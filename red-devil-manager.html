@@ -2417,15 +2417,16 @@ function drawDugout(){
  const x=cv.getContext('2d');const{W,H,P,tE}=dugGeom(cv);
  x.drawImage(dugBackground(cv),0,0);
  const now=performance.now()/1000;
- // update world positions (shared with 2D view)
+ // the dugout watches the same phase of play as the 2D pitch — the
+ // targets are already set by pitchTargets(), we only ease toward them
+ const _pp=(typeof playState==='function')?playState():{};
  MU.dots.forEach(d=>{
-  if(d.pl.off){d.tx=d.si===0?-8:113;d.ty=34}
-  else{const home=dotHome(d.pl,d.si);
-   const pull=d.pl.slot==='GK'?.06:DEFPOS.includes(d.pl.slot)?.16:MIDPOS.includes(d.pl.slot)?.3:.42;
-   d.tx=home.x+(MU.ball.x-home.x)*pull+Math.sin(now*1.7+d.pl.p.id)*1.6;
-   d.ty=home.y+(MU.ball.y-home.y)*(pull*.8)+Math.cos(now*1.4+d.pl.p.id)*1.6}
-  d.x+=((d.tx??d.x)-d.x)*.055;d.y+=((d.ty??d.y)-d.y)*.055});
- MU.ball.x+=(MU.ballT.x-MU.ball.x)*.09;MU.ball.y+=(MU.ballT.y-MU.ball.y)*.09;
+  const ease=d.pl.off?.05:(_pp.holder===d.pl?.20:.075);
+  d.x+=((d.tx==null?d.x:d.tx)-d.x)*ease;
+  d.y+=((d.ty==null?d.y:d.ty)-d.y)*ease});
+ const _mv=(_pp.mode==='pass'||_pp.mode==='carry')?1:.22;
+ MU.ball.x+=(MU.ballT.x-MU.ball.x)*_mv;MU.ball.y+=(MU.ballT.y-MU.ball.y)*_mv;
+ MU.ball.x=clamp(MU.ball.x,.6,104.4);MU.ball.y=clamp(MU.ball.y,1.2,66.8);
  // depth sort: players + ball
  const ents=MU.dots.map(d=>({k:'p',y:d.y,d}));
  ents.push({k:'b',y:MU.ball.y});
@@ -11603,6 +11604,240 @@ MatchSim.prototype.sendOff=function(D,dp,straight){
 /* a new match starts with nothing selected */
 const _koShape=ACTIONS.kickoff;
 ACTIONS.kickoff=()=>{UI.mSel=null;_koShape()};
+
+
+/* =====================================================================
+   MATCHDAY 3.2 — passing that looks like football
+   ---------------------------------------------------------------------
+   The old chooser scored every team-mate on distance, forward gain and
+   pressure alone. It had no idea who is a sensible passing option for
+   whom, so a left winger could roll it across his own eighteen-yard box
+   to the right-back and it looked like nothing you would ever see on a
+   Saturday.
+
+   How the game is actually played, and what that means here:
+     · Teams are built in LINES — keeper, back four, holding, midfield,
+       attacking band, forward. The overwhelming majority of passes go to
+       the line directly ahead, the same line, or one line back. Skipping
+       two lines is a good ball, not a routine one.
+     · Play stays in CHANNELS. A full-back's outlet is the winger in
+       front of him and the midfielder inside him. Switching flanks is a
+       deliberate, lofted, low-frequency act — never a ground pass.
+     · Intent changes by THIRD. In your own third the priority is safety
+       and keeping the ball; in the middle third it is progression; in
+       the final third it is penetration — crosses, cut-backs, through
+       balls.
+     · Square balls across your own box are the one pass every coach
+       bans, so they are heavily penalised here.
+     · Under pressure a player plays the safe ball, which is why real
+       back-passes happen — as an escape, not as a default.
+   ===================================================================== */
+const LINE_OF={GK:0,DC:1,DL:1,DR:1,WBL:1,WBR:1,DM:2,MC:3,ML:3,MR:3,AMC:4,AML:4,AMR:4,ST:5};
+function lineOf(slot){return LINE_OF[slot]!=null?LINE_OF[slot]:3}
+/* everything is judged in the side's own frame: fx 0 = own goal, fy 0 = their left */
+function ownFrame(d,si){return si===0?{fx:d.x,fy:d.y}:{fx:105-d.x,fy:68-d.y}}
+function channelOf(fy){return fy<23?-1:fy>45?1:0}
+/* how natural a pass is between two lines, given the phase of play */
+function lineFit(dL,third){
+ let w=dL===1?1:dL===0?.72:dL===2?.50:dL===-1?.36:dL>=3?.22:.10;
+ if(third===0){                        // own third: keep it, do not force it
+  if(dL<=0)w*=1.85;
+  if(dL>=2)w*=.55}
+ else if(third===2){                   // final third: get it forward or across the box
+  if(dL>=1)w*=1.45;
+  if(dL<=-1)w*=.55}
+ return w}
+function pressureAt(pt,si){
+ return livePlayers(1-si).reduce((n,o)=>{const od=dotOf(o);
+  if(!od)return n;const dd=dist2(od,pt);
+  return n+(dd<5?1.4:dd<8?.85:dd<12?.35:0)},0)}
+/* is anybody standing in the way of this pass? */
+function laneBlocked(from,to,si){
+ const dx=to.x-from.x,dy=to.y-from.y,len=Math.hypot(dx,dy)||1;
+ let worst=0;
+ livePlayers(1-si).forEach(o=>{
+  const d=dotOf(o);if(!d)return;
+  const t=((d.x-from.x)*dx+(d.y-from.y)*dy)/(len*len);
+  if(t<=.08||t>=.95)return;
+  const px=from.x+dx*t,py=from.y+dy*t;
+  const off=Math.hypot(d.x-px,d.y-py);
+  if(off<3.2)worst=Math.max(worst,1);else if(off<5.5)worst=Math.max(worst,.55)});
+ return worst}
+choosePass=function(){
+ const m=MU.m,p=playState(),s=m.sides[p.si],t=s.tac||{};
+ const holder=p.holder,hd=holder?dotOf(holder):null;
+ if(!hd)return null;
+ const si=p.si;
+ const H=ownFrame(hd,si);
+ const third=H.fx<35?0:H.fx<70?1:2;
+ const hLine=lineOf(holder.slot),hChan=channelOf(H.fy);
+ const hPress=pressureAt(hd,si);
+ const want=PITCH.passLen[t.passStyle]||19;
+ const direct=t.passStyle==='Direct';
+ let risk=t.mentality==='Overload'?1.5:t.mentality==='Attacking'?1.22:
+  t.mentality==='Counter'?1.05:t.mentality==='Defensive'?.6:.9;
+ const prog=si===0?MU.ball.x/105:1-MU.ball.x/105;
+ const aim=p.aim==null?.72:p.aim;
+ if(prog>aim)risk*=.22;                              // the move has run its course
+ const squeezed=hPress>=1.1;                          // he has somebody on him
+ const stale=p.stale||0;                              // passes since the ball last went forward
+ risk*=1+stale*.6;
+ let best=null,bw=-1,bestKind='short';
+ livePlayers(si).forEach(x=>{
+  if(x===holder)return;
+  const d=dotOf(x);if(!d)return;
+  const pt=receivePoint(x,si);
+  const R=ownFrame({x:pt.x,y:pt.y},si);
+  const len=dist2(hd,pt);
+  if(len<3.5)return;
+  const dL=lineOf(x.slot)-hLine;
+  const rChan=channelOf(R.fy);
+  let w=lineFit(dL,third);
+  // distance: your passing style sets the sweet spot, and long balls are special
+  const isSwitch=Math.abs(rChan-hChan)===2&&len>=32;
+  const isLong=len>=34;
+  if(isLong&&!isSwitch&&!direct)w*=.62;
+  else if(isLong&&direct)w*=1.05;
+  w*=Math.exp(-Math.pow((len-want)/(direct?20:15),2))+(isLong?.22:0);
+  // channels: play down your side, switch only as a deliberate diagonal
+  const dc=Math.abs(rChan-hChan);
+  if(dc===0)w*=1.35;else if(dc===1)w*=1;else w*=isSwitch?.34:.06;
+  // the pass no coach forgives: square across your own box
+  if(third===0&&dL<=0&&Math.abs(R.fy-H.fy)>16&&R.fx<26)w*=.05;
+  // forward intent
+  const gain=R.fx-H.fx;
+  if(gain>2)w*=1+Math.min(1,gain/26)*risk;
+  else w*=1/(1+stale*.55);                           // stop going sideways forever
+  // under pressure the safe ball becomes the right ball
+  if(squeezed){if(dL<=0)w*=2.2;w*=Math.pow(.55,pressureAt(pt,si))}
+  else w*=Math.pow(.62,pressureAt(pt,si));
+  // somebody in the passing lane
+  w*=1-laneBlocked(hd,{x:pt.x,y:pt.y},si)*.72;
+  // your attacking focus
+  if(t.passFocus==='Left Flank')w*=rChan===-1?1.8:rChan===1?.5:1;
+  else if(t.passFocus==='Right Flank')w*=rChan===1?1.8:rChan===-1?.5:1;
+  else if(t.passFocus==='Central')w*=rChan===0?1.5:.75;
+  // the keeper is an escape, not an option
+  if(x.slot==='GK')w*=(third===0&&squeezed)?.55:(third===0?.05:.004);
+  // quality on both ends of the pass
+  if(x===p.prevHolder)w*=.38;                        // no instant return passes
+  w*=.6+((x.p.attrs&&x.p.attrs.firstTouch)||10)/24;
+  w*=.75+Math.random()*.5;
+  if(w>bw){bw=w;best=x;bestKind=isSwitch?'switch':isLong?'long':'short'}});
+ if(best)playState().passKind=bestKind;
+ return best};
+/* from wide in the final third, you cross — you do not pass it back inside */
+function crossChance(){
+ const p=playState(),s=MU.m.sides[p.si],h=p.holder;
+ if(!h)return null;
+ const hd=dotOf(h);if(!hd)return null;
+ const H=ownFrame(hd,p.si);
+ if(H.fx<74||Math.abs(H.fy-34)<15)return null;      // must be wide and deep
+ const a=h.p.attrs||{};
+ if(Math.random()>clamp(((a.crossing||10)-6)/22,.10,.42))return null;
+ const box=livePlayers(p.si).filter(x=>{
+  const d=dotOf(x);if(!d)return false;
+  const F=ownFrame(d,p.si);
+  return F.fx>78&&Math.abs(F.fy-34)<18&&x!==h});
+ if(!box.length)return null;
+ return box.sort((x,y)=>((y.p.attrs&&y.p.attrs.heading)||0)-((x.p.attrs&&x.p.attrs.heading)||0))[0]}
+/* a pass into a crowd can be cut out — which is what Short passing buys you */
+const _startPassRisk=startPass;
+startPass=function(to,kind){
+ _startPassRisk(to,kind);
+ const p=playState();
+ if(!to||!p.to)return;
+ p.prevHolder=p.holder;
+ const fwd=(p.si===0?p.to.x-p.from.x:p.from.x-p.to.x);
+ p.stale=fwd>2?0:Math.min(4,(p.stale||0)+1);
+ const lane=laneBlocked(p.from,p.to,p.si);
+ const press=pressureAt(p.to,p.si);
+ const chance=clamp(lane*.16+Math.max(0,press-.6)*.07+(p.passKind==='long'?.05:0),0,.30);
+ p.cutOut=Math.random()<chance};
+/* build-up, crosses and interceptions all live in the phase of play */
+const _advBall=advancePlay;
+advancePlay=function(now){
+ const p=playState(),m=MU.m;
+ // a cross beats a pass when the ball is in the corner of the final third
+ if(m&&!m.done&&m.stage!=='HT'&&p.mode==='hold'&&now>=(p.nextAt||0)&&!p.dead){
+  const tgt=crossChance();
+  if(tgt){
+   const d=dotOf(tgt);
+   const pt=d?{x:d.x,y:d.y}:null;
+   const hp=p.holder?dotOf(p.holder):null;
+   if(pt&&hp){
+    p.from={x:hp.x,y:hp.y};
+    p.to=pt;p.t0=now;p.ms=clamp(dist2(p.from,pt)/17*1000,320,1100)/tScale();
+    p.mode='pass';p.target=tgt;p.lofted=true;p.cutOut=Math.random()<.34;
+    p.run={pl:tgt,x:pt.x,y:pt.y};
+    return}}}
+ const wasPass=p.mode;
+ _advBall(now);
+ // a pass that was cut out gives the ball away where it was going
+ if(wasPass==='pass'&&p.mode==='hold'&&p.cutOut){
+  p.cutOut=false;
+  turnover(now)}};
+/* team-mates move to give him an angle, the way a real side does */
+const _targetsSupport=pitchTargets;
+pitchTargets=function(){
+ _targetsSupport();
+ const m=MU.m,p=playState();
+ if(!m||!p.holder)return;
+ const hd=dotOf(p.holder);if(!hd)return;
+ const si=p.si,dir=dirOf(si);
+ const mates=livePlayers(si).filter(x=>x!==p.holder&&x.slot!=='GK'&&x!==(p.run&&p.run.pl))
+  .map(x=>({x,d:dist2(dotOf(x)||{x:0,y:0},hd)})).sort((a,b)=>a.d-b.d).slice(0,3);
+ mates.forEach((o,i)=>{
+  const d=dotOf(o.x);if(!d)return;
+  // one shows ahead, one drops in behind, one holds the width
+  const ahead=i===0?7:i===1?-6:0;
+  const wide=i===2?(d.y<34?-5:5):0;
+  d.tx=clamp(d.tx+dir*ahead,5.5,99.5);
+  d.ty=clamp(d.ty+wide,3.5,64.5)})};
+
+/* =====================================================================
+   THE DUGOUT — the same match, watched from the touchline
+   ---------------------------------------------------------------------
+   The dugout ran its own little drift animation and never advanced the
+   phase of play, so the ball barely moved and the players wandered.
+   It now watches exactly the same game the 2D pitch does.
+   ===================================================================== */
+const _dugShared=drawDugout;
+drawDugout=function(){
+ if(MU.m&&!MU.m.done){
+  advancePlay(performance.now());
+  pitchTargets()}
+ _dugShared();
+ // and it says who is on the ball, same as the pitch view
+ const cv=$('#dugCanvas'),m=MU.m;if(!cv||!m)return;
+ const p=playState();if(!p.holder)return;
+ const d=dotOf(p.holder);if(!d)return;
+ try{
+  const x=cv.getContext('2d'),g=dugGeom(cv),pt=g.P(d.x,d.y);
+  const W=g.W;
+  x.beginPath();x.ellipse(pt[0],pt[1],W*.020,W*.009,0,0,7);
+  x.strokeStyle='rgba(251,225,34,.9)';x.lineWidth=Math.max(1.4,W*.0024);x.stroke();
+  x.font='800 '+Math.max(9,Math.round(W*.021))+'px Inter,sans-serif';
+  x.textAlign='center';
+  x.lineWidth=Math.max(2,W*.005);x.strokeStyle='rgba(0,0,0,.75)';
+  const nm=surname(p.holder.p.name);
+  x.strokeText(nm,pt[0],pt[1]+W*.036);
+  x.fillStyle='#fbe122';x.fillText(nm,pt[0],pt[1]+W*.036);
+  x.textAlign='left'}catch(e){}};
+
+/* =====================================================================
+   THE RUNNING TEXT — newest at the top, so your eyes stay on the pitch
+   ===================================================================== */
+fillFeed=function(list,keep){
+ if(!list||!MU.m)return;
+ const feed=MU.m.feed;
+ while(MU.lastFeed<feed.length){
+  const e=feed[MU.lastFeed++];
+  const d=document.createElement('div');
+  d.className='cline'+(e.cls?' '+e.cls:'');
+  d.innerHTML='<span class="m num">'+(e.min?e.min+'&#8242;':'')+'</span><span class="tx">'+e.text+'</span>';
+  list.insertBefore(d,list.firstChild)}          // the latest line sits under the pitch
+ while(list.children.length>keep)list.removeChild(list.lastChild)};
 
 showStart();
 </script>
