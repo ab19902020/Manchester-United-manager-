@@ -970,7 +970,7 @@ class MatchSim{
    else if(r<.5){this.say(this.dispMin(),D,cf(COMM.chancefail,{d:dp.p.name}));dp.rating+=.06}
    return}
   // penalty chance on last-ditch foul
-  if(Math.random()<.035){const dp=pick(this.pool(D,'def'));this.penaltyEvent(A,D,dp);return}
+  if(Math.random()<.0105){const dp=pick(this.pool(D,'def'));this.penaltyEvent(A,D,dp);return}
   // ---- Phase 3: shot on goal ----
   const fk=A.tac.passFocus;
   const creator=this.weighted(A,x=>{let w=this.effA(x,'vision')+(MIDPOS.includes(x.slot)?4:0);
@@ -996,7 +996,7 @@ class MatchSim{
   if(shooter.goals>=1)shot*=.9;if(shooter.goals>=2)shot*=.82; // defences key on the man in form
   const save=((10+(rawK-10)*.42)*(.79+Math.random()*.43)+.92)*(hasTrait(g,'Wall')?1.045:1);
   A.st.sh++;A.st.xg+=clamp(.13*shot/save,.02,.75);
-  if(shot>save*1.12){this.goal(A,D,shooter,creator,fromCorner?null:creator,false)}
+  if(shot>save*1.088){this.goal(A,D,shooter,creator,fromCorner?null:creator,false)}
   else if(shot>save*.86){A.st.sot++;D.st.sv++;g.rating+=.22;
    this.say(this.dispMin(),A,cf(COMM.save,{b:shooter.p.name,g:g.p.name}),'big');
    if(Math.random()<.52){A.st.cor++;this.cornerEvent(A,D)}}
@@ -10744,12 +10744,13 @@ MatchSim.prototype.shotEvent=function(A,D,shooter,creator,fromCorner){
   p.ms=clamp(dist2(from,to)/34*1000,180,700)/tScale();
   p.lofted=!isGoal&&!saved;
   MU.flight=null;
+  const stAt=this.stage;
   if(isGoal){
    MU.goalFlashP=performance.now()+1700;
-   setTimeout(()=>{if(MU.m===this&&!this.done)kickOffFrom(1-si)},900)}
+   setTimeout(()=>{if(MU.m===this&&!this.done&&this.stage===stAt)kickOffFrom(1-si)},900)}
   else{
    const gk=this.sides[1-si].onfield.find(z=>z.slot==='GK'&&!z.off);
-   setTimeout(()=>{if(MU.m!==this||this.done)return;
+   setTimeout(()=>{if(MU.m!==this||this.done||this.stage!==stAt)return;
     const pp=playState();
     if(pp.mode==='dead')return;
     restartFrom(1-si,gx===105?101:4,34,saved?1100:1500,gk)},Math.max(220,p.ms))}}
@@ -12425,6 +12426,226 @@ MatchSim.prototype.foulEvent=function(D,dp,A,inBox){
   if(alt&&alt!==dp&&alt.slot!=='GK')dp=alt;
   else{D.st.fl++;return}}
  return _foulCare.call(this,D,dp,A,inBox)};
+
+
+/* =====================================================================
+   GOALS — what it was, who made it, and a moment to enjoy it
+   ---------------------------------------------------------------------
+   A goal produced one canned line and the game kicked off again a second
+   later. Now every goal is CLASSIFIED from how it was actually built —
+   the phase it came from, where the shooter was standing, what he is
+   good at — so the commentary tells you it was a header from the corner,
+   a tap-in at the far post, a thirty-yarder or a scruffy one off a shin.
+   The match then stops to show you the goal properly before the restart.
+   ===================================================================== */
+const GOAL_KINDS={
+ pen:{lbl:'Penalty',ic:'⚪',lines:[
+  '{b} sends the keeper the wrong way from twelve yards.',
+  '{b} goes right down the middle and the keeper has already dived.',
+  '{b} smashes the penalty high into the roof of the net.']},
+ header:{lbl:'Header',ic:'🎯',lines:[
+  '{b} climbs above everyone and powers the header down into the corner.',
+  '{b} gets across his man at the near post and glances it in.',
+  'A towering header from {b} — the defender never got off the ground.']},
+ corner:{lbl:'From a corner',ic:'🚩',lines:[
+  'It drops to {b} six yards out in the scramble and he bundles it over the line.',
+  '{b} attacks the corner and thumps it in off the underside of the bar.',
+  'Nobody clears it, {b} reacts first and stabs it home.']},
+ tapin:{lbl:'Tap-in',ic:'👟',lines:[
+  '{b} has the simplest job in football — two yards out and into an empty net.',
+  'It rolls across the six-yard box and {b} cannot miss.',
+  '{b} is in the right place at the right time and taps it in.']},
+ poach:{lbl:'Poacher’s finish',ic:'🦊',lines:[
+  '{b} gambles on the rebound and turns it in from close range.',
+  'The keeper can only parry and {b} is on it in a flash.',
+  '{b} reads it before anybody else and pokes it past the keeper.']},
+ oneone:{lbl:'One-on-one',ic:'🏃',lines:[
+  '{b} is clean through, takes it round the keeper and rolls it in.',
+  'One on one, {b} dinks it over the diving keeper. Ice cold.',
+  '{b} goes through, opens his body and passes it into the far corner.']},
+ curler:{lbl:'Curled finish',ic:'🌀',lines:[
+  '{b} cuts inside and bends it into the far top corner. Unstoppable.',
+  '{b} wraps his foot round it and it curls away from the keeper.',
+  'That is a beautiful strike from {b} — right into the side netting.']},
+ longshot:{lbl:'From outside the box',ic:'💥',lines:[
+  '{b} lets fly from twenty-five yards and it flies into the top corner!',
+  'From fully thirty yards, {b} strikes it sweetly and the keeper never moved.',
+  '{b} takes one touch outside the box and absolutely leathers it in.']},
+ volley:{lbl:'Volley',ic:'⚡',lines:[
+  'It drops perfectly and {b} volleys it first time into the corner!',
+  '{b} meets it on the half-volley and it screams into the net.',
+  'A sweet volley from {b} — struck on the run and never rising above the bar.']},
+ counter:{lbl:'On the counter',ic:'🔁',lines:[
+  'Three passes from their own half and {b} finishes the counter-attack.',
+  'Broken up, broken away, and {b} applies the finish. Ruthless.',
+  'That is a textbook counter and {b} makes it count.']},
+ scruffy:{lbl:'Scruffy',ic:'🙈',lines:[
+  'It comes off {b}’s shin and squirms past the keeper. They all count.',
+  'A horrible scramble and {b} gets the final touch. Nobody cares how.',
+  '{b} miskicks it and it loops in off the defender. He will claim it.']},
+ deflected:{lbl:'Deflected',ic:'🎱',lines:[
+  '{b}’s effort takes a wicked deflection and wrong-foots the keeper.',
+  'It clips a defender on the way through and {b} has his goal.',
+  'The keeper had it covered until it flicked off a boot. {b} will take it.']},
+ freekick:{lbl:'Free kick',ic:'🎪',lines:[
+  '{b} stands it up over the wall and into the corner. Wonderful free kick.',
+  '{b} whips the free kick round the wall and the keeper is beaten.',
+  'Straight over the wall from {b} and in off the underside of the bar.']},
+ far:{lbl:'Far post',ic:'📐',lines:[
+  'The cross picks out {b} completely unmarked at the far post.',
+  '{b} arrives at the back stick and finishes it first time.',
+  'They switch it, {b} is free at the far post and he makes no mistake.']}};
+/* work out what kind of goal that actually was */
+function classifyGoal(m,A,D,shooter,creator,pen,fromCorner){
+ const a=shooter.p.attrs||{};
+ const r=Math.random();
+ if(pen)return 'pen';
+ if(fromCorner)return (a.heading||10)>=13&&r<.72?'header':'corner';
+ // where was he standing? only a live match knows, so fall back on his role
+ let dist=null;
+ if(liveMatch(m)&&MU.shotFrom){
+  const si=A===m.sides[0]?0:1;
+  dist=Math.hypot(oppGoalX(si)-MU.shotFrom.x,34-MU.shotFrom.y)}
+ const slot=shooter.slot;
+ if(dist==null){
+  const roll=Math.random()
+   +(slot==='ST'?-.10:ATTPOS.includes(slot)?-.02:MIDPOS.includes(slot)?.10:.06);
+  dist=roll<.12?3+Math.random()*3.5              // six-yard box
+   :roll<.87?7+Math.random()*11                  // the rest of the area
+   :19+Math.random()*13}                         // outside the box
+ const shootAttr=a.shooting||10, pace=a.pace||10, tech=a.dribbling||10;
+ // a counter is a fast break: momentum with them and the ball moved a long way
+ const counter=(m.mom&&m.mom[A===m.sides[0]?0:1]>=4)&&r<.16;
+ if(dist>=20){
+  if(r<.10)return 'freekick';
+  if(shootAttr>=15&&r<.62)return 'longshot';
+  if(r<.78)return 'longshot';
+  return r<.90?'deflected':'volley'}
+ if(dist<=6.5)return r<.55?'tapin':'poach';
+ if(counter)return 'counter';
+ if(dist<=11){
+  if(r<.24)return 'poach';
+  if(r<.42)return 'far';
+  if(r<.58)return 'scruffy';
+  return r<.80?'oneone':'volley'}
+ // the classic edge-of-the-area finishes
+ if(tech>=14&&r<.34)return 'curler';
+ if(pace>=15&&r<.52)return 'oneone';
+ if(r<.66)return 'volley';
+ if(r<.80)return 'far';
+ return r<.92?'deflected':'scruffy'}
+function goalLine(kind,name){
+ const g=GOAL_KINDS[kind]||GOAL_KINDS.scruffy;
+ return pick(g.lines).split('{b}').join(name)}
+/* the goal itself: classified, narrated and remembered */
+const _goalRich=MatchSim.prototype.goal;
+MatchSim.prototype.goal=function(A,D,shooter,creator,assister,pen){
+ const kind=classifyGoal(this,A,D,shooter,creator,!!pen,!!this._fromCorner);
+ this._goalKind=kind;
+ const before=this.feed.length;
+ const r=_goalRich.apply(this,arguments);
+ // replace the canned line with one that describes this goal
+ const ev=this.feed.slice(before).find(x=>x.cls==='goal');
+ const sc=this.fix.sc[this.fix.sc.length-1];
+ if(sc){sc.kind=kind;sc.lbl=(GOAL_KINDS[kind]||{}).lbl;sc.ic=(GOAL_KINDS[kind]||{}).ic}
+ if(ev){
+  const raw=String(ev.text);
+  const asstName=/Assisted by /.test(raw)?raw.split('Assisted by ')[1].replace(/\.$/,''):null;
+  // keep whatever drama the engine decided this goal carried
+  const dram=(raw.match(/^(LATE DRAMA! |WHAT A TURNAROUND! |They’ve hauled themselves level! )/)||[''])[0];
+  const g=GOAL_KINDS[kind]||GOAL_KINDS.scruffy;
+  ev.text=dram+'⚽ '+g.ic+' '+goalLine(kind,shooter.p.name)+
+   (asstName?' <span class="xs faint">— set up by '+esc(asstName)+'</span>':'');
+  ev.goalKind=kind}
+ if(liveMatch(this))showGoalCard(this,A,shooter,assister,kind,sc);
+ return r};
+/* remember whether the chance came from a corner so headers read right */
+const _shotCorner=MatchSim.prototype.shotEvent;
+MatchSim.prototype.shotEvent=function(A,D,shooter,creator,fromCorner){
+ this._fromCorner=!!fromCorner;
+ const r=_shotCorner.apply(this,arguments);
+ this._fromCorner=false;
+ return r};
+
+/* ---------- the celebration ---------- */
+function showGoalCard(m,A,shooter,assister,kind,sc){
+ const si=A===m.sides[0]?0:1;
+ const c=G.clubs[A.ci];
+ const g=GOAL_KINDS[kind]||GOAL_KINDS.scruffy;
+ MU.goalCard={
+  t0:performance.now(),
+  hold:4200,
+  si,kind,
+  club:c.short,c1:c.c1,
+  name:shooter.p.name,
+  face:shooter.p,
+  min:m.dispMin(),
+  lbl:g.lbl,ic:g.ic,
+  assist:(assister&&assister!==shooter&&!/pen/.test(kind))?assister.p.name:null,
+  tally:(shooter.p.stats&&shooter.p.stats.goals!=null)?(shooter.p.stats.goals+shooter.goals):shooter.goals,
+  score:m.fix.hs+'–'+m.fix.as,
+  mine:A.ci===G.my};
+ MU.goalFlashP=performance.now()+2600;
+ // the match waits while you watch it — the loop already respects hlHold
+ const hold=4200/Math.max(1,tScale()*.5);
+ MU.goalHold=performance.now()+hold;
+ MU.hlHold=performance.now()+hold}
+/* nothing moves while the goal is being shown */
+const _advGoal=advancePlay;
+advancePlay=function(now){
+ if(MU.goalHold&&now<MU.goalHold)return;
+ if(MU.goalHold&&now>=MU.goalHold)MU.goalHold=0;
+ return _advGoal(now)};
+/* the celebration, drawn over the pitch */
+const _drawGoalCard=drawPitch;
+drawPitch=function(){
+ _drawGoalCard();
+ const cv=$('#pitchCanvas'),gc=MU.goalCard;if(!cv||!gc)return;
+ const now=performance.now(),k=(now-gc.t0)/gc.hold;
+ if(k>1){MU.goalCard=null;return}
+ const ctx=cv.getContext('2d'),sx=cv._sx,sy=cv._sy,W=cv.width,H=cv.height;
+ const inA=Math.min(1,k*6),outA=k>.86?(1-k)/.14:1;
+ const a=Math.min(inA,outA);
+ ctx.save();
+ ctx.fillStyle='rgba(6,10,7,'+(0.80*a)+')';ctx.fillRect(0,0,W,H);
+ const cx=W/2;
+ ctx.textAlign='center';
+ // GOAL!
+ const pop=1+Math.max(0,(1-k*7))*.22;
+ ctx.font='800 '+Math.round(sx*7.4*pop)+'px "Archivo Black",Impact,sans-serif';
+ ctx.fillStyle='rgba(251,225,34,'+a+')';
+ ctx.fillText('GOAL!',cx,H*.24);
+ // scorer
+ ctx.font='800 '+Math.round(sx*4.4)+'px "Archivo Black",Impact,sans-serif';
+ ctx.fillStyle='rgba(255,255,255,'+a+')';
+ ctx.fillText(String(gc.name).toUpperCase(),cx,H*.40);
+ // minute + type
+ ctx.font='800 '+Math.round(sx*2.5)+'px Inter,sans-serif';
+ ctx.fillStyle='rgba(251,225,34,'+a+')';
+ ctx.fillText(gc.min+"'   "+gc.ic+' '+gc.lbl.toUpperCase(),cx,H*.51);
+ if(gc.assist){
+  ctx.font='600 '+Math.round(sx*2.2)+'px Inter,sans-serif';
+  ctx.fillStyle='rgba(240,245,240,'+(0.85*a)+')';
+  ctx.fillText('set up by '+gc.assist,cx,H*.60)}
+ // club + score
+ ctx.font='800 '+Math.round(sx*3.2)+'px Inter,sans-serif';
+ ctx.fillStyle=gc.c1==='#FFFFFF'?'rgba(235,235,235,'+a+')':gc.c1;
+ ctx.globalAlpha=a;ctx.fillText(gc.club+'   '+gc.score,cx,H*.74);ctx.globalAlpha=1;
+ ctx.font='600 '+Math.round(sx*2)+'px Inter,sans-serif';
+ ctx.fillStyle='rgba(240,245,240,'+(0.7*a)+')';
+ ctx.fillText(gc.tally+(gc.tally===1?' goal':' goals')+' this season',cx,H*.83);
+ ctx.restore();ctx.textAlign='left'};
+/* the scoreline strip under the clock gets the type too */
+const _topGoals=renderTop;
+renderTop=function(){
+ _topGoals();
+ const sc=$('#mScorers'),m=MU.m;
+ if(!sc||!m||!m.fix.sc.length)return;
+ sc.innerHTML=m.fix.sc.slice(-6).map(s=>{
+  const c=G.clubs[s.ci];
+  return '<span class="xs" style="white-space:nowrap;margin-right:9px">'+
+   (s.ic||'⚽')+' <b>'+esc(String(s.name).split(' ').pop())+'</b> '+s.min+"'"+
+   '<span class="faint"> '+esc(c.short)+'</span></span>'}).join('')};
 
 showStart();
 </script>
