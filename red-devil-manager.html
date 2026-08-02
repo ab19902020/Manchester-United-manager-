@@ -577,7 +577,7 @@ const DB=[
 /* ================= PLAYER GENERATION & WORLD STATE ================= */
 let G=null;
 
-function ovrOf(p,slot){slot=slot||p.pos;const wts=W[slot];let s=0,tw=0;const pen=posPenalty(p.pos,slot);
+function ovrOf(p,slot){slot=slot||p.pos;const wts=W[slot];let s=0,tw=0;const pen=posPenalty(p,slot);
  for(const a in wts){let v=p.attrs[a];if(pen>0&&(TECH.includes(a)||MENT.includes(a)))v*=(1-pen);s+=v*wts[a];tw+=wts[a]}
  return s/tw*5}
 function calcEff(p,slot){ // match-effective rating incl. fitness, sharpness, morale
@@ -876,7 +876,7 @@ class MatchSim{
    return p?{p,slot:pos,hx:sx,hy:sy,cond:p.cond,rating:6+Math.random()*.2,yc:0,off:false,goals:0,assists:0,entered:0}:null}).filter(Boolean);
   const bench=c.players.filter(q=>!used.has(q.id)&&!q.injury&&q.susp<=0&&!q.loan).sort((a,b)=>b.ovr-a.ovr).slice(0,9);
   return{ci,c,home,isMy,tac,onfield,bench,subs:5,reds:0,st:{sh:0,sot:0,cor:0,fl:0,xg:0,sv:0}}}
- effA(pl,attr){const pen=posPenalty(pl.p.pos,pl.slot);let v=pl.p.attrs[attr];
+ effA(pl,attr){const pen=posPenalty(pl.p,pl.slot);let v=pl.p.attrs[attr];
   if(pen>0&&(TECH.includes(attr)||MENT.includes(attr)))v*=(1-pen);
   return v*(.62+.38*pl.cond/100)*(.86+.14*pl.p.sharp/100)*(pl.talk||1)*(.965+.07*(pl.p.morale/100))}
  pool(side,zone){let act=side.onfield.filter(x=>!x.off);if(!act.length)act=side.onfield;let ps;
@@ -1422,7 +1422,7 @@ function vTactics(){
   const eff=p?calcEff(p,s[0]):0;
   h+='<div class="tslot'+(UI.selSlot===idx?' sel':'')+'" data-action="tslot" data-v="'+idx+'" style="left:'+left.toFixed(1)+'%;top:'+top.toFixed(1)+'%">'+
   '<div class="jersey" style="background:linear-gradient(160deg,'+c.c1+','+c.c2+')">'+(p?Math.round(eff):'+')+'</div>'+
-  '<div class="nm">'+(p?esc(p.name.split(' ').pop()):'Empty')+'</div><div class="ps">'+s[0]+(p&&posPenalty(p.pos,s[0])>0?' ⚠':'')+'</div></div>'});
+  '<div class="nm">'+(p?esc(p.name.split(' ').pop()):'Empty')+'</div><div class="ps">'+s[0]+(p&&posPenalty(p,s[0])>0?' ⚠':'')+'</div></div>'});
  h+='</div>';
  h+='<div class="row" style="margin:12px 0"><button class="btn btn-ghost btn-sm" style="flex:1" data-action="autoPickBtn">✨ Auto pick</button>'+
  '<div class="small muted" style="flex:1;text-align:right">Tap a shirt, then a bench player to swap. ⚠ = out of position.</div></div>';
@@ -1432,7 +1432,7 @@ function vTactics(){
   h+='<div class="sec"><div class="t">Replace '+slot[0]+'</div><div class="ln"></div><button class="chip" data-action="slotClear">Cancel</button></div><div class="card tight">';
   if(!bench.length)h+='<div class="small muted" style="padding:6px 2px">No fit players available.</div>';
   bench.slice(0,14).forEach(p=>{h+='<div class="mail" data-action="benchPick" data-id="'+p.id+'"><div class="ic">'+effBadge(calcEff(p,slot[0]))+'</div>'+
-   '<div style="flex:1"><div class="tt">'+esc(p.name)+(posPenalty(p.pos,slot[0])>0?' <span class="xs" style="color:var(--amber)">⚠ '+p.pos+'</span>':'')+'</div>'+
+   '<div style="flex:1"><div class="tt">'+esc(p.name)+(posPenalty(p,slot[0])>0?' <span class="xs" style="color:var(--amber)">⚠ '+p.pos+'</span>':'')+'</div>'+
    '<div class="bd">'+posBadge(p.pos)+' · cond '+Math.round(p.cond)+'% · sharp '+Math.round(p.sharp)+'%</div></div></div>'});
   h+='</div>'}
  h+='<div class="sec"><div class="t">In possession</div><div class="ln"></div></div>';
@@ -1598,7 +1598,7 @@ function openPreMatch(fix){
  '<div class="msb-min">'+fmtDate(G.day)+'</div></div>';
  h+='<div class="mbody"><div class="sec" style="margin-top:4px"><div class="t">Your XI</div><div class="ln"></div><div class="sub">'+G.tacs.formation+' · '+G.tacs.mentality+'</div></div><div class="card tight">';
  xi.forEach(x=>{if(!x.p)return;h+='<div class="spread" style="padding:6px 2px;border-bottom:1px solid var(--chalk)">'+
-  '<div class="row" style="gap:8px">'+posBadge(x.slot)+'<span class="small" style="font-weight:700">'+esc(x.p.name)+'</span>'+(posPenalty(x.p.pos,x.slot)>0?'<span class="xs" style="color:var(--amber)">⚠</span>':'')+'</div>'+
+  '<div class="row" style="gap:8px">'+posBadge(x.slot)+'<span class="small" style="font-weight:700">'+esc(x.p.name)+'</span>'+(posPenalty(x.p,x.slot)>0?'<span class="xs" style="color:var(--amber)">⚠</span>':'')+'</div>'+
   '<div class="row" style="gap:8px">'+bar(x.p.cond)+effBadge(calcEff(x.p,x.slot))+'</div></div>'});
  h+='</div><div class="sec"><div class="t">Danger men</div><div class="ln"></div></div><div class="card tight">';
  oppStars.forEach(p=>{h+='<div class="spread" style="padding:6px 2px"><div class="row" style="gap:8px">'+posBadge(p.pos)+'<span class="small" style="font-weight:700">'+esc(p.name)+'</span></div>'+ovrPill(p)+'</div>'});
@@ -2177,7 +2177,7 @@ function openPreMatch(fix){
  '<div class="msb-min">'+fmtDate(G.day)+(fix.cup?' \u00b7 knockout tie':'')+'</div></div>';
  h+='<div class="mbody"><div class="sec" style="margin-top:4px"><div class="t">Your XI</div><div class="ln"></div><div class="sub">'+G.tacs.formation+' \u00b7 '+G.tacs.mentality+'</div></div><div class="card tight">';
  xi.forEach(x=>{if(!x.p)return;h+='<div class="spread" style="padding:6px 2px;border-bottom:1px solid var(--chalk)">'+
-  '<div class="row" style="gap:8px">'+posBadge(x.slot)+'<span class="small" style="font-weight:700">'+esc(x.p.name)+'</span>'+(posPenalty(x.p.pos,x.slot)>0?'<span class="xs" style="color:var(--amber)">\u26a0</span>':'')+'</div>'+
+  '<div class="row" style="gap:8px">'+posBadge(x.slot)+'<span class="small" style="font-weight:700">'+esc(x.p.name)+'</span>'+(posPenalty(x.p,x.slot)>0?'<span class="xs" style="color:var(--amber)">\u26a0</span>':'')+'</div>'+
   '<div class="row" style="gap:8px">'+bar(x.p.cond)+effBadge(calcEff(x.p,x.slot))+'</div></div>'});
  h+='</div><div class="sec"><div class="t">Danger men</div><div class="ln"></div></div><div class="card tight">';
  oppStars.forEach(p=>{h+='<div class="spread" style="padding:6px 2px"><div class="row" style="gap:8px">'+posBadge(p.pos)+'<span class="small" style="font-weight:700">'+esc(p.name)+'</span></div>'+ovrPill(p)+'</div>'});
@@ -7518,7 +7518,7 @@ function posPenalty(nat,slot){
  else if(sn&&!ss)pen+=.02;
  return Math.min(.32,pen)}
 function posFitLabel(p,slot){
- const pen=posPenalty(p.pos,slot);
+ const pen=posPenalty(p,slot);
  return pen<=0?{k:'Natural',c:'var(--green)'}:pen<=.05?{k:'Accomplished',c:'var(--green)'}:
   pen<=.10?{k:'Competent',c:'var(--gold)'}:pen<=.18?{k:'Unconvincing',c:'var(--amber)'}:
   {k:'Awkward',c:'var(--danger)'}}
@@ -11537,7 +11537,7 @@ ACTIONS.mShapeOpen=()=>{
    '<div class="jersey" style="background:'+(pl?'linear-gradient(160deg,'+c.c1+','+c.c2+')':'rgba(255,255,255,.10)')+'">'+
     (pl?Math.round(eff):'+')+'</div>'+
    '<div class="nm">'+(pl?esc(surname(pl.p.name)):'Gap')+'</div>'+
-   '<div class="ps">'+r.pos+(pl&&posPenalty(pl.p.pos,r.pos)>0?' ⚠':'')+'</div></div>'});
+   '<div class="ps">'+r.pos+(pl&&posPenalty(pl.p,r.pos)>0?' ⚠':'')+'</div></div>'});
  h+='</div>';
  if(holes)h+='<div class="xs" style="color:var(--amber);margin:9px 2px 0">'+holes+' position'+(holes>1?'s':'')+
   ' unmanned. Move somebody across, or pick a shape that suits ten men.</div>';
@@ -12421,7 +12421,7 @@ MatchSim.prototype.tickOnce=function(){
    common as they are in the real game. */
 const _foulCare=MatchSim.prototype.foulEvent;
 MatchSim.prototype.foulEvent=function(D,dp,A,inBox){
- if(dp&&dp.yc>0&&Math.random()<.80){
+ if(dp&&dp.yc>0&&Math.random()<.52){
   const alt=this.weighted(D,x=>(x.yc>0?.15:1)*(4+this.effA(x,'aggression')*.4));
   if(alt&&alt!==dp&&alt.slot!=='GK')dp=alt;
   else{D.st.fl++;return}}
@@ -12924,6 +12924,603 @@ ACTIONS.mShapeOpen=()=>{
    return '<div class="xs" style="padding:2px 0"><b>'+esc(surname(x.p.name))+'</b> <span class="faint">'+
     x.slot+' · '+(R?R.lbl:'—')+'</span></div>'}).join('');
  host.appendChild(box)};
+
+
+/* =====================================================================
+   THE TRAINING GROUND
+   ---------------------------------------------------------------------
+   Three things were wrong with the way this game treated a footballer:
+
+     · He was locked to one position. Play a central midfielder at the
+       base of midfield and he lost four points off his rating, as if
+       he had never seen the role in his life. Real players are rated
+       on a sliding scale of familiarity — natural, accomplished,
+       competent, awkward — and the gap between neighbouring positions
+       is small.
+     · There was no way to teach him a new one. Kobbie Mainoo is 21.
+       If you want him playing off the striker you should be able to
+       put him there, coach him there, and watch him become a natural
+       over a season.
+     · And the training ground itself was a slider and a list. There
+       was nothing to DO with it — no gym, no mentors, no set-piece
+       work, no camp, no sense that the week between games is where
+       a squad is actually built.
+
+   This is all three.
+   ===================================================================== */
+
+/* ---------------------------------------------------------------------
+   1. POSITIONAL FAMILIARITY
+   Every player has a familiarity, 0–100, for every position on the
+   pitch. Where he starts is decided by how close the job is to his
+   own; where he ends up is decided by you.
+   --------------------------------------------------------------------- */
+const RT_SLOTS=['GK','DL','DC','DR','WBL','WBR','DM','MC','ML','MR','AMC','AML','AMR','ST'];
+const RT_OUT=RT_SLOTS.filter(s=>s!=='GK');
+const RT_MAXPEN=.26;                       // the very worst an outfielder can look
+const RT_NAMES={GK:'Goalkeeper',DL:'Left back',DC:'Centre back',DR:'Right back',
+ WBL:'Left wing back',WBR:'Right wing back',DM:'Defensive midfield',MC:'Central midfield',
+ ML:'Left midfield',MR:'Right midfield',AMC:'Attacking midfield',AML:'Left wing',
+ AMR:'Right wing',ST:'Striker'};
+
+/* where a player starts, before anybody coaches him */
+function famBase(nat,slot){
+ if(nat===slot)return 100;
+ if(nat==='GK'||slot==='GK')return 0;
+ if(MIRROR[nat]===slot)return 92;                       // the same job, other flank
+ if((RELATED[nat]||[]).includes(slot))return 82;        // a position he already knows
+ const bn=POS_BAND[nat],bs=POS_BAND[slot];
+ if(bn==null||bs==null)return 45;
+ const gap=Math.abs(bn-bs);
+ let f=gap===0?70:gap===1?55:gap===2?36:18;
+ const sn=POS_SIDE[nat]||0,ss=POS_SIDE[slot]||0;
+ if(sn&&ss&&sn===ss)f+=10;                              // up and down the same touchline
+ else if(sn&&ss)f-=8;                                   // and across to the wrong one
+ else if(sn||ss)f-=4;
+ return clamp(f,5,95)}
+/* where he is now, coaching included */
+function famOf(p,slot){
+ if(!p||!slot)return 100;
+ if(typeof p==='string')return famBase(p,slot);
+ const nat=p.pos;
+ if(nat===slot)return 100;
+ if(p.pos2&&p.pos2.indexOf(slot)>=0)return 100;
+ const b=famBase(nat,slot);
+ const l=clamp((p.posFam&&p.posFam[slot])||0,0,100);
+ return clamp(b+(100-b)*l/100,0,100)}
+/* the penalty is now a gentle curve off familiarity, not a cliff */
+function posPenalty(nat,slot){
+ if(!slot)return 0;
+ const obj=(nat&&typeof nat==='object')?nat:null;
+ const np=obj?obj.pos:nat;
+ if(np===slot)return 0;
+ if(obj&&obj.pos2&&obj.pos2.indexOf(slot)>=0)return 0;
+ if(np==='GK'||slot==='GK')return .70;                  // a keeper is a keeper
+ const f=obj?famOf(obj,slot):famBase(np,slot);
+ return RT_MAXPEN*Math.pow(1-f/100,1.25)}
+const FAM_TIERS=[[99,'Natural','var(--green)'],[80,'Accomplished','var(--green)'],
+ [60,'Competent','var(--gold)'],[42,'Unconvincing','var(--amber)'],
+ [25,'Awkward','var(--danger)'],[0,'Makeshift','var(--danger)']];
+function famTier(f){for(const t of FAM_TIERS)if(f>=t[0])return t;return FAM_TIERS[FAM_TIERS.length-1]}
+function posFitLabel(p,slot){return famTier(famOf(p,slot))[1]}
+function posFitHtml(p,slot){
+ const t=famTier(famOf(p,slot));
+ return '<span style="color:'+t[2]+';font-weight:700">'+t[1]+'</span>'}
+
+/* ---------------------------------------------------------------------
+   2. THE RATING
+   A familiar position costs him almost nothing. An unfamiliar one still
+   hurts — but he is never rated below what his own ability, minus a
+   familiarity gap, would earn him in a job that suits him.
+   --------------------------------------------------------------------- */
+function _wOvr(p,slot,pen){
+ const wts=W[slot];if(!wts)return 0;
+ let s=0,tw=0;
+ for(const a in wts){
+  let v=p.attrs[a];if(v==null)v=1;
+  if(pen>0&&(TECH.includes(a)||MENT.includes(a)))v*=(1-pen);
+  s+=v*wts[a];tw+=wts[a]}
+ return tw?s/tw*5:0}
+function ovrOf(p,slot){
+ slot=slot||p.pos;
+ const pen=posPenalty(p,slot);
+ const raw=_wOvr(p,slot,pen);
+ if(pen<=0)return raw;
+ const f=famOf(p,slot);
+ if(f<60)return raw;                                    // a genuinely strange job stays a mess
+ const drop=Math.pow(1-f/100,1.2)*10;
+ // familiarity can wipe out the unfamiliarity loss, never the mismatch
+ return Math.max(raw,Math.min(_wOvr(p,slot,0),_wOvr(p,p.pos,0)-drop))}
+
+/* ---------------------------------------------------------------------
+   3. RETRAINING
+   Pick a position, and he works at it every week. Age decides how fast
+   he learns, your coach and your facilities decide how well, and the
+   minutes you give him there count for as much as the cones.
+   --------------------------------------------------------------------- */
+function retrainRate(p,slot){
+ const my=G.clubs[G.my];
+ const a=p.age;
+ const ageF=a<=18?1.45:a<=20?1.28:a<=22?1.1:a<=24?.85:a<=26?.62:a<=29?.4:a<=32?.22:.12;
+ const coach=.72+(((G.staff&&G.staff.coach&&G.staff.coach.stars)||2)*.15);
+ const facil=.8+(((my&&my.stad&&my.stad.train)||3)-1)*.1;
+ const att=p.attrs||{};
+ const det=.7+(((att.workRate||10)+(att.decisions||10))/40)*.6;
+ const near=.55+famBase(p.pos,slot)/100*.75;
+ return clamp(1.5*ageF*coach*facil*det*near,.12,6)}
+function retrainWeeks(p,slot){
+ const need=100-clamp((p.posFam&&p.posFam[slot])||0,0,100);
+ const r=retrainRate(p,slot);
+ return r<=0?99:Math.max(1,Math.ceil(need/r))}
+function canRetrain(p,slot){
+ if(!p||!slot)return false;
+ if(p.pos==='GK'||slot==='GK')return false;             // not in this lifetime
+ if(p.pos===slot)return false;
+ return !(p.pos2&&p.pos2.indexOf(slot)>=0)}
+ACTIONS.retrainOpen=el=>{
+ const p=playerById(el.dataset.id);if(!p)return;
+ if(p.pos==='GK'){toast('Goalkeepers are not retrained as outfielders.');return}
+ const cur=p.retrain;
+ let h='<h3>Retrain '+esc(p.name)+'</h3>'+
+  '<div class="small muted" style="margin:4px 0 12px">Natural: <b>'+RT_NAMES[p.pos]+'</b>'+
+  ((p.pos2&&p.pos2.length)?' · also natural at <b>'+p.pos2.map(s=>RT_NAMES[s]).join(', ')+'</b>':'')+
+  '<br>He works at the new position all week. Younger players learn quickest, and minutes in the role count too.</div>';
+ h+='<div class="card tight">';
+ RT_OUT.filter(s=>canRetrain(p,s)).map(s=>({s,f:famOf(p,s)})).sort((a,b)=>b.f-a.f).forEach(o=>{
+  const t=famTier(o.f);
+  h+='<div class="mail'+(cur===o.s?' unread':'')+'" data-action="retrainSet" data-id="'+p.id+'" data-v="'+o.s+'">'+
+   '<div class="ic">'+posBadge(o.s)+'</div><div style="flex:1;min-width:0">'+
+   '<div class="tt">'+RT_NAMES[o.s]+(cur===o.s?' <span class="xs" style="color:var(--gold)">· in training</span>':'')+'</div>'+
+   '<div class="bd"><span style="color:'+t[2]+'">'+t[1]+'</span> · '+Math.round(o.f)+'% familiar · '+
+   (o.f>=99?'done':'about '+retrainWeeks(p,o.s)+' weeks')+'</div>'+
+   '<div style="margin-top:4px">'+bar(o.f)+'</div></div></div>'});
+ h+='</div>';
+ if(cur)h+='<button class="btn btn-ghost btn-block" style="margin-top:10px" data-action="retrainSet" data-id="'+p.id+'" data-v="">Stop retraining</button>';
+ h+='<button class="btn btn-ghost btn-block" style="margin-top:8px" data-action="profile" data-id="'+p.id+'">← Back to profile</button>';
+ openModal(h)};
+ACTIONS.retrainSet=el=>{
+ const p=playerById(el.dataset.id);if(!p)return;
+ const s=el.dataset.v;
+ if(!s){p.retrain=null;toast('🎓 '+p.name+' back on his normal programme')}
+ else if(canRetrain(p,s)){
+  p.retrain=s;p.itrain=null;                            // his week belongs to the new job now
+  p.posFam=p.posFam||{};
+  toast('🎓 '+p.name+' is being retrained at '+RT_NAMES[s])}
+ openProfile(p.id);render()};
+/* the position map on his profile */
+function famGridHtml(p){
+ const rows=[['ST'],['AML','AMC','AMR'],['ML','MC','MR'],['WBL','DM','WBR'],['DL','DC','DR'],['GK']];
+ let h='<div style="display:flex;flex-direction:column;gap:3px">';
+ rows.forEach(r=>{
+  h+='<div class="row" style="gap:3px;justify-content:center">';
+  r.forEach(s=>{
+   const f=famOf(p,s),t=famTier(f);
+   const on=p.pos===s||(p.pos2&&p.pos2.indexOf(s)>=0);
+   h+='<div style="flex:1;max-width:74px;text-align:center;padding:4px 2px;border-radius:6px;'+
+    'background:rgba(255,255,255,'+(0.03+f/100*0.09).toFixed(3)+');border:1px solid '+(on?'var(--gold)':'var(--chalk)')+'">'+
+    '<div class="xs" style="font-weight:800;color:'+t[2]+'">'+s+'</div>'+
+    '<div class="xs faint" style="font-size:9px">'+Math.round(f)+'</div></div>'});
+  h+='</div>'});
+ return h+'</div>'}
+
+/* ---------------------------------------------------------------------
+   4. THE WEEK'S WORK — gym, mentors, set pieces, camps
+   --------------------------------------------------------------------- */
+const GYM={
+ Balanced:{lbl:'Balanced',d:'A bit of everything. Nothing gained quickly, nothing lost.',
+  attrs:['stamina','strength','agility'],g:.5,load:0,inj:1},
+ Strength:{lbl:'Strength',d:'Weights and contact work. Bodies that win their duels — and legs that feel it.',
+  attrs:['strength','heading','aggression'],g:1,load:2.5,inj:1.1},
+ Speed:{lbl:'Speed',d:'Sprint work and change of direction. The quickest gains, and the quickest hamstrings.',
+  attrs:['pace','acceleration','agility'],g:1,load:3.5,inj:1.35},
+ Endurance:{lbl:'Endurance',d:'Running. Miles of it. Legs that last ninety minutes and then some.',
+  attrs:['stamina','workRate'],g:1,load:3,inj:1.05},
+ Recovery:{lbl:'Recovery',d:'Pool, bikes and massage tables. No one gets better, but no one breaks either.',
+  attrs:[],g:0,load:-16,inj:.55}};
+/* the conditioning block also decides how safe the week is */
+const _injRiskGym=injRisk;
+injRisk=function(p,c,ctx){
+ const v=_injRiskGym.apply(this,arguments);
+ if(c&&c.i===G.my&&ctx==='train'){const gy=GYM[G.gym]||GYM.Balanced;return v*(gy.inj||1)}
+ return v};
+const SP_LEVELS=['None','One session','Two sessions','Set-piece specialists'];
+function spLevel(side){
+ if(side&&side.isMy)return clamp(G.setpiece||0,0,3);
+ return 0}
+function ensureTrain(){
+ if(!G)return;
+ if(G.gym==null)G.gym='Balanced';
+ if(G.setpiece==null)G.setpiece=1;
+ if(!G.mentor)G.mentor=[];
+ if(G.campDone==null)G.campDone=-1;
+ G.clubs[G.my].players.forEach(p=>{
+  if(!p.posFam)p.posFam={};
+  if(!p.pos2)p.pos2=[];
+  if(p._devS!==G.season){p._devS=G.season;p._devO=p.ovr;p._devA=Object.assign({},p.attrs)}})}
+ACTIONS.gymSet=el=>{G.gym=el.dataset.v;ensureTrain();toast('🏋️ Conditioning block: '+el.dataset.v);render()};
+ACTIONS.spWork=el=>{G.setpiece=+el.dataset.v;toast('🎯 Set-piece work: '+SP_LEVELS[G.setpiece]);render()};
+ACTIONS.trainTab=el=>{UI.trainTab=el.dataset.v;render()};
+
+/* ---- mentoring ---- */
+function mentorPairs(){ensureTrain();return (G.mentor||[]).map(x=>({m:playerById(x.m),y:playerById(x.y)})).filter(x=>x.m&&x.y)}
+ACTIONS.mentorOpen=()=>{
+ ensureTrain();
+ const my=G.clubs[G.my];
+ const used=new Set();(G.mentor||[]).forEach(x=>{used.add(x.m);used.add(x.y)});
+ const seniors=my.players.filter(p=>!p.loan&&p.age>=27&&!used.has(p.id)).sort((a,b)=>
+  ((b.attrs.leadership||0)+(b.attrs.decisions||0))-((a.attrs.leadership||0)+(a.attrs.decisions||0)));
+ let h='<h3>🧑‍🏫 Mentoring</h3><div class="small muted" style="margin:4px 0 12px">'+
+  'Put a young player alongside a senior pro and the youngster takes on his habits — his composure, his work rate, his head. '+
+  'Four pairs at a time.</div>';
+ const pairs=mentorPairs();
+ h+='<div class="card tight">';
+ if(!pairs.length)h+='<div class="small muted" style="padding:8px 2px">Nobody is being mentored.</div>';
+ pairs.forEach((pr,i)=>{
+  h+='<div class="spread" style="padding:7px 2px;border-bottom:1px solid var(--chalk)">'+
+   '<div class="row" style="gap:6px">'+face(pr.m,22)+'<span class="small" style="font-weight:700">'+esc(pr.m.name)+'</span>'+
+   '<span class="xs faint">→</span>'+face(pr.y,22)+'<span class="small" style="font-weight:700">'+esc(pr.y.name)+'</span></div>'+
+   '<button class="btn btn-xs btn-ghost" data-action="mentorDrop" data-v="'+i+'">Remove</button></div>'});
+ h+='</div>';
+ if(pairs.length<4){
+  h+='<div class="chip-lbl">Add a group — pick the senior pro</div><div class="card tight">';
+  seniors.slice(0,10).forEach(p=>{
+   h+='<div class="mail" data-action="mentorPick" data-id="'+p.id+'"><div class="ic">'+face(p,26)+'</div>'+
+    '<div style="flex:1"><div class="tt">'+esc(p.name)+'</div><div class="bd">'+p.age+' · '+posBadge(p.pos)+
+    ' · leadership '+Math.round(p.attrs.leadership||10)+' · composure '+Math.round(p.attrs.composure||10)+'</div></div></div>'});
+  h+='</div>'}
+ h+='<button class="btn btn-ghost btn-block" style="margin-top:10px" data-action="closeModal">Done</button>';
+ openModal(h)};
+ACTIONS.mentorPick=el=>{
+ const m=playerById(el.dataset.id);if(!m)return;
+ const my=G.clubs[G.my];
+ const used=new Set();(G.mentor||[]).forEach(x=>{used.add(x.m);used.add(x.y)});
+ const kids=my.players.filter(p=>!p.loan&&p.age<=23&&!used.has(p.id)).sort((a,b)=>(b.pot-b.ovr)-(a.pot-a.ovr));
+ let h='<h3>Who learns from '+esc(m.name)+'?</h3><div class="card tight">';
+ if(!kids.length)h+='<div class="small muted" style="padding:8px 2px">No free youngsters in the squad.</div>';
+ kids.slice(0,12).forEach(p=>{
+  h+='<div class="mail" data-action="mentorAdd" data-id="'+p.id+'" data-arg="'+m.id+'"><div class="ic">'+face(p,26)+'</div>'+
+   '<div style="flex:1"><div class="tt">'+esc(p.name)+'</div><div class="bd">'+p.age+' · '+posBadge(p.pos)+
+   ' · '+p.ovr+' now, '+p.pot+' potential</div></div></div>'});
+ h+='</div><button class="btn btn-ghost btn-block" style="margin-top:8px" data-action="mentorOpen">← Back</button>';
+ openModal(h)};
+ACTIONS.mentorAdd=el=>{
+ ensureTrain();
+ if(G.mentor.length>=4){toast('Four groups is the limit.');return}
+ G.mentor.push({m:+el.dataset.arg,y:+el.dataset.id});
+ toast('🧑‍🏫 Mentoring group set up');ACTIONS.mentorOpen()};
+ACTIONS.mentorDrop=el=>{ensureTrain();G.mentor.splice(+el.dataset.v,1);ACTIONS.mentorOpen()};
+
+/* ---- the training camp ---- */
+function campCost(){return Math.round(1.2e6+G.clubs[G.my].rep*260)}
+ACTIONS.campBook=()=>{
+ ensureTrain();
+ const my=G.clubs[G.my],cost=campCost();
+ if(G.campDone===G.season){toast('You have already taken the squad away this season.');return}
+ if(my.budget<cost){toast('Not enough in the budget for a camp.');return}
+ openModal('<h3>✈️ Warm-weather camp</h3><div class="small muted" style="margin:4px 0 12px">'+
+  'Ten days away with the squad: double sessions, no distractions, and a group that comes back closer than it left. '+
+  'Costs <b>'+fmtM(cost)+'</b> out of the transfer budget. One a season.</div>'+
+  '<div class="card tight"><div class="small" style="padding:4px 2px;line-height:1.7">'+
+  '· Everyone comes back fitter and sharper<br>· Accumulated load washed away<br>· Squad morale lifts<br>· A week of extra conditioning work</div></div>'+
+  '<button class="btn btn-primary btn-block" style="margin-top:12px" data-action="campGo">Book it — '+fmtM(cost)+'</button>'+
+  '<button class="btn btn-ghost btn-block" style="margin-top:8px" data-action="closeModal">Not now</button>')};
+ACTIONS.campGo=()=>{
+ const my=G.clubs[G.my],cost=campCost();
+ if(my.budget<cost){toast('Not enough in the budget.');return}
+ my.budget-=cost;G.campDone=G.season;
+ const gy=GYM[G.gym]||GYM.Balanced;
+ my.players.forEach(p=>{
+  if(p.loan)return;
+  p.load=clamp((p.load||0)-30,0,100);
+  p.cond=clamp(p.cond+14,0,100);
+  p.sharp=clamp(p.sharp+12,0,100);
+  p.morale=clamp(p.morale+9,1,100);
+  if(!p.injury)gy.attrs.forEach(a=>{if(p.attrs[a]!=null)p.attrs[a]=clamp(p.attrs[a]+.22,1,20)});
+  p.ovr=Math.round(ovrOf(p))});
+ closeModal();
+ mail('train','✈️ The squad returns from camp',
+  'Ten days of double sessions in the sun. Everyone is fitter, sharper and a good deal happier — and the '+
+  esc((GYM[G.gym]||GYM.Balanced).lbl.toLowerCase())+' block got a full week of undivided attention.');
+ toast('✈️ Camp booked — the squad flies out');render()};
+
+/* ---------------------------------------------------------------------
+   5. WHAT ALL OF IT ACTUALLY DOES, EVERY WEEK
+   --------------------------------------------------------------------- */
+const _weeklyTrainG=weeklyTraining;
+weeklyTraining=function(){
+ ensureTrain();
+ const my=G.clubs[G.my];
+ const gy=GYM[G.gym]||GYM.Balanced;
+ const mod=(typeof TRAIN_INT!=='undefined'&&TRAIN_INT[G.trainInt||'Normal'])||{g:1,f:0,inj:1};
+ const coach=.8+(((G.staff&&G.staff.coach&&G.staff.coach.stars)||2)*.12);
+ const facil=.85+(((my.stad&&my.stad.train)||3)-1)*.09;
+ const notes={grad:[],step:[],ment:[],gym:[]};
+ // ---- the gym ----
+ my.players.forEach(p=>{
+  if(p.loan||p.injury)return;
+  p.load=clamp((p.load||0)+gy.load*(p.rest?.4:1),0,100);
+  if(gy.g>0&&!p.rest){
+   const young=p.age<=23?1:p.age<=27?.6:p.age<=30?.32:.16;
+   const room=Math.max(0,p.pot-p.ovr)/12;
+   gy.attrs.forEach(a=>{
+    if(p.attrs[a]==null)return;
+    const head=20-p.attrs[a];
+    const gain=.055*gy.g*coach*facil*mod.g*(young*(.5+Math.min(1,room))) * (head>2?1:head/2);
+    if(gain>0)p.attrs[a]=clamp(p.attrs[a]+gain,1,20)})}
+  if(G.gym==='Recovery'){p.cond=clamp(p.cond+3.5,0,100);p.sharp=clamp(p.sharp-1.2,0,100)}
+  if(G.gym==='Endurance')p.cond=clamp(p.cond+1.2,0,100)});
+ // ---- mentoring ----
+ mentorPairs().forEach(pr=>{
+  const m=pr.m,y=pr.y;
+  if(m.injury||y.injury||m.loan||y.loan)return;
+  let moved=null;
+  MENT.forEach(a=>{
+   if(m.attrs[a]==null||y.attrs[a]==null)return;
+   const d=m.attrs[a]-y.attrs[a];
+   if(d<=.4)return;
+   const step=Math.min(d*.06,.14)*(y.age<=20?1.3:y.age<=22?1:.7);
+   y.attrs[a]=clamp(y.attrs[a]+step,1,20);
+   if(!moved||step>moved.s)moved={a,s:step}});
+  y.morale=clamp(y.morale+1.2,1,100);
+  if(m.pers&&!y._mentored&&Math.random()<.045){y.pers=m.pers;y._mentored=1;
+   notes.ment.push(esc(y.name)+' has started to carry himself like '+esc(m.name))}
+  else if(moved)notes.ment.push(esc(y.name)+' picking up '+moved.a+' from '+esc(m.name))});
+ // ---- retraining ----
+ my.players.forEach(p=>{
+  if(!p.retrain||p.loan)return;
+  const slot=p.retrain;
+  if(!canRetrain(p,slot)){p.retrain=null;return}
+  p.posFam=p.posFam||{};
+  const before=famOf(p,slot),bt=famTier(before)[1];
+  if(!p.injury)p.posFam[slot]=clamp((p.posFam[slot]||0)+retrainRate(p,slot),0,100);
+  const after=famOf(p,slot),at=famTier(after)[1];
+  if(after>=99){
+   p.pos2=p.pos2||[];if(p.pos2.indexOf(slot)<0)p.pos2.push(slot);
+   p.retrain=null;p.ovr=Math.round(ovrOf(p));
+   notes.grad.push(esc(p.name)+' is now a <b>natural '+RT_NAMES[slot].toLowerCase()+'</b>');
+   mail('train','🎓 '+p.name+' has learned a new position',
+    '<b>'+esc(p.name)+'</b> is now rated a natural <b>'+RT_NAMES[slot].toLowerCase()+'</b> as well as '+
+    RT_NAMES[p.pos].toLowerCase()+'. He plays there with no loss at all.')}
+  else if(at!==bt)notes.step.push(esc(p.name)+' is now <b>'+at.toLowerCase()+'</b> at '+RT_NAMES[slot].toLowerCase())});
+ // ---- everything the older layers do ----
+ const realMailT=mail;
+ let inner=null;
+ mail=function(t,ti,b,a){if(t==='train'&&/Weekly training report/.test(String(ti))){inner=b;return}return realMailT(t,ti,b,a)};
+ try{_weeklyTrainG()}finally{mail=realMailT}
+ // ratings catch up with the week's work
+ my.players.forEach(p=>{if(!p.loan){const nw=Math.round(ovrOf(p));if(nw!==p.ovr){p.ovr=nw;p.value=valueFor(p)}}});
+ // ---- one report, with the new work in it ----
+ let extra='';
+ extra+='<br>🏋️ Conditioning block: <b>'+gy.lbl+'</b>';
+ if(G.setpiece>0)extra+=' · 🎯 set pieces: <b>'+SP_LEVELS[G.setpiece]+'</b>';
+ const rt=my.players.filter(p=>p.retrain);
+ if(rt.length)extra+='<br>🎓 Retraining: '+rt.map(p=>esc(p.name)+' → '+RT_NAMES[p.retrain]+
+  ' ('+Math.round(famOf(p,p.retrain))+'%)').join(', ');
+ if(notes.step.length)extra+='<br>📐 '+notes.step.join('<br>📐 ');
+ if(notes.grad.length)extra+='<br>🎓 '+notes.grad.join('<br>🎓 ');
+ if(notes.ment.length)extra+='<br>🧑‍🏫 '+notes.ment.slice(0,3).join('<br>🧑‍🏫 ');
+ realMailT('train','🏋️ Weekly training report',(inner||'')+extra)};
+
+/* minutes in a position teach him more than any cone drill */
+const _finishFam=MatchSim.prototype.finish;
+MatchSim.prototype.finish=function(){
+ const r=_finishFam.apply(this,arguments);
+ try{
+  this.sides.forEach(s=>{
+   if(!s.isMy)return;
+   s.onfield.forEach(pl=>{
+    const p=pl.p,slot=pl.slot;
+    if(!p||slot==='GK'||p.pos===slot)return;
+    if(p.pos2&&p.pos2.indexOf(slot)>=0)return;
+    const mins=clamp(90-(pl.entered||0)-(pl.off?18:0),10,90);
+    const a=p.age;
+    const ageF=a<=20?1.3:a<=23?1:a<=26?.7:a<=30?.4:.2;
+    p.posFam=p.posFam||{};
+    p.posFam[slot]=clamp((p.posFam[slot]||0)+mins/90*1.15*ageF,0,100);
+    if(famOf(p,slot)>=99){
+     p.pos2=p.pos2||[];
+     if(p.pos2.indexOf(slot)<0){p.pos2.push(slot);
+      mail('train','🎓 '+p.name+' has learned a new position',
+       '<b>'+esc(p.name)+'</b> has played there often enough. He is a natural <b>'+
+       RT_NAMES[slot].toLowerCase()+'</b> now.')}}})})}catch(e){}
+ return r};
+
+/* set-piece work shows up where set pieces are taken */
+const _effSP=MatchSim.prototype.effA;
+MatchSim.prototype.effA=function(pl,attr){
+ const v=_effSP.call(this,pl,attr);
+ const b=this._spBoost;
+ if(b&&b.attrs.indexOf(attr)>=0&&b.side&&b.side.onfield.indexOf(pl)>=0)return v*b.mul;
+ return v};
+const _cornSP=MatchSim.prototype.cornerEvent;
+MatchSim.prototype.cornerEvent=function(A,D){
+ const lv=spLevel(A);
+ if(lv>0)this._spBoost={side:A,mul:1+lv*.075,attrs:['heading','crossing','strength','positioning','vision']};
+ try{return _cornSP.apply(this,arguments)}finally{this._spBoost=null}};
+const _penSP=MatchSim.prototype.penaltyEvent;
+MatchSim.prototype.penaltyEvent=function(A,D,dp){
+ const lv=spLevel(A);
+ if(lv>0)this._spBoost={side:A,mul:1+lv*.055,attrs:['composure','shooting']};
+ try{return _penSP.apply(this,arguments)}finally{this._spBoost=null}};
+
+/* ---------------------------------------------------------------------
+   6. THE TRAINING SCREEN
+   --------------------------------------------------------------------- */
+function trDevRows(){
+ const my=G.clubs[G.my];
+ return my.players.filter(p=>!p.loan&&p._devO!=null).map(p=>{
+  let best=null;
+  for(const a in p.attrs){
+   const was=(p._devA&&p._devA[a]);if(was==null)continue;
+   const d=p.attrs[a]-was;if(!best||d>best.d)best={a,d}}
+  return{p,d:p.ovr-p._devO,best}}).sort((a,b)=>b.d-a.d||(b.best?b.best.d:0)-(a.best?a.best.d:0))}
+vTraining=function(){
+ ensureTrain();
+ const my=G.clubs[G.my];
+ const tab=UI.trainTab||'week';
+ const tabs=[['week','Week'],['gym','Gym'],['indiv','Players'],['retrain','Retraining'],['dev','Development']];
+ let h='<div class="chips" style="margin-bottom:12px">'+tabs.map(t=>
+  '<button class="chip'+(tab===t[0]?' on':'')+'" data-action="trainTab" data-v="'+t[0]+'">'+t[1]+'</button>').join('')+'</div>';
+
+ if(tab==='week'){
+  const gy=GYM[G.gym]||GYM.Balanced;
+  const avail=my.players.filter(p=>!p.injury&&!p.loan);
+  const avgLoad=Math.round(avail.reduce((s,p)=>s+(p.load||0),0)/Math.max(1,avail.length));
+  const avgCond=Math.round(avail.reduce((s,p)=>s+p.cond,0)/Math.max(1,avail.length));
+  const avgSharp=Math.round(avail.reduce((s,p)=>s+p.sharp,0)/Math.max(1,avail.length));
+  h+='<div class="grid3" style="margin-bottom:12px">'+
+   '<div class="kpi"><div class="v">'+avgCond+'%</div><div class="l">Condition</div></div>'+
+   '<div class="kpi"><div class="v">'+avgSharp+'%</div><div class="l">Sharpness</div></div>'+
+   '<div class="kpi"><div class="v" style="color:'+(avgLoad>62?'var(--danger)':avgLoad>45?'var(--amber)':'var(--green)')+'">'+avgLoad+'%</div><div class="l">Load</div></div></div>';
+  h+='<div class="card"><div class="chip-lbl" style="margin-top:0">Training intensity</div><div class="chips">'+
+   ['Light','Normal','Intense'].map(v=>'<button class="chip'+((G.trainInt||'Normal')===v?' on':'')+'" data-action="trainInt" data-v="'+v+'">'+v+'</button>').join('')+
+   '</div><div class="xs faint" style="margin-top:6px">Intense develops players faster but drains legs and risks injuries. Light protects a tired squad before a big week.</div>'+
+   '<div class="chip-lbl">Set-piece work</div><div class="chips">'+
+   SP_LEVELS.map((s,i)=>'<button class="chip'+((G.setpiece||0)===i?' on':'')+'" data-action="spWork" data-v="'+i+'">'+s+'</button>').join('')+
+   '</div><div class="xs faint" style="margin-top:6px">Hours on the training pitch drilling corners and penalties. It shows up in the box on a Saturday.</div></div>';
+  // the focus sliders the old screen had
+  let sum=0;TRAIN_AREAS.forEach(a=>sum+=G.trainFocus[a]);
+  h+='<div class="card"><div class="chip-lbl" style="margin-top:0">Coaching focus</div>'+
+   '<div class="xs faint" style="margin-bottom:10px">Where the sessions go. Players under 24 grow fastest in the areas you push.</div>';
+  TRAIN_AREAS.forEach(a=>{h+='<div class="spread" style="margin-bottom:2px"><span class="small" style="font-weight:700">'+a+'</span><span class="small num" id="tf-'+a+'">'+G.trainFocus[a]+'%</span></div>'+
+   '<input type="range" min="0" max="60" step="5" value="'+G.trainFocus[a]+'" data-tr="'+a+'">'});
+  h+='<div class="spread" style="margin-top:10px"><span class="small muted">Total</span><b class="num" id="tfSum" style="color:'+(sum===100?'var(--green)':'var(--amber)')+'">'+sum+'%</b></div>'+
+   '<button class="btn btn-ghost btn-sm btn-block" style="margin-top:10px" data-action="tfBalance">Balance to 100%</button></div>';
+  h+='<div class="grid3" style="margin-bottom:12px">'+
+   '<div class="kpi"><div class="v">'+((my.stad&&my.stad.train)||1)+'/5</div><div class="l">Facilities</div></div>'+
+   '<div class="kpi"><div class="v">'+((G.staff&&G.staff.coach&&G.staff.coach.stars)||2)+'★</div><div class="l">Coaching</div></div>'+
+   '<div class="kpi"><div class="v">'+((my.stad&&my.stad.youth)||1)+'/5</div><div class="l">Academy</div></div></div>';
+  h+='<button class="btn '+(G.campDone===G.season?'btn-ghost':'btn-primary')+' btn-block" data-action="campBook">'+
+   (G.campDone===G.season?'✈️ Camp already taken this season':'✈️ Book a warm-weather camp · '+fmtM(campCost()))+'</button>';
+  return h}
+
+ if(tab==='gym'){
+  h+='<div class="xs faint" style="margin:-4px 0 10px 2px">The conditioning block runs alongside everything else. It is the only way an older squad holds on to its legs.</div>';
+  h+='<div class="card tight">';
+  Object.keys(GYM).forEach(k=>{
+   const g=GYM[k],on=(G.gym||'Balanced')===k;
+   h+='<div class="mail'+(on?' unread':'')+'" data-action="gymSet" data-v="'+k+'">'+
+    '<div class="ic">'+(k==='Strength'?'🏋️':k==='Speed'?'⚡':k==='Endurance'?'🏃':k==='Recovery'?'🧊':'⚖️')+'</div>'+
+    '<div style="flex:1"><div class="tt">'+g.lbl+(on?' <span class="xs" style="color:var(--gold)">· running now</span>':'')+'</div>'+
+    '<div class="bd">'+g.d+'</div>'+
+    '<div class="xs faint" style="margin-top:3px">'+(g.attrs.length?'Builds '+g.attrs.join(', '):'Builds nothing — protects everything')+
+    ' · load '+(g.load>0?'+':'')+g.load+' · injury risk ×'+g.inj.toFixed(2)+'</div></div></div>'});
+  h+='</div>';
+  h+='<div class="chip-lbl">Mentoring</div>';
+  const prs=mentorPairs();
+  h+='<div class="card tight">';
+  if(!prs.length)h+='<div class="small muted" style="padding:8px 2px">No mentoring groups. Senior professionals can pass on their heads to the young ones.</div>';
+  prs.forEach(pr=>{
+   h+='<div class="spread" style="padding:7px 2px;border-bottom:1px solid var(--chalk)">'+
+    '<div class="row" style="gap:6px">'+face(pr.m,22)+'<span class="small" style="font-weight:700">'+esc(pr.m.name)+'</span>'+
+    '<span class="xs faint">mentors</span>'+face(pr.y,22)+'<span class="small" style="font-weight:700">'+esc(pr.y.name)+'</span></div>'+
+    '<span class="xs faint">'+pr.y.age+'</span></div>'});
+  h+='</div><button class="btn btn-ghost btn-block" style="margin-top:8px" data-action="mentorOpen">🧑‍🏫 Manage mentoring groups</button>';
+  return h}
+
+ if(tab==='indiv'){
+  h+='<div class="xs faint" style="margin:-4px 0 10px 2px">Tap a player to set his individual programme, retrain him, or pull him out of full training.</div>';
+  h+='<div class="card tight"><table class="tbl"><thead><tr><th>Player</th><th>Programme</th><th>Cond</th><th class="r">Load</th></tr></thead><tbody>';
+  [...my.players].filter(p=>!p.loan).sort((a,b)=>b.ovr-a.ovr).forEach(p=>{
+   const prog=p.retrain?'🎓 '+p.retrain:(p.rest?'🛋️ Resting':(p.itrain||'Balanced'));
+   h+='<tr data-action="profile" data-id="'+p.id+'"><td style="max-width:126px"><div class="row" style="gap:6px">'+face(p,22)+
+    '<span style="font-weight:700;font-size:12px">'+esc(p.name)+'</span></div></td>'+
+    '<td class="xs"'+(p.retrain?' style="color:var(--gold);font-weight:700"':'')+'>'+prog+'</td>'+
+    '<td>'+bar(p.cond)+'</td>'+
+    '<td class="r num small" style="color:'+((p.load||0)>70?'var(--danger)':(p.load||0)>50?'var(--amber)':'var(--ink)')+'">'+Math.round(p.load||0)+'%</td></tr>'});
+  h+='</tbody></table></div>';
+  return h}
+
+ if(tab==='retrain'){
+  const on=my.players.filter(p=>p.retrain);
+  h+='<div class="xs faint" style="margin:-4px 0 10px 2px">A footballer is not locked to one position. Coach him somewhere new and, given long enough, he becomes a natural there.</div>';
+  h+='<div class="chip-lbl" style="margin-top:0">In training now</div><div class="card tight">';
+  if(!on.length)h+='<div class="small muted" style="padding:8px 2px">Nobody is learning a new position.</div>';
+  on.forEach(p=>{
+   const f=famOf(p,p.retrain),t=famTier(f);
+   h+='<div class="mail" data-action="retrainOpen" data-id="'+p.id+'"><div class="ic">'+face(p,26)+'</div>'+
+    '<div style="flex:1;min-width:0"><div class="tt">'+esc(p.name)+' <span class="xs faint">'+p.pos+' → '+p.retrain+'</span></div>'+
+    '<div class="bd"><span style="color:'+t[2]+'">'+t[1]+'</span> · '+Math.round(f)+'% · '+retrainWeeks(p,p.retrain)+' weeks to go</div>'+
+    '<div style="margin-top:4px">'+bar(f)+'</div></div></div>'});
+  h+='</div>';
+  const cands=my.players.filter(p=>!p.loan&&!p.retrain&&p.pos!=='GK'&&p.age<=26)
+   .sort((a,b)=>a.age-b.age).slice(0,14);
+  h+='<div class="chip-lbl">Young enough to learn</div><div class="card tight">';
+  cands.forEach(p=>{
+   const alt=RT_OUT.filter(s=>canRetrain(p,s)).map(s=>({s,w:retrainWeeks(p,s)})).sort((a,b)=>a.w-b.w)[0];
+   h+='<div class="mail" data-action="retrainOpen" data-id="'+p.id+'"><div class="ic">'+face(p,26)+'</div>'+
+    '<div style="flex:1;min-width:0"><div class="tt">'+esc(p.name)+'</div>'+
+    '<div class="bd">'+p.age+' · natural '+RT_NAMES[p.pos].toLowerCase()+
+    ((p.pos2&&p.pos2.length)?' &amp; '+p.pos2.map(s=>RT_NAMES[s].toLowerCase()).join(' &amp; '):'')+
+    (alt?' · quickest switch: '+RT_NAMES[alt.s].toLowerCase()+', '+alt.w+' weeks':'')+'</div></div></div>'});
+  h+='</div>';
+  return h}
+
+ // development
+ const rows=trDevRows();
+ h+='<div class="xs faint" style="margin:-4px 0 10px 2px">Where every player stands against where he started the season.</div>';
+ h+='<div class="card tight"><table class="tbl"><thead><tr><th>Player</th><th class="r">Then</th><th class="r">Now</th><th>Biggest gain</th></tr></thead><tbody>';
+ rows.forEach(r=>{
+  const col=r.d>0?'var(--green)':r.d<0?'var(--danger)':'var(--ink-dim)';
+  h+='<tr data-action="profile" data-id="'+r.p.id+'"><td style="max-width:120px"><div class="row" style="gap:6px">'+face(r.p,22)+
+   '<span style="font-weight:700;font-size:12px">'+esc(r.p.name)+'</span></div></td>'+
+   '<td class="r num small faint">'+r.p._devO+'</td>'+
+   '<td class="r num small" style="color:'+col+';font-weight:800">'+r.p.ovr+(r.d?' ('+(r.d>0?'+':'')+r.d+')':'')+'</td>'+
+   '<td class="xs faint">'+(r.best&&r.best.d>=.25?r.best.a+' +'+r.best.d.toFixed(1):'—')+'</td></tr>'});
+ h+='</tbody></table></div>';
+ return h};
+
+/* ---- the profile gains a position map and a retrain button ---- */
+const _profTrain=openProfile;
+openProfile=function(pid){
+ _profTrain(pid);
+ const p=playerById(pid);if(!p)return;
+ const host=$('#sheetBody');if(!host)return;
+ const mine=p.club===G.my;
+ const box=document.createElement('div');
+ box.className='card tight';box.style.marginTop='10px';
+ let h='<div class="xs faint" style="font-weight:800;letter-spacing:.5px;margin-bottom:6px">POSITIONS</div>'+
+  famGridHtml(p)+
+  '<div class="xs faint" style="margin-top:7px">Natural: <b style="color:var(--gold)">'+RT_NAMES[p.pos]+'</b>'+
+  ((p.pos2&&p.pos2.length)?' · also <b style="color:var(--gold)">'+p.pos2.map(s=>RT_NAMES[s]).join(', ')+'</b>':'')+'</div>';
+ if(mine&&p.retrain){
+  const f=famOf(p,p.retrain),t=famTier(f);
+  h+='<div style="margin-top:8px"><div class="xs" style="margin-bottom:3px">🎓 Retraining at <b>'+RT_NAMES[p.retrain]+'</b> — '+
+   '<span style="color:'+t[2]+'">'+t[1]+'</span>, '+retrainWeeks(p,p.retrain)+' weeks to go</div>'+bar(f)+'</div>'}
+ if(mine&&p.pos!=='GK')
+  h+='<button class="btn btn-ghost btn-sm btn-block" style="margin-top:9px" data-action="retrainOpen" data-id="'+p.id+'">🎓 '+
+   (p.retrain?'Change retraining':'Retrain at a new position')+'</button>';
+ box.innerHTML=h;
+ host.appendChild(box)};
+
+
+/* =====================================================================
+   HALF TIME IS HALF TIME
+   ---------------------------------------------------------------------
+   The engine stopped at the whistle but the picture did not. The visual
+   layer carried on moving men and the ball all the way through the
+   interval, so by the time you pressed for the second half the ball had
+   wandered off the centre spot to whoever happened to be holding it —
+   and the game restarted from a throw-in on the halfway line, or a goal
+   kick, or wherever it had drifted to.
+
+   Nobody plays during half time. And when the whistle goes for the
+   second half, the ball is on the centre spot.
+   ===================================================================== */
+const _advHT=advancePlay;
+advancePlay=function(now){
+ const m=MU.m;
+ if(m&&!m.done&&m.stage==='HT')return;                 // they are in the dressing room
+ return _advHT(now)};
+const _tickKO=MatchSim.prototype.tickOnce;
+MatchSim.prototype.tickOnce=function(){
+ const before=this.stage;
+ const r=_tickKO.apply(this,arguments);
+ if(before==='HT'&&this.stage==='H2'&&!this._koH2&&liveMatch(this)){
+  this._koH2=1;
+  // the ends module already swapped MU.koSide at the whistle — kick off with it
+  try{kickOffFrom(MU.koSide==null?0:MU.koSide)}catch(e){}}
+ return r};
 
 showStart();
 </script>
