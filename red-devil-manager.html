@@ -10060,6 +10060,411 @@ humanDays=function(d){
  if(d<30){const w=Math.round(d/7);return w===1?'1 week':w+' weeks'}
  const m=Math.round(d/30);return m===1?'1 month':m+' months'};
 
+
+/* =====================================================================
+   MATCHDAY 3.0 — a clock you can trust, a pitch that shows the game
+   ---------------------------------------------------------------------
+   Three things were wrong with watching a match:
+     · extra time was printed as stoppage time, so a cup tie read "90+33"
+     · a half went by in thirteen seconds, so nothing could be followed
+     · the 2D pitch was decorative — dots drifting toward a random ball
+   ===================================================================== */
+
+/* ---------- 1. THE CLOCK ---------- */
+MatchSim.prototype.dispMin=function(){
+ const m=this.min;
+ if(this.et)return m<=120?String(m):'120+'+(m-120);
+ if(this.stage==='H1'||this.stage==='HT')return m<=45?String(m):'45+'+(m-45);
+ return m<=90?String(m):'90+'+(m-90)};
+/* how much stoppage a half has actually earned */
+MatchSim.prototype.addedTime=function(half){
+ let add=(this._stop||0);
+ add+=half===1?1.1:2.2;                       // second halves always run longer
+ return clamp(Math.round(add),1,8)};          // four is normal, eight is a bad day
+const _tickClock=MatchSim.prototype.tickOnce;
+MatchSim.prototype.tickOnce=function(){
+ if(this.min===0){
+  this._stop=Math.random()*1.6;
+  this.htAt=45+this.addedTime(1);
+  this.ftAt=90+6;                             // provisional; set properly at the restart
+  this._addH1=this.htAt-45}
+ const wasEt=this.et,st=this.stage;
+ const r=_tickClock.apply(this,arguments);
+ // the second half's stoppage is only known once the half is under way
+ if(this.stage==='H2'&&!this._ftSet){this._ftSet=1;this._stop=Math.random()*1.4;
+  this.ftAt=90+this.addedTime(2);this._addH2=this.ftAt-90}
+ if(this.stage==='H2'&&this._ftSet&&this.min<=90){
+  const want=90+this.addedTime(2);
+  if(want>this.ftAt){this.ftAt=want;this._addH2=want-90}}   // goals and injuries add on
+ if(this.et&&!wasEt){                          // extra time starts at 91, not at 94
+  this.min=91;this._etHalf=1;
+  this.ftAt=Math.min(this.ftAt,120+irnd(1,3))}
+ if(this.et&&this._etHalf===1&&this.min>105){
+  this._etHalf=2;this.say(105,null,'Change of ends. Fifteen minutes left in extra time.','big')}
+ if(this.stage==='HT'&&st==='H1'&&!this._htSaid){this._htSaid=1}
+ return r};
+/* stoppages: goals, serious injuries and substitutions all add time */
+const _goalStop=MatchSim.prototype.goal;
+MatchSim.prototype.goal=function(){this._stop=(this._stop||0)+.75;return _goalStop.apply(this,arguments)};
+
+/* ---------- 2. WHERE THE BALL IS, AND WHO HAS IT ---------- */
+/* The engine already decides which real player does everything — it just
+    never told the pitch. Every commentary line names its man, so the ball
+    state is read straight off the events as they happen. */
+function liveMatch(m){return !!(m&&typeof MU!=='undefined'&&MU.m===m)}
+function dotOf(pl){return (MU.dots||[]).find(d=>d.pl===pl)}
+function bsSet(si,pl,evt){
+ if(!MU.bs)MU.bs={};
+ const b=MU.bs;
+ if(pl&&b.pl!==pl){b.prev=b.pl;b.passAt=performance.now()}
+ b.si=si;if(pl)b.pl=pl;b.evt=evt||'run';b.at=performance.now();
+ b.idle=performance.now()+900}
+const _saySee=MatchSim.prototype.say;
+MatchSim.prototype.say=function(min,side,text,cls){
+ const r=_saySee.call(this,min,side,text,cls);
+ if(!liveMatch(this)||!side)return r;
+ const si=side===this.sides[0]?0:1;
+ let who=null;
+ const t=String(text);
+ outer:
+ for(const sd of this.sides)for(const pl of sd.onfield){
+  if(pl.off)continue;
+  if(t.indexOf(pl.p.name)>=0){who=pl;break outer}}
+ // a save or a block belongs to the defending side, whoever was named
+ let evt='run';
+ if(cls==='goal')evt='goal';
+ else if(/SAVE|save|parries|palms|tips/.test(t))evt='save';
+ else if(/corner/i.test(t))evt='corner';
+ else if(/foul|free kick|brings? him down|trips/i.test(t))evt='foul';
+ else if(/wide|over the bar|off target|drags/i.test(t))evt='miss';
+ else if(/chance|through|slips|releases|shoots|drives/i.test(t))evt='attack';
+ bsSet(si,who,evt);
+ return r};
+const _shotSee=MatchSim.prototype.shotEvent;
+MatchSim.prototype.shotEvent=function(A,D,shooter,creator,fromCorner){
+ if(liveMatch(this)){
+  const si=A===this.sides[0]?0:1;
+  bsSet(si,shooter,'attack');
+  MU.shotFrom=dotOf(shooter)?{x:dotOf(shooter).x,y:dotOf(shooter).y}:null}
+ const r=_shotSee.apply(this,arguments);
+ if(liveMatch(this)){
+  const si=A===this.sides[0]?0:1;
+  const last=this.feed[this.feed.length-1]||{};
+  const goal=last.cls==='goal';
+  const saved=/save|SAVE|parr|palm|tip/i.test(String(last.text||''));
+  MU.flight={si,to:{x:si===0?104:1,y:34+(Math.random()*10-5)},
+   kind:goal?'goal':saved?'save':'miss',
+   from:MU.shotFrom||{x:si===0?80:25,y:34},t0:performance.now(),ms:goal?520:460};
+  if(goal)MU.goalFlashP=performance.now()+1600}
+ return r};
+const _cornSee=MatchSim.prototype.cornerEvent;
+MatchSim.prototype.cornerEvent=function(A,D){
+ if(liveMatch(this)){const si=A===this.sides[0]?0:1;
+  MU.setPiece={x:si===0?103:2,y:Math.random()<.5?3:65,until:performance.now()+2200}}
+ return _cornSee.apply(this,arguments)};
+const _penSee=MatchSim.prototype.penaltyEvent;
+MatchSim.prototype.penaltyEvent=function(A,D,dp){
+ if(liveMatch(this)){const si=A===this.sides[0]?0:1;
+  MU.setPiece={x:si===0?94:11,y:34,until:performance.now()+2600}}
+ return _penSee.apply(this,arguments)};
+
+/* ---------- 3. THE PITCH ---------- */
+function surname(n){const p=String(n).split(' ');return p.length>1?p[p.length-1]:n}
+/* team shape: everybody's position is a function of where the ball is */
+function shapeFactor(slot){
+ if(slot==='GK')return .10;
+ if(DEFPOS.includes(slot))return .78;
+ if(slot==='DM')return .88;
+ if(MIDPOS.includes(slot))return 1;
+ return .72}
+function pitchTargets(){
+ const m=MU.m;if(!m)return;
+ const b=MU.ball,bs=MU.bs||{};
+ m.sides.forEach((s,si)=>{
+  const right=si===0;                             // side 0 attacks right
+  const own=right?0:105;
+  const inPoss=bs.si===si;
+  s.onfield.forEach(pl=>{
+   const d=dotOf(pl);if(!d)return;
+   if(pl.off){d.tx=right?-7:112;d.ty=34;return}
+   const home=dotHome(pl,si);
+   if(pl.slot==='GK'){
+    d.tx=own+(right?3.2:-3.2)+(b.x-own)*.055;
+    d.ty=34+(b.y-34)*.30;return}
+   const f=shapeFactor(pl.slot);
+   // longitudinal: follow the ball up and down the pitch, keeping shape
+   const push=(b.x-52.5)*(inPoss?.46:.52)*f;
+   // strikers hold a higher line, defenders a deeper one
+   const bias=ATTPOS.includes(pl.slot)?(right?4:-4):DEFPOS.includes(pl.slot)?(right?-3:3):0;
+   d.tx=clamp(home.x+push+bias,2,103);
+   // lateral: squeeze across toward the ball
+   d.ty=clamp(home.y+(b.y-home.y)*.26*f,3,65)})})}
+drawPitch=function(){
+ const cv=$('#pitchCanvas');if(!cv||!MU.m)return;
+ const m=MU.m,ctx=cv.getContext('2d'),sx=cv._sx,sy=cv._sy;
+ const now=performance.now(),W=cv.width,H=cv.height;
+ if(!MU.bs)MU.bs={si:0,evt:'run'};
+ // ---- turf ----
+ ctx.fillStyle='#0d2a12';ctx.fillRect(0,0,W,H);
+ ctx.fillStyle='rgba(255,255,255,.028)';
+ for(let i=0;i<8;i+=2)ctx.fillRect(i*13.125*sx,0,13.125*sx,H);
+ ctx.strokeStyle='rgba(240,245,240,.42)';ctx.lineWidth=Math.max(1,sx*.33);
+ ctx.strokeRect(2*sx,2*sy,101*sx,64*sy);
+ ctx.beginPath();ctx.moveTo(52.5*sx,2*sy);ctx.lineTo(52.5*sx,66*sy);ctx.stroke();
+ ctx.beginPath();ctx.arc(52.5*sx,34*sy,9.15*sx,0,7);ctx.stroke();
+ ctx.beginPath();ctx.arc(52.5*sx,34*sy,Math.max(1.4,sx*.5),0,7);ctx.fillStyle='rgba(240,245,240,.42)';ctx.fill();
+ ctx.strokeRect(2*sx,15*sy,16.5*sx,38*sy);ctx.strokeRect(86.5*sx,15*sy,16.5*sx,38*sy);
+ ctx.strokeRect(2*sx,25.5*sy,5.5*sx,17*sy);ctx.strokeRect(97.5*sx,25.5*sy,5.5*sx,17*sy);
+ ctx.fillStyle='rgba(240,245,240,.6)';
+ [[13,34],[92,34]].forEach(p=>{ctx.beginPath();ctx.arc(p[0]*sx,p[1]*sy,Math.max(1.2,sx*.42),0,7);ctx.fill()});
+ // goals
+ ctx.strokeStyle='rgba(255,255,255,.75)';ctx.lineWidth=Math.max(1.4,sx*.5);
+ ctx.strokeRect(.2*sx,30.4*sy,1.8*sx,7.2*sy);ctx.strokeRect(103*sx,30.4*sy,1.8*sx,7.2*sy);
+ // ---- ball target ----
+ const bs=MU.bs;
+ let bt=null;
+ if(MU.flight&&now-MU.flight.t0<MU.flight.ms){
+  const f=MU.flight,k=(now-f.t0)/f.ms;
+  bt={x:f.from.x+(f.to.x-f.from.x)*k,y:f.from.y+(f.to.y-f.from.y)*k};
+  MU.ball.x=bt.x;MU.ball.y=bt.y;MU.ballT=bt}
+ else if(MU.setPiece&&now<MU.setPiece.until)bt={x:MU.setPiece.x,y:MU.setPiece.y};
+ else{
+  const d=bs.pl?dotOf(bs.pl):null;
+  if(d)bt={x:d.x+(bs.si===0?1.6:-1.6),y:d.y+.4};
+  else bt={x:52.5,y:34};
+  // between engine events the possessing side keeps the ball moving
+  if(now>(bs.idle||0)&&bs.si!=null&&m.sides[bs.si]&&!m.done&&m.stage!=='HT'){
+   const side=m.sides[bs.si];
+   const opts=side.onfield.filter(x=>!x.off&&x.slot!=='GK');
+   if(opts.length){bs.prev=bs.pl;bs.pl=opts[Math.floor(Math.random()*opts.length)];bs.passAt=now}
+   bs.idle=now+700+Math.random()*900}}
+ if(bt){MU.ballT=bt}
+ // ---- players ----
+ pitchTargets();
+ const carrier=bs.pl;
+ const lbl=[];                       // keep names legible when bodies pile up
+ MU.dots.forEach(d=>{
+  const ease=d.pl.off?.05:.085;
+  d.x+=((d.tx==null?d.x:d.tx)-d.x)*ease;
+  d.y+=((d.ty==null?d.y:d.ty)-d.y)*ease;
+  const c=G.clubs[m.sides[d.si].ci];
+  const px=d.x*sx,py=d.y*sy,r=Math.max(4,sx*1.85);
+  if(d.pl===carrier){
+   ctx.beginPath();ctx.arc(px,py,r*1.9,0,7);
+   ctx.strokeStyle='rgba(251,225,34,.9)';ctx.lineWidth=Math.max(1.4,sx*.42);ctx.stroke()}
+  ctx.beginPath();ctx.arc(px,py,r,0,7);
+  ctx.fillStyle=d.pl.slot==='GK'?'#e9c400':c.c1;ctx.fill();
+  ctx.lineWidth=Math.max(1,sx*.28);
+  ctx.strokeStyle=d.si===0?'rgba(255,255,255,.92)':'rgba(15,15,15,.85)';ctx.stroke();
+  const ly=py+r*2.5;
+  const crowded=lbl.some(q=>Math.abs(q[0]-px)<sx*7&&Math.abs(q[1]-ly)<sy*2.2);
+  if(!d.pl.off&&(d.pl===carrier||!crowded)){
+   lbl.push([px,ly]);
+   ctx.font='700 '+Math.max(7,Math.round(sx*2.05))+'px Inter,sans-serif';
+   ctx.textAlign='center';
+   ctx.lineWidth=Math.max(2,sx*.7);ctx.strokeStyle='rgba(0,0,0,.75)';
+   const nm=surname(d.pl.p.name);
+   ctx.strokeText(nm,px,ly);
+   ctx.fillStyle=d.pl===carrier?'#fbe122':'rgba(240,245,240,.8)';
+   ctx.fillText(nm,px,ly)}});
+ // ---- ball ----
+ MU.ball.x+=(MU.ballT.x-MU.ball.x)*.16;MU.ball.y+=(MU.ballT.y-MU.ball.y)*.16;
+ const bx=MU.ball.x*sx,by=MU.ball.y*sy,br=Math.max(2.6,sx*1.05);
+ ctx.beginPath();ctx.arc(bx,by+br*.7,br*.95,0,7);ctx.fillStyle='rgba(0,0,0,.32)';ctx.fill();
+ ctx.beginPath();ctx.arc(bx,by,br,0,7);ctx.fillStyle='#fff';ctx.fill();
+ ctx.lineWidth=Math.max(1,sx*.24);ctx.strokeStyle='#1a1a1a';ctx.stroke();
+ // ---- overlays ----
+ if(MU.goalFlashP&&now<MU.goalFlashP){
+  const k=1-(MU.goalFlashP-now)/1600;
+  ctx.fillStyle='rgba(251,225,34,'+(0.30*(1-k))+')';ctx.fillRect(0,0,W,H);
+  ctx.font='800 '+Math.round(sx*8)+'px "Archivo Black",Impact,sans-serif';
+  ctx.textAlign='center';ctx.fillStyle='rgba(255,255,255,'+(1-k)+')';
+  ctx.strokeStyle='rgba(0,0,0,.6)';ctx.lineWidth=sx*1.2;
+  ctx.strokeText('GOAL!',W/2,H/2);ctx.fillText('GOAL!',W/2,H/2)}
+ // possession bar + clock
+ const tot=Math.max(1,m.poss[0]+m.poss[1]);
+ const hp=Math.round(m.poss[0]/tot*100);
+ ctx.fillStyle='rgba(0,0,0,.42)';ctx.fillRect(0,0,W,Math.round(sy*4.2));
+ ctx.fillStyle=G.clubs[m.sides[0].ci].c1;ctx.fillRect(0,0,W*hp/100,Math.round(sy*1.1));
+ ctx.fillStyle=G.clubs[m.sides[1].ci].c1;ctx.fillRect(W*hp/100,0,W*(100-hp)/100,Math.round(sy*1.1));
+ ctx.font='800 '+Math.max(8,Math.round(sx*2.2))+'px Inter,sans-serif';
+ ctx.textAlign='left';ctx.fillStyle='rgba(240,245,240,.9)';
+ ctx.fillText(G.clubs[m.sides[0].ci].short+' '+hp+'%',sx*1.5,sy*3.4);
+ ctx.textAlign='right';
+ ctx.fillText((100-hp)+'% '+G.clubs[m.sides[1].ci].short,W-sx*1.5,sy*3.4);
+ ctx.textAlign='center';ctx.fillStyle='#fbe122';
+ ctx.fillText(m.done?'FT':m.stage==='HT'?'HT':m.dispMin()+"'",W/2,sy*3.4);
+ ctx.textAlign='left'};
+/* kick-off resets the ball state cleanly */
+const _initDotsLive=initDots;
+initDots=function(){
+ _initDotsLive();
+ MU.bs={si:0,pl:null,evt:'kickoff',at:performance.now(),idle:0};
+ MU.flight=null;MU.setPiece=null;MU.goalFlashP=0;MU.pend=[]};
+
+/* ---------- 4. PACE — a half you can actually watch ---------- */
+/* milliseconds of real time per minute of football */
+const MSPEED={1:6300,3:2100,8:760,6:260};
+const SPEED_LBL=[[0,'⏸'],[1,'▶ 1×'],[3,'3×'],[8,'⏩'],[6,'⭐'],[9,'⏭ Skip']];
+startLoop=function(){
+ stopLoop();
+ MU.acc=0;MU.last=performance.now();
+ MU.timer=setInterval(()=>{
+  const m=MU.m;if(!m)return;
+  if(m.done){onFT();return}
+  const now=performance.now(),dt=Math.min(500,now-MU.last);MU.last=now;
+  if(m.stage==='HT'){renderMCtl();return}
+  if(MU.speed===0)return;
+  if(MU.speed===9){skipHalf();return}
+  if(MU.hlHold>now)return;                       // holding on a highlight
+  MU.acc+=dt;
+  const per=MSPEED[MU.speed]||MSPEED[1];
+  let ticks=0;
+  const before=m.stage;
+  while(MU.acc>=per&&!m.done&&m.stage!=='HT'&&ticks<40){
+   MU.acc-=per;ticks++;
+   const f0=m.feed.length;
+   trackedTick();
+   if(MU.speed===6&&m.feed.length>f0&&m.feed.slice(f0).some(e=>e.cls==='big'||e.cls==='goal')){
+    MU.hlHold=performance.now()+3200;MU.acc=0;break}
+  }
+  if(ticks){
+   renderTop();
+   if(MU.tab==='comm')fillFeed($('#commList'),200);
+   else if(MU.tab==='pitch'||MU.tab==='dugout')fillFeed($('#miniFeed'),4);
+   else if(MU.tab==='stats')renderStats()}
+  if(m.stage==='HT'&&before!=='HT'){MU.speed=0;MU.acc=0;renderMCtl();renderTop();toast('Half time')}
+  if(m.done)onFT();
+ },90)};
+function skipHalf(){
+ const m=MU.m;if(!m)return;
+ const before=m.stage;let guard=0;
+ while(!m.done&&m.stage!=='HT'&&guard++<400)trackedTick();
+ MU.speed=0;MU.acc=0;MU.hlHold=0;
+ renderTop();renderMCtl();
+ if(MU.tab==='comm')fillFeed($('#commList'),200);else fillFeed($('#miniFeed'),4);
+ if(m.done)onFT();
+ else if(m.stage==='HT'&&before!=='HT')toast('Half time')}
+ACTIONS.mspeed=el=>{
+ const v=+el.dataset.v;
+ MU.hlHold=0;MU.acc=0;MU.last=performance.now();
+ if(v===9){MU.speed=0;renderMCtl();skipHalf();return}
+ MU.speed=v;renderMCtl()};
+ACTIONS.resume2h=()=>{
+ const m=MU.m;if(!m)return;
+ m.tickOnce();                                   // HT -> H2
+ MU.speed=1;MU.acc=0;MU.last=performance.now();MU.hlHold=0;
+ renderMCtl();renderTop()};
+/* control panel: speeds that mean something, plus the added-time readout */
+renderMCtl=function(){
+ const c=$('#mCtl');if(!c||!MU.m)return;const m=MU.m;
+ if(m.done){c.innerHTML='<button class="btn btn-gold btn-block" data-action="ftSummary">Full time — continue</button>';return}
+ if(m.stage==='HT'){
+  c.innerHTML='<div class="small muted" style="text-align:center;margin-bottom:9px">Half time — talk to them, change the plan.</div><div class="row" style="gap:8px">'+
+  '<button class="btn btn-ghost btn-sm" style="flex:1" data-action="htTalkOpen">🗣️ Talk</button>'+
+  '<button class="btn btn-ghost btn-sm" style="flex:1" data-action="instrOpen">📝 Tactics</button>'+
+  '<button class="btn btn-ghost btn-sm" style="flex:1" data-action="subOpen">🔁 Subs</button>'+
+  '<button class="btn btn-primary btn-sm" style="flex:1.2" data-action="resume2h">2nd half</button></div>';return}
+ const s=m.sides[mySideIx()];
+ const tired=s.onfield.filter(x=>!x.off&&x.cond<58).length;
+ const add=m.et?0:(m.stage==='H1'?(m._addH1||0):(m._addH2||0));
+ const inAdd=m.et?m.min>120:(m.stage==='H1'?m.min>45:m.min>90);
+ c.innerHTML='<div class="speedrow">'+SPEED_LBL.map(sp=>
+  '<button class="chip'+(MU.speed===sp[0]?' on':'')+'" data-action="mspeed" data-v="'+sp[0]+'">'+sp[1]+'</button>').join('')+'</div>'+
+ (add&&!m.et?'<div class="xs faint" style="text-align:center;margin:-3px 0 7px">'+
+   (inAdd?'⏱ In added time':'⏱ '+add+' minute'+(add>1?'s':'')+' will be added')+'</div>':'')+
+ '<div class="row" style="gap:6px">'+
+ '<button class="btn btn-ghost btn-sm" style="flex:1" data-action="subOpen">🔁 Subs ('+s.subs+')'+
+  (tired?' <span style="color:var(--amber)">⚠'+tired+'</span>':'')+'</button>'+
+ '<button class="btn btn-ghost btn-sm" style="flex:1.3" data-action="instrOpen">📝 '+s.tac.formation+' · '+s.tac.mentality+'</button></div>'};
+
+/* ---------- 5. SUBSTITUTIONS — line them all up, then make them ---------- */
+function subsPending(){return MU.pend||(MU.pend=[])}
+function subStaged(){
+ const s=mySide();if(!s)return{outIds:new Set(),inIds:new Set()};
+ return{outIds:new Set(subsPending().map(x=>x.out)),inIds:new Set(subsPending().map(x=>x.in))}}
+function subSheet(){
+ const s=mySide();if(!s)return;
+ const pend=subsPending(),st=subStaged();
+ const left=s.subs-pend.length;
+ let h='<h3>🔁 Substitutions <span class="small muted">('+left+' of '+s.subs+' left)</span></h3>'+
+  '<div class="small muted" style="margin:2px 0 12px">Line up as many changes as you like, then make them all at once.</div>';
+ h+='<div class="chip-lbl">Changes ready</div><div class="card tight">';
+ if(!pend.length)h+='<div class="small muted" style="padding:7px 2px">Nothing lined up yet — pick a player to take off below.</div>';
+ pend.forEach((p,ix)=>{
+  const out=s.onfield.find(x=>x.p.id===p.out),inP=s.bench.find(q=>q.id===p.in);
+  if(!out||!inP)return;
+  h+='<div class="spread" style="padding:7px 2px;border-bottom:1px solid var(--chalk)">'+
+  '<div style="flex:1;min-width:0"><div class="small" style="font-weight:800">'+
+   '<span style="color:var(--danger)">↓</span> '+esc(surname(out.p.name))+
+   '  <span style="color:var(--green)">↑</span> '+esc(inP.name)+'</div>'+
+  '<div class="xs faint">'+out.slot+' · '+esc(inP.pos)+' · cond '+Math.round(inP.cond)+'%</div></div>'+
+  '<button class="btn btn-xs btn-ghost" data-action="subDrop" data-v="'+ix+'">Remove</button></div>'});
+ h+='</div>';
+ if(left>0){
+  h+='<div class="chip-lbl">Take off</div><div class="card tight">';
+  const avail=s.onfield.filter(x=>!x.off&&!st.outIds.has(x.p.id));
+  if(!avail.length)h+='<div class="small muted" style="padding:7px 2px">Nobody left to take off.</div>';
+  avail.sort((a,b)=>a.cond-b.cond).forEach(pl=>{
+   h+='<div class="mail" data-action="subOut" data-id="'+pl.p.id+'"><div class="ic">'+effBadge(pl.rating*10)+'</div>'+
+   '<div style="flex:1;min-width:0"><div class="tt">'+esc(pl.p.name)+' <span class="xs faint">'+pl.slot+'</span></div>'+
+   '<div class="bd">rating '+pl.rating.toFixed(1)+' · cond '+Math.round(pl.cond)+'%'+(pl.yc?' · 🟨':'')+
+    (pl.cond<58?' · <span style="color:var(--amber)">tiring</span>':'')+'</div></div></div>'});
+  h+='</div>'}
+ h+='<div class="row" style="gap:8px;margin-top:12px">'+
+  '<button class="btn btn-ghost" style="flex:1" data-action="subCancel">Cancel</button>'+
+  '<button class="btn '+(pend.length?'btn-gold':'btn-ghost')+'" style="flex:1.4" data-action="subConfirm">'+
+  (pend.length?'Make '+pend.length+' change'+(pend.length>1?'s':''):'Close')+'</button></div>';
+ openModal(h)}
+ACTIONS.subOpen=()=>{
+ const s=mySide();if(!s)return;
+ if(s.subs<=0){toast('No substitutions left.');return}
+ MU.pend=[];subSheet()};
+ACTIONS.subOut=el=>{
+ const s=mySide();if(!s)return;
+ const out=s.onfield.find(x=>x.p.id===+el.dataset.id&&!x.off);if(!out)return;
+ const st=subStaged();
+ const bench=s.bench.filter(p=>!st.inIds.has(p.id));
+ let h='<h3>Bring on</h3><div class="small muted" style="margin-bottom:10px">Replacing <b>'+esc(out.p.name)+'</b> ('+out.slot+')</div><div class="card tight">';
+ if(!bench.length)h+='<div class="small muted" style="padding:7px 2px">No one left on the bench.</div>';
+ bench.slice().sort((a,b)=>calcEff(b,out.slot)-calcEff(a,out.slot)).forEach(p=>{
+  h+='<div class="mail" data-action="subDo" data-id="'+p.id+'" data-arg="'+out.p.id+'"><div class="ic">'+effBadge(calcEff(p,out.slot))+'</div>'+
+  '<div style="flex:1;min-width:0"><div class="tt">'+esc(p.name)+'</div>'+
+  '<div class="bd">'+posBadge(p.pos)+' · '+posFitLabel(p,out.slot)+' · cond '+Math.round(p.cond)+'%</div></div></div>'});
+ h+='</div><button class="btn btn-ghost btn-block" style="margin-top:10px" data-action="subBack">← Back</button>';
+ openModal(h)};
+ACTIONS.subDo=el=>{
+ const s=mySide();if(!s)return;
+ const out=+el.dataset.arg,inId=+el.dataset.id;
+ if(subsPending().length<s.subs)subsPending().push({out,in:inId});
+ subSheet()};
+ACTIONS.subDrop=el=>{subsPending().splice(+el.dataset.v,1);subSheet()};
+ACTIONS.subBack=()=>subSheet();
+ACTIONS.subCancel=()=>{MU.pend=[];closeModal()};
+ACTIONS.subConfirm=()=>{
+ const s=mySide(),m=MU.m;
+ const pend=subsPending();
+ if(!s||!m||!pend.length){MU.pend=[];closeModal();return}
+ const names=[];
+ pend.forEach(p=>{
+  const out=s.onfield.find(x=>x.p.id===p.out&&!x.off);
+  const inP=s.bench.find(q=>q.id===p.in);
+  if(!out||!inP||s.subs<=0)return;
+  out.off=true;s.subs--;s.bench=s.bench.filter(q=>q!==inP);
+  const npl={p:inP,slot:out.slot,hx:out.hx,hy:out.hy,cond:inP.cond,rating:6,yc:0,off:false,
+   goals:0,assists:0,entered:m.min};
+  s.onfield.push(npl);
+  MU.dots.push({pl:npl,si:mySideIx(),x:mySideIx()===0?-5:110,y:34});
+  names.push(inP.name+' for '+surname(out.p.name))});
+ if(names.length){
+  m._stop=(m._stop||0)+names.length*.35;                 // changes eat clock
+  const head=names.length===1?'Substitution: ':
+   (names.length===2?'Double change':names.length===3?'Triple change':names.length+' changes')+' for '+s.c.short+': ';
+  m.say(m.dispMin(),s,head+names.join(', ')+'.','');
+  toast('🔁 '+names.length+' change'+(names.length>1?'s':'')+' made')}
+ MU.pend=[];closeModal();renderMCtl();
+ if(MU.tab==='comm')fillFeed($('#commList'),200);else fillFeed($('#miniFeed'),4)};
+
 showStart();
 </script>
 </body>
