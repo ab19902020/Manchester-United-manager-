@@ -953,7 +953,7 @@ class MatchSim{
   const pressClash=(D.tac.press==='High'&&A.tac.passStyle==='Short')?.95:(D.tac.press==='High'&&A.tac.passStyle==='Direct')?1.05:1;
   const a1=this.avg(A,['passing','firstTouch','vision'],'all')*A.mm.att*styleB*tempoB*pressClash*urgA*(1+this.mom[ai]*.009)*(A.home?1.04:1);
   const d1=this.avg(D,['positioning','workRate','tackling'],'def')*D.mm.def*parkD*(D.tac.press==='High'?1.07:D.tac.press==='Low'?.94:1);
-  if(Math.random()>clamp(sigmoid((a1-d1)/3.4)*1.3,.58,.74)){
+  if(Math.random()>clamp(sigmoid((a1-d1)/3.4)*1.22,.58,.72)){
    if(Math.random()<.16){const dp=pick(this.pool(D,'mid'));this.say(this.dispMin(),D,cf(COMM.intercept,{d:dp.p.name,t:D.c.short}));dp.rating+=.05}
    return}
   if(Math.random()<.25){const ap=pick(this.pool(A,'mid'));this.say(this.dispMin(),A,cf(COMM.build,{a:ap.p.name,t:A.c.short}))}
@@ -963,9 +963,9 @@ class MatchSim{
   const tackB=D.tac.tackling==='Aggressive'?1.06:D.tac.tackling==='Cautious'?.95:1;
   const lineB=D.tac.line==='Deep'?1.05:D.tac.line==='High'?.97:1;
   const d2=this.avg(D,['tackling','decisions','positioning'],'def')*D.mm.def*tackB*lineB*parkD;
-  if(Math.random()>clamp(sigmoid((a2-d2)/3.2)*.78,.42,.60)){
+  if(Math.random()>clamp(sigmoid((a2-d2)/3.2)*.70,.41,.57)){
    const r=Math.random();const dp=pick(this.pool(D,'def'));
-   if(r<.15){A.st.cor++;this.say(this.dispMin(),A,cf(COMM.corner,{t:A.c.short,d:dp.p.name}));this.cornerEvent(A,D)}
+   if(r<.19){A.st.cor++;this.say(this.dispMin(),A,cf(COMM.corner,{t:A.c.short,d:dp.p.name}));this.cornerEvent(A,D)}
    else if(r<.30){D.st.fl++;this.foulEvent(D,dp,A,false)}
    else if(r<.5){this.say(this.dispMin(),D,cf(COMM.chancefail,{d:dp.p.name}));dp.rating+=.06}
    return}
@@ -994,12 +994,12 @@ class MatchSim{
   const rawK=(this.effA(g,'positioning')+this.effA(g,'agility'))/2;
   let shot=(10+(rawS-10)*0.42)*(.85+Math.random()*.35)*A.mm.att*(A.home?1.03:1)*(hasTrait(shooter,'Finisher')?1.04:1)*(creator&&hasTrait(creator,'Playmaker')?1.03:1);
   if(shooter.goals>=1)shot*=.9;if(shooter.goals>=2)shot*=.82; // defences key on the man in form
-  const save=((10+(rawK-10)*.42)*(.79+Math.random()*.43)+1.30)*(hasTrait(g,'Wall')?1.045:1);
-  A.st.sh++;A.st.xg+=clamp(.12*shot/save,.02,.72);
-  if(shot>save*1.15){this.goal(A,D,shooter,creator,fromCorner?null:creator,false)}
-  else if(shot>save*.92){A.st.sot++;D.st.sv++;g.rating+=.22;
+  const save=((10+(rawK-10)*.42)*(.79+Math.random()*.43)+.92)*(hasTrait(g,'Wall')?1.045:1);
+  A.st.sh++;A.st.xg+=clamp(.13*shot/save,.02,.75);
+  if(shot>save*1.12){this.goal(A,D,shooter,creator,fromCorner?null:creator,false)}
+  else if(shot>save*.86){A.st.sot++;D.st.sv++;g.rating+=.22;
    this.say(this.dispMin(),A,cf(COMM.save,{b:shooter.p.name,g:g.p.name}),'big');
-   if(Math.random()<.45){A.st.cor++;this.cornerEvent(A,D)}}
+   if(Math.random()<.52){A.st.cor++;this.cornerEvent(A,D)}}
   else{this.say(this.dispMin(),A,cf(COMM.miss,{b:shooter.p.name}));shooter.rating-=.03}}
  cornerEvent(A,D){ // header contest from the set piece
   const taker=this.weighted(A,x=>this.effA(x,'crossing'));
@@ -1009,8 +1009,8 @@ class MatchSim{
   if(att>mark*(1.06+Math.random()*.25)){this.shotEvent(A,D,header,taker,true)}}
  foulEvent(D,dp,A,inBox){D.st.fl++;const vic=pick(this.pool(A,'att'));
   this.say(this.dispMin(),D,cf(COMM.foul,{d:dp.p.name,a:vic.p.name}));
-  const aggr=dp.p.attrs.aggression;const ycP=.22+aggr/70+(D.tac.tackling==='Aggressive'?.12:D.tac.tackling==='Cautious'?-.08:0);
-  if(Math.random()<.025){this.sendOff(D,dp,true);return}
+  const aggr=dp.p.attrs.aggression;const ycP=.10+aggr/120+(D.tac.tackling==='Aggressive'?.07:D.tac.tackling==='Cautious'?-.04:0);
+  if(Math.random()<.0012){this.sendOff(D,dp,true);return}
   if(Math.random()<ycP){this.card(D,dp)}}
  card(D,dp){dp.yc++;dp.rating-=.15;
   if(dp.yc>=2){this.sendOff(D,dp,false)}
@@ -11889,6 +11889,7 @@ MatchSim.prototype.tickOnce=function(){
   this._endsFlipped=!this._endsFlipped;
   this.say(46,null,'Back under way — the sides have changed ends.','big');
   kickOffFrom(MU.koSide==null?0:1-MU.koSide)}
+ else if(before==='HT'&&this.stage==='H2')this.say(46,null,'Back under way for the second half.','big');
  // extra time: ends swap again, and again at the change of ends
  if(this.et&&!wasEt&&!this._etFlip){
   this._etFlip=1;this._endsFlipped=!this._endsFlipped;
@@ -12272,6 +12273,158 @@ openProfile=function(pid){
    (i.talk===1?'Speaks up · ':'Keeps his own counsel · ')+
    (i.vol>=1.4?'Rides the highs and lows':i.vol<=.75?'Even tempered':'Fairly level')+'</div>';
  host.appendChild(box)};
+
+
+/* =====================================================================
+   CHANGING ENDS, VISIBLY
+   ---------------------------------------------------------------------
+   The sides did swap over, but only at the instant you pressed "2nd
+   half", and nothing on screen ever told you which way a team was
+   shooting — so it was easy to watch a whole match and never notice.
+   Now they change ends the moment the whistle goes for half time, the
+   way they do when they walk off, and the pitch always says which way
+   each side is kicking.
+   ===================================================================== */
+/* swap at the whistle, not at the restart */
+const _tickEnds=MatchSim.prototype.tickOnce;
+MatchSim.prototype.tickOnce=function(){
+ const before=this.stage;
+ const r=_tickEnds.apply(this,arguments);
+ if(!liveMatch(this))return r;
+ if(before==='H1'&&this.stage==='HT'&&!this._htSwap){
+  this._htSwap=1;
+  this._endsFlipped=!this._endsFlipped;
+  this._h2Done=1;                                   // the later hook must not swap again
+  MU.endsBanner=performance.now()+9000;
+  this.say(45,null,'The sides swap over — they will change ends for the second half.','big');
+  // everybody walks to the other half and lines up for the restart
+  const ko=(MU.koSide==null?0:1-MU.koSide);
+  try{pitchTargets();MU.dots.forEach(d=>{const h=dotHome(d.pl,d.si);d.x=h.x;d.y=h.y;d.tx=h.x;d.ty=h.y})}catch(e){}
+  try{kickOffFrom(ko)}catch(e){}}
+ return r};
+/* an arrow at each end saying which way that side is shooting */
+const _drawEnds=drawPitch;
+drawPitch=function(){
+ _drawEnds();
+ const cv=$('#pitchCanvas'),m=MU.m;if(!cv||!m)return;
+ const ctx=cv.getContext('2d'),sx=cv._sx,sy=cv._sy,W=cv.width,H=cv.height;
+ const now=performance.now();
+ ctx.save();
+ // which club attacks which goal, drawn at that goal
+ [0,1].forEach(si=>{
+  const c=G.clubs[m.sides[si].ci];
+  const R=atkRight(si);
+  const x=R?W-sx*4:sx*4;
+  ctx.font='800 '+Math.max(8,Math.round(sx*2.1))+'px Inter,sans-serif';
+  ctx.textAlign=R?'right':'left';
+  ctx.lineWidth=Math.max(2,sx*.62);ctx.strokeStyle='rgba(0,0,0,.7)';
+  const txt=(R?'':'◀ ')+esc(c.short).toUpperCase()+(R?' ▶':'');
+  ctx.strokeText(txt,x,H-sy*2.6);
+  ctx.fillStyle=c.c1==='#FFFFFF'?'#e8e8e8':c.c1;
+  ctx.globalAlpha=.92;ctx.fillText(txt,x,H-sy*2.6);ctx.globalAlpha=1});
+ // and a banner the moment they change over
+ if(MU.endsBanner&&now<MU.endsBanner&&(m.stage==='HT'||m.min<52)){
+  const k=clamp((MU.endsBanner-now)/9000,0,1);
+  const a=Math.min(1,k*2.4);
+  ctx.fillStyle='rgba(9,16,12,'+(0.72*a)+')';
+  ctx.fillRect(0,H*.40,W,H*.20);
+  ctx.textAlign='center';
+  ctx.font='800 '+Math.round(sx*3.4)+'px "Archivo Black",Impact,sans-serif';
+  ctx.fillStyle='rgba(251,225,34,'+a+')';
+  ctx.fillText('CHANGE OF ENDS',W/2,H*.485);
+  ctx.font='700 '+Math.round(sx*2.1)+'px Inter,sans-serif';
+  ctx.fillStyle='rgba(240,245,240,'+a+')';
+  const h=G.clubs[m.sides[0].ci],aw=G.clubs[m.sides[1].ci];
+  ctx.fillText(esc(h.short)+' now shoot '+(atkRight(0)?'right ▶':'◀ left')+
+   '   ·   '+esc(aw.short)+' now shoot '+(atkRight(1)?'right ▶':'◀ left'),W/2,H*.545)}
+ ctx.restore();
+ ctx.textAlign='left'};
+/* the possession bar follows the pitch: left label = side defending the left */
+const _drawPossOrder=drawPitch;
+drawPitch=function(){
+ _drawPossOrder();
+ const cv=$('#pitchCanvas'),m=MU.m;if(!cv||!m)return;
+ if(atkRight(0))return;                              // first-half order is already right
+ const ctx=cv.getContext('2d'),sx=cv._sx,sy=cv._sy,W=cv.width;
+ const tot=Math.max(1,m.poss[0]+m.poss[1]);
+ const hp=Math.round(m.poss[0]/tot*100);
+ // repaint the strip with the two clubs the way round they now are —
+ // opaque first, or the first-half labels bleed through
+ ctx.fillStyle='#0d2a12';ctx.fillRect(0,0,W,Math.round(sy*4.2));
+ ctx.fillStyle='rgba(0,0,0,.44)';ctx.fillRect(0,0,W,Math.round(sy*4.2));
+ ctx.fillStyle=G.clubs[m.sides[1].ci].c1;ctx.fillRect(0,0,W*(100-hp)/100,Math.round(sy*1.1));
+ ctx.fillStyle=G.clubs[m.sides[0].ci].c1;ctx.fillRect(W*(100-hp)/100,0,W*hp/100,Math.round(sy*1.1));
+ ctx.font='800 '+Math.max(8,Math.round(sx*2.2))+'px Inter,sans-serif';
+ ctx.textAlign='left';ctx.fillStyle='rgba(240,245,240,.9)';
+ ctx.fillText(G.clubs[m.sides[1].ci].short+' '+(100-hp)+'%',sx*1.5,sy*3.4);
+ ctx.textAlign='right';
+ ctx.fillText(hp+'% '+G.clubs[m.sides[0].ci].short,W-sx*1.5,sy*3.4);
+ ctx.textAlign='center';ctx.fillStyle='#fbe122';
+ ctx.fillText(m.done?'FT':m.stage==='HT'?'HT':m.dispMin()+"'",W/2,sy*3.4);
+ ctx.textAlign='left'};
+/* the half-time panel spells it out too */
+const _mctlEnds=renderMCtl;
+renderMCtl=function(){
+ _mctlEnds();
+ const c=$('#mCtl'),m=MU.m;if(!c||!m||m.done||m.stage!=='HT')return;
+ const h=G.clubs[m.sides[0].ci],a=G.clubs[m.sides[1].ci];
+ c.insertAdjacentHTML('afterbegin',
+  '<div class="xs" style="text-align:center;margin:-2px 0 8px;color:var(--gold);font-weight:800">'+
+  '🔄 Ends changed — '+esc(h.short)+' now shoot '+(atkRight(0)?'right':'left')+
+  ', '+esc(a.short)+' shoot '+(atkRight(1)?'right':'left')+'</div>')};
+const _koBanner=initDots;
+initDots=function(){_koBanner();MU.endsBanner=0};
+
+
+/* =====================================================================
+   THE REFEREE — a match has twenty fouls in it, not four
+   ---------------------------------------------------------------------
+   Fouls only ever came out of a failed attack, so a game finished with
+   about four of them and barely a booking, while straight red cards were
+   more than twice as common as in the real game. Fouls are their own
+   event now, committed by the players you would expect, and only the
+   notable ones interrupt the commentary.
+   ===================================================================== */
+const _tickRef=MatchSim.prototype.tickOnce;
+MatchSim.prototype.tickOnce=function(){
+ const r=_tickRef.apply(this,arguments);
+ if(this.done||this.stage==='HT'||this.min<1)return r;
+ if(Math.random()>=.140)return r;
+ const si=Math.random()<.52?(this.poss[0]>this.poss[1]?1:0):(Math.random()<.5?0:1);
+ const D=this.sides[si],A=this.sides[1-si];
+ const act=D.onfield.filter(x=>!x.off&&x.slot!=='GK');
+ if(!act.length||!A.onfield.some(x=>!x.off))return r;
+ const dp=this.weighted(D,x=>6+this.effA(x,'aggression')*.45+
+  (DEFPOS.includes(x.slot)||x.slot==='DM'?3:0)+(x.slot==='GK'?-14:0)+
+  (x.yc>0?-7:0));                                  // a booked man is careful
+ if(!dp||dp.slot==='GK')return r;
+ if(dp.yc>0&&Math.random()<.86){D.st.fl++;return r}  // he gives it away rather than risk a second
+ D.st.fl++;
+ const aggr=(dp.p.attrs&&dp.p.attrs.aggression)||10;
+ const tack=D.tac&&D.tac.tackling;
+ const ycP=.13+aggr/110+(tack==='Aggressive'?.07:tack==='Cautious'?-.04:0);
+ const late=this.min>70?1.12:1;
+ if(Math.random()<.0009){                          // a genuine sending-off offence
+  const vic=pick(this.pool(A,'att'));
+  this.say(this.dispMin(),D,dp.p.name+' goes right through '+vic.p.name+' — the referee reaches for his pocket.','big');
+  this.sendOff(D,dp,true);return r}
+ if(Math.random()<ycP*late*(dp.yc>0?.16:1)){this.card(D,dp);return r}
+ // most fouls are just fouls; only some are worth mentioning
+ if(Math.random()<.22){
+  const vic=pick(this.pool(A,'all'));
+  this.say(this.dispMin(),D,cf(COMM.foul,{d:dp.p.name,a:vic.p.name}))}
+ return r};
+
+/* a booked player does not dive into the next one — he backs off, and the
+   bench warns him. Without this, second yellows made red cards twice as
+   common as they are in the real game. */
+const _foulCare=MatchSim.prototype.foulEvent;
+MatchSim.prototype.foulEvent=function(D,dp,A,inBox){
+ if(dp&&dp.yc>0&&Math.random()<.80){
+  const alt=this.weighted(D,x=>(x.yc>0?.15:1)*(4+this.effA(x,'aggression')*.4));
+  if(alt&&alt!==dp&&alt.slot!=='GK')dp=alt;
+  else{D.st.fl++;return}}
+ return _foulCare.call(this,D,dp,A,inBox)};
 
 showStart();
 </script>
