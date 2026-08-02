@@ -2853,7 +2853,7 @@ function spawnConfetti3D(atX,color){
  T3.conf.geometry.attributes.color.needsUpdate=true}
 function updateWorldMotion(now){
  MU.dots.forEach(d=>{
-  if(d.pl.off){d.tx=d.si===0?-8:113;d.ty=34}
+  if(d.pl.off){d.tx=atkRight(d.si)?-8:113;d.ty=34}
   else{const home=dotHome(d.pl,d.si);
    const pull=d.pl.slot==='GK'?.06:DEFPOS.includes(d.pl.slot)?.16:MIDPOS.includes(d.pl.slot)?.3:.42;
    d.tx=home.x+(MU.ball.x-home.x)*pull+Math.sin(now*1.7+d.pl.p.id)*1.6;
@@ -10499,7 +10499,7 @@ function ballHome(){const p=playState();const d=p.holder?dotOf(p.holder):null;re
 function teamFrame(si){
  const m=MU.m,s=m.sides[si],t=s.tac||{},p=playState();
  const dir=dirOf(si);
- const prog=si===0?MU.ball.x/105:1-MU.ball.x/105;      // 0 own goal, 1 theirs
+ const prog=progOf(si);                                // 0 own goal, 1 theirs
  const inPoss=p.si===si;
  const lead=(si===0?m.fix.hs-m.fix.as:m.fix.as-m.fix.hs);
  let push=(prog-.45)*42;
@@ -10525,7 +10525,7 @@ pitchTargets=function(){
     .map(x=>({x,d:dist2(dotOf(x)||{x:0,y:0},b)})).sort((a,c)=>a.d-c.d).slice(0,2).map(o=>o.x)}
   m.sides[si].onfield.forEach(pl=>{
    const d=dotOf(pl);if(!d)return;
-   if(pl.off){d.tx=si===0?-7:112;d.ty=34;return}
+   if(pl.off){d.tx=atkRight(si)?-7:112;d.ty=34;return}
    const home=dotHome(pl,si);
    if(pl.slot==='GK'){                                  // sweeper-keeper creeps out
     const own=ownGoalX(si);
@@ -10636,7 +10636,7 @@ function syncPlay(si,who,evt){
   const on=MU.m.sides.findIndex(s=>s.onfield.indexOf(who)>=0);
   p.si=on>=0?on:si;p.holder=who}
  else p.si=si;
- if(p.si!==was){p.aim=.55+Math.random()*.33;p.stallAt=0}
+ if(p.si!==was){p.aim=.66+Math.random()*.28;p.stallAt=0;p.finish=0}
  if(p.mode!=='dead'){p.mode='hold';p.run=null;p.target=null;
   const hd=p.holder?dotOf(p.holder):null;
   if(hd){MU.ballT={x:hd.x,y:hd.y}}
@@ -10649,7 +10649,7 @@ function turnover(now){
  const gk=MU.m.sides[other].onfield.find(z=>z.slot==='GK'&&!z.off);
  p.si=other;p.holder=(near&&near.d<16?near.x:null)||gk||livePlayers(other)[0];
  p.mode='hold';p.run=null;p.target=null;p.stallAt=0;
- p.aim=.55+Math.random()*.33;
+ p.aim=.66+Math.random()*.28;p.finish=0;
  p.nextAt=now+nextHold();
  const hd=p.holder?dotOf(p.holder):null;
  if(hd)MU.ballT={x:hd.x,y:hd.y}}
@@ -10677,12 +10677,18 @@ function advancePlay(now){
    MU.ballT={x,y:y-lift};MU.ball.x=x;MU.ball.y=y-lift}
   return}
  // a move that has run its course is broken up, as most of them are
- const prog=p.si===0?MU.ball.x/105:1-MU.ball.x/105;
- if(p.aim==null)p.aim=.55+Math.random()*.33;
- if(prog>p.aim+.06){
-  if(!p.stallAt)p.stallAt=now+(1400+Math.random()*1600)/tScale();
-  else if(now>p.stallAt){turnover(now);return}}
- else p.stallAt=0;
+ const prog=progOf(p.si);
+ if(p.aim==null)p.aim=.66+Math.random()*.28;
+ if(prog>.66){                                  // inside the final third: finish it
+  if(!p.finish)p.finish=now+(1800+Math.random()*1600)/tScale();
+  else if(now>p.finish){p.finish=0;finishAttack(now);return}
+  p.stallAt=0}
+ else{
+  p.finish=0;
+  if(prog>p.aim+.06){
+   if(!p.stallAt)p.stallAt=now+(1400+Math.random()*1600)/tScale();
+   else if(now>p.stallAt){turnover(now);return}}
+  else p.stallAt=0}
  // holding the ball: pass, carry, or just keep it
  if(now>=(p.nextAt||0)){
   if(canDribble())startCarry();
@@ -10728,10 +10734,11 @@ MatchSim.prototype.shotEvent=function(A,D,shooter,creator,fromCorner){
   const isGoal=last.cls==='goal';
   const saved=/save|parr|palm|tip/i.test(String(last.text||''));
   const gx=oppGoalX(si);
-  const from=MU.shotFrom||{x:si===0?80:25,y:34};
-  const to=isGoal?{x:si===0?104.2:.8,y:30+Math.random()*8}
-   :saved?{x:si===0?102:3,y:31+Math.random()*6}
-   :{x:si===0?104:1,y:Math.random()<.5?20+Math.random()*4:44+Math.random()*4};
+  const R=atkRight(si);
+  const from=MU.shotFrom||{x:R?80:25,y:34};
+  const to=isGoal?{x:R?104.2:.8,y:30+Math.random()*8}
+   :saved?{x:R?102:3,y:31+Math.random()*6}
+   :{x:R?104:1,y:Math.random()<.5?20+Math.random()*4:44+Math.random()*4};
   p.mode='pass';p.target=null;p.run=null;
   p.from=from;p.to=to;p.t0=performance.now();
   p.ms=clamp(dist2(from,to)/34*1000,180,700)/tScale();
@@ -10751,7 +10758,7 @@ MatchSim.prototype.cornerEvent=function(A,D){
  if(liveMatch(this)){
   const si=A===this.sides[0]?0:1;
   const cy=Math.random()<.5?3.5:64.5;
-  restartFrom(si,si===0?102.5:2.5,cy,1500,null);
+  restartFrom(si,atkRight(si)?102.5:2.5,cy,1500,null);
   const p=playState();
   const takers=livePlayers(si).filter(x=>x.slot!=='GK');
   if(takers.length)p.holder=takers.sort((a,b)=>((b.p.attrs&&b.p.attrs.crossing)||0)-((a.p.attrs&&a.p.attrs.crossing)||0))[0];
@@ -10760,7 +10767,7 @@ MatchSim.prototype.cornerEvent=function(A,D){
 MatchSim.prototype.penaltyEvent=function(A,D,dp){
  if(liveMatch(this)){
   const si=A===this.sides[0]?0:1;
-  restartFrom(si,si===0?94:11,34,2000,null);
+  restartFrom(si,atkRight(si)?94:11,34,2000,null);
   const p=playState();
   const t=livePlayers(si).filter(x=>x.slot!=='GK');
   if(t.length)p.holder=t.sort((a,b)=>((b.p.attrs&&b.p.attrs.composure)||0)-((a.p.attrs&&a.p.attrs.composure)||0))[0]}
@@ -10863,7 +10870,7 @@ drawPitch=function(){
 initDots=function(){
  _initDotsLive();
  MU.play={si:Math.random()<.5?0:1,holder:null,target:null,mode:'idle',from:null,to:null,
-  t0:0,ms:0,nextAt:0,dead:0,run:null,aim:.55+Math.random()*.33,stallAt:0};
+  t0:0,ms:0,nextAt:0,dead:0,run:null,aim:.66+Math.random()*.28,stallAt:0};
  MU.trail=[];MU.flight=null;MU.setPiece=null;MU.goalFlashP=0;MU.pend=[];
  MU.ball={x:52.5,y:34};MU.ballT={x:52.5,y:34};
  kickOffFrom(MU.play.si)};
@@ -11676,9 +11683,10 @@ choosePass=function(){
  const direct=t.passStyle==='Direct';
  let risk=t.mentality==='Overload'?1.5:t.mentality==='Attacking'?1.22:
   t.mentality==='Counter'?1.05:t.mentality==='Defensive'?.6:.9;
- const prog=si===0?MU.ball.x/105:1-MU.ball.x/105;
+ const prog=progOf(si);
  const aim=p.aim==null?.72:p.aim;
- if(prog>aim)risk*=.22;                              // the move has run its course
+ if(prog>.66)risk*=1.5;                              // in the final third you go for it
+ else if(prog>aim)risk*=.30;                         // otherwise the move has run its course
  const squeezed=hPress>=1.1;                          // he has somebody on him
  const stale=p.stale||0;                              // passes since the ball last went forward
  risk*=1+stale*.6;
@@ -11748,7 +11756,7 @@ startPass=function(to,kind){
  const p=playState();
  if(!to||!p.to)return;
  p.prevHolder=p.holder;
- const fwd=(p.si===0?p.to.x-p.from.x:p.from.x-p.to.x);
+ const fwd=(p.to.x-p.from.x)*dirOf(p.si);
  p.stale=fwd>2?0:Math.min(4,(p.stale||0)+1);
  const lane=laneBlocked(p.from,p.to,p.si);
  const press=pressureAt(p.to,p.si);
@@ -11838,6 +11846,432 @@ fillFeed=function(list,keep){
   d.innerHTML='<span class="m num">'+(e.min?e.min+'&#8242;':'')+'</span><span class="tx">'+e.text+'</span>';
   list.insertBefore(d,list.firstChild)}          // the latest line sits under the pitch
  while(list.children.length>keep)list.removeChild(list.lastChild)};
+
+
+/* =====================================================================
+   MATCHDAY 3.3 — half time is a real half time, and attacks end in shots
+   ---------------------------------------------------------------------
+   Two things were wrong with the picture:
+     · Sides never changed ends and the second half simply resumed with
+       the ball wherever it happened to be. In football you swap ends at
+       the interval and the side that did NOT kick off the game restarts
+       it from the centre spot — and you swap again for extra time, and
+       again at the extra-time interval.
+     · Attacks reached the edge of the box and then passed sideways for
+       ever. Nobody gambled on a run across the near post, nobody drove
+       inside off the touchline, and nobody ever hit the thing. Real
+       attacks END: a shot, a block, a corner, a goal kick, a turnover.
+   ===================================================================== */
+/* which way is a side kicking? this is the one source of truth now */
+function halfFlip(){const m=MU.m;return !!(m&&m._endsFlipped)}
+function atkRight(si){return (si===0)!==halfFlip()}
+dirOf=function(si){return atkRight(si)?1:-1};
+ownGoalX=function(si){return atkRight(si)?0:105};
+oppGoalX=function(si){return atkRight(si)?105:0};
+dotHome=function(pl,si){
+ let x=pl.hx,y=pl.hy;
+ if(!atkRight(si)){x=105-x;y=68-y}
+ return{x,y}};
+ownFrame=function(d,si){
+ return atkRight(si)?{fx:d.x,fy:d.y}:{fx:105-d.x,fy:68-d.y}};
+/* progress up the pitch for a side, 0 at its own goal, 1 at the other one */
+function progOf(si){const x=MU.ball?MU.ball.x:52.5;return atkRight(si)?x/105:1-x/105}
+
+/* ---------- the interval: swap ends, restart from the centre ---------- */
+const _tickHalves=MatchSim.prototype.tickOnce;
+MatchSim.prototype.tickOnce=function(){
+ const before=this.stage,wasEt=this.et,etHalf=this._etHalf;
+ const r=_tickHalves.apply(this,arguments);
+ if(!liveMatch(this))return r;
+ // out of the tunnel for the second half
+ if(before==='HT'&&this.stage==='H2'&&!this._h2Done){
+  this._h2Done=1;
+  this._endsFlipped=!this._endsFlipped;
+  this.say(46,null,'Back under way — the sides have changed ends.','big');
+  kickOffFrom(MU.koSide==null?0:1-MU.koSide)}
+ // extra time: ends swap again, and again at the change of ends
+ if(this.et&&!wasEt&&!this._etFlip){
+  this._etFlip=1;this._endsFlipped=!this._endsFlipped;
+  kickOffFrom(MU.koSide==null?0:MU.koSide)}
+ if(this.et&&this._etHalf===2&&etHalf===1&&!this._etFlip2){
+  this._etFlip2=1;this._endsFlipped=!this._endsFlipped;
+  kickOffFrom(MU.koSide==null?1:1-MU.koSide)}
+ return r};
+/* remember who got the game started, so the other side restarts it */
+const _koRemember=kickOffFrom;
+kickOffFrom=function(si){MU.koSide=si;return _koRemember(si)};
+
+/* ---------- runs into the box, and attacks that finish ---------- */
+/* where a player wants to be when his side is camped in the final third */
+function boxRun(pl,si,prog){
+ if(prog<.54)return null;
+ const dir=dirOf(si),goal=oppGoalX(si);
+ const eager=clamp((prog-.54)/.34,0,1);          // 0 at the edge, 1 in the six-yard box
+ const s=pl.slot;
+ if(s==='ST')return{x:goal-dir*(13-eager*6),y:34+(Math.random()<.5?-4:4)};
+ if(s==='AMC')return{x:goal-dir*(20-eager*7),y:34};
+ if(s==='AML'||s==='ML')return{x:goal-dir*(17-eager*7),y:34+(atkRight(si)?-9:9)};
+ if(s==='AMR'||s==='MR')return{x:goal-dir*(17-eager*7),y:34+(atkRight(si)?9:-9)};
+ if(s==='MC'&&eager>.3)return{x:goal-dir*(25-eager*7),y:34+(pl.hy<34?-8:8)};
+ if((s==='WBL'||s==='WBR'||s==='DL'||s==='DR')&&eager>.55)
+  return{x:goal-dir*(24-eager*6),y:pl.hy<34?7:61};   // the overlap
+ return null}
+const _targetsBox=pitchTargets;
+pitchTargets=function(){
+ _targetsBox();
+ const m=MU.m,p=playState();
+ if(!m||m.done||m.stage==='HT')return;
+ const si=p.si;
+ const prog=progOf(si);
+ if(prog<.54)return;
+ // the side in possession commits bodies to the box
+ livePlayers(si).forEach(pl=>{
+  if(pl===p.holder||(p.run&&p.run.pl===pl))return;
+  const d=dotOf(pl);if(!d)return;
+  const t=boxRun(pl,si,prog);
+  if(!t)return;
+  // the run IS the target — easing it against the base shape just left
+  // everyone hovering on the edge of the area
+  d.tx=clamp(t.x,5.5,101);
+  d.ty=clamp(t.y,4,64)});
+ // and the defending side gets bodies back between ball and goal
+ const dSi=1-si,dGoal=ownGoalX(dSi),dDir=dirOf(dSi);
+ livePlayers(dSi).forEach(pl=>{
+  if(pl.slot==='GK')return;
+  const d=dotOf(pl);if(!d)return;
+  const F=ownFrame(d,dSi);
+  if(F.fx>42)return;                             // only the men already back
+  const want=dGoal+dDir*(6+Math.abs(d.y-34)*.35);
+  d.tx=clamp(d.tx+(want-d.tx)*.22,2,103);
+  d.ty=clamp(d.ty+(MU.ball.y-d.ty)*.12,3.5,64.5)})};
+/* would he shoot from here? */
+function shotUrge(){
+ const p=playState(),h=p.holder;if(!h||h.slot==='GK')return 0;
+ const hd=dotOf(h);if(!hd)return 0;
+ const si=p.si,goal=oppGoalX(si);
+ const d=Math.hypot(goal-hd.x,34-hd.y);
+ if(d>32)return 0;
+ const a=h.p.attrs||{};
+ const skill=((a.shooting||10)*1.4+(a.composure||10)*.6)/2;
+ const angle=1-Math.min(1,Math.abs(hd.y-34)/26);  // straight on is best
+ const room=1/(1+pressureAt(hd,si)*.8);
+ let u=(1-d/32)*angle*room*(.45+skill/26);
+ if(d<16)u*=1.9;                                 // inside the area you have a go
+ if(ATTPOS.includes(h.slot))u*=1.4;
+ else if(DEFPOS.includes(h.slot))u*=.35;
+ return clamp(u,0,.95)}
+/* an attempt: it is the picture of an attack ending, never a goal — the
+   engine alone decides the score, so nothing here touches it */
+function visualShot(now){
+ const p=playState(),si=p.si,h=p.holder;
+ const hd=h?dotOf(h):null;if(!hd)return false;
+ const goal=oppGoalX(si),dir=dirOf(si);
+ const roll=Math.random();
+ const outcome=roll<.30?'block':roll<.68?'save':'wide';
+ const to=outcome==='block'
+  ?{x:hd.x+dir*(3+Math.random()*5),y:hd.y+(Math.random()*8-4)}
+  :outcome==='save'
+   ?{x:goal-dir*1.6,y:31+Math.random()*6}
+   :{x:goal-dir*.4,y:Math.random()<.5?18+Math.random()*5:45+Math.random()*5};
+ p.from={x:hd.x,y:hd.y};p.to=to;p.t0=now;
+ p.ms=clamp(dist2(p.from,to)/32*1000,180,520)/tScale();
+ p.mode='pass';p.target=null;p.run=null;p.lofted=outcome==='wide';
+ p.cutOut=false;p.shooting=outcome;
+ MU.shotFx={t0:now,si};
+ return true}
+const _advShots=advancePlay;
+advancePlay=function(now){
+ const p=playState(),m=MU.m;
+ if(m&&!m.done&&m.stage!=='HT'&&!p.dead){
+  // resolve an attempt that has just landed
+  if(p.mode==='pass'&&p.shooting&&(now-p.t0)>=p.ms){
+   const kind=p.shooting;p.shooting=null;
+   const si=p.si;
+   if(kind==='block'){                            // it comes back off a defender
+    const df=livePlayers(1-si).filter(x=>x.slot!=='GK')
+     .map(x=>({x,d:dist2(dotOf(x)||{x:52,y:34},MU.ball)})).sort((a,b)=>a.d-b.d)[0];
+    if(df&&Math.random()<.45){                    // sometimes it runs out for a corner
+     const cy=Math.random()<.5?3.5:64.5;
+     restartFrom(si,oppGoalX(si)===105?102.5:2.5,cy,1400,null)}
+    else{p.si=1-si;p.holder=df?df.x:livePlayers(1-si)[0];p.mode='hold';
+     p.aim=.66+Math.random()*.28;p.stallAt=0;p.finish=0;p.nextAt=now+nextHold()}}
+   else{                                          // keeper has it, or it is a goal kick
+    const gk=m.sides[1-si].onfield.find(z=>z.slot==='GK'&&!z.off);
+    restartFrom(1-si,oppGoalX(si)===105?101:4,34,kind==='save'?1100:1500,gk)}
+   return}
+  // in and around the box, he has a go
+  if(p.mode==='hold'&&now>=(p.nextAt||0)){
+   const u=shotUrge();
+   if(u>0&&Math.random()<u){if(visualShot(now))return}}}
+ return _advShots(now)};
+/* driving inside off the touchline, and the cut-back from the byline */
+const _crossInside=crossChance;
+crossChance=function(){
+ const p=playState(),h=p.holder;
+ if(!h)return null;
+ const hd=dotOf(h);if(!hd)return null;
+ const H=ownFrame(hd,p.si);
+ // deep by the byline: cut it back to the penalty spot rather than cross
+ if(H.fx>88&&Math.abs(H.fy-34)>13){
+  const spot=livePlayers(p.si).filter(x=>{
+   const d=dotOf(x);if(!d||x===h)return false;
+   const F=ownFrame(d,p.si);
+   return F.fx>76&&F.fx<90&&Math.abs(F.fy-34)<12});
+  if(spot.length&&Math.random()<.55)
+   return spot.sort((a,b)=>((b.p.attrs&&b.p.attrs.shooting)||0)-((a.p.attrs&&a.p.attrs.shooting)||0))[0]}
+ return _crossInside()};
+/* a wide man carries it inside onto his stronger side */
+const _carryInside=startCarry;
+startCarry=function(){
+ const p=playState(),hd=p.holder?dotOf(p.holder):null;
+ if(hd){
+  const si=p.si,F=ownFrame(hd,si),dir=dirOf(si);
+  if(F.fx>66&&Math.abs(F.fy-34)>14&&Math.random()<.55){
+   // off the line and into the shooting angle
+   p.from={x:hd.x,y:hd.y};
+   p.to={x:clamp(hd.x+dir*(4+Math.random()*6),3,101),
+    y:clamp(hd.y+(34-hd.y)*(.35+Math.random()*.3),4,64)};
+   p.t0=performance.now();p.ms=(560+Math.random()*320)/tScale();
+   p.mode='carry';p.target=p.holder;p.lofted=false;
+   p.run={pl:p.holder,x:p.to.x,y:p.to.y};
+   return}}
+ return _carryInside()};
+/* the ball flashing across the face of goal deserves to be seen */
+const _drawShotFx=drawPitch;
+drawPitch=function(){
+ _drawShotFx();
+ const cv=$('#pitchCanvas'),fx=MU.shotFx;
+ if(!cv||!fx)return;
+ const now=performance.now(),k=(now-fx.t0)/520;
+ if(k>1){MU.shotFx=null;return}
+ const ctx=cv.getContext('2d'),sx=cv._sx,sy=cv._sy;
+ const gx=oppGoalX(fx.si);
+ ctx.beginPath();
+ ctx.arc(gx*sx,34*sy,(6+k*26)*sx,0,7);
+ ctx.strokeStyle='rgba(255,255,255,'+(0.30*(1-k))+')';
+ ctx.lineWidth=Math.max(1,sx*.5);ctx.stroke()};
+
+/* an attack in the final third always ends in something worth watching */
+function finishAttack(now){
+ const p=playState(),si=p.si,h=p.holder;
+ const hd=h?dotOf(h):null;
+ if(!hd){turnover(now);return}
+ if(shotUrge()>0.04&&visualShot(now))return;
+ const tgt=(typeof crossChance==='function')?crossChance():null;
+ if(tgt){
+  const d=dotOf(tgt);
+  if(d){
+   p.from={x:hd.x,y:hd.y};p.to={x:d.x,y:d.y};p.t0=now;
+   p.ms=clamp(dist2(p.from,p.to)/17*1000,320,1100)/tScale();
+   p.mode='pass';p.target=tgt;p.lofted=true;p.run={pl:tgt,x:d.x,y:d.y};
+   p.cutOut=Math.random()<.45;
+   return}}
+ // nothing on: it gets headed clear and the other side breaks
+ const dir=dirOf(si);
+ const gk=MU.m.sides[1-si].onfield.find(z=>z.slot==='GK'&&!z.off);
+ if(Math.random()<.35&&gk){restartFrom(1-si,ownGoalX(1-si)+dirOf(1-si)*4,34,1200,gk);return}
+ turnover(now);
+ const np=playState(),nd=np.holder?dotOf(np.holder):null;
+ if(nd){                                        // and it is a proper clearance upfield
+  np.from={x:nd.x,y:nd.y};
+  np.to={x:clamp(nd.x+dirOf(np.si)*(26+Math.random()*16),4,101),y:clamp(34+(Math.random()*30-15),5,63)};
+  np.t0=now;np.ms=900/tScale();np.mode='pass';np.target=null;np.lofted=true;np.run=null;
+  np.nextAt=now+900}}
+
+
+/* =====================================================================
+   THE DRESSING ROOM — twenty-six different men, not twenty-six clones
+   ---------------------------------------------------------------------
+   Personality was derived from attributes, so the squad came out as a
+   wall of "model professionals" and "born leaders" — a third-choice
+   keeper read as a natural captain and the most vocal player in the
+   league read as the quiet one. Real squads are not like that: there is
+   the shouter, the one who leads without saying a word, the one who is
+   unplayable one week and invisible the next, the joker who keeps the
+   mood up, the perfectionist who is hardest on himself.
+
+   These are FOOTBALL temperaments — how a player carries himself on the
+   pitch and in the group. Nothing here is a claim about anyone's private
+   life; off-field incidents stay in the generic discipline system.
+   ===================================================================== */
+Object.assign(PERSONALITIES,{
+ vocal:{lbl:'Vocal Leader',d:'Never stops talking. Organises, demands, drags people through games — and lets you know when he disagrees.',
+  praise:1.15,crit:1.1,fire:1.6,vol:1.15,lead:1.5,talk:1},
+ quietleader:{lbl:'Quiet Leader',d:'Says almost nothing and sets the standard anyway. The young ones watch what he does, not what he says.',
+  praise:.8,crit:.6,fire:1.3,vol:.65,lead:1.35,talk:0},
+ mercurial:{lbl:'Mercurial',d:'Unplayable when it clicks, anonymous when it does not. Confidence is everything with him.',
+  praise:1.5,crit:1.6,fire:.8,vol:1.7,lead:.7,talk:0},
+ joker:{lbl:'Heart of the Dressing Room',d:'Keeps the mood up when results are bad. Worth more to the group than the ratings ever show.',
+  praise:1.2,crit:1.0,fire:1.0,vol:1.0,lead:1.1,talk:1},
+ warrior:{lbl:'Warrior',d:'Lives for the physical battle and plays right on the edge of it. Referees know his name.',
+  praise:.9,crit:.7,fire:1.9,vol:1.1,lead:1.2,talk:1},
+ prodigy:{lbl:'Prodigy',d:'Young, fearless and in a hurry. Handle him well and he becomes the team; handle him badly and he sulks.',
+  praise:1.45,crit:1.5,fire:1.2,vol:1.4,lead:.6,talk:0}});
+/* the older archetypes gain the same two dials so everything reads alike */
+Object.assign(PERSONALITIES.model,{lead:1.15,talk:0});
+Object.assign(PERSONALITIES.determined,{lead:1.1,talk:0});
+Object.assign(PERSONALITIES.resilient,{lead:1.2,talk:0});
+Object.assign(PERSONALITIES.leader,{lead:1.45,talk:1});
+Object.assign(PERSONALITIES.ambitious,{lead:.85,talk:1});
+Object.assign(PERSONALITIES.charlie,{lead:.6,talk:1});
+Object.assign(PERSONALITIES.temperamental,{lead:.7,talk:1});
+Object.assign(PERSONALITIES.loyal,{lead:1.1,talk:0});
+Object.assign(PERSONALITIES.perfectionist,{lead:1.0,talk:0});
+Object.assign(PERSONALITIES.lowconf,{lead:.5,talk:0});
+Object.assign(PERSONALITIES.casual,{lead:.6,talk:0});
+Object.assign(PERSONALITIES.balanced,{lead:1,talk:0});
+
+/* ---------- the actual United dressing room ---------- */
+/* pers, plus the hidden dials the rest of the game already reads:
+   amb = ambition, loy = loyalty, pre = temperament under pressure     */
+const MUN_CHARACTER={
+ // ---- goalkeepers ----
+ 'Senne Lammens':{pers:'resilient',amb:14,loy:13,pre:17,note:'Unflappable for his age. Nothing that goes in seems to touch him.'},
+ 'Altay Bayındır':{pers:'loyal',amb:9,loy:16,pre:13,note:'Waits his turn without a word of complaint, then wants the shirt kept.'},
+ 'Karl Darlow':{pers:'joker',amb:6,loy:17,pre:15,note:'Third choice, first to the coffee machine. The group would notice if he left.'},
+ // ---- defenders ----
+ 'Diogo Dalot':{pers:'model',amb:12,loy:16,pre:17,note:'Plays every game, every competition, never a murmur. The manager’s dream.'},
+ 'Noussair Mazraoui':{pers:'model',amb:11,loy:13,pre:16,note:'Quiet, tidy, does the job on either flank without fuss.'},
+ 'Matthijs de Ligt':{pers:'quietleader',amb:13,loy:14,pre:18,note:'Leads the back line by doing it right, not by shouting about it.'},
+ 'Leny Yoro':{pers:'prodigy',amb:16,loy:11,pre:15,note:'Serious, studious, desperate to be great. Takes every setback personally.'},
+ 'Lisandro Martínez':{pers:'warrior',amb:15,loy:16,pre:19,note:'Wants the fight. Gives away the odd foul because he will not be second.'},
+ 'Harry Maguire':{pers:'resilient',amb:8,loy:18,pre:20,note:'Has taken more stick than anyone and kept turning up. Nothing rattles him now.'},
+ 'Ayden Heaven':{pers:'determined',amb:16,loy:14,pre:14,note:'Academy lad with a chip on his shoulder about being doubted.'},
+ 'Luke Shaw':{pers:'resilient',amb:9,loy:16,pre:16,note:'Laid back off the pitch, stubborn on it. Plays through things he should not.'},
+ 'Patrick Dorgu':{pers:'prodigy',amb:17,loy:8,pre:13,note:'Raw, quick, occasionally reckless. Wants everything at once.'},
+ // ---- midfield ----
+ 'Manuel Ugarte':{pers:'warrior',amb:13,loy:12,pre:16,note:'Enjoys the dirty side of it. The one you want when a game turns nasty.'},
+ 'Andrey Santos':{pers:'determined',amb:16,loy:11,pre:16,note:'Relentless. Trains like every session is a trial.'},
+ 'Youri Tielemans':{pers:'quietleader',amb:10,loy:14,pre:18,note:'Senior head. Says a sentence and the tempo changes.'},
+ 'Kobbie Mainoo':{pers:'prodigy',amb:15,loy:17,pre:18,note:'Composed to the point of eerie. A boy playing like a thirty-year-old.'},
+ 'Mason Mount':{pers:'perfectionist',amb:12,loy:13,pre:14,note:'Hardest on himself in the building. Needs an arm round the shoulder, not a rollicking.'},
+ 'Bruno Fernandes':{pers:'vocal',amb:16,loy:17,pre:19,note:'Talks the entire ninety minutes. Arms out, demanding the ball, demanding more from everyone.'},
+ // ---- forwards ----
+ 'Amad Diallo':{pers:'joker',amb:14,loy:16,pre:16,note:'Smiling through everything. The dressing room is louder and better with him in it.'},
+ 'Bryan Mbeumo':{pers:'model',amb:13,loy:12,pre:17,note:'Turns up, works, repeats. Never the story, always in the team.'},
+ 'Matheus Cunha':{pers:'temperamental',amb:15,loy:10,pre:12,note:'Plays on emotion. Brilliant when it flows, a handful when it does not.'},
+ 'Benjamin Šeško':{pers:'ambitious',amb:18,loy:10,pre:16,note:'Knows exactly how good he could be and is impatient to get there.'},
+ 'Joshua Zirkzee':{pers:'casual',amb:10,loy:11,pre:13,note:'Languid to watch and languid to coach. Talent has always come easily.'},
+ 'Chido Obi':{pers:'prodigy',amb:17,loy:15,pre:13,note:'Academy goalscorer who thinks he should already be starting. He might be right.'},
+ 'Marcus Rashford':{pers:'mercurial',amb:13,loy:15,pre:12,note:'Confidence is the whole thing. On a run he is unplayable; off one he hides.'},
+ 'JJ Gabriel':{pers:'prodigy',amb:18,loy:12,pre:11,note:'Fifteen, and the whole academy already talks about him. Protect him.'},
+ // ---- academy ----
+ 'Kai Rooney':{pers:'determined',amb:16,loy:18,pre:14,note:'Carrying a name. Determined to be judged on his own football.'},
+ 'Jariyah Shah':{pers:'ambitious',amb:17,loy:12,pre:13},
+ 'Jayden Ngwashi':{pers:'joker',amb:14,loy:14,pre:12},
+ 'Dante Plunkett':{pers:'quietleader',amb:12,loy:16,pre:15},
+ 'Bendito Mantato':{pers:'mercurial',amb:15,loy:10,pre:11},
+ 'Rafe McCormack':{pers:'resilient',amb:12,loy:15,pre:16},
+ 'Douka Abdoulaye':{pers:'warrior',amb:14,loy:13,pre:15},
+ 'Nathaniel-Junior Brown':{pers:'prodigy',amb:16,loy:13,pre:13},
+ 'Noah Ajayi':{pers:'determined',amb:15,loy:14,pre:14},
+ 'Louie Bradbury':{pers:'perfectionist',amb:13,loy:15,pre:13},
+ 'Jay McEvoy':{pers:'model',amb:11,loy:16,pre:15},
+ 'James Bailey':{pers:'balanced',amb:12,loy:14,pre:14}};
+/* a handful of the game's biggest names get a character too, so the rest
+   of the league is not one shade either */
+const WORLD_CHARACTER={
+ 'Erling Haaland':'ambitious','Mohamed Salah':'model','Kylian Mbappé':'ambitious',
+ 'Vinícius Júnior':'temperamental','Jude Bellingham':'vocal','Bukayo Saka':'model',
+ 'Virgil van Dijk':'quietleader','Kevin De Bruyne':'perfectionist','Lamine Yamal':'prodigy',
+ 'Harry Kane':'quietleader','Martin Ødegaard':'quietleader','Cole Palmer':'casual',
+ 'Alexander Isak':'ambitious','Florian Wirtz':'perfectionist','Declan Rice':'leader',
+ 'Ousmane Dembélé':'mercurial','Mason Greenwood':'mercurial','Rodri':'quietleader',
+ 'Marc Cucurella':'warrior','Nicolò Barella':'warrior','Antoine Semenyo':'determined'};
+function applyCharacters(){
+ G.clubs.forEach(c=>{
+  [...c.players,...(c.youth||[])].forEach(p=>{
+   const ch=MUN_CHARACTER[p.name];
+   if(ch){
+    p.pers=ch.pers;
+    if(ch.amb!=null)p.ambition=ch.amb;
+    if(ch.loy!=null)p.loyalty=ch.loy;
+    if(ch.pre!=null)p.pressure=ch.pre;
+    if(ch.note)p.persNote=ch.note;
+    return}
+   const w=WORLD_CHARACTER[p.name];
+   if(w)p.pers=w})})}
+/* everyone else: a spread that is not all model professionals */
+const _persOfX=personalityOf;
+personalityOf=function(p){
+ if(p.pers&&PERSONALITIES[p.pers])return p.pers;
+ const k=_persOfX(p);
+ // the old derivation buries half the archetypes; sprinkle the rest in
+ // deterministically so a squad reads like a squad
+ const r=mulberry(hashStr('pers2'+p.id+p.name))();
+ let out=k;
+ if(k==='model'&&r<.45)out=r<.22?'quietleader':'joker';
+ else if(k==='leader'&&r<.5)out=r<.25?'vocal':'quietleader';
+ else if(k==='balanced'&&r<.55)out=r<.18?'joker':r<.36?'mercurial':'warrior';
+ else if(k==='determined'&&r<.3)out=(p.age<=21)?'prodigy':'warrior';
+ else if(k==='resilient'&&r<.25)out='quietleader';
+ else if(k==='ambitious'&&r<.35&&p.age<=21)out='prodigy';
+ p.pers=out;
+ return out};
+const _ngCharX=newGame;
+newGame=function(i){_ngCharX(i);try{applyCharacters()}catch(e){}};
+const _loadCharX=loadSlot;
+loadSlot=function(s){const ok=_loadCharX(s);if(ok)try{applyCharacters()}catch(e){}return ok};
+
+/* ---------- character now does something you can feel ---------- */
+/* leaders lift the group; the volatile ones swing further either way */
+const _dailyRecPersX=dailyRecovery;
+dailyRecovery=function(){
+ _dailyRecPersX();
+ const c=G.clubs[G.my];if(!c)return;
+ const leaders=c.players.filter(p=>!p.loan&&!p.injury&&(persInfo(p).lead||1)>=1.3);
+ if(!leaders.length)return;
+ const lift=Math.min(.5,leaders.length*.12);
+ c.players.forEach(p=>{if(!p.loan)p.morale=clamp(p.morale+lift,1,100)})};
+/* the troublemakers really are the troublemakers */
+const _discPersX=discRisk;
+discRisk=function(p){
+ let r=_discPersX(p);
+ const k=personalityOf(p);
+ r*={warrior:1.5,mercurial:1.6,temperamental:2.2,casual:2.0,charlie:2.4,prodigy:1.35,
+  joker:1.1,vocal:1.2,quietleader:.25,model:.15,leader:.4,perfectionist:.6}[k]||1;
+ return r};
+/* a vocal leader on the pitch steadies everyone around him */
+const _talkPersX=applyTalk;
+applyTalk=function(side,type){
+ const r=_talkPersX(side,type);
+ if(!side||!side.onfield)return r;
+ const shout=side.onfield.filter(x=>!x.off&&(persInfo(x.p).talk===1)&&(persInfo(x.p).lead||1)>=1.3).length;
+ if(shout)side.onfield.forEach(x=>{x.talk=(x.talk||1)*(1+Math.min(.035,shout*.014))});
+ return r};
+/* big occasions separate the warriors from the rest */
+const _ctxPersX=buildContext;
+buildContext=function(fix){
+ const ctx=_ctxPersX(fix);
+ if(ctx._persDone)return ctx;
+ ctx._persDone=true;
+ const big=!!(fix.cup||((G.clubs[fix.h].rep+G.clubs[fix.a].rep)/2>8600));
+ if(!big)return ctx;
+ const me=fix.h===G.my?ctx.h:ctx.a;
+ const xi=G.tacs.xi.map(id=>playerById(id)).filter(Boolean);
+ let n=0;xi.forEach(p=>{const k=personalityOf(p);
+  if(k==='warrior'||k==='resilient'||k==='vocal'||k==='leader')n++;
+  else if(k==='lowconf'||k==='mercurial'||k==='casual')n--});
+ if(me&&n)me.att*=1+clamp(n*.006,-.05,.05),me.def*=1+clamp(n*.006,-.05,.05);
+ return ctx};
+/* ---------- and you can read it ---------- */
+const _profPersX=openProfile;
+openProfile=function(pid){
+ _profPersX(pid);
+ const p=playerById(pid);if(!p)return;
+ const host=$('#sheetBody');if(!host)return;
+ const i=persInfo(p);
+ const box=document.createElement('div');
+ box.className='card tight';box.style.marginTop='10px';
+ box.innerHTML='<div class="xs faint" style="font-weight:800;letter-spacing:.5px">CHARACTER</div>'+
+  '<div class="small" style="font-weight:800;margin:3px 0 2px">'+esc(i.lbl)+'</div>'+
+  '<div class="xs muted" style="line-height:1.5">'+esc(i.d)+'</div>'+
+  (p.persNote?'<div class="xs" style="line-height:1.5;margin-top:6px;color:var(--gold);font-style:italic">“'+esc(p.persNote)+'”</div>':'')+
+  '<div class="xs faint" style="margin-top:7px">'+
+   ((i.lead||1)>=1.3?'🗣️ Dressing-room voice · ':'')+
+   (i.talk===1?'Speaks up · ':'Keeps his own counsel · ')+
+   (i.vol>=1.4?'Rides the highs and lows':i.vol<=.75?'Even tempered':'Fairly level')+'</div>';
+ host.appendChild(box)};
 
 showStart();
 </script>
