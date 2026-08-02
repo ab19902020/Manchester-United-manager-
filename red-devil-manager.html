@@ -13522,6 +13522,459 @@ MatchSim.prototype.tickOnce=function(){
   try{kickOffFrom(MU.koSide==null?0:MU.koSide)}catch(e){}}
  return r};
 
+
+/* =====================================================================
+   SOUND, AND THINGS THAT ASK FOR YOUR ATTENTION
+   ---------------------------------------------------------------------
+   The game was silent, and it never told you anything had happened
+   unless you happened to be looking at the right corner of the screen.
+
+   There are no audio files here — this is one HTML file and it has to
+   stay one HTML file — so every sound is SYNTHESISED with the Web Audio
+   API at the moment it plays: oscillators for the tones, filtered noise
+   for the whistle and the crowd. A referee's whistle is band-passed
+   noise with a warble on it. A goal is a noise swell through a rising
+   filter with a major chord underneath. The crowd is a loop of very
+   dark noise whose volume follows how tense the match is.
+
+   And the screen now reacts: the inbox tile flashes and pulses when
+   something lands in it, the nav carries a live dot, a goal flashes and
+   shakes the whole thing, a card throws its colour round the edges.
+   ===================================================================== */
+
+/* ---------------------------------------------------------------------
+   1. THE ENGINE
+   --------------------------------------------------------------------- */
+const SFX={ctx:null,master:null,amb:null,ambGain:null,noise:null,last:{},ready:false};
+function sfxCfg(){
+ if(!G)return{on:true,vol:.7,crowd:true};
+ if(!G.sfx)G.sfx={on:true,vol:.7,crowd:true};
+ if(G.sfx.vol==null)G.sfx.vol=.7;
+ if(G.sfx.crowd==null)G.sfx.crowd=true;
+ return G.sfx}
+function sfxOn(){const c=sfxCfg();return !!c.on}
+/* the browser will not let us make a sound until the user has touched
+   something, so the context is built on the first tap and resumed on
+   every one after it */
+function sfxCtx(){
+ if(SFX.ctx){if(SFX.ctx.state==='suspended')SFX.ctx.resume();return SFX.ctx}
+ const AC=window.AudioContext||window.webkitAudioContext;
+ if(!AC)return null;
+ try{
+  SFX.ctx=new AC();
+  SFX.master=SFX.ctx.createGain();
+  SFX.master.gain.value=sfxCfg().vol;
+  SFX.master.connect(SFX.ctx.destination);
+  // one second of white noise, reused by everything that needs it
+  const sr=SFX.ctx.sampleRate,buf=SFX.ctx.createBuffer(1,sr*2,sr),d=buf.getChannelData(0);
+  for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1;
+  SFX.noise=buf;
+  SFX.ready=true}
+ catch(e){SFX.ctx=null}
+ return SFX.ctx}
+function sfxVol(){if(SFX.master)SFX.master.gain.value=sfxCfg().vol}
+/* a plain tone, optionally sliding */
+function sTone(o){
+ const ctx=sfxCtx();if(!ctx||!sfxOn())return;
+ const t=ctx.currentTime+(o.at||0);
+ const osc=ctx.createOscillator(),g=ctx.createGain();
+ osc.type=o.type||'sine';
+ osc.frequency.setValueAtTime(o.f,t);
+ if(o.to)osc.frequency.exponentialRampToValueAtTime(Math.max(20,o.to),t+o.d);
+ const pk=(o.g==null?.2:o.g);
+ g.gain.setValueAtTime(.0001,t);
+ g.gain.exponentialRampToValueAtTime(pk,t+(o.a==null?.008:o.a));
+ g.gain.exponentialRampToValueAtTime(.0001,t+o.d);
+ osc.connect(g);g.connect(SFX.master);
+ osc.start(t);osc.stop(t+o.d+.02)}
+/* filtered noise: whistles, crowds, thumps, swooshes */
+function sNoise(o){
+ const ctx=sfxCtx();if(!ctx||!sfxOn())return;
+ const t=ctx.currentTime+(o.at||0);
+ const src=ctx.createBufferSource();src.buffer=SFX.noise;
+ src.loop=true;
+ const f=ctx.createBiquadFilter();
+ f.type=o.filter||'bandpass';
+ f.frequency.setValueAtTime(o.f,t);
+ if(o.to)f.frequency.exponentialRampToValueAtTime(Math.max(40,o.to),t+o.d);
+ f.Q.value=o.q==null?1:o.q;
+ const g=ctx.createGain();
+ const pk=(o.g==null?.2:o.g);
+ g.gain.setValueAtTime(.0001,t);
+ g.gain.exponentialRampToValueAtTime(pk,t+(o.a==null?.02:o.a));
+ g.gain.exponentialRampToValueAtTime(.0001,t+o.d);
+ src.connect(f);f.connect(g);g.connect(SFX.master);
+ src.start(t);src.stop(t+o.d+.05)}
+/* don't let the same sound stack up when twenty things happen at once */
+function sGate(k,ms){
+ const now=performance.now();
+ if(SFX.last[k]&&now-SFX.last[k]<ms)return false;
+ SFX.last[k]=now;return true}
+
+/* ---------------------------------------------------------------------
+   2. THE SOUNDS
+   --------------------------------------------------------------------- */
+const SOUNDS={
+ tap(){sTone({f:1180,to:900,d:.05,type:'sine',g:.055})},
+ nav(){sTone({f:660,to:990,d:.09,type:'triangle',g:.075})},
+ open(){sNoise({f:400,to:2400,d:.22,q:.7,g:.05,filter:'bandpass'})},
+ close(){sNoise({f:2200,to:380,d:.20,q:.7,g:.045,filter:'bandpass'})},
+ toast(){sTone({f:880,d:.10,type:'triangle',g:.09});sTone({f:1320,d:.13,type:'sine',g:.05,at:.05})},
+ mail(){                                             // the inbox chime
+  sTone({f:987.8,d:.16,type:'triangle',g:.11});
+  sTone({f:1318.5,d:.30,type:'triangle',g:.09,at:.09});
+  sTone({f:1975.5,d:.34,type:'sine',g:.045,at:.15})},
+ urgent(){                                           // something needs doing
+  [0,.13,.26].forEach((at,i)=>sTone({f:[1046,880,740][i],d:.16,type:'square',g:.055,at}))},
+ cash(){
+  sTone({f:1568,d:.09,type:'square',g:.06});
+  sTone({f:2093,d:.20,type:'square',g:.05,at:.07});
+  sNoise({f:5200,d:.16,q:1.4,g:.03,at:.02})},
+ deny(){sTone({f:190,to:120,d:.20,type:'square',g:.08})},
+ ok(){sTone({f:659,d:.09,type:'triangle',g:.08});sTone({f:988,d:.16,type:'triangle',g:.07,at:.07})},
+ /* a referee's whistle: band-passed noise, warbling, with a pea in it */
+ whistle(n){
+  const times=n===3?[0,.20,.40]:n===2?[0,.22]:[0];
+  times.forEach(at=>{
+   sNoise({f:2350,d:.26,q:14,g:.10,at,filter:'bandpass'});
+   sNoise({f:3150,d:.24,q:18,g:.055,at:at+.01,filter:'bandpass'});
+   sTone({f:2380,to:2520,d:.24,type:'sine',g:.028,at})})},
+ kick(){
+  sTone({f:150,to:60,d:.09,type:'sine',g:.16});
+  sNoise({f:1800,d:.05,q:.8,g:.06,filter:'highpass'})},
+ /* the noise a crowd makes when the ball hits the net */
+ goal(){
+  sNoise({f:180,to:1500,d:1.7,q:.5,g:.30,a:.28,filter:'bandpass'});
+  [523.25,659.25,783.99,1046.5].forEach((f,i)=>
+   sTone({f,d:1.5-i*.12,type:'triangle',g:.075,at:.05+i*.05,a:.10}));
+  sTone({f:110,to:220,d:1.2,type:'sawtooth',g:.05,a:.2})},
+ conceded(){
+  sNoise({f:900,to:150,d:1.5,q:.5,g:.20,a:.30,filter:'bandpass'});
+  sTone({f:196,to:130,d:1.1,type:'sawtooth',g:.05,a:.25})},
+ ooh(){sNoise({f:700,to:340,d:.75,q:.6,g:.14,a:.16,filter:'bandpass'})},
+ save(){sNoise({f:500,to:900,d:.55,q:.6,g:.11,a:.14,filter:'bandpass'});
+  sTone({f:330,d:.20,type:'triangle',g:.04})},
+ card(y){
+  sTone({f:y?520:300,d:.13,type:'square',g:.07});
+  sTone({f:y?390:200,d:.22,type:'square',g:.06,at:.10});
+  if(!y)sTone({f:150,d:.4,type:'sawtooth',g:.05,at:.2})},
+ fullTime(){SOUNDS.whistle(3)},
+ win(){[523,659,784,1046].forEach((f,i)=>sTone({f,d:.5,type:'triangle',g:.085,at:i*.11}))},
+ lose(){[523,466,392,311].forEach((f,i)=>sTone({f,d:.55,type:'triangle',g:.07,at:i*.13}))}};
+function sfx(k,arg){
+ if(!sfxOn())return;
+ const f=SOUNDS[k];if(!f)return;
+ try{f(arg)}catch(e){}}
+
+/* ---------------------------------------------------------------------
+   3. THE CROWD
+   A loop of very dark noise. It gets louder when the game gets tense
+   and drops away at half time, the way a ground does.
+   --------------------------------------------------------------------- */
+function crowdStart(){
+ const ctx=sfxCtx();if(!ctx||!sfxOn()||!sfxCfg().crowd||SFX.amb)return;
+ try{
+  const src=ctx.createBufferSource();src.buffer=SFX.noise;src.loop=true;
+  const lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=420;lp.Q.value=.7;
+  const hp=ctx.createBiquadFilter();hp.type='highpass';hp.frequency.value=90;
+  const g=ctx.createGain();g.gain.value=0;
+  src.connect(hp);hp.connect(lp);lp.connect(g);g.connect(SFX.master);
+  src.start();
+  SFX.amb=src;SFX.ambGain=g;
+  g.gain.linearRampToValueAtTime(.05,ctx.currentTime+1.5)}
+ catch(e){}}
+function crowdStop(){
+ if(!SFX.amb)return;
+ try{const ctx=SFX.ctx,s=SFX.amb,g=SFX.ambGain;
+  g.gain.cancelScheduledValues(ctx.currentTime);
+  g.gain.setValueAtTime(g.gain.value,ctx.currentTime);
+  g.gain.linearRampToValueAtTime(.0001,ctx.currentTime+.8);
+  setTimeout(()=>{try{s.stop()}catch(e){}},1000)}catch(e){}
+ SFX.amb=null;SFX.ambGain=null}
+/* how loud the ground ought to be, right now */
+function crowdTarget(){
+ const m=MU.m;
+ if(!m||m.done)return .02;
+ if(m.stage==='HT')return .018;
+ const diff=Math.abs(m.fix.hs-m.fix.as);
+ const late=m.min>=75?1.35:m.min>=60?1.15:1;
+ let v=.042*late*(diff===0?1.15:diff===1?1.1:diff>=3?.8:1);
+ if(MU.ball){                                        // it lifts near either goal
+  const near=Math.min(MU.ball.x,105-MU.ball.x);
+  if(near<22)v*=1+(22-near)/22*.5}
+ return clamp(v,0,.12)}
+function crowdLevel(){
+ if(!SFX.ambGain||!SFX.ctx)return;
+ try{SFX.ambGain.gain.setTargetAtTime(crowdTarget(),SFX.ctx.currentTime,.6)}catch(e){}}
+
+/* ---------------------------------------------------------------------
+   4. THINGS THAT FLASH
+   --------------------------------------------------------------------- */
+(function attentionCSS(){
+ const st=document.createElement('style');st.id='sfxfx';
+ st.textContent=
+ /* the inbox tile, and anything else asking for you */
+ '@keyframes sbPulse{0%,100%{box-shadow:0 0 0 0 rgba(251,225,34,0)}'+
+  '50%{box-shadow:0 0 0 4px rgba(251,225,34,.16)}}'+
+ '.sb.alert{animation:sbPulse 2.1s ease-in-out infinite}'+
+ '@keyframes sbHit{0%{transform:scale(1)}22%{transform:scale(1.07);'+
+  'background:rgba(251,225,34,.34)}100%{transform:scale(1)}}'+
+ '.sb.hit{animation:sbHit .62s ease-out 2}'+
+ /* a live dot on the nav */
+ '@keyframes dotBeat{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.85);opacity:.6}}'+
+ '.nav button .dot.live{background:var(--red-hot)!important;animation:dotBeat 1.5s ease-in-out infinite}'+
+ '.nav button .dot.gold{background:var(--gold)!important;animation:dotBeat 1.5s ease-in-out infinite}'+
+ /* a goal */
+ '@keyframes goalFlash{0%{opacity:0}12%{opacity:.62}100%{opacity:0}}'+
+ '#fxFlash{position:fixed;inset:0;z-index:130;pointer-events:none;display:none;'+
+  'background:radial-gradient(circle at 50% 45%,rgba(255,255,255,.9),rgba(251,225,34,.35) 40%,transparent 72%)}'+
+ '#fxFlash.go{display:block;animation:goalFlash .75s ease-out}'+
+ '#fxFlash.bad{background:radial-gradient(circle at 50% 45%,rgba(255,83,72,.75),rgba(120,0,0,.3) 45%,transparent 75%)}'+
+ '#fxFlash.yc{background:linear-gradient(90deg,rgba(251,225,34,.55),transparent 22%,transparent 78%,rgba(251,225,34,.55))}'+
+ '#fxFlash.rc{background:linear-gradient(90deg,rgba(255,83,72,.7),transparent 22%,transparent 78%,rgba(255,83,72,.7))}'+
+ '@keyframes shakeIt{0%,100%{transform:translate(0,0)}'+
+  '15%{transform:translate(-5px,2px)}30%{transform:translate(5px,-2px)}'+
+  '45%{transform:translate(-4px,-1px)}60%{transform:translate(4px,1px)}'+
+  '80%{transform:translate(-2px,0)}}'+
+ '#app.shake{animation:shakeIt .55s ease-out}'+
+ /* the toast arrives rather than appears */
+ '@keyframes toastIn{0%{opacity:0;transform:translateX(-50%) translateY(14px) scale(.94)}'+
+  '60%{opacity:1;transform:translateX(-50%) translateY(-3px) scale(1.02)}'+
+  '100%{opacity:1;transform:translateX(-50%) translateY(0) scale(1)}}'+
+ '#toast{animation:toastIn .30s cubic-bezier(.2,1.3,.4,1)}'+
+ '#toast.good{border-color:rgba(61,220,132,.55);box-shadow:0 10px 30px rgba(0,0,0,.5),0 0 0 3px rgba(61,220,132,.10)}'+
+ '#toast.bad{border-color:rgba(255,83,72,.55);box-shadow:0 10px 30px rgba(0,0,0,.5),0 0 0 3px rgba(255,83,72,.10)}'+
+ '#toast.gold{border-color:rgba(251,225,34,.55);box-shadow:0 10px 30px rgba(0,0,0,.5),0 0 0 3px rgba(251,225,34,.12)}'+
+ /* the continue dock breathes on a matchday */
+ '@keyframes dockGlow{0%,100%{box-shadow:0 8px 26px rgba(218,41,28,.30)}'+
+  '50%{box-shadow:0 8px 34px rgba(218,41,28,.62)}}'+
+ '.dock-match{animation:dockGlow 2.4s ease-in-out infinite}'+
+ /* an unread mail row catches the light once */
+ '@keyframes rowSweep{0%{background-position:-260px 0}100%{background-position:320px 0}}'+
+ '.mail.fresh{background-image:linear-gradient(100deg,transparent 0,rgba(251,225,34,.14) 45%,transparent 90%);'+
+  'background-size:260px 100%;background-repeat:no-repeat;animation:rowSweep 1.5s ease-out 2}'+
+ '@media (prefers-reduced-motion:reduce){.sb.alert,.nav button .dot.live,.nav button .dot.gold,'+
+  '#app.shake,.dock-match,.mail.fresh,#toast{animation:none!important}}';
+ document.head.appendChild(st);
+ const fx=document.createElement('div');fx.id='fxFlash';
+ document.body.appendChild(fx)})();
+function flashScreen(kind,shake){
+ const fx=$('#fxFlash');if(!fx)return;
+ fx.className='';void fx.offsetWidth;
+ fx.className='go'+(kind?' '+kind:'');
+ setTimeout(()=>{fx.className=''},800);
+ if(shake){const a=$('#app');if(a){a.classList.remove('shake');void a.offsetWidth;
+  a.classList.add('shake');setTimeout(()=>a.classList.remove('shake'),600)}}}
+function flashInbox(){
+ const tiles=document.querySelectorAll('.statusbar .sb');
+ const t=tiles[tiles.length-1];if(!t)return;
+ t.classList.remove('hit');void t.offsetWidth;t.classList.add('hit');
+ setTimeout(()=>t.classList.remove('hit'),1500)}
+
+/* ---------------------------------------------------------------------
+   5. WIRING IT ALL UP
+   --------------------------------------------------------------------- */
+/* the first tap builds the audio context; every tap keeps it awake */
+document.addEventListener('pointerdown',e=>{
+ sfxCtx();
+ const el=e.target.closest&&e.target.closest('[data-action]');
+ if(!el)return;
+ const a=el.dataset.action;
+ if(a==='nav'||a==='trainTab'||a==='clubTab')sfx('nav');
+ else if(a==='closeModal')sfx('close');
+ else if(sGate('tap',60))sfx('tap')},true);
+
+/* toasts speak, and take a colour from what they say */
+const _toastSfx=toast;
+toast=function(msg,ms){
+ const r=_toastSfx(msg,ms);
+ const t=$('#toast');
+ const s=String(msg||'');
+ const bad=/cannot|can’t|can't|not enough|blocked|beyond|refus|reject|no |fail|too /i.test(s);
+ const good=/✅|👏|🎉|joins|signed|agreed|hired|welcome|complete|booked|🎓|🏋️|🧑‍🏫/i.test(s);
+ if(t){t.className=bad?'bad':good?'good':'gold';
+  t.style.animation='none';void t.offsetWidth;t.style.animation=''}
+ if(sGate('toast',180))sfx(bad?'deny':good?'ok':'toast');
+ return r};
+
+/* post lands: chime, flash the tile, and light the nav */
+let _mailPend=0;
+const _mailSfx=mail;
+mail=function(type,title,body,actions){
+ const r=_mailSfx(type,title,body,actions);
+ _mailPend++;
+ clearTimeout(SFX._mt);
+ SFX._mt=setTimeout(()=>{
+  const n=_mailPend;_mailPend=0;
+  const urgent=(typeof blockingMails==='function')&&blockingMails().length>0;
+  if(sGate('mail',350))sfx(urgent?'urgent':'mail');
+  flashInbox();
+  if(typeof renderNav==='function')try{renderNav();navDots()}catch(e){}
+  if(n>1&&typeof G!=='undefined'&&!MU.m)toastQuiet(n+' new messages')},260);
+ return r};
+function toastQuiet(msg){
+ const t=$('#toast');if(!t||t.style.display==='block')return;
+ t.className='gold';t.textContent='📬 '+msg;t.style.display='block';
+ clearTimeout(t._h);t._h=setTimeout(()=>t.style.display='none',2000)}
+
+/* a live dot on whichever tab wants you */
+function navDots(){
+ const btns=document.querySelectorAll('.nav button');
+ if(!btns.length||!G)return;
+ const need=(typeof blockingMails==='function')?blockingMails().length:0;
+ const un=(typeof unreadMails==='function')?unreadMails().length:(G.unread||0);
+ const iss=(typeof squadIssues==='function')?squadIssues().length:0;
+ btns.forEach(b=>{
+  const d=b.querySelector('.dot');if(!d)return;
+  const v=b.dataset.v;
+  d.classList.remove('live','gold');
+  if(v==='home'&&(need||un))d.classList.add(need?'live':'gold');
+  if(v==='squad'&&iss)d.classList.add('live')})}
+const _navSfx=renderNav;
+renderNav=function(){const r=_navSfx();try{navDots()}catch(e){}return r};
+const _renderDots=render;
+render=function(){const r=_renderDots();try{navDots()}catch(e){}return r};
+/* an unread message glints once when the list is drawn */
+const _hdrSfx=renderHdr;
+renderHdr=function(){const r=_hdrSfx();try{navDots()}catch(e){}return r};
+
+/* modals whoosh */
+const _openModalSfx=openModal;
+openModal=function(html){const r=_openModalSfx(html);if(sGate('open',150))sfx('open');return r};
+
+/* ---------- the match ---------- */
+const _tickSfx=MatchSim.prototype.tickOnce;
+MatchSim.prototype.tickOnce=function(){
+ const before=this.stage,hs=this.fix.hs,as=this.fix.as;
+ const r=_tickSfx.apply(this,arguments);
+ if(!liveMatch(this))return r;
+ if(before==='H1'&&this.stage==='HT'){sfx('whistle',2);crowdLevel()}
+ if(before==='HT'&&this.stage==='H2'){sfx('whistle',1);sfx('kick');crowdLevel()}
+ if(!this._ftSfx&&this.done){this._ftSfx=1;
+  sfx('fullTime');
+  const my=this.sides.findIndex(s=>s.isMy);
+  if(my>=0){const gf=my===0?this.fix.hs:this.fix.as,ga=my===0?this.fix.as:this.fix.hs;
+   setTimeout(()=>sfx(gf>ga?'win':gf<ga?'lose':'toast'),900)}
+  setTimeout(crowdStop,2600)}
+ if((this.fix.hs!==hs||this.fix.as!==as)===false&&Math.random()<.06)crowdLevel();
+ return r};
+/* kick-off */
+const _koSfx=kickOffFrom;
+kickOffFrom=function(si){
+ const r=_koSfx(si);
+ if(MU.m&&!MU.m.done&&sGate('ko',600)){sfx('whistle',1);setTimeout(()=>sfx('kick'),260);crowdStart()}
+ return r};
+/* goals: the roar, the flash, the shake — and the other kind */
+const _goalSfx=MatchSim.prototype.goal;
+MatchSim.prototype.goal=function(A,D,shooter,creator,assister,pen){
+ const r=_goalSfx.apply(this,arguments);
+ if(liveMatch(this)){
+  const mine=!!A.isMy;
+  sfx(mine?'goal':'conceded');
+  flashScreen(mine?'':'bad',true);
+  if(SFX.ambGain&&SFX.ctx){try{
+   SFX.ambGain.gain.cancelScheduledValues(SFX.ctx.currentTime);
+   SFX.ambGain.gain.setValueAtTime(mine?.115:.03,SFX.ctx.currentTime);
+   SFX.ambGain.gain.setTargetAtTime(.045,SFX.ctx.currentTime+1.6,1.2)}catch(e){}}}
+ return r};
+/* cards */
+const _cardSfx=MatchSim.prototype.card;
+MatchSim.prototype.card=function(D,dp){
+ const before=dp.yc;
+ const r=_cardSfx.apply(this,arguments);
+ if(liveMatch(this)&&dp.yc>before){sfx('whistle',1);setTimeout(()=>sfx('card',true),200);flashScreen('yc',false)}
+ return r};
+const _offSfx=MatchSim.prototype.sendOff;
+MatchSim.prototype.sendOff=function(D,dp,straight){
+ const r=_offSfx.apply(this,arguments);
+ if(liveMatch(this)){sfx('whistle',2);setTimeout(()=>sfx('card',false),260);flashScreen('rc',true)}
+ return r};
+/* shots that come to something */
+const _shotSfx=MatchSim.prototype.shotEvent;
+MatchSim.prototype.shotEvent=function(A,D,sh,cr,head){
+ const hs=this.fix.hs,as=this.fix.as;
+ const sot=D.st.sv;
+ const r=_shotSfx.apply(this,arguments);
+ if(liveMatch(this)&&this.fix.hs===hs&&this.fix.as===as&&sGate('shot',400)){
+  if(D.st.sv>sot)sfx('save');else sfx('ooh')}
+ return r};
+/* the crowd follows the game, checked a few times a second */
+const _drawCrowd=drawPitch;
+drawPitch=function(){
+ const r=_drawCrowd.apply(this,arguments);
+ if(sGate('crowd',450))crowdLevel();
+ return r};
+/* leaving the match turns the ground off */
+const _doneSfx=ACTIONS.matchDone;
+ACTIONS.matchDone=function(){crowdStop();return _doneSfx.apply(this,arguments)};
+
+/* money changing hands */
+['submitBid','submitTerms','confirmSign','acceptOffer','sellConfirm','campGo','staffHire']
+ .forEach(k=>{const f=ACTIONS[k];if(!f)return;
+  ACTIONS[k]=function(){const r=f.apply(this,arguments);if(sGate('cash',300))sfx('cash');return r}});
+
+/* ---------------------------------------------------------------------
+   6. THE CONTROLS
+   --------------------------------------------------------------------- */
+ACTIONS.sfxToggle=()=>{
+ const c=sfxCfg();c.on=!c.on;
+ if(!c.on)crowdStop();else{sfxCtx();sfx('ok')}
+ toast(c.on?'🔊 Sound on':'🔇 Sound off');render();
+ if(MU.m&&typeof renderMCtl==='function')renderMCtl()};
+ACTIONS.sfxCrowd=()=>{
+ const c=sfxCfg();c.crowd=!c.crowd;
+ if(!c.crowd)crowdStop();else if(MU.m&&!MU.m.done)crowdStart();
+ toast(c.crowd?'📣 Crowd on':'📣 Crowd off');render()};
+ACTIONS.sfxTest=()=>{sfxCtx();sfx('goal');flashScreen('',true)};
+document.addEventListener('input',e=>{
+ const el=e.target.closest&&e.target.closest('[data-sfxvol]');
+ if(!el)return;
+ sfxCfg().vol=(+el.value)/100;sfxVol();
+ const lbl=$('#sfxVolLbl');if(lbl)lbl.textContent=Math.round(+el.value)+'%';
+ if(sGate('vol',220))sfx('tap')});
+/* a speaker on the match bar */
+const _mctlSfx=renderMCtl;
+renderMCtl=function(){
+ const r=_mctlSfx.apply(this,arguments);
+ const c=$('#mCtl');if(!c)return r;
+ if(c.querySelector('[data-action="sfxToggle"]'))return r;
+ c.insertAdjacentHTML('beforeend',
+  '<div class="row" style="justify-content:center;gap:8px;margin-top:8px">'+
+  '<button class="chip'+(sfxOn()?' on':'')+'" data-action="sfxToggle">'+(sfxOn()?'🔊 Sound':'🔇 Muted')+'</button>'+
+  '<button class="chip'+(sfxCfg().crowd?' on':'')+'" data-action="sfxCrowd">📣 Crowd</button></div>');
+ return r};
+/* and a proper panel in settings */
+const _vSaveSfx=vSave;
+vSave=function(){
+ const c=sfxCfg();
+ let h='<div class="sec" style="margin-top:0"><div class="t">🔊 Sound &amp; alerts</div><div class="ln"></div>'+
+  '<div class="sub">'+(c.on?'on':'muted')+'</div></div>'+
+  '<div class="card"><div class="chips">'+
+  '<button class="chip'+(c.on?' on':'')+'" data-action="sfxToggle">'+(c.on?'🔊 Sound on':'🔇 Sound off')+'</button>'+
+  '<button class="chip'+(c.crowd?' on':'')+'" data-action="sfxCrowd">📣 Crowd noise</button>'+
+  '<button class="chip" data-action="sfxTest">▶️ Test</button></div>'+
+  '<div class="spread" style="margin:12px 0 2px"><span class="small" style="font-weight:700">Volume</span>'+
+  '<span class="small num" id="sfxVolLbl">'+Math.round(c.vol*100)+'%</span></div>'+
+  '<input type="range" min="0" max="100" step="5" value="'+Math.round(c.vol*100)+'" data-sfxvol="1">'+
+  '<div class="xs faint" style="margin-top:8px;line-height:1.6">Every sound in here is generated by the browser as it plays — '+
+  'whistles, the thud of a kick, the roar when one goes in and the hum of the ground behind it. '+
+  'Nothing is downloaded, so it works with no connection at all.</div></div>';
+ return h+_vSaveSfx()};
+/* keep the master gain in step with a loaded save */
+const _renderVol=render;
+render=function(){const r=_renderVol();try{sfxVol()}catch(e){}return r};
+/* the dock glows on a matchday */
+const _dockGlow=renderDock;
+renderDock=function(){
+ const r=_dockGlow.apply(this,arguments);
+ try{
+  const d=$('#continueDock');if(!d)return r;
+  const btn=d.querySelector('button[data-action="advance"]');
+  const um=(typeof userMatchOn==='function')?userMatchOn(G.day):null;
+  if(btn&&um&&!um.played)btn.classList.add('dock-match')}
+ catch(e){}
+ return r};
+
 showStart();
 </script>
 </body>
