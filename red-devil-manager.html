@@ -9662,7 +9662,7 @@ vTreatment=function(){
   sus.forEach(p=>{h+='<div class="mail" data-action="profile" data-id="'+p.id+'"><div class="ic">🟥</div><div style="flex:1">'+
    '<div class="tt">'+esc(p.name)+'</div><div class="bd">'+p.susp+' match'+(p.susp>1?'es':'')+' remaining</div></div></div>'});
   h+='</div>'}
- h+='<div class="chip-lbl">Load & injury risk</div>'+
+ h+='<div class="chip-lbl">Load &amp; injury risk</div>'+
  '<div class="xs faint" style="margin:-4px 0 6px 2px">Tap “Rest” to pull a player out of full training — his risk drops sharply, his sharpness drifts.</div>'+
  '<div class="card tight"><table class="tbl"><thead><tr><th>Player</th><th>Load</th><th class="c">Risk</th><th class="r">Rest</th></tr></thead><tbody>';
  flagged.forEach(({p,r})=>{const b=riskBand(r);
@@ -10873,6 +10873,281 @@ function kickOffFrom(si){
   .map(x=>({x,d:Math.abs(dotHome(x,si).x-52.5)+Math.abs(dotHome(x,si).y-34)*.5}))
   .sort((a,b)=>a.d-b.d)[0];
  restartFrom(si,52.5,34,900,mid?mid.x:null)}
+
+
+/* =====================================================================
+   THE NEWS CYCLE — one feed that reacts to everything the club does
+   ---------------------------------------------------------------------
+   Media and social only ever woke up after a match. Now every part of
+   the game posts into one timeline: injuries, discipline, transfers,
+   the boardroom, the academy, runs of form, milestones and silverware —
+   and the fans, the press and rival supporters all have their say.
+   ===================================================================== */
+const BUZZ_FANS=['@RedArmyTom','@StretfordSteve','@UtdDataNerd','@TerraceTactics','@MancunianMatt',
+ '@BusbyBabeBex','@OTFaithful','@ScholesyWasBetter','@NorthStandNoel','@FergieTimeFrank',
+ '@SamOnTheKop','@TheatreOfBeans','@RedCafeRhys','@BellyOfTheBeast','@AwayDaysAnna'];
+const BUZZ_PRESS=['@SandraBeckwith','@MarcusReeveTV','@NiaFletcherData','@TerryDochertyOBE',
+ '@DeanWhitlock5','@OllieGrantComms','@TheTouchlineUK','@BackPageDaily'];
+const BUZZ_RIVAL=['@BlueMoonBazza','@AnfieldAndy','@GunnerGraham','@SpursScott','@ToffeeTerri'];
+const BUZZ_INSIDER=['@FabrizioWatch','@DoneDealDaily','@TransferTapUK'];
+const BUZZ_KIND={
+ result:{ic:'⚽'},injury:{ic:'🚑'},discipline:{ic:'🚨'},transfer:{ic:'💷'},board:{ic:'🏛️'},
+ youth:{ic:'🎓'},form:{ic:'📈'},milestone:{ic:'🌟'},trophy:{ic:'🏆'},press:{ic:'🎙️'},contract:{ic:'📝'}};
+function buzzPool(k){
+ return k==='transfer'?BUZZ_INSIDER.concat(BUZZ_PRESS):
+  k==='board'||k==='press'?BUZZ_PRESS:
+  k==='milestone'||k==='trophy'?BUZZ_FANS.concat(BUZZ_PRESS):BUZZ_FANS}
+/* one call, from anywhere in the game */
+function buzz(kind,text,o){
+ if(!G||!G.clubs)return;
+ o=o||{};
+ if(!G.buzz)G.buzz=[];
+ const fans=(G.fans==null?60:G.fans);
+ const pool=o.rival?BUZZ_RIVAL:o.handle?[o.handle]:buzzPool(kind);
+ const r=mulberry(hashStr('bz'+G.day+kind+text.slice(0,18)));
+ const base=o.big?4200:900;
+ const likes=Math.round(base*(.6+r()*2.4)*(1+fans/140)*(o.big?3.4:1));
+ G.buzz.unshift({d:G.day,k:kind,h:pool[Math.floor(r()*pool.length)],t:text,
+  l:likes,tone:o.tone||'neu',big:!!o.big});
+ trimBuzz()}
+/* keep the feed to a sane size, dropping routine match chatter first */
+function trimBuzz(){
+ if(!G.buzz||G.buzz.length<=180)return;
+ let over=G.buzz.length-180;
+ for(let i=G.buzz.length-1;i>=0&&over>0;i--){
+  if(G.buzz[i].k==='result'&&!G.buzz[i].big){G.buzz.splice(i,1);over--}}
+ if(G.buzz.length>180)G.buzz.length=180}
+/* fan reactions carry the mood of the terraces */
+function buzzMood(){const f=G.fans==null?60:G.fans;return f>=72?'up':f<=38?'down':'mid'}
+function buzzPick(up,mid,down){const m=buzzMood();return pick(m==='up'?up:m==='down'?down:mid)}
+
+/* ---------- injuries ---------- */
+const _aiBuzz=applyInjury;
+applyInjury=function(p,c,tr){
+ const d=_aiBuzz(p,c,tr);
+ if(d&&c&&c.i===G.my&&(d>=21||(d>=10&&p.ovr>=80))){
+  const wk=humanDays(d);
+  buzz('injury',buzzPick(
+   ['Gutted for '+p.name+'. '+wk+' out. He’ll come back stronger.','Not '+p.name+' 😩 '+wk+'. Squad depth time.'],
+   [p.name+' out for '+wk+'. Of course he is. Every single season.','Another one down. '+p.name+', '+wk+'. You could set your watch by it.'],
+   ['How is it ALWAYS us? '+p.name+' gone for '+wk+'.','Medical department needs looking at. '+p.name+' — '+wk+'.']),
+   {tone:'neg',big:d>=70})}
+ return d};
+
+/* ---------- discipline: the story, and how you handled it ---------- */
+const _mdBuzz=maybeDrama;
+maybeDrama=function(){
+ const n=G.inbox.length;
+ _mdBuzz();
+ if(G.inbox.length<=n)return;
+ const m=G.inbox[0];if(!m.drama)return;
+ const t=String(m.title).replace(/^[^\w]+/,'');
+ if(m.drama==='good')buzz('discipline','Love to see it — '+t.toLowerCase()+'. Proper club, this.',{tone:'pos'});
+ else{
+  buzz('discipline',(m.drama==='major'?'🚨 ':'')+t+'. '+
+   buzzPick(['Deal with it in-house and move on.','He’s human. Back him.'],
+    ['Not what we need right now.','Sort it out, lads. Focus.'],
+    ['Embarrassing. This club is a circus.','Same old shambles behind the scenes.']),
+   {tone:'neg',big:m.drama==='major'});
+  if(m.drama==='major')buzz('discipline','Never a dull day at '+G.clubs[G.my].short+' is there 😂',{rival:1,tone:'neg'})}};
+const _dramaBuzz=ACTIONS.drama;
+ACTIONS.drama=el=>{
+ const[kind,pid,tier]=String(el.dataset.arg).split(':');
+ const p=playerById(pid);
+ _dramaBuzz(el);
+ if(!p)return;
+ const nm=surname(p.name);
+ if(kind==='fine')buzz('discipline','Manager’s fined '+nm+'. Good. Standards are standards.',{tone:'pos'});
+ else if(kind==='back')buzz('discipline','Boss has come out and backed '+nm+'. '+
+  buzzPick(['That’s how you get a dressing room behind you.'],['Hope he knows what he’s doing.'],
+   ['Weak. Absolutely weak.']),{tone:buzzMood()==='down'?'neg':'pos'});
+ else if(kind==='drop')buzz('discipline',nm+' dropped. Nobody is bigger than the club 👏',{tone:'pos'});
+ else buzz('discipline','Clear-the-air meeting called. Whatever works.',{tone:'neu'})};
+
+/* ---------- transfers ---------- */
+const _signBuzz=completeSigning;
+completeSigning=function(p,fee,t){
+ const seller=G.clubs[p.club];
+ const nm=p.name,ov=p.ovr,ag=p.age,from=seller?seller.short:'';
+ _signBuzz(p,fee,t);
+ buzz('transfer','HERE WE GO ✅ '+nm+' to '+G.clubs[G.my].short+' from '+from+', '+fmtM(fee)+'. Medical done.',
+  {handle:pick(BUZZ_INSIDER),tone:'pos',big:fee>=4e7});
+ buzz('transfer',ov>=82?'What a signing. '+nm+' at '+ag+' for '+fmtM(fee)+' is serious business 🔴':
+  ag<=21?nm+' is '+ag+'. One for the future but we needed one for NOW.':
+  fee>=5e7?fmtM(fee)+' for '+nm+'? Hope he’s worth it.':
+  'Decent bit of business, that. '+nm+' improves us.',{tone:ov>=82?'pos':'neu',big:ov>=86});
+ if(ov>=85)buzz('transfer','Every window they get one out of nowhere. Sickening.',{rival:1,tone:'neu'})};
+const _offAccBuzz=ACTIONS.offerAccept;
+ACTIONS.offerAccept=el=>{
+ const o=(typeof offerById==='function')?offerById(el.dataset.arg):null;
+ const p=o?playerById(o.pid):null;
+ const nm=p?p.name:null,ov=p?p.ovr:0,fee=o?o.fee:0;
+ _offAccBuzz(el);
+ if(!nm)return;
+ buzz('transfer',ov>=82?'Selling '+nm+' for '+fmtM(fee)+'. Explain this to me like I’m five.':
+  'That’s '+nm+' gone then. '+fmtM(fee)+'. Reinvest it properly.',
+  {tone:ov>=82?'neg':'neu',big:ov>=84})};
+
+/* ---------- the boardroom ---------- */
+const _bmrBuzz=boardMonthlyReview;
+boardMonthlyReview=function(){
+ const before=G.boardStage||0;
+ _bmrBuzz();
+ const after=G.boardStage||0;
+ if(after>before&&after>=2)buzz('board',
+  after>=3?'Understand the board have delivered a final warning to the '+G.clubs[G.my].short+' manager. Next few weeks are decisive.'
+   :'Told the '+G.clubs[G.my].short+' hierarchy have spoken to the manager about results. No decision imminent.',
+  {handle:pick(BUZZ_PRESS),tone:'neg',big:after>=3});
+ else if(after<before)buzz('board','Pressure easing on the '+G.clubs[G.my].short+' manager after a better run. Board happy to stay patient.',
+  {handle:pick(BUZZ_PRESS),tone:'pos'})};
+
+/* ---------- form, milestones, silverware, the academy ---------- */
+function buzzStreaks(){
+ const st=(typeof formStreak==='function')?formStreak(G.my):null;
+ if(!st||st.n<3)return;
+ const key=st.r+st.n;
+ if(G._buzzStreak===key)return;G._buzzStreak=key;
+ if(st.r==='W'&&st.n>=4)buzz('form',st.n+' wins on the bounce. Do not wake me up 🔴🔥',{tone:'pos',big:st.n>=6});
+ else if(st.r==='L'&&st.n>=3)buzz('form',st.n+' straight defeats. '+
+  buzzPick(['Blip. We go again.'],['This is getting serious now.'],['Enough. Genuinely enough.']),{tone:'neg',big:st.n>=5});
+ else if(st.r==='D'&&st.n>=4)buzz('form',st.n+' draws in a row. Turn them into wins and we’re fine.',{tone:'neu'})}
+function buzzMilestones(){
+ const my=G.clubs[G.my];
+ G._buzzMs=G._buzzMs||{};
+ my.players.forEach(p=>{
+  const g=(p.stats&&p.stats.goals)||0;
+  [10,20,25,30].forEach(mark=>{
+   const k=p.id+':'+mark+':'+G.season;
+   if(g>=mark&&!G._buzzMs[k]){G._buzzMs[k]=1;
+    buzz('milestone',surname(p.name)+' reaches '+mark+' goals for the season. '+
+     (mark>=25?'Whatever he wants, give it to him. 🐐':'Take a bow, son. 🔴'),{tone:'pos',big:mark>=25})}});
+  const cs=(p.stats&&p.stats.cleanSheets)||0;
+  const kc=p.id+':cs15:'+G.season;
+  if(p.pos==='GK'&&cs>=15&&!G._buzzMs[kc]){G._buzzMs[kc]=1;
+   buzz('milestone',surname(p.name)+' has '+cs+' clean sheets. Golden Glove is his.',{tone:'pos'})}})}
+const _dtcBuzz=dailyTickCore;
+dailyTickCore=function(){
+ _dtcBuzz();
+ if(G.sacked)return;
+ try{buzzStreaks();if(G.day%4===2)buzzMilestones()}catch(e){}};
+const _pcBuzz=progressCups;
+progressCups=function(){
+ const before={};for(const k in (G.cups||{}))before[k]=G.cups[k].winner;
+ _pcBuzz();
+ for(const k in (G.cups||{})){
+  const cup=G.cups[k];
+  if(cup.winner!=null&&before[k]==null&&cup.winner===G.my){
+   const nm=(CUP_DEFS[k]||{}).name||'the cup';
+   buzz('trophy','WE HAVE WON THE '+nm.toUpperCase()+' 🏆🏆🏆 I am not okay',{tone:'pos',big:true});
+   buzz('trophy','Silverware changes everything at a club this size. Credit where it is due.',
+    {handle:pick(BUZZ_PRESS),tone:'pos',big:true})}}};
+const _promoBuzz=ACTIONS.promoteYouth;
+ACTIONS.promoteYouth=el=>{
+ const p=playerById(el.dataset.id);
+ const nm=p?p.name:null,pot=p?p.pot:0,ag=p?p.age:0;
+ _promoBuzz(el);
+ if(!nm)return;
+ buzz('youth',nm+' promoted to the first team at '+ag+'. '+
+  (pot>=85?'Everyone at the academy says he is the real thing 👀':'Academy graduate. Long may it continue.'),
+  {tone:'pos',big:pot>=88})};
+/* the press room feeds the timeline too */
+const _pressBuzz=ACTIONS.pressAnswer||null;
+if(typeof ACTIONS.pressAnswer==='function'){
+ ACTIONS.pressAnswer=el=>{
+  _pressBuzz(el);
+  buzz('press','Manager fronted up in the press room today. '+
+   buzzPick(['Said all the right things.'],['Bit of everything in that one.'],['Words are cheap.']),{tone:'neu'})}}
+/* match reactions go into the same timeline instead of their own silo */
+const _socialBuzz=socialPosts;
+socialPosts=function(f){
+ const out=_socialBuzz(f);
+ // the article keeps every reaction; the timeline takes the best two so a
+ // busy fixture list cannot bury everything else that happened
+ const key='mc'+G.day+':'+f.gf+'-'+f.ga;
+ if(G._buzzMatch!==key){
+  G._buzzMatch=key;
+  if(!G.buzz)G.buzz=[];
+  (out||[]).slice(0,2).forEach(x=>G.buzz.unshift({d:G.day,k:'result',h:x.h,t:x.t,l:x.l,
+   tone:f.res==='W'?'pos':f.res==='L'?'neg':'neu',big:false}))}
+ trimBuzz();
+ return out};
+
+/* ---------- the media hub ---------- */
+function buzzFilters(){return[['all','Everything'],['result','Matches'],['transfer','Transfers'],
+ ['injury','Injuries'],['discipline','Off the pitch'],['form','Form'],['milestone','Players'],['board','Boardroom']]}
+function fmtLikes(n){return n>=1000?(n/1000).toFixed(n>=10000?0:1)+'k':String(n)}
+function vBuzz(){
+ const list=(G.buzz||[]);
+ const f=UI.buzzFilter||'all';
+ const shown=(f==='all'?list:list.filter(x=>x.k===f)).slice(0,UI.buzzShow||14);
+ let h='<div class="chip-lbl">The timeline</div>'+
+ '<div class="chips" style="margin-bottom:8px">'+buzzFilters().map(x=>
+  '<button class="chip'+(f===x[0]?' on':'')+'" data-action="buzzFilter" data-v="'+x[0]+'">'+x[1]+'</button>').join('')+'</div>';
+ if(!shown.length)return h+'<div class="card tight"><div class="small muted" style="padding:8px 2px">Nothing being said just yet. Play some football.</div></div>';
+ h+='<div class="card tight">'+shown.map(x=>{
+  const col=x.tone==='pos'?'var(--green)':x.tone==='neg'?'var(--danger)':'var(--muted)';
+  return '<div style="padding:8px 2px;border-bottom:1px solid var(--chalk);'+(x.big?'background:rgba(251,225,34,.05)':'')+'">'+
+  '<div class="spread"><div class="row" style="gap:6px"><span style="font-size:12px">'+((BUZZ_KIND[x.k]||{}).ic||'💬')+'</span>'+
+  '<span class="xs" style="font-weight:800;color:'+col+'">'+esc(x.h)+'</span></div>'+
+  '<span class="xs faint">'+fmtDateShort(x.d)+'</span></div>'+
+  '<div class="small" style="line-height:1.45;margin:3px 0 2px">'+esc(x.t)+'</div>'+
+  '<div class="xs faint">♥ '+fmtLikes(x.l)+' · ↻ '+fmtLikes(Math.round(x.l*.28))+'</div></div>'}).join('')+'</div>';
+ if((f==='all'?list:list.filter(x=>x.k===f)).length>shown.length)
+  h+='<button class="btn btn-ghost btn-block btn-sm" style="margin-top:8px" data-action="buzzMore">Show more</button>';
+ return h}
+ACTIONS.buzzFilter=el=>{UI.buzzFilter=el.dataset.v;UI.buzzShow=14;render()};
+ACTIONS.buzzMore=()=>{UI.buzzShow=(UI.buzzShow||14)+14;render()};
+vMedia=function(){
+ const my=G.clubs[G.my];
+ const all=G.inbox.concat(G.archive||[]).filter(m=>m.type==='news'||m.article);
+ all.sort((a,b)=>b.day-a.day);
+ let h='<div class="sec"><div class="t">📰 Media centre</div><div class="ln"></div><div class="sub">'+
+  (G.buzz||[]).length+' posts · '+all.length+' stories</div></div>';
+ h+=vFans();
+ // the running storyline
+ const n=(typeof seasonNarrative==='function')?seasonNarrative():null;
+ if(n)h+='<div class="card" style="margin-bottom:12px;border-color:rgba(251,225,34,.3)">'+
+  '<div class="xs faint" style="font-weight:800;letter-spacing:.5px">THE STORY RIGHT NOW</div>'+
+  '<div class="small" style="font-weight:800;margin:4px 0 3px">'+n.h+'</div>'+
+  '<div class="xs muted" style="line-height:1.5">'+n.b+'</div></div>';
+ const pts=(typeof buildTalkingPoints==='function')?buildTalkingPoints():[];
+ if(pts.length){
+  h+='<div class="chip-lbl">Talking points</div><div class="card tight">'+
+  pts.map(x=>'<div style="padding:7px 2px;border-bottom:1px solid var(--chalk)">'+
+   '<div class="xs faint">'+esc(x.t)+'</div>'+
+   '<div class="small" style="font-style:italic;line-height:1.5;margin:3px 0">“'+x.l+'”</div>'+
+   '<div class="xs faint">— '+esc(x.p.n)+', '+esc(x.p.r)+'</div></div>').join('')+'</div>'}
+ h+=vBuzz();
+ h+='<div class="chip-lbl">Coverage</div><div class="card tight" style="max-height:40vh;overflow-y:auto">';
+ if(!all.length)h+='<div class="small muted" style="padding:8px 2px">No coverage yet.</div>';
+ all.slice(0,20).forEach(m=>{
+  h+='<div class="mail" data-action="mailOpen" data-id="'+m.id+'"><div class="ic">'+(m.article?'📰':'🗨️')+'</div>'+
+  '<div style="flex:1;min-width:0"><div class="tt" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+m.title+'</div>'+
+  '<div class="xs faint">'+esc(mailFrom(m))+' · '+fmtDateShort(m.day)+'</div></div></div>'});
+ return h+'</div>'};
+/* the dashboard gets a window onto the noise */
+const _vHomeBuzz=vHome;
+vHome=function(){
+ let h=_vHomeBuzz();
+ if(G.sacked)return h;
+ const b=(G.buzz||[])[0];
+ if(!b)return h;
+ const col=b.tone==='pos'?'var(--green)':b.tone==='neg'?'var(--danger)':'var(--muted)';
+ const card='<div class="card tight" style="margin-bottom:11px" data-action="openMedia">'+
+  '<div class="spread" style="margin-bottom:4px"><span class="xs faint" style="font-weight:800;letter-spacing:.5px">TRENDING</span>'+
+  '<span class="xs faint">'+esc(b.h)+' · ♥ '+fmtLikes(b.l)+'</span></div>'+
+  '<div class="small" style="line-height:1.42;color:'+col+'">'+esc(b.t.length>120?b.t.slice(0,118)+'…':b.t)+'</div></div>';
+ const at=h.indexOf('<div class="minitbl');
+ return at>0?h.slice(0,at)+card+h.slice(at):h+card};
+ACTIONS.openMedia=()=>{UI.view='club';UI.clubTab='media';render();window.scrollTo(0,0)};
+const _ngBuzz=newGame;
+newGame=function(i){_ngBuzz(i);G.buzz=[];G._buzzMs={};G._buzzStreak=null;
+ buzz('board','Official: '+G.clubs[G.my].name+' appoint a new manager. Big job, big expectations.',
+  {handle:pick(BUZZ_PRESS),tone:'neu',big:true})};
+const _loadBuzz=loadSlot;
+loadSlot=function(slot){const ok=_loadBuzz(slot);
+ if(ok){if(!G.buzz)G.buzz=[];if(!G._buzzMs)G._buzzMs={}}
+ return ok};
 
 showStart();
 </script>
