@@ -9402,6 +9402,1069 @@ loadSlot=function(slot){
  return ok};
 const _ngSafe=newGame;
 newGame=function(i){_ngSafe(i);ensureClubTactics()};
+/* =====================================================================
+   SPORTS SCIENCE — injuries that behave like real football
+   ---------------------------------------------------------------------
+   Real squads pick up roughly 20 injuries a season and about two thirds
+   of them happen ON A MATCHDAY, not on the training ground. The old model
+   had that backwards: ~22 training injuries a season against ~3 in
+   matches, with no cooldown, so knocks arrived in clusters every couple
+   of days. This rebuilds the whole thing around accumulated LOAD.
+   ===================================================================== */
+const INJ_LIB={
+ knock:[['Dead leg',3],['Bruised ribs',4],['Bang on the ankle',3],['Tight hamstring',5],
+  ['Back spasm',4],['Sore knee',5],['Cut requiring stitches',2],['Bruised foot',4],['Virus',5],['Stiff calf',4]],
+ mod:[['Twisted ankle',16],['Grade one hamstring strain',20],['Calf strain',18],['Groin strain',19],
+  ['Thigh strain',17],['Concussion protocol',12],['Shoulder sprain',23],['Hip flexor strain',18],['Knee sprain',22]],
+ bad:[['Grade two hamstring tear',45],['Broken metatarsal',68],['Medial ligament damage',58],
+  ['Ankle ligament damage',80],['Fractured cheekbone',34],['Torn quadriceps',48],['Broken wrist',40]],
+ season:[['Ruptured cruciate ligament',225],['Ruptured achilles',195],['Broken leg',150]]};
+const SEV_ORDER=['knock','mod','bad','season'];
+const SEV_LBL={knock:'a knock',mod:'a strain',bad:'a serious injury',season:'a long-term injury'};
+/* how bad an injury is depends on WHERE it happened — training ground
+    knocks are overwhelmingly minor, contact in a match is not */
+const SEV_MIX={
+ train:[.74,.225,.033,.002],
+ match:[.46,.395,.133,.012]};
+function rollSeverity(ctx,p){
+ const mix=SEV_MIX[ctx]||SEV_MIX.train;
+ let r=Math.random();
+ // older legs and heavy load skew things worse
+ const age=p.age||25,load=p.load||0;
+ r-=(age>=32?.05:age>=29?.025:0)+Math.max(0,load-60)/40*.05;
+ let acc=0;
+ for(let i=0;i<4;i++){acc+=mix[i];if(r<acc)return SEV_ORDER[i]}
+ return 'bad'}
+/* the single source of truth for how likely a player is to break down */
+function injRisk(p,c,ctx){
+ let r=ctx==='match'?.00255:.00072;
+ r*=.55+(p.injuryProneness||8)/9*.62;                 // 3 → .76   18 → 1.79
+ const age=p.age||25;
+ r*=age>=33?1.38:age>=30?1.2:age<=19?1.12:1;
+ r*=1+Math.max(0,(p.load||0)-45)/55*1.15;             // fresh legs are safe legs
+ const cond=p.cond==null?100:p.cond;
+ r*=cond<55?1.95:cond<70?1.45:cond<85?1.12:1;
+ if(p.relapse>0)r*=1.85;                              // rushed back too soon
+ if(p.rest&&ctx==='train')r*=.42;                     // wrapped in cotton wool
+ const st=(p.attrs&&p.attrs.strength)||10, na=(p.attrs&&p.attrs.stamina)||10;
+ r*=1.16-(st+na)/2/20*.32;
+ if(c&&c.i===G.my){
+  const sp=(G.staff&&G.staff.sports&&G.staff.sports.stars)||2;
+  const ph=(G.staff&&G.staff.physio&&G.staff.physio.stars)||2;
+  r*=clamp(1-.055*sp-.018*ph,.45,1);                  // the sports scientist finally earns his wage
+  r*=clamp(1-.035*(((c.stad&&c.stad.train)||1)-1),.8,1);
+  if(ctx==='train'){
+   const out=c.players.filter(x=>x.injury).length;
+   if(out>=5)r*=.4;                                   // triage: the physios wrap everyone in bubble wrap
+   else if(out>=3)r*=.7}}
+ // a hard ceiling so a thin, badly-resourced squad is punished but not buried
+ return Math.min(r,ctx==='match'?.0055:.00215)}
+/* a 0-100 readout the player can actually see and act on */
+function injRiskPct(p){
+ const c=G.clubs[p.club];
+ return clamp(Math.round(injRisk(p,c,'train')/.00072*32),3,99)}
+function riskBand(v){return v>=70?['High','var(--danger)']:v>=48?['Elevated','var(--amber)']:v>=24?['Normal','var(--ink)']:['Low','var(--green)']}
+
+/* ---------- applyInjury rebuilt: contextual severity + real reporting ---------- */
+let INJ_LOCK=false;
+applyInjury=function(p,c,inTraining){
+ if(INJ_LOCK||!p||p.injury)return 0;
+ const ctx=inTraining?'train':'match';
+ const sev=rollSeverity(ctx,p);
+ const t=pick(INJ_LIB[sev]);
+ let days=Math.max(1,Math.round(t[1]*(.72+Math.random()*.56)));
+ if(c&&c.i===G.my&&G.staff&&G.staff.physio)days=Math.max(1,Math.round(days*(1-.06*G.staff.physio.stars)));
+ p.injury={name:t[0],days,total:days,sev,ctx};
+ p._pendingRelapse=(sev==='mod'||sev==='bad')?days:0;
+ p.load=Math.max(0,(p.load||0)-25);
+ if(days>=10)p.cond=Math.min(p.cond,34);
+ if(p.rest)p.rest=false;
+ if(c&&c.i===G.my){
+  c._injLog=c._injLog||[];c._injLog.push({d:G.day,id:p.id,ctx,sev});
+  if(c._injLog.length>120)c._injLog=c._injLog.slice(-60);
+  const back=fmtDateShort(G.day+days);
+  const cover=c.players.filter(x=>x!==p&&!x.injury&&x.susp<=0&&!x.loan&&POSGROUP(x.pos)===POSGROUP(p.pos))
+   .sort((a,b)=>b.ovr-a.ovr)[0];
+  mail('injury',(sev==='season'?'🔴 ':sev==='bad'?'🩹 ':'🏥 ')+'Injury: '+p.name,
+   '<b>'+esc(p.name)+'</b> ('+p.pos+') has suffered <b>'+esc(t[0].toLowerCase())+'</b> '+
+   (inTraining?'in training':'during the match')+'.<br>'+
+   'Out for around <b>'+humanDays(days)+'</b> · back around <b>'+back+'</b>.'+
+   (cover?'<br><span class="xs faint">'+esc((G.staff&&G.staff.assistant&&G.staff.assistant.name)||'Your assistant')+
+    ': "'+esc(cover.name)+' can cover there, boss."</span>':'')+
+   (sev==='season'?'<br><b style="color:var(--danger)">This one will define his season.</b>':''))}
+ return days}
+
+/* ---------- daily load, recovery and relapse windows ---------- */
+const _dailyRecLoad=dailyRecovery;
+dailyRecovery=function(){
+ _dailyRecLoad();
+ const sp=(G.staff&&G.staff.sports&&G.staff.sports.stars)||2;
+ const intMod=G.trainInt==='Light'?2.6:G.trainInt==='Intense'?-1.2:0;
+ eachPlayer((p,c)=>{
+  if(p.load==null)p.load=0;
+  const shed=(c.i===G.my?4.6+sp*.55+intMod:5.2)+(p.injury?4:0)+(p.rest?3:0);
+  p.load=clamp(p.load-shed,0,100);
+  if(p.relapse>0)p.relapse--;
+  if(!p.injury&&p._pendingRelapse){
+   p.relapse=clamp(Math.round(p._pendingRelapse*.85)+6,7,30);
+   p._pendingRelapse=0;
+   if(c.i===G.my&&p.relapse>=14)mail('injury','⚠️ '+p.name+' is not out of the woods',
+    '<b>'+esc(p.name)+'</b> is back on the grass but the medical team flag a <b>'+p.relapse+
+    '-day</b> window where he is at real risk of doing it again. Manage his minutes.')}
+ })};
+
+/* ---------- training injuries: rare, load-driven, never in clusters ---------- */
+trainingInjuryCheck=function(){
+ G.clubs.forEach(c=>{
+  if(c._injCd&&G.day<c._injCd)return;          // no two training injuries in the same week
+  const pool=c.players.filter(p=>!p.injury&&!p.loan);
+  if(!pool.length)return;
+  for(const p of pool){
+   if(Math.random()<injRisk(p,c,'train')){
+    applyInjury(p,c,true);
+    c._injCd=G.day+irnd(3,6);
+    break}}                                     // at most ONE per club per day
+ })};
+
+/* ---------- match injuries: where football actually breaks players ---------- */
+const _tickInj=MatchSim.prototype.tickOnce;
+MatchSim.prototype.tickOnce=function(){
+ const r=_tickInj.apply(this,arguments);
+ if(this.done||this.stage==='HT')return r;
+ this.sides.forEach(s=>{
+  const act=s.onfield.filter(x=>!x.off);
+  if(act.length<8)return;
+  const pl=pick(act);
+  if(pl.p.injury)return;
+  let risk=injRisk(pl.p,s.c,'match');
+  const cond=pl.cond==null?100:pl.cond;
+  if(cond<55)risk*=1.5;else if(cond<70)risk*=1.2;
+  if(s.tac&&s.tac.tackling==='Hard')risk*=1.15;
+  if(this.et)risk*=1.3;                          // extra time is where legs go
+  if(Math.random()>=risk)return;
+  const days=applyInjury(pl.p,s.c,false);
+  if(!days)return;
+  const sev=pl.p.injury&&pl.p.injury.sev;
+  this.say(this.dispMin(),s,(sev==='knock'?pl.p.name+' is down and needs treatment…':
+   sev==='season'?pl.p.name+' is down and the physios are waving frantically to the bench — this looks bad.':
+   pl.p.name+' pulls up and signals to the bench — he cannot continue.'),'big');
+  pl.off=true;pl.injOff=true;
+  if(s.subs>0&&s.bench.length){
+   const sub=s.bench.shift();s.subs--;
+   s.onfield.push({p:sub,slot:pl.slot,hx:pl.hx,hy:pl.hy,cond:sub.cond,rating:6,yc:0,off:false,
+    goals:0,assists:0,entered:this.min});
+   this.say(this.dispMin(),s,'Forced change: '+sub.name+' on for '+pl.p.name+'.','')}
+  else this.say(this.dispMin(),s,s.c.short+' have no substitutions left — they play on a man light.','')
+ });
+ return r};
+/* minutes played become load that carries into the following week */
+const _finishLoad=MatchSim.prototype.finish;
+MatchSim.prototype.finish=function(){
+ const r=_finishLoad.apply(this,arguments);
+ const ft=this.ftAt||90;
+ this.sides.forEach(s=>s.onfield.forEach(pl=>{
+  const p=pl.p;
+  const mins=clamp(ft-(pl.entered||0),0,130);
+  p.load=clamp((p.load||0)+mins/90*29+(this.et?5:0),0,100);
+  p.lastMatch=G.day;
+  // a player carried off does not walk out of the ground fresh
+  if(p.injury&&p.injury.ctx==='match'&&p.injury.days>=10)p.cond=Math.min(p.cond,34)}));
+ return r};
+
+/* ---------- weekly training: one honest report, no phantom knocks ---------- */
+const _weeklyTrainInj=weeklyTraining;
+weeklyTraining=function(){
+ const my=G.clubs[G.my];
+ const before={};my.players.forEach(p=>before[p.id]=p.ovr);
+ const injBefore=new Set(my.players.filter(p=>p.injury).map(p=>p.id));
+ // run the whole legacy chain with its own injury roll and report disabled
+ const realMail=mail;
+ INJ_LOCK=true;
+ mail=function(t,ti,b,a){if(t==='train'&&/Weekly training report/.test(String(ti)))return;return realMail(t,ti,b,a)};
+ try{_weeklyTrainInj()}finally{mail=realMail;INJ_LOCK=false}
+ // load added by the week's work, then one load-driven injury check
+ const mod=TRAIN_INT[G.trainInt||'Normal']||TRAIN_INT.Normal;
+ const add=G.trainInt==='Intense'?15:G.trainInt==='Light'?4:8.5;
+ eachPlayer((p,c)=>{if(p.injury||p.loan)return;
+  p.load=clamp((p.load||0)+(c.i===G.my?(p.rest?add*.35:add):8.5),0,100)});
+ G.clubs.forEach(c=>{
+  if(c._injCd&&G.day<c._injCd)return;
+  const pool=c.players.filter(p=>!p.injury&&!p.loan);
+  for(const p of pool){
+   if(Math.random()<injRisk(p,c,'train')*(mod.inj||1)*1.9){
+    applyInjury(p,c,true);c._injCd=G.day+irnd(3,6);break}}});
+ // rested players trade sharpness for safety
+ my.players.forEach(p=>{if(p.rest&&!p.injury){p.sharp=clamp(p.sharp-3.4,0,100)}});
+ // ---- the report ----
+ const knocks=my.players.filter(p=>p.injury&&!injBefore.has(p.id));
+ const risers=my.players.filter(p=>before[p.id]!=null&&p.ovr>before[p.id])
+  .sort((a,b)=>(b.ovr-before[b.id])-(a.ovr-before[a.id]));
+ const avail=my.players.filter(p=>!p.injury&&!p.loan);
+ const sharp=[...avail].sort((a,b)=>b.sharp-a.sharp).slice(0,3);
+ const heavy=avail.filter(p=>(p.load||0)>=62).sort((a,b)=>(b.load||0)-(a.load||0));
+ const atRisk=avail.filter(p=>injRiskPct(p)>=70).sort((a,b)=>injRiskPct(b)-injRiskPct(a)).slice(0,3);
+ const avgLoad=Math.round(avail.reduce((s,p)=>s+(p.load||0),0)/Math.max(1,avail.length));
+ let body='<b>'+(G.trainInt||'Normal')+'</b> intensity · facilities '+my.stad.train+'/5 · '+
+  esc((G.staff&&G.staff.coach&&G.staff.coach.name)||'coaching staff')+
+  ' · sports science '+((G.staff&&G.staff.sports&&G.staff.sports.stars)||2)+'★<br>';
+ body+='📊 Squad load <b>'+avgLoad+'%</b> · '+avail.length+' available · '+
+  my.players.filter(p=>p.injury).length+' in the treatment room<br>';
+ body+=risers.length?'📈 Improving: '+risers.slice(0,4).map(p=>'<b>'+esc(p.name)+'</b> ('+before[p.id]+'→'+p.ovr+')').join(', ')+'<br>':
+  '📈 No breakthroughs this week.<br>';
+ if(sharp.length)body+='⚡ Sharpest: '+sharp.map(p=>esc(p.name)+' ('+Math.round(p.sharp)+'%)').join(', ')+'<br>';
+ if(heavy.length)body+='😴 Heavy legs: '+heavy.slice(0,4).map(p=>esc(p.name)+' ('+Math.round(p.load)+'% load)').join(', ')+'<br>';
+ if(atRisk.length)body+='⚠️ Flagged by sports science: '+atRisk.map(p=>'<b>'+esc(p.name)+'</b>').join(', ')+
+  ' — rest them or risk losing them.<br>';
+ if(knocks.length)body+='🩹 Picked up this week: '+knocks.map(p=>'<b>'+esc(p.name)+'</b> ('+esc(p.injury.name)+')').join(', ');
+ if(!knocks.length&&!atRisk.length)body+='✅ A clean week on the grass.';
+ mail('train','🏋️ Weekly training report',body)};
+
+/* ---------- rest a player: the manager's lever on all of this ---------- */
+ACTIONS.restToggle=el=>{
+ const p=playerById(el.dataset.id);if(!p)return;
+ p.rest=!p.rest;
+ toast(p.rest?'🛋️ '+p.name+' pulled out of full training':'🏃 '+p.name+' back in full training');
+ render()};
+
+/* ---------- the treatment room, rebuilt around load and risk ---------- */
+vTreatment=function(){
+ const c=G.clubs[G.my];
+ const squad=c.players.filter(p=>!p.loan);
+ const inj=squad.filter(p=>p.injury).sort((a,b)=>a.injury.days-b.injury.days);
+ const sus=squad.filter(p=>p.susp>0);
+ const fit=squad.filter(p=>!p.injury);
+ const avgLoad=Math.round(fit.reduce((s,p)=>s+(p.load||0),0)/Math.max(1,fit.length));
+ const flagged=fit.map(p=>({p,r:injRiskPct(p)})).sort((a,b)=>b.r-a.r);
+ const season=(c._injLog||[]).filter(x=>x.d>=(G.seasonStart||0));
+ const trainN=season.filter(x=>x.ctx==='train').length,matchN=season.length-trainN;
+ let h='<div class="grid3" style="margin-bottom:12px">'+
+ '<div class="kpi"><div class="v">'+inj.length+'</div><div class="l">Injured</div></div>'+
+ '<div class="kpi"><div class="v">'+avgLoad+'%</div><div class="l">Squad load</div></div>'+
+ '<div class="kpi"><div class="v">'+((G.staff&&G.staff.physio&&G.staff.physio.stars)||2)+'★</div><div class="l">Physio</div></div></div>';
+ h+='<div class="xs faint" style="margin:-6px 0 12px 2px">This season: <b>'+season.length+'</b> injuries — '+
+  matchN+' in matches, '+trainN+' on the training ground. Load is what breaks players: rest the red names.</div>';
+ h+='<div class="chip-lbl">Treatment room</div><div class="card tight">';
+ if(!inj.length)h+='<div class="small muted" style="padding:8px 2px">Nobody in the treatment room. Long may it last.</div>';
+ inj.forEach(p=>{const pc=p.injury.total?Math.round((1-p.injury.days/p.injury.total)*100):0;
+  h+='<div class="mail" data-action="profile" data-id="'+p.id+'"><div class="ic">'+
+  (p.injury.sev==='season'?'🔴':p.injury.sev==='bad'?'🩹':'🏥')+'</div><div style="flex:1;min-width:0">'+
+  '<div class="tt">'+esc(p.name)+' <span class="xs faint">'+p.pos+'</span></div>'+
+  '<div class="bd">'+esc(p.injury.name)+' · back '+fmtDateShort(G.day+p.injury.days)+' ('+humanDays(p.injury.days)+')</div>'+
+  '<div style="margin-top:4px">'+bar(pc)+'</div></div>'+ovrPill(p)+'</div>'});
+ h+='</div>';
+ const relapse=fit.filter(p=>p.relapse>0).sort((a,b)=>b.relapse-a.relapse);
+ if(relapse.length){h+='<div class="chip-lbl">Coming back — handle with care</div><div class="card tight">';
+  relapse.forEach(p=>{h+='<div class="spread" style="padding:6px 2px" data-action="profile" data-id="'+p.id+'">'+
+   '<div class="row" style="gap:7px">'+face(p,22)+'<span class="small" style="font-weight:700">'+esc(p.name)+'</span></div>'+
+   '<span class="xs" style="color:var(--amber);font-weight:800">relapse risk '+p.relapse+'d</span></div>'});
+  h+='</div>'}
+ if(sus.length){h+='<div class="chip-lbl">Suspended</div><div class="card tight">';
+  sus.forEach(p=>{h+='<div class="mail" data-action="profile" data-id="'+p.id+'"><div class="ic">🟥</div><div style="flex:1">'+
+   '<div class="tt">'+esc(p.name)+'</div><div class="bd">'+p.susp+' match'+(p.susp>1?'es':'')+' remaining</div></div></div>'});
+  h+='</div>'}
+ h+='<div class="chip-lbl">Load & injury risk</div>'+
+ '<div class="xs faint" style="margin:-4px 0 6px 2px">Tap “Rest” to pull a player out of full training — his risk drops sharply, his sharpness drifts.</div>'+
+ '<div class="card tight"><table class="tbl"><thead><tr><th>Player</th><th>Load</th><th class="c">Risk</th><th class="r">Rest</th></tr></thead><tbody>';
+ flagged.forEach(({p,r})=>{const b=riskBand(r);
+  h+='<tr><td style="max-width:118px" data-action="profile" data-id="'+p.id+'"><div class="row" style="gap:6px">'+face(p,22)+
+  '<span style="font-weight:700;font-size:12px">'+esc(p.name)+'</span></div></td>'+
+  '<td style="width:74px">'+loadBar(p.load||0)+'</td>'+
+  '<td class="c xs" style="color:'+b[1]+';font-weight:800">'+b[0]+'</td>'+
+  '<td class="r"><button class="btn btn-xs '+(p.rest?'btn-gold':'btn-ghost')+'" data-action="restToggle" data-id="'+p.id+'">'+
+  (p.rest?'Resting':'Rest')+'</button></td></tr>'});
+ h+='</tbody></table></div>';
+ return h};
+
+/* the assistant now warns you BEFORE somebody breaks down */
+const _abLoad=assistantBrief;
+assistantBrief=function(){
+ const b=_abLoad();
+ const c=G.clubs[G.my];
+ const risky=c.players.filter(p=>!p.injury&&!p.loan&&injRiskPct(p)>=70)
+  .sort((a,b2)=>injRiskPct(b2)-injRiskPct(a)).slice(0,3);
+ const relapse=c.players.filter(p=>!p.injury&&!p.loan&&p.relapse>0&&G.tacs.xi.includes(p.id));
+ if(risky.length)b.lines.splice(Math.min(2,b.lines.length),0,{ic:'🩺',
+  t:risky.length+' player'+(risky.length>1?'s are':' is')+' one session from a pull',
+  s:risky.map(p=>esc(p.name)+' ('+Math.round(p.load||0)+'% load)').join(', ')+
+   ' — rest them in the Treatment room, boss.'});
+ if(relapse.length)b.lines.splice(Math.min(3,b.lines.length),0,{ic:'⚠️',
+  t:'Rushing someone back',
+  s:relapse.map(p=>esc(p.name)+' ('+p.relapse+'d relapse window)').join(', ')+' — he is in your XI. Your call.'});
+ return b};
+/* profile screen shows load, risk and the rest toggle */
+const _profLoad=openProfile;
+openProfile=function(pid){
+ _profLoad(pid);
+ const p=playerById(pid);
+ if(!p||p.club!==G.my)return;
+ const host=$('#sheetBody');if(!host)return;
+ const r=injRiskPct(p),b=riskBand(r);
+ const box=document.createElement('div');
+ box.className='card tight';box.style.marginTop='10px';
+ box.innerHTML='<div class="spread"><div><div class="xs faint">PHYSICAL LOAD</div>'+
+  '<div class="small" style="font-weight:800">'+Math.round(p.load||0)+'% · injury risk <span style="color:'+b[1]+'">'+b[0]+'</span>'+
+  (p.relapse>0?' · <span style="color:var(--amber)">relapse window '+p.relapse+'d</span>':'')+'</div></div>'+
+  (p.injury?'':'<button class="btn btn-xs '+(p.rest?'btn-gold':'btn-ghost')+'" data-action="restToggle" data-id="'+p.id+'">'+
+   (p.rest?'Resting':'Rest him')+'</button>')+'</div>'+
+  '<div style="margin-top:6px">'+loadBar(p.load||0)+'</div>';
+ host.appendChild(box)};
+/* new saves and old ones alike start with sane load values */
+const _ngLoad=newGame;
+newGame=function(i){_ngLoad(i);eachPlayer(p=>{p.load=irnd(8,26);p.relapse=0;p.rest=false})};
+const _loadLoad=loadSlot;
+loadSlot=function(slot){
+ const ok=_loadLoad(slot);
+ if(ok)try{eachPlayer(p=>{if(p.load==null)p.load=20;if(p.relapse==null)p.relapse=0})}catch(e){}
+ return ok};
+
+/* =====================================================================
+   DISCIPLINE 2.0 — footballers who mostly behave themselves
+   ---------------------------------------------------------------------
+   The old model rolled 5.5% EVERY DAY against a random squad member, so
+   a season produced twenty-odd scandals and a model professional was as
+   likely to be arrested as a big-time charlie. Real clubs get a handful
+   of off-field stories a season, and it is always the same few characters.
+   ===================================================================== */
+const DISC_EV={
+ /* ---- minor: the bread and butter of a season ---- */
+ minor:[
+  {t:'⏰ Late for training again',b:n=>'<b>'+n+'</b> turned up late for the third time this month. It has not gone unnoticed in the dressing room.',
+   opts:[['Fine him a week’s wages','fine'],['Quiet word in the office','back'],['Make him train with the kids','drop']]},
+  {t:'📱 Social media storm',b:n=>'An old post from <b>'+n+'</b> has resurfaced and gone viral. The press want a statement from the manager.',
+   opts:[['Make him apologise publicly','fine'],['Defend him — it’s history','back']]},
+  {t:'🥊 Training-ground bust-up',b:n=>'<b>'+n+'</b> had to be separated from a teammate after a heated argument boiled over in training.',
+   opts:[['Discipline both privately','fine'],['Clear-the-air team meeting','meet'],['Drop him for two matches','drop']]},
+  {t:'🎤 Went off-message in an interview',b:n=>'<b>'+n+'</b> told a reporter he “should be starting every week”. The quote is everywhere.',
+   opts:[['Fine him for the breach','fine'],['Back him — he wants to play','back'],['Leave him out to make the point','drop']]},
+  {t:'🍔 Reported for a poor diet',b:n=>'The sports science team have flagged <b>'+n+'</b> after another set of body-fat readings went the wrong way.',
+   opts:[['Put him on a strict programme','fine'],['Have a quiet word','back']]},
+  {t:'😤 Threw his shirt at the bench',b:n=>'<b>'+n+'</b> reacted badly to being substituted and threw his shirt down in front of the dugout. The cameras caught all of it.',
+   opts:[['Fine him — standards matter','fine'],['I like players who hate coming off','back'],['Drop him for two matches','drop']]}],
+ /* ---- major: genuinely rare ---- */
+ major:[
+  {t:'🚨 Arrested after nightclub incident',b:n=>'<b>'+n+'</b> was taken into custody in the early hours after an altercation outside a city-centre nightclub. It is on every back page.',
+   opts:[['Fine him two weeks’ wages','fine'],['Back him publicly','back'],['Drop him for two matches','drop']]},
+  {t:'🍺 Papped drunk at 3am',b:n=>'Photos of <b>'+n+'</b> stumbling out of a bar at 3am, two days before a match, are all over social media.',
+   opts:[['Fine him two weeks’ wages','fine'],['Deal with it privately','back'],['Drop him for two matches','drop']]},
+  {t:'🚗 Caught speeding — licence at risk',b:n=>'<b>'+n+'</b> was clocked at three figures on the motorway and faces a driving ban. The club’s sponsors are unimpressed.',
+   opts:[['Fine him two weeks’ wages','fine'],['Support him through it','back']]},
+  {t:'🎰 Betting breach investigation',b:n=>'The FA has opened an investigation into <b>'+n+'</b> over alleged betting-rule breaches. He could face a ban.',
+   opts:[['Cooperate fully & fine him','fine'],['Fight the charge','back']]},
+  {t:'🛑 Walked out of training',b:n=>'<b>'+n+'</b> downed tools and left the training ground after a row with a coach. He has not been seen since.',
+   opts:[['Fine him and suspend him','drop'],['Go and talk him round','back'],['Clear-the-air meeting','meet']]}],
+ /* ---- good: the club is not only a soap opera ---- */
+ good:[
+  {t:'🎂 Squad surprise birthday',b:n=>'The squad threw a surprise birthday for <b>'+n+'</b> at the training ground — spirits are high.',
+   opts:[['Love to see it','meet']]},
+  {t:'❤️ Visited a children’s hospital unannounced',b:n=>'<b>'+n+'</b> quietly spent his day off at the children’s hospital. The story leaked — the fans adore him for it.',
+   opts:[['Praise him to the press','back']]},
+  {t:'🌟 First in, last out',b:n=>'The coaches report that <b>'+n+'</b> has been staying behind every afternoon working on his weaknesses. The young lads have started copying him.',
+   opts:[['Hold him up as the standard','back'],['Reward the whole group','meet']]},
+  {t:'🤝 Took the new signing under his wing',b:n=>'<b>'+n+'</b> has gone out of his way to settle the club’s new arrival — house, schools, the lot.',
+   opts:[['Thank him publicly','back']]},
+  {t:'🎓 Funded the academy’s new minibus',b:n=>'<b>'+n+'</b> quietly paid for the academy’s new minibus. Nobody was supposed to find out.',
+   opts:[['Say nothing — respect it','meet'],['Tell the press','back']]}]};
+/* how likely a given player is to be the one in the paper */
+function discRisk(p){
+ if(!p||p.loan)return 0;
+ const k=personalityOf(p);
+ let r={charlie:2.6,temperamental:2.4,casual:2.2,ambitious:1.3,lowconf:1.0,perfectionist:.7,
+  balanced:1,leader:.5,determined:.5,resilient:.5,loyal:.45,model:.15}[k]||1;
+ const a=p.attrs||{};
+ r*=1+((a.aggression||10)-10)/26;
+ r*=1-((a.workRate||10)-10)/30;
+ r*=p.age<=21?1.35:p.age<=25?1.1:p.age>=32?.7:1;
+ if(p.morale<40)r*=1.7;else if(p.morale<55)r*=1.25;else if(p.morale>82)r*=.75;
+ if(p.ovr>=84)r*=1.25;                       // stars sell papers
+ return Math.max(0,r)}
+function discPick(pool,tier){
+ const w=pool.map(p=>({p,w:discRisk(p)*(tier==='major'?Math.pow(discRisk(p),.8):1)}));
+ const tot=w.reduce((s,x)=>s+x.w,0);
+ if(tot<=0)return null;
+ let r=Math.random()*tot;
+ for(const x of w){r-=x.w;if(r<=0)return x.p}
+ return w[w.length-1].p}
+maybeDrama=function(){
+ if(!G.clubs||G.sacked)return;
+ if(G.dramaCd==null)G.dramaCd=G.day+irnd(10,24);
+ if(G.day<G.dramaCd)return;
+ if(Math.random()>.040)return;
+ const c=G.clubs[G.my];
+ const pool=c.players.filter(p=>!p.loan);
+ if(pool.length<8)return;
+ G.dramaSeen=G.dramaSeen||{};
+ // what kind of story is this? good news is as likely as bad
+ const roll=Math.random();
+ const tier=roll<.44?'good':roll<.945?'minor':'major';
+ const p=tier==='good'
+  ? pool.filter(x=>x.morale>=48).sort(()=>Math.random()-.5)[0]||pick(pool)
+  : discPick(pool.filter(x=>discRisk(x)>=(tier==='major'?.75:.3)),tier);
+ if(!p){G.dramaCd=G.day+irnd(8,16);return}
+ const fresh=DISC_EV[tier].filter(e=>!(G.dramaSeen[p.id]||[]).includes(e.t));
+ const ev=fresh.length?pick(fresh):pick(DISC_EV[tier]);
+ (G.dramaSeen[p.id]=G.dramaSeen[p.id]||[]).push(ev.t);
+ const mid=Math.random().toString(36).slice(2);
+ const badge=tier==='major'?'<span class="tag-pill" style="background:rgba(239,68,68,.18);color:#ff9c9c;border:1px solid rgba(239,68,68,.4)">SERIOUS</span> ':'';
+ G.inbox.unshift({id:mid,day:G.day,type:tier==='good'?'info':'news',title:ev.t,
+  body:badge+ev.b(esc(p.name))+'<div class="xs faint" style="margin-top:6px">'+esc(persInfo(p).lbl)+
+   ' · morale '+moodFace(p.morale)+'</div>',
+  read:false,drama:tier,
+  actions:ev.opts.map(o=>({lbl:o[0],act:'drama',arg:o[1]+':'+p.id+':'+tier,mid,ghost:o[1]!=='fine'?1:0}))});
+ G.unread++;
+ if(tier==='good'){p.morale=clamp(p.morale+8,1,100);c.players.forEach(x=>{if(x!==p)x.morale=clamp(x.morale+1,1,100)})}
+ else{
+  p.morale=clamp(p.morale-(tier==='major'?7:3),1,100);
+  if(tier==='major'){c.patience=clamp(c.patience-1.5,0,100);if(typeof fansShift==='function')fansShift(-1.5,'off-field trouble')}}
+ // a story buys the squad a quiet few weeks
+ G.dramaCd=G.day+(tier==='major'?irnd(34,58):irnd(24,42))};
+/* consequences now scale with how serious the story actually was */
+ACTIONS.drama=el=>{
+ const[kind,pid,tier]=String(el.dataset.arg).split(':');
+ const p=playerById(pid),c=G.clubs[G.my];
+ const big=tier==='major';
+ if(p){
+  if(kind==='fine'){
+   const wk=big?2:1,amt=p.wage*wk;c.bank+=amt;
+   moraleHit(p,-(big?7:4),'crit');
+   c.players.forEach(x=>{if(x.id!==p.id)x.morale=clamp(x.morale+(big?1.6:.9),1,100)});
+   p.disc=(p.disc||0)+1;
+   toast('⚖️ Fined '+fmtM(amt)+' — the squad notices the standards');}
+  else if(kind==='back'){
+   moraleHit(p,big?9:5,'praise');
+   p.loyalty=clamp((p.loyalty||10)+(big?2:1),1,20);
+   if(big&&Math.random()<.5)c.patience=clamp(c.patience-1.5,0,100);
+   if(big&&typeof fansShift==='function'&&Math.random()<.5)fansShift(-1,'standing by a player in trouble');
+   toast('🤝 He won’t forget you standing by him');}
+  else if(kind==='drop'){
+   p.susp=Math.max(p.susp,big?2:1);
+   moraleHit(p,-(big?11:7),'crit');
+   c.patience=clamp(c.patience+(big?2.5:1),0,100);
+   c.players.forEach(x=>{if(x.id!==p.id&&(x.pressure||10)>=12)x.morale=clamp(x.morale+1.6,1,100)});
+   if(typeof fansShift==='function')fansShift(big?1.5:.6,'taking a firm line');
+   toast('🪧 Left out — a message to the dressing room');}
+  else if(kind==='meet'){
+   c.players.forEach(x=>x.morale=clamp(x.morale+2.2,1,100));
+   toast('💬 The group leaves the meeting tighter than before');}}
+ const m=G.inbox.find(x=>x.id===el.dataset.mid);if(m)m.actions=null;
+ render()};
+const _ngDrama=newGame;
+newGame=function(i){_ngDrama(i);G.dramaCd=irnd(14,34);G.dramaSeen={}};
+
+/* =====================================================================
+   THE BOARDROOM 2.0 — you get told where you stand before you get sacked
+   ---------------------------------------------------------------------
+   Previously patience could hit zero inside five months with no more
+   warning than a single generic email. Now there is a grace period, a
+   published target, and a three-stage warning ladder you can climb back
+   down. Cup runs count. So does the squad you were actually handed.
+   ===================================================================== */
+function boardTarget(){
+ const c=G.clubs[G.my];
+ const exp=expectPos(G.my);
+ const div=myDiv();
+ return {exp,div,
+  txt:div==='PL'||div==='EU'?'finish '+ordinal(exp)+' or better':
+   'finish '+ordinal(exp)+' or better and push for promotion'}}
+function boardHealth(){
+ const c=G.clubs[G.my];
+ const gp=gamesPlayed(G.my);
+ const pos=leaguePos(G.my),exp=expectPos(G.my);
+ let score=(exp-pos)*1.6;                                   // above expectation = positive
+ const recent=(c.recent||[]).slice(0,6);
+ const w=recent.filter(x=>x.r==='W').length,l=recent.filter(x=>x.r==='L').length;
+ score+=(w-l)*1.1;
+ // cup runs buy you time
+ let cups=0;
+ for(const k in (G.cups||{})){const cup=G.cups[k];
+  if(!cup)continue;
+  if(cup.winner===G.my)cups+=6;
+  else if((cup.ties||[]).some(t=>!t.played&&(t.h===G.my||t.a===G.my)))cups+=2}
+ score+=cups;
+ return {score,gp,pos,exp,cups}}
+const _bmrChain=boardMonthlyReview;
+boardMonthlyReview=function(){
+ const c=G.clubs[G.my];
+ // run the legacy chain for everything else it does (Player of the Month,
+ // value refreshes) but with its old patience maths and its sacking neutralised
+ const pat=c.patience,wasSacked=G.sacked;
+ const realMail=mail,realSack=sackManager;
+ mail=function(t,ti,b,a){if(t==='board')return;return realMail(t,ti,b,a)};
+ sackManager=function(){};
+ try{_bmrChain()}finally{mail=realMail;sackManager=realSack}
+ c.patience=pat;G.sacked=wasSacked;
+ const h=boardHealth();
+ if(G.boardStage==null)G.boardStage=0;
+ if(h.gp<6){ // honeymoon — nobody is judged on five games
+  if(h.gp>=3&&!G._boardHello){G._boardHello=1;
+   mail('board','🏛️ Board review','Early days. The target for the season remains <b>'+boardTarget().txt+
+    '</b>. The board will not draw conclusions until the table has settled.')}
+  return}
+ c.patience=clamp(c.patience+clamp(h.score,-7,6),0,100);
+ let stage=c.patience>46?0:c.patience>30?1:c.patience>15?2:3;
+ if(stage>G.boardStage+1)stage=G.boardStage+1; // the ladder is climbed one rung at a time
+ const t=boardTarget();
+ const line='Currently <b>'+ordinal(h.pos)+'</b> · target <b>'+ordinal(t.exp)+'</b>'+
+  (h.cups?' · the cup run is noted':'')+'.';
+ if(stage>G.boardStage){
+  G.boardStage=stage;
+  if(stage===1)mail('board','🏛️ The board would like a word',
+   'Nothing dramatic, but results are not where they should be. '+line+
+   ' Turn it around over the next few weeks and this conversation ends here.');
+  else if(stage===2)mail('board','⚠️ Formal warning',
+   'The board has issued a <b>formal warning</b>. '+line+
+   ' They want to see a clear improvement in the league by the next review, or your position becomes untenable.');
+  else if(stage===3)mail('board','🚨 FINAL WARNING',
+   'This is your <b>final warning</b>. '+line+
+   ' Anything less than a serious upturn between now and the next board meeting and the club will make a change.');
+ } else if(stage<G.boardStage){
+  G.boardStage=stage;
+  mail('board','🏛️ Pressure easing','Results have improved and the board has stepped back. '+line+
+   ' Keep it going and the noise disappears altogether.');
+ }
+ // sacking is only ever possible after a final warning that went unheeded
+ if(stage===3&&h.gp>=10&&c.patience<=3&&G._boardFinalAt!=null&&G.day-G._boardFinalAt>=28)sackManager();
+ if(stage===3&&G._boardFinalAt==null)G._boardFinalAt=G.day;
+ if(stage<3)G._boardFinalAt=null};
+sackManager=function(){
+ if(G.sacked)return;
+ G.sacked=true;
+ const c=G.clubs[G.my];
+ mail('board','🪦 Contract terminated',
+  'The board has relieved you of your duties after '+gamesPlayed(G.my)+' league games, with the club <b>'+
+  ordinal(leaguePos(G.my))+'</b> in the '+DIV_NAMES[myDiv()]+
+  '. You leave with the club’s thanks and '+(G.honours&&G.honours.length?'<b>'+G.honours.length+
+  '</b> trophy'+(G.honours.length>1?' wins':'')+' to your name.':'no silverware.'))};
+const _ngBoard=newGame;
+newGame=function(i){_ngBoard(i);G.boardStage=0;G._boardFinalAt=null;G._boardHello=0};
+
+/* =====================================================================
+   FIXES FOUND IN TESTING
+   ===================================================================== */
+/* 1. the pre-match squad check only ever looked at LEAGUE fixtures, so you
+      could walk into a cup tie with an injured man or ten players. */
+const _advCup=ACTIONS.advance;
+ACTIONS.advance=()=>{
+ const um=(typeof userMatchOn==='function')?userMatchOn(G.day):null;
+ if(um&&squadIssues().length){ACTIONS.squadIssueOpen();return}
+ _advCup()};
+
+/* 2. the Cups screen rendered every tie in every competition — over 300KB
+      of HTML on one screen, which is what made it crawl on a phone. */
+const _vCupsTrim=vCups;
+vCups=function(){
+ const h=_vCupsTrim();
+ return h.length>90000?h.slice(0,90000).replace(/<tr[^>]*$/,'')+
+  '</tbody></table></div><div class="xs faint" style="padding:8px 4px">Older rounds trimmed to keep this screen quick.</div>':h};
+
+/* 3. offline play looked wrong because the whole type system lived on a
+      Google Fonts request. Give every family a real local fallback. */
+(function fontFallback(){
+ try{
+  const st=document.createElement('style');st.id='vfont';
+  st.textContent='body,button,input,select,textarea{font-family:Inter,"Segoe UI",Roboto,-apple-system,'+
+   'BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif}'+
+   '.disp,.logo,h1,h2,h3{font-family:"Archivo Black",Impact,"Haettenschweiler","Arial Black",sans-serif}';
+  document.head.appendChild(st)}catch(e){}})();
+
+/* 4. squad depth guard — retirements and sales could leave you unable to
+      field a team. The board now funds emergency cover rather than
+      letting the save quietly break. */
+const _dtcDepth=dailyTickCore;
+dailyTickCore=function(){
+ _dtcDepth();
+ const c=G.clubs[G.my];
+ if(!c||G.sacked)return;
+ const avail=c.players.filter(p=>!p.loan);
+ const gks=avail.filter(p=>p.pos==='GK');
+ if(avail.length>=18&&gks.length>=1)return;
+ if(G._depthWarn===G.day)return;G._depthWarn=G.day;
+ const need=!gks.length?'GK':pick(['DC','MC','ST','DR','AMC']);
+ const nm=FN[irnd(0,FN.length-1)]+' '+LN[irnd(0,LN.length-1)];
+ const base=clamp(Math.round(c.rep/145),46,70);
+ const p=genPlayer([nm,need,irnd(23,31),base,base+irnd(0,3)],G.my);
+ p.contract=1;p.scouted=true;p.load=15;
+ c.players.push(p);
+ mail('board','🧑‍💼 Emergency signing: '+p.name,
+  'The squad was down to <b>'+avail.length+'</b> available senior player'+(avail.length===1?'':'s')+
+  (!gks.length?' with no fit goalkeeper':'')+', so the board has taken <b>'+esc(p.name)+'</b> ('+need+
+  ') on a short-term deal to keep the club able to fulfil its fixtures.')};
+
+
+/* =====================================================================
+   PRESENTATION FIXES FOUND IN TESTING
+   ===================================================================== */
+/* 5. club badges printed the full short name into a 40-unit shield, so
+      "Man Utd" was clipped to "Van Utc". Badges use a monogram now. */
+function crestMark(c){
+ let k=String(c.key||'').replace(/[^A-Za-z]/g,'').toUpperCase().slice(0,3);
+ if(k.length>=2)return k;
+ const s=String(c.short||c.name||'?');
+ const w=s.split(/\s+/).filter(Boolean);
+ return (w.length>1?w.map(x=>x[0]).join(''):s).toUpperCase().slice(0,3)}
+crest=function(c,size){
+ size=size||28;
+ const m=crestMark(c);
+ const fs=m.length<=2?15:12.4;
+ return '<svg class="crest" width="'+size+'" height="'+size+'" viewBox="0 0 40 40">'+
+ '<defs><linearGradient id="g'+c.i+'" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="'+c.c1+'"/><stop offset="1" stop-color="'+c.c2+'"/></linearGradient></defs>'+
+ '<path d="M20 2 35 7v12c0 9-6.5 15.5-15 19C11.5 34.5 5 28 5 19V7z" fill="url(#g'+c.i+')" stroke="rgba(255,255,255,.5)" stroke-width="1.4"/>'+
+ '<path d="M20 2 35 7v12c0 9-6.5 15.5-15 19z" fill="rgba(0,0,0,.18)"/>'+
+ '<text x="20" y="24.5" text-anchor="middle" textLength="24" lengthAdjust="spacingAndGlyphs" '+
+ 'font-family="Archivo Black,Impact,sans-serif" font-size="'+fs+'" fill="#fff" style="paint-order:stroke" '+
+ 'stroke="rgba(0,0,0,.35)" stroke-width="2.6">'+esc(m)+'</text></svg>'};
+
+/* 6. a load bar is not a condition bar — full is BAD, so the colours
+      have to run the other way. */
+function loadBar(v){
+ v=clamp(v||0,0,100);
+ const cls=v>=72?'b-red':v>=48?'b-amber':'b-green';
+ return '<div class="bar '+cls+'"><i style="width:'+v+'%"></i></div>'}
+
+/* 7. the home screen rendered its decision banner AND the assistant's
+      briefing twice, because two separate layers both added them. */
+let ASST_DONE=false;
+const _asstOnce=vAssistant;
+vAssistant=function(){
+ if(ASST_DONE)return '';
+ ASST_DONE=true;
+ return _asstOnce()};
+const _vHomeDup=vHome;
+vHome=function(){
+ ASST_DONE=false;
+ let out=_vHomeDup();
+ ASST_DONE=false;
+ return out.replace(/^<div class="card" style="margin-bottom:12px;border-color:rgba\(251,225,34,\.5\)[\s\S]*?Tap to jump to them\.<\/div><\/div><\/div><\/div>/,'')};
+
+/* 8. the continue dock only recognised LEAGUE match days, so cup ties
+      showed a plain "Continue" button. */
+const _dockCup=renderDock;
+renderDock=function(){
+ const d=$('#continueDock');if(!d)return;
+ if(G.sacked||blockingMails().length)return _dockCup();
+ const um=(typeof userMatchOn==='function')?userMatchOn(G.day):null;
+ if(um&&!fixturesOn(G.day).some(f=>!f.played&&(f.h===G.my||f.a===G.my))){
+  const iss=squadIssues();
+  if(iss.length){d.innerHTML='<button class="btn btn-gold" data-action="squadIssueOpen">🚨 Team not ready'+
+   '<span class="cd-sub">'+esc(iss[0].t.replace(/<[^>]+>/g,''))+' — tap to fix</span></button>';return}
+  const opp=G.clubs[um.h===G.my?um.a:um.h];
+  d.innerHTML='<button class="btn btn-gold" data-action="advance">⚽ '+esc(compLabel(um))+
+   '<span class="cd-sub">'+(um.h===G.my?'vs':'at')+' '+esc(opp.name)+' — tap to begin</span></button>';return}
+ return _dockCup()};
+
+/* 9. "back in 1 weeks" — every duration in the game ran through one
+      unpluralised helper. */
+humanDays=function(d){
+ d=Math.max(0,Math.round(d));
+ if(d===1)return '1 day';
+ if(d<7)return d+' days';
+ if(d<30){const w=Math.round(d/7);return w===1?'1 week':w+' weeks'}
+ const m=Math.round(d/30);return m===1?'1 month':m+' months'};
+
+
+/* =====================================================================
+   MATCHDAY 3.0 — a clock you can trust, a pitch that shows the game
+   ---------------------------------------------------------------------
+   Three things were wrong with watching a match:
+     · extra time was printed as stoppage time, so a cup tie read "90+33"
+     · a half went by in thirteen seconds, so nothing could be followed
+     · the 2D pitch was decorative — dots drifting toward a random ball
+   ===================================================================== */
+
+/* ---------- 1. THE CLOCK ---------- */
+MatchSim.prototype.dispMin=function(){
+ const m=this.min;
+ if(this.et)return m<=120?String(m):'120+'+(m-120);
+ if(this.stage==='H1'||this.stage==='HT')return m<=45?String(m):'45+'+(m-45);
+ return m<=90?String(m):'90+'+(m-90)};
+/* how much stoppage a half has actually earned */
+MatchSim.prototype.addedTime=function(half){
+ let add=(this._stop||0);
+ add+=half===1?1.1:2.2;                       // second halves always run longer
+ return clamp(Math.round(add),1,8)};          // four is normal, eight is a bad day
+const _tickClock=MatchSim.prototype.tickOnce;
+MatchSim.prototype.tickOnce=function(){
+ if(this.min===0){
+  this._stop=Math.random()*1.6;
+  this.htAt=45+this.addedTime(1);
+  this.ftAt=90+6;                             // provisional; set properly at the restart
+  this._addH1=this.htAt-45}
+ const wasEt=this.et,st=this.stage;
+ const r=_tickClock.apply(this,arguments);
+ // the second half's stoppage is only known once the half is under way
+ if(this.stage==='H2'&&!this._ftSet){this._ftSet=1;this._stop=Math.random()*1.4;
+  this.ftAt=90+this.addedTime(2);this._addH2=this.ftAt-90}
+ if(this.stage==='H2'&&this._ftSet&&this.min<=90){
+  const want=90+this.addedTime(2);
+  if(want>this.ftAt){this.ftAt=want;this._addH2=want-90}}   // goals and injuries add on
+ if(this.et&&!wasEt){                          // extra time starts at 91, not at 94
+  this.min=91;this._etHalf=1;
+  this.ftAt=Math.min(this.ftAt,120+irnd(1,3))}
+ if(this.et&&this._etHalf===1&&this.min>105){
+  this._etHalf=2;this.say(105,null,'Change of ends. Fifteen minutes left in extra time.','big')}
+ if(this.stage==='HT'&&st==='H1'&&!this._htSaid){this._htSaid=1}
+ return r};
+/* stoppages: goals, serious injuries and substitutions all add time */
+const _goalStop=MatchSim.prototype.goal;
+MatchSim.prototype.goal=function(){this._stop=(this._stop||0)+.75;return _goalStop.apply(this,arguments)};
+
+/* ---------- 2. WHERE THE BALL IS, AND WHO HAS IT ---------- */
+/* The engine already decides which real player does everything — it just
+    never told the pitch. Every commentary line names its man, so the ball
+    state is read straight off the events as they happen. */
+function liveMatch(m){return !!(m&&typeof MU!=='undefined'&&MU.m===m)}
+function dotOf(pl){return (MU.dots||[]).find(d=>d.pl===pl)}
+function bsSet(si,pl,evt){
+ if(!MU.bs)MU.bs={};
+ const b=MU.bs;
+ if(pl&&b.pl!==pl){b.prev=b.pl;b.passAt=performance.now()}
+ b.si=si;if(pl)b.pl=pl;b.evt=evt||'run';b.at=performance.now();
+ b.idle=performance.now()+900}
+const _saySee=MatchSim.prototype.say;
+MatchSim.prototype.say=function(min,side,text,cls){
+ const r=_saySee.call(this,min,side,text,cls);
+ if(!liveMatch(this)||!side)return r;
+ const si=side===this.sides[0]?0:1;
+ let who=null;
+ const t=String(text);
+ outer:
+ for(const sd of this.sides)for(const pl of sd.onfield){
+  if(pl.off)continue;
+  if(t.indexOf(pl.p.name)>=0){who=pl;break outer}}
+ // a save or a block belongs to the defending side, whoever was named
+ let evt='run';
+ if(cls==='goal')evt='goal';
+ else if(/SAVE|save|parries|palms|tips/.test(t))evt='save';
+ else if(/corner/i.test(t))evt='corner';
+ else if(/foul|free kick|brings? him down|trips/i.test(t))evt='foul';
+ else if(/wide|over the bar|off target|drags/i.test(t))evt='miss';
+ else if(/chance|through|slips|releases|shoots|drives/i.test(t))evt='attack';
+ bsSet(si,who,evt);
+ return r};
+const _shotSee=MatchSim.prototype.shotEvent;
+MatchSim.prototype.shotEvent=function(A,D,shooter,creator,fromCorner){
+ if(liveMatch(this)){
+  const si=A===this.sides[0]?0:1;
+  bsSet(si,shooter,'attack');
+  MU.shotFrom=dotOf(shooter)?{x:dotOf(shooter).x,y:dotOf(shooter).y}:null}
+ const r=_shotSee.apply(this,arguments);
+ if(liveMatch(this)){
+  const si=A===this.sides[0]?0:1;
+  const last=this.feed[this.feed.length-1]||{};
+  const goal=last.cls==='goal';
+  const saved=/save|SAVE|parr|palm|tip/i.test(String(last.text||''));
+  MU.flight={si,to:{x:si===0?104:1,y:34+(Math.random()*10-5)},
+   kind:goal?'goal':saved?'save':'miss',
+   from:MU.shotFrom||{x:si===0?80:25,y:34},t0:performance.now(),ms:goal?520:460};
+  if(goal)MU.goalFlashP=performance.now()+1600}
+ return r};
+const _cornSee=MatchSim.prototype.cornerEvent;
+MatchSim.prototype.cornerEvent=function(A,D){
+ if(liveMatch(this)){const si=A===this.sides[0]?0:1;
+  MU.setPiece={x:si===0?103:2,y:Math.random()<.5?3:65,until:performance.now()+2200}}
+ return _cornSee.apply(this,arguments)};
+const _penSee=MatchSim.prototype.penaltyEvent;
+MatchSim.prototype.penaltyEvent=function(A,D,dp){
+ if(liveMatch(this)){const si=A===this.sides[0]?0:1;
+  MU.setPiece={x:si===0?94:11,y:34,until:performance.now()+2600}}
+ return _penSee.apply(this,arguments)};
+
+/* ---------- 3. THE PITCH ---------- */
+function surname(n){const p=String(n).split(' ');return p.length>1?p[p.length-1]:n}
+/* team shape: everybody's position is a function of where the ball is */
+function shapeFactor(slot){
+ if(slot==='GK')return .10;
+ if(DEFPOS.includes(slot))return .78;
+ if(slot==='DM')return .88;
+ if(MIDPOS.includes(slot))return 1;
+ return .72}
+function pitchTargets(){
+ const m=MU.m;if(!m)return;
+ const b=MU.ball,bs=MU.bs||{};
+ m.sides.forEach((s,si)=>{
+  const right=si===0;                             // side 0 attacks right
+  const own=right?0:105;
+  const inPoss=bs.si===si;
+  s.onfield.forEach(pl=>{
+   const d=dotOf(pl);if(!d)return;
+   if(pl.off){d.tx=right?-7:112;d.ty=34;return}
+   const home=dotHome(pl,si);
+   if(pl.slot==='GK'){
+    d.tx=own+(right?3.2:-3.2)+(b.x-own)*.055;
+    d.ty=34+(b.y-34)*.30;return}
+   const f=shapeFactor(pl.slot);
+   // longitudinal: follow the ball up and down the pitch, keeping shape
+   const push=(b.x-52.5)*(inPoss?.46:.52)*f;
+   // strikers hold a higher line, defenders a deeper one
+   const bias=ATTPOS.includes(pl.slot)?(right?4:-4):DEFPOS.includes(pl.slot)?(right?-3:3):0;
+   d.tx=clamp(home.x+push+bias,2,103);
+   // lateral: squeeze across toward the ball
+   d.ty=clamp(home.y+(b.y-home.y)*.26*f,3,65)})})}
+drawPitch=function(){
+ const cv=$('#pitchCanvas');if(!cv||!MU.m)return;
+ const m=MU.m,ctx=cv.getContext('2d'),sx=cv._sx,sy=cv._sy;
+ const now=performance.now(),W=cv.width,H=cv.height;
+ if(!MU.bs)MU.bs={si:0,evt:'run'};
+ // ---- turf ----
+ ctx.fillStyle='#0d2a12';ctx.fillRect(0,0,W,H);
+ ctx.fillStyle='rgba(255,255,255,.028)';
+ for(let i=0;i<8;i+=2)ctx.fillRect(i*13.125*sx,0,13.125*sx,H);
+ ctx.strokeStyle='rgba(240,245,240,.42)';ctx.lineWidth=Math.max(1,sx*.33);
+ ctx.strokeRect(2*sx,2*sy,101*sx,64*sy);
+ ctx.beginPath();ctx.moveTo(52.5*sx,2*sy);ctx.lineTo(52.5*sx,66*sy);ctx.stroke();
+ ctx.beginPath();ctx.arc(52.5*sx,34*sy,9.15*sx,0,7);ctx.stroke();
+ ctx.beginPath();ctx.arc(52.5*sx,34*sy,Math.max(1.4,sx*.5),0,7);ctx.fillStyle='rgba(240,245,240,.42)';ctx.fill();
+ ctx.strokeRect(2*sx,15*sy,16.5*sx,38*sy);ctx.strokeRect(86.5*sx,15*sy,16.5*sx,38*sy);
+ ctx.strokeRect(2*sx,25.5*sy,5.5*sx,17*sy);ctx.strokeRect(97.5*sx,25.5*sy,5.5*sx,17*sy);
+ ctx.fillStyle='rgba(240,245,240,.6)';
+ [[13,34],[92,34]].forEach(p=>{ctx.beginPath();ctx.arc(p[0]*sx,p[1]*sy,Math.max(1.2,sx*.42),0,7);ctx.fill()});
+ // goals
+ ctx.strokeStyle='rgba(255,255,255,.75)';ctx.lineWidth=Math.max(1.4,sx*.5);
+ ctx.strokeRect(.2*sx,30.4*sy,1.8*sx,7.2*sy);ctx.strokeRect(103*sx,30.4*sy,1.8*sx,7.2*sy);
+ // ---- ball target ----
+ const bs=MU.bs;
+ let bt=null;
+ if(MU.flight&&now-MU.flight.t0<MU.flight.ms){
+  const f=MU.flight,k=(now-f.t0)/f.ms;
+  bt={x:f.from.x+(f.to.x-f.from.x)*k,y:f.from.y+(f.to.y-f.from.y)*k};
+  MU.ball.x=bt.x;MU.ball.y=bt.y;MU.ballT=bt}
+ else if(MU.setPiece&&now<MU.setPiece.until)bt={x:MU.setPiece.x,y:MU.setPiece.y};
+ else{
+  const d=bs.pl?dotOf(bs.pl):null;
+  if(d)bt={x:d.x+(bs.si===0?1.6:-1.6),y:d.y+.4};
+  else bt={x:52.5,y:34};
+  // between engine events the possessing side keeps the ball moving
+  if(now>(bs.idle||0)&&bs.si!=null&&m.sides[bs.si]&&!m.done&&m.stage!=='HT'){
+   const side=m.sides[bs.si];
+   const opts=side.onfield.filter(x=>!x.off&&x.slot!=='GK');
+   if(opts.length){bs.prev=bs.pl;bs.pl=opts[Math.floor(Math.random()*opts.length)];bs.passAt=now}
+   bs.idle=now+700+Math.random()*900}}
+ if(bt){MU.ballT=bt}
+ // ---- players ----
+ pitchTargets();
+ const carrier=bs.pl;
+ const lbl=[];                       // keep names legible when bodies pile up
+ MU.dots.forEach(d=>{
+  const ease=d.pl.off?.05:.085;
+  d.x+=((d.tx==null?d.x:d.tx)-d.x)*ease;
+  d.y+=((d.ty==null?d.y:d.ty)-d.y)*ease;
+  const c=G.clubs[m.sides[d.si].ci];
+  const px=d.x*sx,py=d.y*sy,r=Math.max(4,sx*1.85);
+  if(d.pl===carrier){
+   ctx.beginPath();ctx.arc(px,py,r*1.9,0,7);
+   ctx.strokeStyle='rgba(251,225,34,.9)';ctx.lineWidth=Math.max(1.4,sx*.42);ctx.stroke()}
+  ctx.beginPath();ctx.arc(px,py,r,0,7);
+  ctx.fillStyle=d.pl.slot==='GK'?'#e9c400':c.c1;ctx.fill();
+  ctx.lineWidth=Math.max(1,sx*.28);
+  ctx.strokeStyle=d.si===0?'rgba(255,255,255,.92)':'rgba(15,15,15,.85)';ctx.stroke();
+  const ly=py+r*2.5;
+  const crowded=lbl.some(q=>Math.abs(q[0]-px)<sx*7&&Math.abs(q[1]-ly)<sy*2.2);
+  if(!d.pl.off&&(d.pl===carrier||!crowded)){
+   lbl.push([px,ly]);
+   ctx.font='700 '+Math.max(7,Math.round(sx*2.05))+'px Inter,sans-serif';
+   ctx.textAlign='center';
+   ctx.lineWidth=Math.max(2,sx*.7);ctx.strokeStyle='rgba(0,0,0,.75)';
+   const nm=surname(d.pl.p.name);
+   ctx.strokeText(nm,px,ly);
+   ctx.fillStyle=d.pl===carrier?'#fbe122':'rgba(240,245,240,.8)';
+   ctx.fillText(nm,px,ly)}});
+ // ---- ball ----
+ MU.ball.x+=(MU.ballT.x-MU.ball.x)*.16;MU.ball.y+=(MU.ballT.y-MU.ball.y)*.16;
+ const bx=MU.ball.x*sx,by=MU.ball.y*sy,br=Math.max(2.6,sx*1.05);
+ ctx.beginPath();ctx.arc(bx,by+br*.7,br*.95,0,7);ctx.fillStyle='rgba(0,0,0,.32)';ctx.fill();
+ ctx.beginPath();ctx.arc(bx,by,br,0,7);ctx.fillStyle='#fff';ctx.fill();
+ ctx.lineWidth=Math.max(1,sx*.24);ctx.strokeStyle='#1a1a1a';ctx.stroke();
+ // ---- overlays ----
+ if(MU.goalFlashP&&now<MU.goalFlashP){
+  const k=1-(MU.goalFlashP-now)/1600;
+  ctx.fillStyle='rgba(251,225,34,'+(0.30*(1-k))+')';ctx.fillRect(0,0,W,H);
+  ctx.font='800 '+Math.round(sx*8)+'px "Archivo Black",Impact,sans-serif';
+  ctx.textAlign='center';ctx.fillStyle='rgba(255,255,255,'+(1-k)+')';
+  ctx.strokeStyle='rgba(0,0,0,.6)';ctx.lineWidth=sx*1.2;
+  ctx.strokeText('GOAL!',W/2,H/2);ctx.fillText('GOAL!',W/2,H/2)}
+ // possession bar + clock
+ const tot=Math.max(1,m.poss[0]+m.poss[1]);
+ const hp=Math.round(m.poss[0]/tot*100);
+ ctx.fillStyle='rgba(0,0,0,.42)';ctx.fillRect(0,0,W,Math.round(sy*4.2));
+ ctx.fillStyle=G.clubs[m.sides[0].ci].c1;ctx.fillRect(0,0,W*hp/100,Math.round(sy*1.1));
+ ctx.fillStyle=G.clubs[m.sides[1].ci].c1;ctx.fillRect(W*hp/100,0,W*(100-hp)/100,Math.round(sy*1.1));
+ ctx.font='800 '+Math.max(8,Math.round(sx*2.2))+'px Inter,sans-serif';
+ ctx.textAlign='left';ctx.fillStyle='rgba(240,245,240,.9)';
+ ctx.fillText(G.clubs[m.sides[0].ci].short+' '+hp+'%',sx*1.5,sy*3.4);
+ ctx.textAlign='right';
+ ctx.fillText((100-hp)+'% '+G.clubs[m.sides[1].ci].short,W-sx*1.5,sy*3.4);
+ ctx.textAlign='center';ctx.fillStyle='#fbe122';
+ ctx.fillText(m.done?'FT':m.stage==='HT'?'HT':m.dispMin()+"'",W/2,sy*3.4);
+ ctx.textAlign='left'};
+/* kick-off resets the ball state cleanly */
+const _initDotsLive=initDots;
+initDots=function(){
+ _initDotsLive();
+ MU.bs={si:0,pl:null,evt:'kickoff',at:performance.now(),idle:0};
+ MU.flight=null;MU.setPiece=null;MU.goalFlashP=0;MU.pend=[]};
+
+/* ---------- 4. PACE — a half you can actually watch ---------- */
+/* milliseconds of real time per minute of football */
+const MSPEED={1:6300,3:2100,8:760,6:260};
+const SPEED_LBL=[[0,'⏸'],[1,'▶ 1×'],[3,'3×'],[8,'⏩'],[6,'⭐'],[9,'⏭ Skip']];
+startLoop=function(){
+ stopLoop();
+ MU.acc=0;MU.last=performance.now();
+ MU.timer=setInterval(()=>{
+  const m=MU.m;if(!m)return;
+  if(m.done){onFT();return}
+  const now=performance.now(),dt=Math.min(500,now-MU.last);MU.last=now;
+  if(m.stage==='HT'){renderMCtl();return}
+  if(MU.speed===0)return;
+  if(MU.speed===9){skipHalf();return}
+  if(MU.hlHold>now)return;                       // holding on a highlight
+  MU.acc+=dt;
+  const per=MSPEED[MU.speed]||MSPEED[1];
+  let ticks=0;
+  const before=m.stage;
+  while(MU.acc>=per&&!m.done&&m.stage!=='HT'&&ticks<40){
+   MU.acc-=per;ticks++;
+   const f0=m.feed.length;
+   trackedTick();
+   if(MU.speed===6&&m.feed.length>f0&&m.feed.slice(f0).some(e=>e.cls==='big'||e.cls==='goal')){
+    MU.hlHold=performance.now()+3200;MU.acc=0;break}
+  }
+  if(ticks){
+   renderTop();
+   if(MU.tab==='comm')fillFeed($('#commList'),200);
+   else if(MU.tab==='pitch'||MU.tab==='dugout')fillFeed($('#miniFeed'),4);
+   else if(MU.tab==='stats')renderStats()}
+  if(m.stage==='HT'&&before!=='HT'){MU.speed=0;MU.acc=0;renderMCtl();renderTop();toast('Half time')}
+  if(m.done)onFT();
+ },90)};
+function skipHalf(){
+ const m=MU.m;if(!m)return;
+ const before=m.stage;let guard=0;
+ while(!m.done&&m.stage!=='HT'&&guard++<400)trackedTick();
+ MU.speed=0;MU.acc=0;MU.hlHold=0;
+ renderTop();renderMCtl();
+ if(MU.tab==='comm')fillFeed($('#commList'),200);else fillFeed($('#miniFeed'),4);
+ if(m.done)onFT();
+ else if(m.stage==='HT'&&before!=='HT')toast('Half time')}
+ACTIONS.mspeed=el=>{
+ const v=+el.dataset.v;
+ MU.hlHold=0;MU.acc=0;MU.last=performance.now();
+ if(v===9){MU.speed=0;renderMCtl();skipHalf();return}
+ MU.speed=v;renderMCtl()};
+ACTIONS.resume2h=()=>{
+ const m=MU.m;if(!m)return;
+ m.tickOnce();                                   // HT -> H2
+ MU.speed=1;MU.acc=0;MU.last=performance.now();MU.hlHold=0;
+ renderMCtl();renderTop()};
+/* control panel: speeds that mean something, plus the added-time readout */
+renderMCtl=function(){
+ const c=$('#mCtl');if(!c||!MU.m)return;const m=MU.m;
+ if(m.done){c.innerHTML='<button class="btn btn-gold btn-block" data-action="ftSummary">Full time — continue</button>';return}
+ if(m.stage==='HT'){
+  c.innerHTML='<div class="small muted" style="text-align:center;margin-bottom:9px">Half time — talk to them, change the plan.</div><div class="row" style="gap:8px">'+
+  '<button class="btn btn-ghost btn-sm" style="flex:1" data-action="htTalkOpen">🗣️ Talk</button>'+
+  '<button class="btn btn-ghost btn-sm" style="flex:1" data-action="instrOpen">📝 Tactics</button>'+
+  '<button class="btn btn-ghost btn-sm" style="flex:1" data-action="subOpen">🔁 Subs</button>'+
+  '<button class="btn btn-primary btn-sm" style="flex:1.2" data-action="resume2h">2nd half</button></div>';return}
+ const s=m.sides[mySideIx()];
+ const tired=s.onfield.filter(x=>!x.off&&x.cond<58).length;
+ const add=m.et?0:(m.stage==='H1'?(m._addH1||0):(m._addH2||0));
+ const inAdd=m.et?m.min>120:(m.stage==='H1'?m.min>45:m.min>90);
+ c.innerHTML='<div class="speedrow">'+SPEED_LBL.map(sp=>
+  '<button class="chip'+(MU.speed===sp[0]?' on':'')+'" data-action="mspeed" data-v="'+sp[0]+'">'+sp[1]+'</button>').join('')+'</div>'+
+ (add&&!m.et?'<div class="xs faint" style="text-align:center;margin:-3px 0 7px">'+
+   (inAdd?'⏱ In added time':'⏱ '+add+' minute'+(add>1?'s':'')+' will be added')+'</div>':'')+
+ '<div class="row" style="gap:6px">'+
+ '<button class="btn btn-ghost btn-sm" style="flex:1" data-action="subOpen">🔁 Subs ('+s.subs+')'+
+  (tired?' <span style="color:var(--amber)">⚠'+tired+'</span>':'')+'</button>'+
+ '<button class="btn btn-ghost btn-sm" style="flex:1.3" data-action="instrOpen">📝 '+s.tac.formation+' · '+s.tac.mentality+'</button></div>'};
+
+/* ---------- 5. SUBSTITUTIONS — line them all up, then make them ---------- */
+function subsPending(){return MU.pend||(MU.pend=[])}
+function subStaged(){
+ const s=mySide();if(!s)return{outIds:new Set(),inIds:new Set()};
+ return{outIds:new Set(subsPending().map(x=>x.out)),inIds:new Set(subsPending().map(x=>x.in))}}
+function subSheet(){
+ const s=mySide();if(!s)return;
+ const pend=subsPending(),st=subStaged();
+ const left=s.subs-pend.length;
+ let h='<h3>🔁 Substitutions <span class="small muted">('+left+' of '+s.subs+' left)</span></h3>'+
+  '<div class="small muted" style="margin:2px 0 12px">Line up as many changes as you like, then make them all at once.</div>';
+ h+='<div class="chip-lbl">Changes ready</div><div class="card tight">';
+ if(!pend.length)h+='<div class="small muted" style="padding:7px 2px">Nothing lined up yet — pick a player to take off below.</div>';
+ pend.forEach((p,ix)=>{
+  const out=s.onfield.find(x=>x.p.id===p.out),inP=s.bench.find(q=>q.id===p.in);
+  if(!out||!inP)return;
+  h+='<div class="spread" style="padding:7px 2px;border-bottom:1px solid var(--chalk)">'+
+  '<div style="flex:1;min-width:0"><div class="small" style="font-weight:800">'+
+   '<span style="color:var(--danger)">↓</span> '+esc(surname(out.p.name))+
+   '  <span style="color:var(--green)">↑</span> '+esc(inP.name)+'</div>'+
+  '<div class="xs faint">'+out.slot+' · '+esc(inP.pos)+' · cond '+Math.round(inP.cond)+'%</div></div>'+
+  '<button class="btn btn-xs btn-ghost" data-action="subDrop" data-v="'+ix+'">Remove</button></div>'});
+ h+='</div>';
+ if(left>0){
+  h+='<div class="chip-lbl">Take off</div><div class="card tight">';
+  const avail=s.onfield.filter(x=>!x.off&&!st.outIds.has(x.p.id));
+  if(!avail.length)h+='<div class="small muted" style="padding:7px 2px">Nobody left to take off.</div>';
+  avail.sort((a,b)=>a.cond-b.cond).forEach(pl=>{
+   h+='<div class="mail" data-action="subOut" data-id="'+pl.p.id+'"><div class="ic">'+effBadge(pl.rating*10)+'</div>'+
+   '<div style="flex:1;min-width:0"><div class="tt">'+esc(pl.p.name)+' <span class="xs faint">'+pl.slot+'</span></div>'+
+   '<div class="bd">rating '+pl.rating.toFixed(1)+' · cond '+Math.round(pl.cond)+'%'+(pl.yc?' · 🟨':'')+
+    (pl.cond<58?' · <span style="color:var(--amber)">tiring</span>':'')+'</div></div></div>'});
+  h+='</div>'}
+ h+='<div class="row" style="gap:8px;margin-top:12px">'+
+  '<button class="btn btn-ghost" style="flex:1" data-action="subCancel">Cancel</button>'+
+  '<button class="btn '+(pend.length?'btn-gold':'btn-ghost')+'" style="flex:1.4" data-action="subConfirm">'+
+  (pend.length?'Make '+pend.length+' change'+(pend.length>1?'s':''):'Close')+'</button></div>';
+ openModal(h)}
+ACTIONS.subOpen=()=>{
+ const s=mySide();if(!s)return;
+ if(s.subs<=0){toast('No substitutions left.');return}
+ MU.pend=[];subSheet()};
+ACTIONS.subOut=el=>{
+ const s=mySide();if(!s)return;
+ const out=s.onfield.find(x=>x.p.id===+el.dataset.id&&!x.off);if(!out)return;
+ const st=subStaged();
+ const bench=s.bench.filter(p=>!st.inIds.has(p.id));
+ let h='<h3>Bring on</h3><div class="small muted" style="margin-bottom:10px">Replacing <b>'+esc(out.p.name)+'</b> ('+out.slot+')</div><div class="card tight">';
+ if(!bench.length)h+='<div class="small muted" style="padding:7px 2px">No one left on the bench.</div>';
+ bench.slice().sort((a,b)=>calcEff(b,out.slot)-calcEff(a,out.slot)).forEach(p=>{
+  h+='<div class="mail" data-action="subDo" data-id="'+p.id+'" data-arg="'+out.p.id+'"><div class="ic">'+effBadge(calcEff(p,out.slot))+'</div>'+
+  '<div style="flex:1;min-width:0"><div class="tt">'+esc(p.name)+'</div>'+
+  '<div class="bd">'+posBadge(p.pos)+' · '+posFitLabel(p,out.slot)+' · cond '+Math.round(p.cond)+'%</div></div></div>'});
+ h+='</div><button class="btn btn-ghost btn-block" style="margin-top:10px" data-action="subBack">← Back</button>';
+ openModal(h)};
+ACTIONS.subDo=el=>{
+ const s=mySide();if(!s)return;
+ const out=+el.dataset.arg,inId=+el.dataset.id;
+ if(subsPending().length<s.subs)subsPending().push({out,in:inId});
+ subSheet()};
+ACTIONS.subDrop=el=>{subsPending().splice(+el.dataset.v,1);subSheet()};
+ACTIONS.subBack=()=>subSheet();
+ACTIONS.subCancel=()=>{MU.pend=[];closeModal()};
+ACTIONS.subConfirm=()=>{
+ const s=mySide(),m=MU.m;
+ const pend=subsPending();
+ if(!s||!m||!pend.length){MU.pend=[];closeModal();return}
+ const names=[];
+ pend.forEach(p=>{
+  const out=s.onfield.find(x=>x.p.id===p.out&&!x.off);
+  const inP=s.bench.find(q=>q.id===p.in);
+  if(!out||!inP||s.subs<=0)return;
+  out.off=true;s.subs--;s.bench=s.bench.filter(q=>q!==inP);
+  const npl={p:inP,slot:out.slot,hx:out.hx,hy:out.hy,cond:inP.cond,rating:6,yc:0,off:false,
+   goals:0,assists:0,entered:m.min};
+  s.onfield.push(npl);
+  MU.dots.push({pl:npl,si:mySideIx(),x:mySideIx()===0?-5:110,y:34});
+  names.push(inP.name+' for '+surname(out.p.name))});
+ if(names.length){
+  m._stop=(m._stop||0)+names.length*.35;                 // changes eat clock
+  const head=names.length===1?'Substitution: ':
+   (names.length===2?'Double change':names.length===3?'Triple change':names.length+' changes')+' for '+s.c.short+': ';
+  m.say(m.dispMin(),s,head+names.join(', ')+'.','');
+  toast('🔁 '+names.length+' change'+(names.length>1?'s':'')+' made')}
+ MU.pend=[];closeModal();renderMCtl();
+ if(MU.tab==='comm')fillFeed($('#commList'),200);else fillFeed($('#miniFeed'),4)};
+
 showStart();
 </script>
 </body>
