@@ -9662,7 +9662,7 @@ vTreatment=function(){
   sus.forEach(p=>{h+='<div class="mail" data-action="profile" data-id="'+p.id+'"><div class="ic">🟥</div><div style="flex:1">'+
    '<div class="tt">'+esc(p.name)+'</div><div class="bd">'+p.susp+' match'+(p.susp>1?'es':'')+' remaining</div></div></div>'});
   h+='</div>'}
- h+='<div class="chip-lbl">Load & injury risk</div>'+
+ h+='<div class="chip-lbl">Load &amp; injury risk</div>'+
  '<div class="xs faint" style="margin:-4px 0 6px 2px">Tap “Rest” to pull a player out of full training — his risk drops sharply, his sharpness drifts.</div>'+
  '<div class="card tight"><table class="tbl"><thead><tr><th>Player</th><th>Load</th><th class="c">Risk</th><th class="r">Rest</th></tr></thead><tbody>';
  flagged.forEach(({p,r})=>{const b=riskBand(r);
@@ -10464,6 +10464,690 @@ ACTIONS.subConfirm=()=>{
   toast('🔁 '+names.length+' change'+(names.length>1?'s':'')+' made')}
  MU.pend=[];closeModal();renderMCtl();
  if(MU.tab==='comm')fillFeed($('#commList'),200);else fillFeed($('#miniFeed'),4)};
+
+
+/* =====================================================================
+   MATCHDAY 3.1 — the pitch plays football
+   ---------------------------------------------------------------------
+   The dots knew where the ball was but not what football looks like: no
+   passing, no runs, no pressing, and nothing that changed when you
+   changed your tactics. This layer runs a continuous phase of play
+   between the engine's events — a real passing move, built out of your
+   formation, passing style, tempo, width, focus, pressing and line —
+   and hard-syncs to the engine whenever it decides something.
+   ===================================================================== */
+const PITCH={
+ mentPush:{Defensive:-8,Counter:-5,Balanced:0,Attacking:5,Overload:10},
+ linePush:{Deep:-8,Standard:0,High:8},
+ widthF:{Narrow:.70,Standard:1,Wide:1.26},
+ pressPull:{Low:.20,Medium:.34,High:.52},
+ holdMs:{Slow:[900,1700],Normal:[620,1200],Fast:[380,820]},
+ passLen:{Short:11,Mixed:19,Direct:30}};
+function playState(){
+ if(!MU.play)MU.play={si:0,holder:null,target:null,mode:'idle',from:null,to:null,t0:0,ms:0,nextAt:0,dead:0,run:null};
+ return MU.play}
+function tScale(){const per=(typeof MSPEED!=='undefined'&&MSPEED[MU.speed])||6300;return clamp(6300/per,1,7)}
+function oppGoalX(si){return si===0?105:0}
+function ownGoalX(si){return si===0?0:105}
+function dirOf(si){return si===0?1:-1}
+function dist2(a,b){return Math.hypot(a.x-b.x,a.y-b.y)}
+function livePlayers(si){const s=MU.m.sides[si];return s?s.onfield.filter(x=>!x.off):[]}
+function ballHome(){const p=playState();const d=p.holder?dotOf(p.holder):null;return d?{x:d.x,y:d.y}:{x:52.5,y:34}}
+
+/* ---------- the team shape, straight out of your tactics ---------- */
+function teamFrame(si){
+ const m=MU.m,s=m.sides[si],t=s.tac||{},p=playState();
+ const dir=dirOf(si);
+ const prog=si===0?MU.ball.x/105:1-MU.ball.x/105;      // 0 own goal, 1 theirs
+ const inPoss=p.si===si;
+ const lead=(si===0?m.fix.hs-m.fix.as:m.fix.as-m.fix.hs);
+ let push=(prog-.45)*42;
+ push+=inPoss?(PITCH.mentPush[t.mentality]||0):(PITCH.linePush[t.line]||0);
+ if(!inPoss&&t.counter==='Counter-press')push+=3.5;    // squeeze straight back on
+ if(t.timeWaste==='On'&&lead>0&&m.min>72)push-=4;      // seeing it out
+ if(m.min>80&&lead<0)push+=4.5;                        // chasing the game
+ push=clamp(push,-17,21);                              // a shape, not a stampede
+ return{dir,inPoss,prog,push,
+  widthF:PITCH.widthF[t.width]||1,
+  press:PITCH.pressPull[t.press]||.34,
+  t}}
+pitchTargets=function(){
+ const m=MU.m;if(!m)return;
+ const b=MU.ball,p=playState();
+ [0,1].forEach(si=>{
+  const F=teamFrame(si);
+  const act=livePlayers(si);
+  // whoever is nearest the ball does the pressing, and his mate covers
+  let pressers=[];
+  if(!F.inPoss&&act.length){
+   pressers=act.filter(x=>x.slot!=='GK')
+    .map(x=>({x,d:dist2(dotOf(x)||{x:0,y:0},b)})).sort((a,c)=>a.d-c.d).slice(0,2).map(o=>o.x)}
+  m.sides[si].onfield.forEach(pl=>{
+   const d=dotOf(pl);if(!d)return;
+   if(pl.off){d.tx=si===0?-7:112;d.ty=34;return}
+   const home=dotHome(pl,si);
+   if(pl.slot==='GK'){                                  // sweeper-keeper creeps out
+    const own=ownGoalX(si);
+    d.tx=own+F.dir*(3.4+Math.max(0,(F.prog-.5))*11);
+    d.ty=34+(b.y-34)*.28;return}
+   const roleF=DEFPOS.includes(pl.slot)?.86:pl.slot==='DM'?.95:MIDPOS.includes(pl.slot)?1:.82;
+   let tx=home.x+F.dir*F.push*roleF;
+   let ty=34+(home.y-34)*F.widthF;
+   // squeeze across toward the ball, hardest for the side without it
+   const lat=F.inPoss?.16:.30;
+   ty+=(b.y-34)*lat*roleF;
+   if(F.inPoss){
+    // the man asked for the ball goes to meet it
+    if(p.run&&p.run.pl===pl){tx=p.run.x;ty=p.run.y}
+    // the man on the ball is wherever the ball is
+    else if(p.holder===pl){tx=b.x;ty=b.y}
+   }else{
+    const ix=pressers.indexOf(pl);
+    if(ix===0){tx+=(b.x-tx)*F.press;ty+=(b.y-ty)*F.press}
+    else if(ix===1){tx+=(b.x-tx)*F.press*.55;ty+=(b.y-ty)*F.press*.55}
+   }
+   const jig=Math.sin(performance.now()/900+pl.p.id)*.7;
+   const lo=pl.slot==='GK'?1.5:5.5,hi=pl.slot==='GK'?103.5:99.5;
+   d.tx=clamp(tx+jig*.4,lo,hi);d.ty=clamp(ty+jig,3.5,64.5)})})};
+
+/* ---------- choosing the next pass ---------- */
+function receivePoint(pl,si){
+ const d=dotOf(pl);if(!d)return{x:52.5,y:34};
+ const dir=dirOf(si);
+ const ahead=ATTPOS.includes(pl.slot)?4.5:MIDPOS.includes(pl.slot)?2.5:0;
+ return{x:clamp(d.x+dir*ahead,3,102),y:clamp(d.y,4,64)}}
+function pressureOn(pt,si){
+ return livePlayers(1-si).reduce((n,o)=>{const od=dotOf(o);
+  if(!od)return n;const dd=dist2(od,pt);return n+(dd<7?1:dd<11?.45:0)},0)}
+function choosePass(){
+ const m=MU.m,p=playState(),s=m.sides[p.si],t=s.tac||{};
+ const holder=p.holder;const hd=holder?dotOf(holder):null;
+ if(!hd)return null;
+ const dir=dirOf(p.si),want=PITCH.passLen[t.passStyle]||19;
+ let risk=t.mentality==='Overload'?1.6:t.mentality==='Attacking'?1.25:
+  t.mentality==='Counter'?1.05:t.mentality==='Defensive'?.55:.9;
+ // once the move has got as far as it was ever going to, the ball comes back out
+ const prog=p.si===0?MU.ball.x/105:1-MU.ball.x/105;
+ const aim=p.aim==null?.72:p.aim;
+ if(prog>aim)risk*=.18;
+ let best=null,bw=-1;
+ livePlayers(p.si).forEach(x=>{
+  if(x===holder)return;
+  const d=dotOf(x);if(!d)return;
+  const pt=receivePoint(x,p.si);
+  const len=dist2(hd,pt);
+  if(len<3)return;
+  const gain=(pt.x-hd.x)*dir;
+  let w=Math.exp(-Math.pow((len-want)/15,2));          // your passing style, in metres
+  w*=1+Math.max(0,gain)/24*risk;
+  if(gain<-6)w*=.42;                                   // sideways and back is allowed, not preferred
+  if(t.passFocus==='Left Flank')w*=pt.y<24?1.85:pt.y>44?.55:1;
+  else if(t.passFocus==='Right Flank')w*=pt.y>44?1.85:pt.y<24?.55:1;
+  else if(t.passFocus==='Central')w*=(pt.y>19&&pt.y<49)?1.5:.7;
+  if(x.slot==='GK')w*=(hd.x-ownGoalX(p.si))*dir<26?.30:.02;   // only when there is nothing on
+  w*=Math.pow(.66,pressureOn(pt,p.si));                // do not pass into trouble
+  w*=.55+((x.p.attrs&&x.p.attrs.firstTouch)||10)/22;
+  w*=.7+Math.random()*.6;
+  if(w>bw){bw=w;best=x}});
+ return best}
+function canDribble(){
+ const p=playState(),h=p.holder;if(!h)return false;
+ const hd=dotOf(h);if(!hd)return false;
+ const a=h.p.attrs||{};
+ const skill=((a.dribbling||10)+(a.pace||10)+(a.acceleration||10))/3;
+ const space=pressureOn({x:hd.x+dirOf(p.si)*7,y:hd.y},p.si);
+ return space<.6&&Math.random()<clamp((skill-9)/26,.04,.34)}
+function startPass(to,kind){
+ const p=playState(),hd=dotOf(p.holder);
+ const pt=to?receivePoint(to,p.si):{x:MU.ball.x,y:MU.ball.y};
+ const len=hd?dist2(hd,pt):10;
+ const speed=kind==='long'?26:kind==='clear'?30:21;    // metres per second
+ p.from=hd?{x:hd.x,y:hd.y}:{x:MU.ball.x,y:MU.ball.y};
+ p.to=pt;p.t0=performance.now();p.ms=clamp(len/speed*1000,170,1500)/tScale();
+ p.mode='pass';p.target=to;p.lofted=len>28;
+ if(to)p.run={pl:to,x:pt.x,y:pt.y}}
+function startCarry(){
+ const p=playState(),hd=dotOf(p.holder);if(!hd)return;
+ const dir=dirOf(p.si);
+ p.from={x:hd.x,y:hd.y};
+ p.to={x:clamp(hd.x+dir*(5+Math.random()*7),3,102),y:clamp(hd.y+(Math.random()*8-4),4,64)};
+ p.t0=performance.now();p.ms=(620+Math.random()*380)/tScale();
+ p.mode='carry';p.target=p.holder;p.lofted=false;p.run={pl:p.holder,x:p.to.x,y:p.to.y}}
+function nextHold(){
+ const p=playState(),s=MU.m.sides[p.si],t=s.tac||{};
+ const r=PITCH.holdMs[t.tempo]||PITCH.holdMs.Normal;
+ return (r[0]+Math.random()*(r[1]-r[0]))/tScale()}
+/* dead-ball restarts so the ball always comes back into play properly */
+function restartFrom(si,x,y,ms,holder){
+ const p=playState();
+ p.si=si;p.mode='dead';p.dead=performance.now()+ms/tScale();
+ p.holder=holder||MU.m.sides[si].onfield.find(z=>z.slot==='GK'&&!z.off)||livePlayers(si)[0];
+ p.target=null;
+ MU.ballT={x:clamp(x,2,103),y:clamp(y,3,65)};
+ MU.ball.x=MU.ballT.x;MU.ball.y=MU.ballT.y;
+ p.run=p.holder?{pl:p.holder,x:MU.ballT.x,y:MU.ballT.y}:null}
+/* the engine has spoken — put the ball where it says */
+function syncPlay(si,who,evt){
+ const p=playState();
+ if(evt==='goal'||evt==='corner'||evt==='pen')return;   // handled by their own hooks
+ const was=p.si;
+ if(who){
+  const on=MU.m.sides.findIndex(s=>s.onfield.indexOf(who)>=0);
+  p.si=on>=0?on:si;p.holder=who}
+ else p.si=si;
+ if(p.si!==was){p.aim=.55+Math.random()*.33;p.stallAt=0}
+ if(p.mode!=='dead'){p.mode='hold';p.run=null;p.target=null;
+  const hd=p.holder?dotOf(p.holder):null;
+  if(hd){MU.ballT={x:hd.x,y:hd.y}}
+  p.nextAt=performance.now()+nextHold()*.6}}
+/* possession lost: the nearest defender picks it up and it all turns round */
+function turnover(now){
+ const p=playState(),other=1-p.si;
+ const near=livePlayers(other).filter(x=>x.slot!=='GK')
+  .map(x=>({x,d:dist2(dotOf(x)||{x:52,y:34},MU.ball)})).sort((a,b)=>a.d-b.d)[0];
+ const gk=MU.m.sides[other].onfield.find(z=>z.slot==='GK'&&!z.off);
+ p.si=other;p.holder=(near&&near.d<16?near.x:null)||gk||livePlayers(other)[0];
+ p.mode='hold';p.run=null;p.target=null;p.stallAt=0;
+ p.aim=.55+Math.random()*.33;
+ p.nextAt=now+nextHold();
+ const hd=p.holder?dotOf(p.holder):null;
+ if(hd)MU.ballT={x:hd.x,y:hd.y}}
+/* the phase of play, advanced in real time */
+function advancePlay(now){
+ const m=MU.m,p=playState();
+ if(!m||m.done||m.stage==='HT'){return}
+ if(p.dead>now)return;
+ if(p.dead){p.dead=0;p.mode='hold';p.nextAt=now+80}
+ if(!p.holder||p.holder.off){
+  const opts=livePlayers(p.si).filter(x=>x.slot!=='GK');
+  p.holder=opts.length?pick(opts):livePlayers(p.si)[0];
+  if(!p.holder)return}
+ if(p.mode==='pass'||p.mode==='carry'){
+  const k=(now-p.t0)/p.ms;
+  if(k>=1){
+   if(p.target)p.holder=p.target;
+   p.target=null;p.run=null;p.mode='hold';
+   p.nextAt=now+nextHold();
+   MU.ballT={x:p.to.x,y:p.to.y}}
+  else{
+   const x=p.from.x+(p.to.x-p.from.x)*k;
+   const y=p.from.y+(p.to.y-p.from.y)*k;
+   const lift=p.lofted?Math.sin(k*Math.PI)*2.4:0;
+   MU.ballT={x,y:y-lift};MU.ball.x=x;MU.ball.y=y-lift}
+  return}
+ // a move that has run its course is broken up, as most of them are
+ const prog=p.si===0?MU.ball.x/105:1-MU.ball.x/105;
+ if(p.aim==null)p.aim=.55+Math.random()*.33;
+ if(prog>p.aim+.06){
+  if(!p.stallAt)p.stallAt=now+(1400+Math.random()*1600)/tScale();
+  else if(now>p.stallAt){turnover(now);return}}
+ else p.stallAt=0;
+ // holding the ball: pass, carry, or just keep it
+ if(now>=(p.nextAt||0)){
+  if(canDribble())startCarry();
+  else{const to=choosePass();
+   if(to)startPass(to,dotOf(to)&&dist2(dotOf(p.holder),dotOf(to))>28?'long':'short');
+   else p.nextAt=now+nextHold()}}
+ else{const hd=dotOf(p.holder);if(hd)MU.ballT={x:hd.x+dirOf(p.si)*.9,y:hd.y+.5}}}
+
+/* ---------- engine hooks, rewired onto the phase of play ---------- */
+MatchSim.prototype.say=function(min,side,text,cls){
+ const r=_saySee.call(this,min,side,text,cls);
+ if(!liveMatch(this)||!side)return r;
+ const si=side===this.sides[0]?0:1;
+ let who=null;const t=String(text);
+ outer:
+ for(const sd of this.sides)for(const pl of sd.onfield){
+  if(pl.off)continue;
+  if(t.indexOf(pl.p.name)>=0){who=pl;break outer}}
+ let evt='run';
+ if(cls==='goal')evt='goal';
+ else if(/save|parr|palm|tip/i.test(t))evt='save';
+ else if(/corner/i.test(t))evt='corner';
+ else if(/foul|free kick|brings? him down|trip|clatter|scythe/i.test(t))evt='foul';
+ else if(/wide|over the bar|off target|drag/i.test(t))evt='miss';
+ syncPlay(si,who,evt);
+ if(evt==='foul'&&who){                       // dead ball, then the other side restarts
+  const d=dotOf(who);const other=1-(this.sides.findIndex(s=>s.onfield.indexOf(who)>=0));
+  restartFrom(other,d?d.x:52.5,d?d.y:34,1400,null);
+  const p=playState();
+  const opts=livePlayers(other).filter(x=>x.slot!=='GK');
+  if(opts.length&&d){p.holder=opts.map(x=>({x,d:dist2(dotOf(x)||{x:0,y:0},d)})).sort((a,b)=>a.d-b.d)[0].x}}
+ return r};
+MatchSim.prototype.shotEvent=function(A,D,shooter,creator,fromCorner){
+ const live=liveMatch(this);
+ if(live){
+  const si=A===this.sides[0]?0:1;
+  const p=playState();p.si=si;p.holder=shooter;p.mode='hold';p.run=null;
+  MU.shotFrom=dotOf(shooter)?{x:dotOf(shooter).x,y:dotOf(shooter).y}:null}
+ const r=_shotSee.apply(this,arguments);
+ if(live){
+  const si=A===this.sides[0]?0:1,p=playState();
+  const last=this.feed[this.feed.length-1]||{};
+  const isGoal=last.cls==='goal';
+  const saved=/save|parr|palm|tip/i.test(String(last.text||''));
+  const gx=oppGoalX(si);
+  const from=MU.shotFrom||{x:si===0?80:25,y:34};
+  const to=isGoal?{x:si===0?104.2:.8,y:30+Math.random()*8}
+   :saved?{x:si===0?102:3,y:31+Math.random()*6}
+   :{x:si===0?104:1,y:Math.random()<.5?20+Math.random()*4:44+Math.random()*4};
+  p.mode='pass';p.target=null;p.run=null;
+  p.from=from;p.to=to;p.t0=performance.now();
+  p.ms=clamp(dist2(from,to)/34*1000,180,700)/tScale();
+  p.lofted=!isGoal&&!saved;
+  MU.flight=null;
+  if(isGoal){
+   MU.goalFlashP=performance.now()+1700;
+   setTimeout(()=>{if(MU.m===this&&!this.done)kickOffFrom(1-si)},900)}
+  else{
+   const gk=this.sides[1-si].onfield.find(z=>z.slot==='GK'&&!z.off);
+   setTimeout(()=>{if(MU.m!==this||this.done)return;
+    const pp=playState();
+    if(pp.mode==='dead')return;
+    restartFrom(1-si,gx===105?101:4,34,saved?1100:1500,gk)},Math.max(220,p.ms))}}
+ return r};
+MatchSim.prototype.cornerEvent=function(A,D){
+ if(liveMatch(this)){
+  const si=A===this.sides[0]?0:1;
+  const cy=Math.random()<.5?3.5:64.5;
+  restartFrom(si,si===0?102.5:2.5,cy,1500,null);
+  const p=playState();
+  const takers=livePlayers(si).filter(x=>x.slot!=='GK');
+  if(takers.length)p.holder=takers.sort((a,b)=>((b.p.attrs&&b.p.attrs.crossing)||0)-((a.p.attrs&&a.p.attrs.crossing)||0))[0];
+}
+ return _cornSee.apply(this,arguments)};
+MatchSim.prototype.penaltyEvent=function(A,D,dp){
+ if(liveMatch(this)){
+  const si=A===this.sides[0]?0:1;
+  restartFrom(si,si===0?94:11,34,2000,null);
+  const p=playState();
+  const t=livePlayers(si).filter(x=>x.slot!=='GK');
+  if(t.length)p.holder=t.sort((a,b)=>((b.p.attrs&&b.p.attrs.composure)||0)-((a.p.attrs&&a.p.attrs.composure)||0))[0]}
+ return _penSee.apply(this,arguments)};
+
+/* ---------- drawing ---------- */
+drawPitch=function(){
+ const cv=$('#pitchCanvas');if(!cv||!MU.m)return;
+ const m=MU.m,ctx=cv.getContext('2d'),sx=cv._sx,sy=cv._sy;
+ const now=performance.now(),W=cv.width,H=cv.height;
+ const p=playState();
+ // ---- turf ----
+ ctx.fillStyle='#0d2a12';ctx.fillRect(0,0,W,H);
+ ctx.fillStyle='rgba(255,255,255,.03)';
+ for(let i=0;i<8;i+=2)ctx.fillRect(i*13.125*sx,0,13.125*sx,H);
+ ctx.strokeStyle='rgba(240,245,240,.42)';ctx.lineWidth=Math.max(1,sx*.33);
+ ctx.strokeRect(2*sx,2*sy,101*sx,64*sy);
+ ctx.beginPath();ctx.moveTo(52.5*sx,2*sy);ctx.lineTo(52.5*sx,66*sy);ctx.stroke();
+ ctx.beginPath();ctx.arc(52.5*sx,34*sy,9.15*sx,0,7);ctx.stroke();
+ ctx.beginPath();ctx.arc(52.5*sx,34*sy,Math.max(1.4,sx*.5),0,7);ctx.fillStyle='rgba(240,245,240,.42)';ctx.fill();
+ ctx.strokeRect(2*sx,15*sy,16.5*sx,38*sy);ctx.strokeRect(86.5*sx,15*sy,16.5*sx,38*sy);
+ ctx.strokeRect(2*sx,25.5*sy,5.5*sx,17*sy);ctx.strokeRect(97.5*sx,25.5*sy,5.5*sx,17*sy);
+ ctx.fillStyle='rgba(240,245,240,.6)';
+ [[13,34],[92,34]].forEach(q=>{ctx.beginPath();ctx.arc(q[0]*sx,q[1]*sy,Math.max(1.2,sx*.42),0,7);ctx.fill()});
+ ctx.strokeStyle='rgba(255,255,255,.75)';ctx.lineWidth=Math.max(1.4,sx*.5);
+ ctx.strokeRect(.2*sx,30.4*sy,1.8*sx,7.2*sy);ctx.strokeRect(103*sx,30.4*sy,1.8*sx,7.2*sy);
+ // ---- the game ----
+ advancePlay(now);
+ pitchTargets();
+ // ball trail
+ MU.trail=MU.trail||[];
+ if(!MU.trail.length||dist2(MU.trail[MU.trail.length-1],MU.ball)>.6){
+  MU.trail.push({x:MU.ball.x,y:MU.ball.y,t:now});if(MU.trail.length>14)MU.trail.shift()}
+ MU.dots.forEach(d=>{
+  const ease=d.pl.off?.05:(p.holder===d.pl?.20:.075);
+  d.x+=((d.tx==null?d.x:d.tx)-d.x)*ease;
+  d.y+=((d.ty==null?d.y:d.ty)-d.y)*ease});
+ MU.ball.x+=(MU.ballT.x-MU.ball.x)*(p.mode==='pass'||p.mode==='carry'?1:.22);
+ MU.ball.y+=(MU.ballT.y-MU.ball.y)*(p.mode==='pass'||p.mode==='carry'?1:.22);
+ MU.ball.x=clamp(MU.ball.x,.6,104.4);MU.ball.y=clamp(MU.ball.y,1.2,66.8);
+ // pass line, so the eye can follow the move
+ if((p.mode==='pass')&&p.from&&p.to){
+  ctx.beginPath();ctx.moveTo(p.from.x*sx,p.from.y*sy);ctx.lineTo(MU.ball.x*sx,MU.ball.y*sy);
+  ctx.strokeStyle='rgba(255,255,255,.20)';ctx.lineWidth=Math.max(1,sx*.28);ctx.stroke()}
+ // players
+ const lbl=[];
+ MU.dots.forEach(d=>{
+  const c=G.clubs[m.sides[d.si].ci];
+  const px=d.x*sx,py=d.y*sy,r=Math.max(4,sx*1.85);
+  const isHolder=p.holder===d.pl;
+  if(isHolder){ctx.beginPath();ctx.arc(px,py,r*1.95,0,7);
+   ctx.strokeStyle='rgba(251,225,34,.92)';ctx.lineWidth=Math.max(1.4,sx*.44);ctx.stroke()}
+  ctx.beginPath();ctx.arc(px,py,r,0,7);
+  ctx.fillStyle=d.pl.slot==='GK'?'#e9c400':c.c1;ctx.fill();
+  ctx.lineWidth=Math.max(1,sx*.28);
+  ctx.strokeStyle=d.si===0?'rgba(255,255,255,.92)':'rgba(15,15,15,.85)';ctx.stroke();
+  const ly=py+r*2.5;
+  const crowded=lbl.some(q=>Math.abs(q[0]-px)<sx*7&&Math.abs(q[1]-ly)<sy*2.2);
+  if(!d.pl.off&&(isHolder||!crowded)){
+   lbl.push([px,ly]);
+   ctx.font='700 '+Math.max(7,Math.round(sx*2.05))+'px Inter,sans-serif';
+   ctx.textAlign='center';
+   ctx.lineWidth=Math.max(2,sx*.7);ctx.strokeStyle='rgba(0,0,0,.75)';
+   const nm=surname(d.pl.p.name);
+   ctx.strokeText(nm,px,ly);
+   ctx.fillStyle=isHolder?'#fbe122':'rgba(240,245,240,.8)';
+   ctx.fillText(nm,px,ly)}});
+ // ball
+ const bx=MU.ball.x*sx,by=MU.ball.y*sy,br=Math.max(2.6,sx*1.05);
+ for(let i=1;i<MU.trail.length;i++){
+  const a=(i/MU.trail.length)*.30;
+  ctx.beginPath();ctx.arc(MU.trail[i].x*sx,MU.trail[i].y*sy,br*.55,0,7);
+  ctx.fillStyle='rgba(255,255,255,'+a+')';ctx.fill()}
+ ctx.beginPath();ctx.arc(bx,by+br*.7,br*.95,0,7);ctx.fillStyle='rgba(0,0,0,.32)';ctx.fill();
+ ctx.beginPath();ctx.arc(bx,by,br,0,7);ctx.fillStyle='#fff';ctx.fill();
+ ctx.lineWidth=Math.max(1,sx*.24);ctx.strokeStyle='#1a1a1a';ctx.stroke();
+ // goal flash
+ if(MU.goalFlashP&&now<MU.goalFlashP){
+  const k=1-(MU.goalFlashP-now)/1700;
+  ctx.fillStyle='rgba(251,225,34,'+(0.30*(1-k))+')';ctx.fillRect(0,0,W,H);
+  ctx.font='800 '+Math.round(sx*8)+'px "Archivo Black",Impact,sans-serif';
+  ctx.textAlign='center';ctx.fillStyle='rgba(255,255,255,'+(1-k)+')';
+  ctx.strokeStyle='rgba(0,0,0,.6)';ctx.lineWidth=sx*1.2;
+  ctx.strokeText('GOAL!',W/2,H/2);ctx.fillText('GOAL!',W/2,H/2)}
+ // header strip: possession, clock, and who is on the ball
+ const tot=Math.max(1,m.poss[0]+m.poss[1]);
+ const hp=Math.round(m.poss[0]/tot*100);
+ ctx.fillStyle='rgba(0,0,0,.44)';ctx.fillRect(0,0,W,Math.round(sy*4.2));
+ ctx.fillStyle=G.clubs[m.sides[0].ci].c1;ctx.fillRect(0,0,W*hp/100,Math.round(sy*1.1));
+ ctx.fillStyle=G.clubs[m.sides[1].ci].c1;ctx.fillRect(W*hp/100,0,W*(100-hp)/100,Math.round(sy*1.1));
+ ctx.font='800 '+Math.max(8,Math.round(sx*2.2))+'px Inter,sans-serif';
+ ctx.textAlign='left';ctx.fillStyle='rgba(240,245,240,.9)';
+ ctx.fillText(G.clubs[m.sides[0].ci].short+' '+hp+'%',sx*1.5,sy*3.4);
+ ctx.textAlign='right';
+ ctx.fillText((100-hp)+'% '+G.clubs[m.sides[1].ci].short,W-sx*1.5,sy*3.4);
+ ctx.textAlign='center';ctx.fillStyle='#fbe122';
+ ctx.fillText(m.done?'FT':m.stage==='HT'?'HT':m.dispMin()+"'",W/2,sy*3.4);
+ ctx.textAlign='left'};
+/* kick-off: everybody back to their own half, ball on the centre spot */
+initDots=function(){
+ _initDotsLive();
+ MU.play={si:Math.random()<.5?0:1,holder:null,target:null,mode:'idle',from:null,to:null,
+  t0:0,ms:0,nextAt:0,dead:0,run:null,aim:.55+Math.random()*.33,stallAt:0};
+ MU.trail=[];MU.flight=null;MU.setPiece=null;MU.goalFlashP=0;MU.pend=[];
+ MU.ball={x:52.5,y:34};MU.ballT={x:52.5,y:34};
+ kickOffFrom(MU.play.si)};
+/* kick-off: a midfielder rolls it off the centre spot */
+function kickOffFrom(si){
+ const s=MU.m&&MU.m.sides[si];if(!s)return;
+ const mid=s.onfield.filter(x=>!x.off&&x.slot!=='GK')
+  .map(x=>({x,d:Math.abs(dotHome(x,si).x-52.5)+Math.abs(dotHome(x,si).y-34)*.5}))
+  .sort((a,b)=>a.d-b.d)[0];
+ restartFrom(si,52.5,34,900,mid?mid.x:null)}
+
+
+/* =====================================================================
+   THE NEWS CYCLE — one feed that reacts to everything the club does
+   ---------------------------------------------------------------------
+   Media and social only ever woke up after a match. Now every part of
+   the game posts into one timeline: injuries, discipline, transfers,
+   the boardroom, the academy, runs of form, milestones and silverware —
+   and the fans, the press and rival supporters all have their say.
+   ===================================================================== */
+const BUZZ_FANS=['@RedArmyTom','@StretfordSteve','@UtdDataNerd','@TerraceTactics','@MancunianMatt',
+ '@BusbyBabeBex','@OTFaithful','@ScholesyWasBetter','@NorthStandNoel','@FergieTimeFrank',
+ '@SamOnTheKop','@TheatreOfBeans','@RedCafeRhys','@BellyOfTheBeast','@AwayDaysAnna'];
+const BUZZ_PRESS=['@SandraBeckwith','@MarcusReeveTV','@NiaFletcherData','@TerryDochertyOBE',
+ '@DeanWhitlock5','@OllieGrantComms','@TheTouchlineUK','@BackPageDaily'];
+const BUZZ_RIVAL=['@BlueMoonBazza','@AnfieldAndy','@GunnerGraham','@SpursScott','@ToffeeTerri'];
+const BUZZ_INSIDER=['@FabrizioWatch','@DoneDealDaily','@TransferTapUK'];
+const BUZZ_KIND={
+ result:{ic:'⚽'},injury:{ic:'🚑'},discipline:{ic:'🚨'},transfer:{ic:'💷'},board:{ic:'🏛️'},
+ youth:{ic:'🎓'},form:{ic:'📈'},milestone:{ic:'🌟'},trophy:{ic:'🏆'},press:{ic:'🎙️'},contract:{ic:'📝'}};
+function buzzPool(k){
+ return k==='transfer'?BUZZ_INSIDER.concat(BUZZ_PRESS):
+  k==='board'||k==='press'?BUZZ_PRESS:
+  k==='milestone'||k==='trophy'?BUZZ_FANS.concat(BUZZ_PRESS):BUZZ_FANS}
+/* one call, from anywhere in the game */
+function buzz(kind,text,o){
+ if(!G||!G.clubs)return;
+ o=o||{};
+ if(!G.buzz)G.buzz=[];
+ const fans=(G.fans==null?60:G.fans);
+ const pool=o.rival?BUZZ_RIVAL:o.handle?[o.handle]:buzzPool(kind);
+ const r=mulberry(hashStr('bz'+G.day+kind+text.slice(0,18)));
+ const base=o.big?4200:900;
+ const likes=Math.round(base*(.6+r()*2.4)*(1+fans/140)*(o.big?3.4:1));
+ G.buzz.unshift({d:G.day,k:kind,h:pool[Math.floor(r()*pool.length)],t:text,
+  l:likes,tone:o.tone||'neu',big:!!o.big});
+ trimBuzz()}
+/* keep the feed to a sane size, dropping routine match chatter first */
+function trimBuzz(){
+ if(!G.buzz||G.buzz.length<=180)return;
+ let over=G.buzz.length-180;
+ for(let i=G.buzz.length-1;i>=0&&over>0;i--){
+  if(G.buzz[i].k==='result'&&!G.buzz[i].big){G.buzz.splice(i,1);over--}}
+ if(G.buzz.length>180)G.buzz.length=180}
+/* fan reactions carry the mood of the terraces */
+function buzzMood(){const f=G.fans==null?60:G.fans;return f>=72?'up':f<=38?'down':'mid'}
+function buzzPick(up,mid,down){const m=buzzMood();return pick(m==='up'?up:m==='down'?down:mid)}
+
+/* ---------- injuries ---------- */
+const _aiBuzz=applyInjury;
+applyInjury=function(p,c,tr){
+ const d=_aiBuzz(p,c,tr);
+ if(d&&c&&c.i===G.my&&(d>=21||(d>=10&&p.ovr>=80))){
+  const wk=humanDays(d);
+  buzz('injury',buzzPick(
+   ['Gutted for '+p.name+'. '+wk+' out. He’ll come back stronger.','Not '+p.name+' 😩 '+wk+'. Squad depth time.'],
+   [p.name+' out for '+wk+'. Of course he is. Every single season.','Another one down. '+p.name+', '+wk+'. You could set your watch by it.'],
+   ['How is it ALWAYS us? '+p.name+' gone for '+wk+'.','Medical department needs looking at. '+p.name+' — '+wk+'.']),
+   {tone:'neg',big:d>=70})}
+ return d};
+
+/* ---------- discipline: the story, and how you handled it ---------- */
+const _mdBuzz=maybeDrama;
+maybeDrama=function(){
+ const n=G.inbox.length;
+ _mdBuzz();
+ if(G.inbox.length<=n)return;
+ const m=G.inbox[0];if(!m.drama)return;
+ const t=String(m.title).replace(/^[^\w]+/,'');
+ if(m.drama==='good')buzz('discipline','Love to see it — '+t.toLowerCase()+'. Proper club, this.',{tone:'pos'});
+ else{
+  buzz('discipline',(m.drama==='major'?'🚨 ':'')+t+'. '+
+   buzzPick(['Deal with it in-house and move on.','He’s human. Back him.'],
+    ['Not what we need right now.','Sort it out, lads. Focus.'],
+    ['Embarrassing. This club is a circus.','Same old shambles behind the scenes.']),
+   {tone:'neg',big:m.drama==='major'});
+  if(m.drama==='major')buzz('discipline','Never a dull day at '+G.clubs[G.my].short+' is there 😂',{rival:1,tone:'neg'})}};
+const _dramaBuzz=ACTIONS.drama;
+ACTIONS.drama=el=>{
+ const[kind,pid,tier]=String(el.dataset.arg).split(':');
+ const p=playerById(pid);
+ _dramaBuzz(el);
+ if(!p)return;
+ const nm=surname(p.name);
+ if(kind==='fine')buzz('discipline','Manager’s fined '+nm+'. Good. Standards are standards.',{tone:'pos'});
+ else if(kind==='back')buzz('discipline','Boss has come out and backed '+nm+'. '+
+  buzzPick(['That’s how you get a dressing room behind you.'],['Hope he knows what he’s doing.'],
+   ['Weak. Absolutely weak.']),{tone:buzzMood()==='down'?'neg':'pos'});
+ else if(kind==='drop')buzz('discipline',nm+' dropped. Nobody is bigger than the club 👏',{tone:'pos'});
+ else buzz('discipline','Clear-the-air meeting called. Whatever works.',{tone:'neu'})};
+
+/* ---------- transfers ---------- */
+const _signBuzz=completeSigning;
+completeSigning=function(p,fee,t){
+ const seller=G.clubs[p.club];
+ const nm=p.name,ov=p.ovr,ag=p.age,from=seller?seller.short:'';
+ _signBuzz(p,fee,t);
+ buzz('transfer','HERE WE GO ✅ '+nm+' to '+G.clubs[G.my].short+' from '+from+', '+fmtM(fee)+'. Medical done.',
+  {handle:pick(BUZZ_INSIDER),tone:'pos',big:fee>=4e7});
+ buzz('transfer',ov>=82?'What a signing. '+nm+' at '+ag+' for '+fmtM(fee)+' is serious business 🔴':
+  ag<=21?nm+' is '+ag+'. One for the future but we needed one for NOW.':
+  fee>=5e7?fmtM(fee)+' for '+nm+'? Hope he’s worth it.':
+  'Decent bit of business, that. '+nm+' improves us.',{tone:ov>=82?'pos':'neu',big:ov>=86});
+ if(ov>=85)buzz('transfer','Every window they get one out of nowhere. Sickening.',{rival:1,tone:'neu'})};
+const _offAccBuzz=ACTIONS.offerAccept;
+ACTIONS.offerAccept=el=>{
+ const o=(typeof offerById==='function')?offerById(el.dataset.arg):null;
+ const p=o?playerById(o.pid):null;
+ const nm=p?p.name:null,ov=p?p.ovr:0,fee=o?o.fee:0;
+ _offAccBuzz(el);
+ if(!nm)return;
+ buzz('transfer',ov>=82?'Selling '+nm+' for '+fmtM(fee)+'. Explain this to me like I’m five.':
+  'That’s '+nm+' gone then. '+fmtM(fee)+'. Reinvest it properly.',
+  {tone:ov>=82?'neg':'neu',big:ov>=84})};
+
+/* ---------- the boardroom ---------- */
+const _bmrBuzz=boardMonthlyReview;
+boardMonthlyReview=function(){
+ const before=G.boardStage||0;
+ _bmrBuzz();
+ const after=G.boardStage||0;
+ if(after>before&&after>=2)buzz('board',
+  after>=3?'Understand the board have delivered a final warning to the '+G.clubs[G.my].short+' manager. Next few weeks are decisive.'
+   :'Told the '+G.clubs[G.my].short+' hierarchy have spoken to the manager about results. No decision imminent.',
+  {handle:pick(BUZZ_PRESS),tone:'neg',big:after>=3});
+ else if(after<before)buzz('board','Pressure easing on the '+G.clubs[G.my].short+' manager after a better run. Board happy to stay patient.',
+  {handle:pick(BUZZ_PRESS),tone:'pos'})};
+
+/* ---------- form, milestones, silverware, the academy ---------- */
+function buzzStreaks(){
+ const st=(typeof formStreak==='function')?formStreak(G.my):null;
+ if(!st||st.n<3)return;
+ const key=st.r+st.n;
+ if(G._buzzStreak===key)return;G._buzzStreak=key;
+ if(st.r==='W'&&st.n>=4)buzz('form',st.n+' wins on the bounce. Do not wake me up 🔴🔥',{tone:'pos',big:st.n>=6});
+ else if(st.r==='L'&&st.n>=3)buzz('form',st.n+' straight defeats. '+
+  buzzPick(['Blip. We go again.'],['This is getting serious now.'],['Enough. Genuinely enough.']),{tone:'neg',big:st.n>=5});
+ else if(st.r==='D'&&st.n>=4)buzz('form',st.n+' draws in a row. Turn them into wins and we’re fine.',{tone:'neu'})}
+function buzzMilestones(){
+ const my=G.clubs[G.my];
+ G._buzzMs=G._buzzMs||{};
+ my.players.forEach(p=>{
+  const g=(p.stats&&p.stats.goals)||0;
+  [10,20,25,30].forEach(mark=>{
+   const k=p.id+':'+mark+':'+G.season;
+   if(g>=mark&&!G._buzzMs[k]){G._buzzMs[k]=1;
+    buzz('milestone',surname(p.name)+' reaches '+mark+' goals for the season. '+
+     (mark>=25?'Whatever he wants, give it to him. 🐐':'Take a bow, son. 🔴'),{tone:'pos',big:mark>=25})}});
+  const cs=(p.stats&&p.stats.cleanSheets)||0;
+  const kc=p.id+':cs15:'+G.season;
+  if(p.pos==='GK'&&cs>=15&&!G._buzzMs[kc]){G._buzzMs[kc]=1;
+   buzz('milestone',surname(p.name)+' has '+cs+' clean sheets. Golden Glove is his.',{tone:'pos'})}})}
+const _dtcBuzz=dailyTickCore;
+dailyTickCore=function(){
+ _dtcBuzz();
+ if(G.sacked)return;
+ try{buzzStreaks();if(G.day%4===2)buzzMilestones()}catch(e){}};
+const _pcBuzz=progressCups;
+progressCups=function(){
+ const before={};for(const k in (G.cups||{}))before[k]=G.cups[k].winner;
+ _pcBuzz();
+ for(const k in (G.cups||{})){
+  const cup=G.cups[k];
+  if(cup.winner!=null&&before[k]==null&&cup.winner===G.my){
+   const nm=(CUP_DEFS[k]||{}).name||'the cup';
+   buzz('trophy','WE HAVE WON THE '+nm.toUpperCase()+' 🏆🏆🏆 I am not okay',{tone:'pos',big:true});
+   buzz('trophy','Silverware changes everything at a club this size. Credit where it is due.',
+    {handle:pick(BUZZ_PRESS),tone:'pos',big:true})}}};
+const _promoBuzz=ACTIONS.promoteYouth;
+ACTIONS.promoteYouth=el=>{
+ const p=playerById(el.dataset.id);
+ const nm=p?p.name:null,pot=p?p.pot:0,ag=p?p.age:0;
+ _promoBuzz(el);
+ if(!nm)return;
+ buzz('youth',nm+' promoted to the first team at '+ag+'. '+
+  (pot>=85?'Everyone at the academy says he is the real thing 👀':'Academy graduate. Long may it continue.'),
+  {tone:'pos',big:pot>=88})};
+/* the press room feeds the timeline too */
+const _pressBuzz=ACTIONS.pressAnswer||null;
+if(typeof ACTIONS.pressAnswer==='function'){
+ ACTIONS.pressAnswer=el=>{
+  _pressBuzz(el);
+  buzz('press','Manager fronted up in the press room today. '+
+   buzzPick(['Said all the right things.'],['Bit of everything in that one.'],['Words are cheap.']),{tone:'neu'})}}
+/* match reactions go into the same timeline instead of their own silo */
+const _socialBuzz=socialPosts;
+socialPosts=function(f){
+ const out=_socialBuzz(f);
+ // the article keeps every reaction; the timeline takes the best two so a
+ // busy fixture list cannot bury everything else that happened
+ const key='mc'+G.day+':'+f.gf+'-'+f.ga;
+ if(G._buzzMatch!==key){
+  G._buzzMatch=key;
+  if(!G.buzz)G.buzz=[];
+  (out||[]).slice(0,2).forEach(x=>G.buzz.unshift({d:G.day,k:'result',h:x.h,t:x.t,l:x.l,
+   tone:f.res==='W'?'pos':f.res==='L'?'neg':'neu',big:false}))}
+ trimBuzz();
+ return out};
+
+/* ---------- the media hub ---------- */
+function buzzFilters(){return[['all','Everything'],['result','Matches'],['transfer','Transfers'],
+ ['injury','Injuries'],['discipline','Off the pitch'],['form','Form'],['milestone','Players'],['board','Boardroom']]}
+function fmtLikes(n){return n>=1000?(n/1000).toFixed(n>=10000?0:1)+'k':String(n)}
+function vBuzz(){
+ const list=(G.buzz||[]);
+ const f=UI.buzzFilter||'all';
+ const shown=(f==='all'?list:list.filter(x=>x.k===f)).slice(0,UI.buzzShow||14);
+ let h='<div class="chip-lbl">The timeline</div>'+
+ '<div class="chips" style="margin-bottom:8px">'+buzzFilters().map(x=>
+  '<button class="chip'+(f===x[0]?' on':'')+'" data-action="buzzFilter" data-v="'+x[0]+'">'+x[1]+'</button>').join('')+'</div>';
+ if(!shown.length)return h+'<div class="card tight"><div class="small muted" style="padding:8px 2px">Nothing being said just yet. Play some football.</div></div>';
+ h+='<div class="card tight">'+shown.map(x=>{
+  const col=x.tone==='pos'?'var(--green)':x.tone==='neg'?'var(--danger)':'var(--muted)';
+  return '<div style="padding:8px 2px;border-bottom:1px solid var(--chalk);'+(x.big?'background:rgba(251,225,34,.05)':'')+'">'+
+  '<div class="spread"><div class="row" style="gap:6px"><span style="font-size:12px">'+((BUZZ_KIND[x.k]||{}).ic||'💬')+'</span>'+
+  '<span class="xs" style="font-weight:800;color:'+col+'">'+esc(x.h)+'</span></div>'+
+  '<span class="xs faint">'+fmtDateShort(x.d)+'</span></div>'+
+  '<div class="small" style="line-height:1.45;margin:3px 0 2px">'+esc(x.t)+'</div>'+
+  '<div class="xs faint">♥ '+fmtLikes(x.l)+' · ↻ '+fmtLikes(Math.round(x.l*.28))+'</div></div>'}).join('')+'</div>';
+ if((f==='all'?list:list.filter(x=>x.k===f)).length>shown.length)
+  h+='<button class="btn btn-ghost btn-block btn-sm" style="margin-top:8px" data-action="buzzMore">Show more</button>';
+ return h}
+ACTIONS.buzzFilter=el=>{UI.buzzFilter=el.dataset.v;UI.buzzShow=14;render()};
+ACTIONS.buzzMore=()=>{UI.buzzShow=(UI.buzzShow||14)+14;render()};
+vMedia=function(){
+ const my=G.clubs[G.my];
+ const all=G.inbox.concat(G.archive||[]).filter(m=>m.type==='news'||m.article);
+ all.sort((a,b)=>b.day-a.day);
+ let h='<div class="sec"><div class="t">📰 Media centre</div><div class="ln"></div><div class="sub">'+
+  (G.buzz||[]).length+' posts · '+all.length+' stories</div></div>';
+ h+=vFans();
+ // the running storyline
+ const n=(typeof seasonNarrative==='function')?seasonNarrative():null;
+ if(n)h+='<div class="card" style="margin-bottom:12px;border-color:rgba(251,225,34,.3)">'+
+  '<div class="xs faint" style="font-weight:800;letter-spacing:.5px">THE STORY RIGHT NOW</div>'+
+  '<div class="small" style="font-weight:800;margin:4px 0 3px">'+n.h+'</div>'+
+  '<div class="xs muted" style="line-height:1.5">'+n.b+'</div></div>';
+ const pts=(typeof buildTalkingPoints==='function')?buildTalkingPoints():[];
+ if(pts.length){
+  h+='<div class="chip-lbl">Talking points</div><div class="card tight">'+
+  pts.map(x=>'<div style="padding:7px 2px;border-bottom:1px solid var(--chalk)">'+
+   '<div class="xs faint">'+esc(x.t)+'</div>'+
+   '<div class="small" style="font-style:italic;line-height:1.5;margin:3px 0">“'+x.l+'”</div>'+
+   '<div class="xs faint">— '+esc(x.p.n)+', '+esc(x.p.r)+'</div></div>').join('')+'</div>'}
+ h+=vBuzz();
+ h+='<div class="chip-lbl">Coverage</div><div class="card tight" style="max-height:40vh;overflow-y:auto">';
+ if(!all.length)h+='<div class="small muted" style="padding:8px 2px">No coverage yet.</div>';
+ all.slice(0,20).forEach(m=>{
+  h+='<div class="mail" data-action="mailOpen" data-id="'+m.id+'"><div class="ic">'+(m.article?'📰':'🗨️')+'</div>'+
+  '<div style="flex:1;min-width:0"><div class="tt" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+m.title+'</div>'+
+  '<div class="xs faint">'+esc(mailFrom(m))+' · '+fmtDateShort(m.day)+'</div></div></div>'});
+ return h+'</div>'};
+/* the dashboard gets a window onto the noise */
+const _vHomeBuzz=vHome;
+vHome=function(){
+ let h=_vHomeBuzz();
+ if(G.sacked)return h;
+ const b=(G.buzz||[])[0];
+ if(!b)return h;
+ const col=b.tone==='pos'?'var(--green)':b.tone==='neg'?'var(--danger)':'var(--muted)';
+ const card='<div class="card tight" style="margin-bottom:11px" data-action="openMedia">'+
+  '<div class="spread" style="margin-bottom:4px"><span class="xs faint" style="font-weight:800;letter-spacing:.5px">TRENDING</span>'+
+  '<span class="xs faint">'+esc(b.h)+' · ♥ '+fmtLikes(b.l)+'</span></div>'+
+  '<div class="small" style="line-height:1.42;color:'+col+'">'+esc(b.t.length>120?b.t.slice(0,118)+'…':b.t)+'</div></div>';
+ const at=h.indexOf('<div class="minitbl');
+ return at>0?h.slice(0,at)+card+h.slice(at):h+card};
+ACTIONS.openMedia=()=>{UI.view='club';UI.clubTab='media';render();window.scrollTo(0,0)};
+const _ngBuzz=newGame;
+newGame=function(i){_ngBuzz(i);G.buzz=[];G._buzzMs={};G._buzzStreak=null;
+ buzz('board','Official: '+G.clubs[G.my].name+' appoint a new manager. Big job, big expectations.',
+  {handle:pick(BUZZ_PRESS),tone:'neu',big:true})};
+const _loadBuzz=loadSlot;
+loadSlot=function(slot){const ok=_loadBuzz(slot);
+ if(ok){if(!G.buzz)G.buzz=[];if(!G._buzzMs)G._buzzMs={}}
+ return ok};
 
 showStart();
 </script>
