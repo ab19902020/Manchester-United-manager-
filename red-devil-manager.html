@@ -2417,15 +2417,16 @@ function drawDugout(){
  const x=cv.getContext('2d');const{W,H,P,tE}=dugGeom(cv);
  x.drawImage(dugBackground(cv),0,0);
  const now=performance.now()/1000;
- // update world positions (shared with 2D view)
+ // the dugout watches the same phase of play as the 2D pitch — the
+ // targets are already set by pitchTargets(), we only ease toward them
+ const _pp=(typeof playState==='function')?playState():{};
  MU.dots.forEach(d=>{
-  if(d.pl.off){d.tx=d.si===0?-8:113;d.ty=34}
-  else{const home=dotHome(d.pl,d.si);
-   const pull=d.pl.slot==='GK'?.06:DEFPOS.includes(d.pl.slot)?.16:MIDPOS.includes(d.pl.slot)?.3:.42;
-   d.tx=home.x+(MU.ball.x-home.x)*pull+Math.sin(now*1.7+d.pl.p.id)*1.6;
-   d.ty=home.y+(MU.ball.y-home.y)*(pull*.8)+Math.cos(now*1.4+d.pl.p.id)*1.6}
-  d.x+=((d.tx??d.x)-d.x)*.055;d.y+=((d.ty??d.y)-d.y)*.055});
- MU.ball.x+=(MU.ballT.x-MU.ball.x)*.09;MU.ball.y+=(MU.ballT.y-MU.ball.y)*.09;
+  const ease=d.pl.off?.05:(_pp.holder===d.pl?.20:.075);
+  d.x+=((d.tx==null?d.x:d.tx)-d.x)*ease;
+  d.y+=((d.ty==null?d.y:d.ty)-d.y)*ease});
+ const _mv=(_pp.mode==='pass'||_pp.mode==='carry')?1:.22;
+ MU.ball.x+=(MU.ballT.x-MU.ball.x)*_mv;MU.ball.y+=(MU.ballT.y-MU.ball.y)*_mv;
+ MU.ball.x=clamp(MU.ball.x,.6,104.4);MU.ball.y=clamp(MU.ball.y,1.2,66.8);
  // depth sort: players + ball
  const ents=MU.dots.map(d=>({k:'p',y:d.y,d}));
  ents.push({k:'b',y:MU.ball.y});
@@ -11148,6 +11149,695 @@ const _loadBuzz=loadSlot;
 loadSlot=function(slot){const ok=_loadBuzz(slot);
  if(ok){if(!G.buzz)G.buzz=[];if(!G._buzzMs)G._buzzMs={}}
  return ok};
+
+
+/* =====================================================================
+   NEGOTIATION 2.0 — you talk until somebody moves, not until a counter
+   runs out
+   ---------------------------------------------------------------------
+   Both the fee talks and the contract talks gave you three attempts and
+   then slammed the door for thirty days, whatever you had offered. Real
+   clubs and real agents counter, and keep countering. They only walk
+   away when you insult them — and even then not for a month.
+   ===================================================================== */
+function negoState(pid){
+ if(!G.nego)G.nego={};
+ if(!G.nego[pid])G.nego[pid]={rounds:0,insults:0,last:0,counter:0,log:[]};
+ return G.nego[pid]}
+function negoLog(pid,who,txt){
+ const n=negoState(pid);
+ n.log.unshift({d:G.day,who,txt});
+ if(n.log.length>8)n.log.length=8}
+function feeBand(p){
+ const ask=askPrice(p);
+ return{ask,insult:Math.round(ask*.55),low:Math.round(ask*.78),near:Math.round(ask*.9)}}
+/* what they would say yes to right now, given how the talks have gone */
+function feeCounter(p,offer){
+ const n=negoState(p.id),b=feeBand(p);
+ // each round of genuine bidding brings their number down a little
+ const soften=Math.min(.14,n.rounds*.035);
+ let want=Math.round(b.ask*(1-soften));
+ if(offer>0)want=Math.max(want,Math.round(offer*1.04)); // never counter below your own bid
+ want=Math.min(want,b.ask);
+ return Math.max(Math.round(want/1e5)*1e5,3e5)}
+/* ---------- the bid sheet, rewritten so you can always see where you are ---------- */
+openBidSheet=function(pid,agentNote,prefill){
+ const p=playerById(pid);if(!p)return;
+ const my=G.clubs[G.my],c=G.clubs[p.club];
+ if(p.club===G.my){toast('He already plays for you, boss.');return}
+ if(!windowOpen()){toast('The transfer window is closed.');return}
+ if((G.lockouts[pid]||0)>G.day){
+  toast(esc(c.short)+' have paused talks for '+humanDays(G.lockouts[pid]-G.day)+'.');return}
+ const n=negoState(pid),b=feeBand(p);
+ const known=p.scouted||n.rounds>0;
+ const want=n.counter||b.ask;
+ const start=prefill||n.last||Math.min(my.budget,Math.round(p.value/1e5)*1e5);
+ const ib=(typeof interestScore==='function')?interestBand(interestScore(p,null,null)):null;
+ let h='<h3>Transfer talks</h3>'+
+ '<div class="row" style="margin:8px 0 12px">'+crest(c,32)+'<div style="flex:1;min-width:0">'+
+  '<div style="font-weight:800">'+esc(p.name)+' <span class="muted small">'+p.pos+' · '+p.age+' · '+p.ovr+'</span></div>'+
+  '<div class="small muted">'+esc(c.name)+' · value '+(p.scouted?fmtM(p.value):'~'+fmtM(Math.round(p.value*.85))+'+')+
+   (ib?' · <span style="color:'+ib.c+'">'+ib.k+'</span>':'')+'</div></div></div>';
+ // where the talks stand — always on screen
+ h+='<div class="card tight" style="margin-bottom:11px;border-color:rgba(251,225,34,.35)">'+
+  '<div class="spread"><span class="xs faint" style="font-weight:800;letter-spacing:.5px">WHERE THE TALKS STAND</span>'+
+  '<span class="xs faint">round '+(n.rounds+1)+'</span></div>'+
+  '<div class="small" style="margin-top:5px;line-height:1.5">'+
+   (n.rounds===0
+    ? esc(c.short)+' have not named a price yet. Their valuation looks like <b>'+
+      (known?fmtM(b.ask):'around '+fmtM(Math.round(b.ask*.9))+'–'+fmtM(Math.round(b.ask*1.1)))+'</b>.'
+    : 'Your last offer: <b>'+fmtM(n.last)+'</b><br>'+esc(c.short)+' want: <b style="color:var(--gold)">'+fmtM(want)+'</b>')+
+  '</div>'+
+  (n.insults>=2?'<div class="xs" style="color:var(--danger);margin-top:5px">They are losing patience with low offers.</div>':'')+
+  '</div>';
+ if(agentNote)h+='<div class="card tight" style="border-color:rgba(251,225,34,.4);margin-bottom:11px">'+
+  '<div class="small" style="color:var(--gold);font-weight:700;line-height:1.5">'+agentNote+'</div></div>';
+ h+='<div class="field"><label>Your offer</label><input type="number" id="bidFee" inputmode="numeric" step="100000" min="0" value="'+start+'"></div>'+
+ '<div class="chips" style="margin-bottom:8px">'+
+  [['-1M',-1e6],['-250K',-25e4],['+250K',25e4],['+1M',1e6],['+5M',5e6]].map(x=>
+   '<button class="chip" data-action="bump" data-t="bidFee" data-v="'+x[1]+'">'+x[0]+'</button>').join('')+'</div>';
+ if(want<=my.budget)h+='<button class="btn btn-ghost btn-block btn-sm" style="margin-bottom:10px" data-action="bidMeet" data-v="'+want+'">'+
+  '🤝 Meet their valuation — '+fmtM(want)+'</button>';
+ h+='<div class="small muted" style="margin-bottom:10px">Transfer budget: <b class="num">'+fmtM(my.budget)+'</b></div>'+
+ '<button class="btn btn-primary btn-block" data-action="submitBid" data-id="'+pid+'">Submit offer</button>'+
+ '<button class="btn btn-ghost btn-block" style="margin-top:8px" data-action="bidPause">Leave it for now</button>';
+ if(n.log.length)h+='<div class="chip-lbl" style="margin-top:12px">How we got here</div><div class="card tight">'+
+  n.log.map(x=>'<div class="xs" style="padding:3px 0;border-bottom:1px solid var(--chalk)">'+
+   '<span class="faint">'+fmtDateShort(x.d)+' · '+esc(x.who)+'</span><br>'+esc(x.txt)+'</div>').join('')+'</div>';
+ openModal(h)};
+ACTIONS.bidMeet=el=>{const i=$('#bidFee');if(i)i.value=el.dataset.v};
+ACTIONS.bidPause=()=>{closeModal();toast('Talks left open — come back any time.')};
+ACTIONS.submitBid=el=>{
+ const pid=el.dataset.id,p=playerById(pid);if(!p)return;
+ const my=G.clubs[G.my],c=G.clubs[p.club];
+ const fee=Math.round(+($('#bidFee')&&$('#bidFee').value)||0);
+ if(fee<=0){toast('Enter a fee first.');return}
+ if(fee>my.budget){toast('That is beyond your transfer budget.');return}
+ const n=negoState(pid),b=feeBand(p);
+ n.last=fee;n.rounds++;
+ negoLog(pid,'You','Offered '+fmtM(fee)+'.');
+ // accepted
+ if(fee>=(n.counter||b.ask)*.985||fee>=b.ask*.99){
+  negoLog(pid,esc(c.short),'Accepted '+fmtM(fee)+'.');
+  n.insults=0;
+  openInterestPhase(p,fee);return}
+ // insulting — they say so, and three of them ends the conversation for a few days
+ if(fee<b.insult){
+  n.insults++;
+  negoLog(pid,esc(c.short),'Dismissed it out of hand.');
+  if(n.insults>=3){
+   const days=irnd(5,8);
+   G.lockouts[pid]=G.day+days;
+   n.insults=0;n.rounds=0;n.counter=0;
+   closeModal();
+   mail('transfer','Talks paused: '+p.name,esc(c.name)+' have ended the conversation for now after a run of offers nowhere near their valuation. '+
+    'They will take a call again in <b>'+humanDays(days)+'</b>.');
+   render();return}
+  openBidSheet(pid,'<b>'+esc(c.short)+'</b> did not even take it to the board — '+fmtM(fee)+' is nowhere near. '+
+   'They want around <b>'+fmtM(b.ask)+'</b>.'+(n.insults===2?' One more like that and they will stop taking your calls.':''),
+   Math.round(b.ask*.86/1e5)*1e5);
+  return}
+ // a real offer: they counter, and the gap closes
+ n.insults=0;
+ const want=feeCounter(p,fee);
+ n.counter=want;
+ const gap=want-fee;
+ negoLog(pid,esc(c.short),'Countered at '+fmtM(want)+'.');
+ const note=fee>=b.near
+  ? '<b>'+esc(c.short)+'</b> are close to saying yes. Their director says <b>'+fmtM(want)+'</b> gets it done.'
+  : fee>=b.low
+   ? '<b>'+esc(c.short)+'</b> turned down '+fmtM(fee)+', but they are talking. They want <b>'+fmtM(want)+'</b>'+
+     (gap>0?' — you are '+fmtM(gap)+' short.':'.')
+   : '<b>'+esc(c.short)+'</b> value him a lot higher than that. Come back at <b>'+fmtM(want)+'</b> and they will listen.';
+ openBidSheet(pid,note,Math.min(my.budget,want));
+};
+/* a player saying no is a setback, not a month-long ban */
+const _oipSoft=openInterestPhase;
+openInterestPhase=function(p,fee){
+ const before=G.lockouts[p.id]||0;
+ _oipSoft(p,fee);
+ const after=G.lockouts[p.id]||0;
+ if(after>before&&after-G.day>10)G.lockouts[p.id]=G.day+irnd(5,9)};
+
+/* ---------- contract talks: give the agent what he asked for and it's done ---------- */
+/* The old sheet said "we want £X", then refused £X because the score never
+   quite cleared the bar, then walked away after three goes. Now the number
+   on screen is the honest number, and talks only end if you insult him. */
+const _termsPrev=ACTIONS.submitTerms;
+ACTIONS.submitTerms=()=>{
+ const n=G.negotiation;if(!n)return;
+ const p=playerById(n.pid);if(!p)return;
+ const my=G.clubs[G.my];
+ const wage=Math.round(+($('#tWage')&&$('#tWage').value)||0);
+ const len=+($('#tLen')&&$('#tLen').value)||3;
+ const signOn=Math.round(+($('#tSign')&&$('#tSign').value)||0);
+ const bonus=Math.round(+($('#tBonus')&&$('#tBonus').value)||0);
+ const clause=Math.round(+($('#tClause')&&$('#tClause').value)||0);
+ if(wage<500){toast('Offer a real wage.');return}
+ const newTotal=squadWage(my)-(n.renew?p.wage:0)+wage;
+ if(newTotal>my.wageCap*1.18){toast('The board blocks this — it would smash the wage budget.');return}
+ if(!n.renew&&signOn>my.bank){toast('Not enough cash in the bank for that sign-on fee.');return}
+ // how badly he wants the move shifts what he will settle for
+ let ask=n.exp;
+ if(!n.renew&&typeof interestScore==='function'){
+  const sc=interestScore(p,n.fee,wage);
+  n._interest=sc;
+  ask=Math.round(ask*(sc>=62?.93:sc<34?1.10:1)/500)*500}
+ const lenOk=len>=(p.age<=23?2:1);
+ // the honest rule: meet the asking wage on a sensible deal and he signs
+ if(n.renew)ask=Math.max(ask,Math.round(p.wage*1.02/500)*500);
+ const meets=wage>=ask&&lenOk;
+ const lp=[[0,-4,-1,2,4,5],[0,0,2,4,3,1],[0,4,3,0,-3,-6]][p.age<=23?0:p.age<=29?1:2][len]||0;
+ const score=wage/Math.max(1,ask)*70+lp+Math.min(8,signOn/Math.max(1,ask*8)*8)+
+  Math.min(4,bonus/8e3*4)+(clause>0?(clause<p.value*1.9?5:2):0)+(n.renew?(p.loyalty||10)*.45:0);
+ const threshold=74+((p.ambition||10)-10)*1.1;
+ if(meets||score>=threshold){
+  if(n.renew){
+   p.wage=wage;p.contract=len;p.clause=clause;p.bonus=bonus;my.bank-=signOn;
+   p.morale=clamp(p.morale+9,1,100);
+   mail('contract','Renewed: '+p.name,'<b>'+esc(p.name)+'</b> has signed a new '+len+'-year deal worth <b>'+fmtW(wage)+'</b>.');
+   closeModal();toast('✍️ '+p.name+' signs on!');render()}
+  else completeSigning(p,n.fee,{wage,len,signOn,bonus,clause});
+  return}
+ // an insulting offer is the only thing that ends a conversation
+ const floor=Math.round(ask*.62);
+ n._insults=n._insults||0;
+ const al=$('#agentLine');
+ if(wage<floor){
+  n._insults++;
+  if(n._insults>=3){
+   const days=irnd(4,7);
+   G.lockouts[p.id]=G.day+days;
+   closeModal();
+   mail('contract','Talks paused: '+p.name,'His agent has ended the meeting after a run of offers well below what they asked. '+
+    'He will sit down again in <b>'+humanDays(days)+'</b>.');
+   render();return}
+  if(al)al.innerHTML='<div class="small" style="color:var(--danger);font-weight:700">Agent: "That is not a serious offer. We are at <b>'+
+   fmtW(ask)+'</b>."'+(n._insults===2?' <span class="muted">One more like that and we are done.</span>':'')+'</div>';
+  return}
+ // a genuine offer: he counters, and the counter comes toward you
+ n._insults=0;
+ n._r=(n._r||0)+1;
+ // soften against the ORIGINAL demand, never against the last one, or a
+ // patient lowballer would talk him down to nothing
+ if(n.ask0==null)n.ask0=ask;
+ const floorW=n.renew?Math.max(Math.round(p.wage*1.02),Math.round(n.ask0*.88))
+  :Math.round(n.ask0*.88);
+ let want=Math.round(Math.max(wage*1.03,n.ask0*(1-Math.min(.12,n._r*.03)),floorW)/500)*500;
+ want=Math.min(want,n.ask0);
+ n.exp=want;
+ if(al)al.innerHTML='<div class="small" style="color:var(--gold);font-weight:700">Agent: "Close. Make it <b>'+fmtW(want)+
+  '</b> and he signs."<br><span class="xs muted">Nobody is walking away — keep talking.</span></div>';
+ const wi=$('#tWage');if(wi)wi.value=want;
+ const mb=$('#termsMeet');
+ if(mb){mb.dataset.v=want;mb.innerHTML='🤝 Meet the asking wage — '+fmtW(want)}};
+/* the contract sheet gains a one-tap "give him what he wants" */
+const _openContractMeet=openContractSheet;
+openContractSheet=function(p,opt){
+ _openContractMeet(p,opt);
+ const n=G.negotiation;if(!n)return;
+ const host=$('#sheetBody');if(!host)return;
+ const al=$('#agentLine');
+ if(al)al.insertAdjacentHTML('afterend',
+  '<button class="btn btn-ghost btn-block btn-sm" id="termsMeet" style="margin:-6px 0 12px" '+
+  'data-action="termsMeet" data-v="'+n.exp+'">🤝 Meet the asking wage — '+fmtW(n.exp)+'</button>')};
+ACTIONS.termsMeet=el=>{const i=$('#tWage');if(i)i.value=el.dataset.v};
+/* every lockout in the game is now days, not a month */
+const _ngNego=newGame;
+newGame=function(i){_ngNego(i);G.nego={}};
+const _loadNego=loadSlot;
+loadSlot=function(s){const ok=_loadNego(s);if(ok&&!G.nego)G.nego={};return ok};
+
+/* =====================================================================
+   THE PRESS ROOM — you can always get back in
+   ---------------------------------------------------------------------
+   Opening the press conference immediately stripped the actions off the
+   mail that launched it. Tap outside the sheet by accident and the
+   questions were gone for good, with the conference half-answered.
+   The mail now stays live until the conference is actually finished.
+   ===================================================================== */
+/* opening no longer closes the door behind you: the original stripped the
+   mail's actions on the way in, which is what made an accidental tap fatal */
+ACTIONS.pressOpen=()=>{
+ if(!G.pressCtx){
+  G.inbox.forEach(m=>{if(m.press){m.actions=null;m.press=false}});
+  toast('Nothing waiting in the press room.');render();return}
+ if(G.pressCtx.day==null)G.pressCtx.day=G.day;
+ openPressSheet('')};
+/* a conference left hanging over a match day is handled by the assistant */
+const _dtcPressExpire=dailyTickCore;
+dailyTickCore=function(){
+ _dtcPressExpire();
+ const c=G.pressCtx;
+ if(c&&c.day!=null&&G.day-c.day>=2){
+  closePressMail();G.pressCtx=null;
+  G.clubs[G.my].patience=clamp(G.clubs[G.my].patience-1,0,100);
+  mail('news','🎙️ Your assistant faced the press','You never made it to the media room, so your assistant read a short statement on your behalf. It was not well received.')}};
+/* the conference is only over when it is over */
+const _pressWrapClose=pressWrap;
+pressWrap=function(){
+ const r=_pressWrapClose();
+ closePressMail();
+ return r};
+ACTIONS.pressSkip=()=>{
+ closePressMail();G.pressCtx=null;
+ G.clubs[G.my].patience=clamp(G.clubs[G.my].patience-1,0,100);
+ toast('Your assistant reads a statement. The press are unimpressed.');
+ closeModal();render()};
+/* one tap back into a conference you stepped out of */
+function pressLive(){return !!(G.pressCtx&&!G.sacked)}
+ACTIONS.pressResume=()=>{
+ if(!pressLive()){toast('Nothing waiting in the press room.');return}
+ openPressSheet('You take your seat again. '+esc(G.pressCtx.rep||'The room')+' picks up where you left off.')};
+ACTIONS.pressLeave=()=>{
+ closeModal();
+ toast('🎙️ Step outside — tap “Back to the press room” when you are ready.')};
+/* the sheet says how to get back, and stepping out is a deliberate choice */
+const _openPressResume=openPressSheet;
+openPressSheet=function(reaction){
+ _openPressResume(reaction);
+ const host=$('#sheetBody');if(!host)return;
+ const b=document.createElement('div');
+ b.innerHTML='<button class="btn btn-ghost btn-block btn-sm" style="margin-top:8px" data-action="pressLeave">Step out for a moment</button>'+
+  '<div class="xs faint" style="text-align:center;margin-top:6px">Nothing is lost if you leave — the room waits for you.</div>';
+ host.appendChild(b)};
+/* the dock and the dashboard both offer the way back in */
+const _dockResume=renderDock;
+renderDock=function(){
+ const d=$('#continueDock');if(!d||G.sacked)return _dockResume();
+ if(pressLive()){
+  const c=G.pressCtx;
+  d.innerHTML='<button class="btn btn-gold" data-action="pressResume">🎙️ Back to the press room'+
+   '<span class="cd-sub">Question '+((c.q||0)+1)+' of '+(c.qTotal||2)+' — they are still waiting</span></button>';
+  return}
+ return _dockResume()};
+const _vHomePress=vHome;
+vHome=function(){
+ let h=_vHomePress();
+ if(!pressLive())return h;
+ const c=G.pressCtx;
+ const card='<div class="card" style="margin-bottom:12px;border-color:rgba(251,225,34,.55);'+
+  'background:linear-gradient(160deg,rgba(251,225,34,.10),rgba(255,255,255,.01))" data-action="pressResume">'+
+  '<div class="row" style="gap:9px"><span style="font-size:19px">🎙️</span><div style="flex:1">'+
+  '<div class="small" style="font-weight:800">You walked out mid-press conference</div>'+
+  '<div class="xs muted">Question '+((c.q||0)+1)+' of '+(c.qTotal||2)+' is still on the table. Tap to go back in.</div>'+
+  '</div></div></div>';
+ return card+h};
+
+/* =====================================================================
+   IN-MATCH SHAPE — reorganise the side without leaving the touchline
+   ---------------------------------------------------------------------
+   You could change mentality and make substitutions, but not move a
+   single player. Go down to ten men and you were stuck: the formation
+   switch refused to run without a full eleven, and there was no way to
+   push a forward back into the hole the red card left.
+   ===================================================================== */
+/* a formation change now works with whatever you have left */
+ACTIONS.mForm=el=>{
+ const s=mySide();if(!s)return;
+ const f=el.dataset.v,slots=FORMATIONS[f];if(!slots)return;
+ const act=s.onfield.filter(x=>!x.off);
+ if(!act.length)return;
+ reshapeInto(s,f);
+ if(MU.m&&!MU.m.done)MU.m.say(MU.m.dispMin(),s,s.c.short+' switch to '+f+
+  (act.length<11?' with '+act.length+' men.':'.'),'big');
+ toast('Shape: '+f+(act.length<11?' ('+act.length+' men)':''));
+ ACTIONS.mShapeOpen();renderMCtl()};
+/* fit the available players into a shape, dropping the least useful slots */
+function reshapeInto(s,f){
+ const slots=FORMATIONS[f]||FORMATIONS[s.tac.formation];
+ const act=s.onfield.filter(x=>!x.off);
+ if(!act.length)return;
+ const gkSlot=slots.find(x=>x[0]==='GK')||slots[0];
+ const gk=act.find(x=>x.slot==='GK')||act[0];
+ gk.slot='GK';gk.hx=gkSlot[1];gk.hy=gkSlot[2];
+ const rest=act.filter(x=>x!==gk);
+ // with a man short, give up the least valuable outfield slot first
+ const outfield=slots.filter(x=>x[0]!=='GK');
+ const order=['ST','AMR','AML','AMC','MR','ML','MC','DM','DR','DL','WBR','WBL','DC'];
+ const keep=outfield.slice().sort((a,b)=>order.indexOf(a[0])-order.indexOf(b[0]));
+ while(keep.length>rest.length)keep.shift();     // shed strikers/wingers before defenders
+ keep.reverse();                                 // then fill from the back
+ const used=new Set();
+ keep.forEach(sl=>{
+  let best=null,bv=-99;
+  rest.forEach(pl=>{if(used.has(pl))return;const v=calcEff(pl.p,sl[0]);if(v>bv){bv=v;best=pl}});
+  if(best){used.add(best);best.slot=sl[0];best.hx=sl[1];best.hy=sl[2]}});
+ // anyone left over tucks in alongside the midfield
+ rest.filter(x=>!used.has(x)).forEach((pl,i)=>{
+  pl.slot='MC';pl.hx=48;pl.hy=26+i*16});
+ s.tac.formation=f;G.tacs.formation=f;
+ if(typeof applyInstr==='function')try{applyInstr(s)}catch(e){}}
+/* which formation slots are filled, and which are gaping */
+function shapeSlots(){
+ const s=mySide();if(!s)return[];
+ const slots=FORMATIONS[s.tac.formation]||[];
+ const act=s.onfield.filter(x=>!x.off);
+ const used=new Set();
+ const rows=slots.map((sl,ix)=>{
+  const pl=act.find(x=>!used.has(x)&&Math.abs(x.hx-sl[1])<1.2&&Math.abs(x.hy-sl[2])<1.2);
+  if(pl)used.add(pl);
+  return{ix,pos:sl[0],hx:sl[1],hy:sl[2],pl:pl||null}});
+ act.filter(x=>!used.has(x)).forEach((pl,k)=>rows.push({ix:100+k,pos:pl.slot,hx:pl.hx,hy:pl.hy,pl}));
+ return rows}
+ACTIONS.mShapeOpen=()=>{
+ const s=mySide(),m=MU.m;if(!s||!m)return;
+ const rows=shapeSlots();
+ const act=s.onfield.filter(x=>!x.off);
+ const holes=rows.filter(r=>!r.pl).length;
+ const c=G.clubs[G.my];
+ let h='<h3>📐 Shape on the pitch</h3>'+
+ '<div class="small muted" style="margin:2px 0 10px">'+m.dispMin()+"' · "+act.length+' men on'+
+  (act.length<11?' <span style="color:var(--danger);font-weight:800">— you are down to '+act.length+'</span>':'')+
+  '. Tap a player, then tap where you want him.</div>';
+ h+='<div class="chip-lbl">Formation</div><div class="chips" style="margin-bottom:10px">'+
+  Object.keys(FORMATIONS).map(f=>'<button class="chip'+(s.tac.formation===f?' on':'')+
+   '" data-action="mForm" data-v="'+f+'">'+f+'</button>').join('')+'</div>';
+ h+='<div class="pitchbox" id="mShapePitch" style="height:300px">'+
+ '<svg class="lines" viewBox="0 0 100 130" preserveAspectRatio="none">'+
+ '<g stroke="rgba(240,245,240,.28)" stroke-width=".7" fill="none">'+
+ '<rect x="3" y="3" width="94" height="124"/><line x1="3" y1="65" x2="97" y2="65"/>'+
+ '<circle cx="50" cy="65" r="11"/><rect x="26" y="3" width="48" height="17"/><rect x="26" y="110" width="48" height="17"/>'+
+ '<rect x="37" y="3" width="26" height="7"/><rect x="37" y="120" width="26" height="7"/></g></svg>';
+ rows.forEach(r=>{
+  const left=(r.hy/68*86+7),top=((1-r.hx/105)*82+8);
+  const sel=UI.mSel===r.ix;
+  const pl=r.pl;
+  const eff=pl?calcEff(pl.p,r.pos):0;
+  h+='<div class="tslot'+(sel?' sel':'')+'" data-action="mSlotTap" data-v="'+r.ix+'" '+
+   'style="left:'+left.toFixed(1)+'%;top:'+top.toFixed(1)+'%'+(pl?'':';opacity:.55')+'">'+
+   '<div class="jersey" style="background:'+(pl?'linear-gradient(160deg,'+c.c1+','+c.c2+')':'rgba(255,255,255,.10)')+'">'+
+    (pl?Math.round(eff):'+')+'</div>'+
+   '<div class="nm">'+(pl?esc(surname(pl.p.name)):'Gap')+'</div>'+
+   '<div class="ps">'+r.pos+(pl&&posPenalty(pl.p.pos,r.pos)>0?' ⚠':'')+'</div></div>'});
+ h+='</div>';
+ if(holes)h+='<div class="xs" style="color:var(--amber);margin:9px 2px 0">'+holes+' position'+(holes>1?'s':'')+
+  ' unmanned. Move somebody across, or pick a shape that suits ten men.</div>';
+ h+='<div class="row" style="gap:8px;margin-top:11px">'+
+  '<button class="btn btn-ghost btn-sm" style="flex:1" data-action="mShapeAuto">✨ Reorganise for me</button>'+
+  '<button class="btn btn-ghost btn-sm" style="flex:1" data-action="instrOpen">📝 Instructions</button></div>'+
+  '<button class="btn btn-primary btn-block" style="margin-top:8px" data-action="closeModal">Back to the game</button>';
+ openModal(h);
+ const pitch=$('#mShapePitch');
+ if(pitch)pitch.style.height=Math.round(pitch.clientWidth*1.2)+'px'};
+ACTIONS.mSlotTap=el=>{
+ const s=mySide();if(!s)return;
+ const ix=+el.dataset.v;
+ const rows=shapeSlots();
+ const row=rows.find(r=>r.ix===ix);if(!row)return;
+ if(UI.mSel==null){
+  if(!row.pl){toast('Pick a player first, then tap where to put him.');return}
+  UI.mSel=ix;ACTIONS.mShapeOpen();return}
+ if(UI.mSel===ix){UI.mSel=null;ACTIONS.mShapeOpen();return}
+ const from=rows.find(r=>r.ix===UI.mSel);
+ UI.mSel=null;
+ if(!from||!from.pl){ACTIONS.mShapeOpen();return}
+ const a=from.pl,b=row.pl;
+ const aSlot=a.slot,aHx=a.hx,aHy=a.hy;
+ a.slot=row.pos;a.hx=row.hx;a.hy=row.hy;
+ if(b){b.slot=aSlot;b.hx=aHx;b.hy=aHy}
+ if(typeof applyInstr==='function')try{applyInstr(s)}catch(e){}
+ if(MU.m&&!MU.m.done)MU.m.say(MU.m.dispMin(),s,
+  b?surname(a.p.name)+' and '+surname(b.p.name)+' swap positions for '+s.c.short+'.'
+   :surname(a.p.name)+' drops into '+row.pos+' for '+s.c.short+'.');
+ toast(b?'🔁 '+surname(a.p.name)+' ⇄ '+surname(b.p.name):'➡️ '+surname(a.p.name)+' to '+row.pos);
+ ACTIONS.mShapeOpen();renderMCtl()};
+ACTIONS.mShapeAuto=()=>{
+ const s=mySide();if(!s)return;
+ const act=s.onfield.filter(x=>!x.off);
+ // ten men: a shape that actually works a man short
+ const want=act.length>=11?s.tac.formation:
+  act.length===10?(FORMATIONS['4-4-2']?'4-4-2':s.tac.formation):
+  (FORMATIONS['5-3-2']?'5-3-2':s.tac.formation);
+ reshapeInto(s,want);
+ UI.mSel=null;
+ if(MU.m&&!MU.m.done)MU.m.say(MU.m.dispMin(),s,s.c.short+' reorganise — '+want+' with '+act.length+' men.','big');
+ toast('✨ Reorganised into '+want);
+ ACTIONS.mShapeOpen();renderMCtl()};
+/* the touchline panel: a Shape button, and a loud prompt when you go down to ten */
+const _mctlShape=renderMCtl;
+renderMCtl=function(){
+ _mctlShape();
+ const c=$('#mCtl'),m=MU.m;if(!c||!m||m.done)return;
+ const s=m.sides[mySideIx()];if(!s)return;
+ const act=s.onfield.filter(x=>!x.off).length;
+ const short=act<11;
+ if(m.stage==='HT'){
+  c.insertAdjacentHTML('beforeend','<button class="btn btn-ghost btn-sm btn-block" style="margin-top:7px" '+
+   'data-action="mShapeOpen">📐 Shape &amp; positions</button>');
+  return}
+ c.insertAdjacentHTML('beforeend',
+  (short?'<div class="xs" style="color:var(--danger);font-weight:800;text-align:center;margin:7px 0 3px">'+
+    '🟥 Down to '+act+' men — reorganise the side</div>':'')+
+  '<button class="btn '+(short?'btn-gold':'btn-ghost')+' btn-sm btn-block" style="margin-top:'+(short?'2px':'6px')+'" '+
+   'data-action="mShapeOpen">📐 Shape &amp; positions'+(short?' — fix it':'')+'</button>')};
+/* a red card should put the sheet in front of you, not leave you guessing */
+const _sendOffPrompt=MatchSim.prototype.sendOff;
+MatchSim.prototype.sendOff=function(D,dp,straight){
+ const r=_sendOffPrompt.apply(this,arguments);
+ if(liveMatch(this)&&D===this.sides[mySideIx()]){
+  MU.speed=0;
+  try{renderMCtl();renderTop()}catch(e){}
+  toast('🟥 '+surname(dp.p.name)+' is off — reorganise the side');
+  setTimeout(()=>{if(MU.m===this&&!this.done)try{ACTIONS.mShapeOpen()}catch(e){}},420)}
+ return r};
+/* a new match starts with nothing selected */
+const _koShape=ACTIONS.kickoff;
+ACTIONS.kickoff=()=>{UI.mSel=null;_koShape()};
+
+
+/* =====================================================================
+   MATCHDAY 3.2 — passing that looks like football
+   ---------------------------------------------------------------------
+   The old chooser scored every team-mate on distance, forward gain and
+   pressure alone. It had no idea who is a sensible passing option for
+   whom, so a left winger could roll it across his own eighteen-yard box
+   to the right-back and it looked like nothing you would ever see on a
+   Saturday.
+
+   How the game is actually played, and what that means here:
+     · Teams are built in LINES — keeper, back four, holding, midfield,
+       attacking band, forward. The overwhelming majority of passes go to
+       the line directly ahead, the same line, or one line back. Skipping
+       two lines is a good ball, not a routine one.
+     · Play stays in CHANNELS. A full-back's outlet is the winger in
+       front of him and the midfielder inside him. Switching flanks is a
+       deliberate, lofted, low-frequency act — never a ground pass.
+     · Intent changes by THIRD. In your own third the priority is safety
+       and keeping the ball; in the middle third it is progression; in
+       the final third it is penetration — crosses, cut-backs, through
+       balls.
+     · Square balls across your own box are the one pass every coach
+       bans, so they are heavily penalised here.
+     · Under pressure a player plays the safe ball, which is why real
+       back-passes happen — as an escape, not as a default.
+   ===================================================================== */
+const LINE_OF={GK:0,DC:1,DL:1,DR:1,WBL:1,WBR:1,DM:2,MC:3,ML:3,MR:3,AMC:4,AML:4,AMR:4,ST:5};
+function lineOf(slot){return LINE_OF[slot]!=null?LINE_OF[slot]:3}
+/* everything is judged in the side's own frame: fx 0 = own goal, fy 0 = their left */
+function ownFrame(d,si){return si===0?{fx:d.x,fy:d.y}:{fx:105-d.x,fy:68-d.y}}
+function channelOf(fy){return fy<23?-1:fy>45?1:0}
+/* how natural a pass is between two lines, given the phase of play */
+function lineFit(dL,third){
+ let w=dL===1?1:dL===0?.72:dL===2?.50:dL===-1?.36:dL>=3?.22:.10;
+ if(third===0){                        // own third: keep it, do not force it
+  if(dL<=0)w*=1.85;
+  if(dL>=2)w*=.55}
+ else if(third===2){                   // final third: get it forward or across the box
+  if(dL>=1)w*=1.45;
+  if(dL<=-1)w*=.55}
+ return w}
+function pressureAt(pt,si){
+ return livePlayers(1-si).reduce((n,o)=>{const od=dotOf(o);
+  if(!od)return n;const dd=dist2(od,pt);
+  return n+(dd<5?1.4:dd<8?.85:dd<12?.35:0)},0)}
+/* is anybody standing in the way of this pass? */
+function laneBlocked(from,to,si){
+ const dx=to.x-from.x,dy=to.y-from.y,len=Math.hypot(dx,dy)||1;
+ let worst=0;
+ livePlayers(1-si).forEach(o=>{
+  const d=dotOf(o);if(!d)return;
+  const t=((d.x-from.x)*dx+(d.y-from.y)*dy)/(len*len);
+  if(t<=.08||t>=.95)return;
+  const px=from.x+dx*t,py=from.y+dy*t;
+  const off=Math.hypot(d.x-px,d.y-py);
+  if(off<3.2)worst=Math.max(worst,1);else if(off<5.5)worst=Math.max(worst,.55)});
+ return worst}
+choosePass=function(){
+ const m=MU.m,p=playState(),s=m.sides[p.si],t=s.tac||{};
+ const holder=p.holder,hd=holder?dotOf(holder):null;
+ if(!hd)return null;
+ const si=p.si;
+ const H=ownFrame(hd,si);
+ const third=H.fx<35?0:H.fx<70?1:2;
+ const hLine=lineOf(holder.slot),hChan=channelOf(H.fy);
+ const hPress=pressureAt(hd,si);
+ const want=PITCH.passLen[t.passStyle]||19;
+ const direct=t.passStyle==='Direct';
+ let risk=t.mentality==='Overload'?1.5:t.mentality==='Attacking'?1.22:
+  t.mentality==='Counter'?1.05:t.mentality==='Defensive'?.6:.9;
+ const prog=si===0?MU.ball.x/105:1-MU.ball.x/105;
+ const aim=p.aim==null?.72:p.aim;
+ if(prog>aim)risk*=.22;                              // the move has run its course
+ const squeezed=hPress>=1.1;                          // he has somebody on him
+ const stale=p.stale||0;                              // passes since the ball last went forward
+ risk*=1+stale*.6;
+ let best=null,bw=-1,bestKind='short';
+ livePlayers(si).forEach(x=>{
+  if(x===holder)return;
+  const d=dotOf(x);if(!d)return;
+  const pt=receivePoint(x,si);
+  const R=ownFrame({x:pt.x,y:pt.y},si);
+  const len=dist2(hd,pt);
+  if(len<3.5)return;
+  const dL=lineOf(x.slot)-hLine;
+  const rChan=channelOf(R.fy);
+  let w=lineFit(dL,third);
+  // distance: your passing style sets the sweet spot, and long balls are special
+  const isSwitch=Math.abs(rChan-hChan)===2&&len>=32;
+  const isLong=len>=34;
+  if(isLong&&!isSwitch&&!direct)w*=.62;
+  else if(isLong&&direct)w*=1.05;
+  w*=Math.exp(-Math.pow((len-want)/(direct?20:15),2))+(isLong?.22:0);
+  // channels: play down your side, switch only as a deliberate diagonal
+  const dc=Math.abs(rChan-hChan);
+  if(dc===0)w*=1.35;else if(dc===1)w*=1;else w*=isSwitch?.34:.06;
+  // the pass no coach forgives: square across your own box
+  if(third===0&&dL<=0&&Math.abs(R.fy-H.fy)>16&&R.fx<26)w*=.05;
+  // forward intent
+  const gain=R.fx-H.fx;
+  if(gain>2)w*=1+Math.min(1,gain/26)*risk;
+  else w*=1/(1+stale*.55);                           // stop going sideways forever
+  // under pressure the safe ball becomes the right ball
+  if(squeezed){if(dL<=0)w*=2.2;w*=Math.pow(.55,pressureAt(pt,si))}
+  else w*=Math.pow(.62,pressureAt(pt,si));
+  // somebody in the passing lane
+  w*=1-laneBlocked(hd,{x:pt.x,y:pt.y},si)*.72;
+  // your attacking focus
+  if(t.passFocus==='Left Flank')w*=rChan===-1?1.8:rChan===1?.5:1;
+  else if(t.passFocus==='Right Flank')w*=rChan===1?1.8:rChan===-1?.5:1;
+  else if(t.passFocus==='Central')w*=rChan===0?1.5:.75;
+  // the keeper is an escape, not an option
+  if(x.slot==='GK')w*=(third===0&&squeezed)?.55:(third===0?.05:.004);
+  // quality on both ends of the pass
+  if(x===p.prevHolder)w*=.38;                        // no instant return passes
+  w*=.6+((x.p.attrs&&x.p.attrs.firstTouch)||10)/24;
+  w*=.75+Math.random()*.5;
+  if(w>bw){bw=w;best=x;bestKind=isSwitch?'switch':isLong?'long':'short'}});
+ if(best)playState().passKind=bestKind;
+ return best};
+/* from wide in the final third, you cross — you do not pass it back inside */
+function crossChance(){
+ const p=playState(),s=MU.m.sides[p.si],h=p.holder;
+ if(!h)return null;
+ const hd=dotOf(h);if(!hd)return null;
+ const H=ownFrame(hd,p.si);
+ if(H.fx<74||Math.abs(H.fy-34)<15)return null;      // must be wide and deep
+ const a=h.p.attrs||{};
+ if(Math.random()>clamp(((a.crossing||10)-6)/22,.10,.42))return null;
+ const box=livePlayers(p.si).filter(x=>{
+  const d=dotOf(x);if(!d)return false;
+  const F=ownFrame(d,p.si);
+  return F.fx>78&&Math.abs(F.fy-34)<18&&x!==h});
+ if(!box.length)return null;
+ return box.sort((x,y)=>((y.p.attrs&&y.p.attrs.heading)||0)-((x.p.attrs&&x.p.attrs.heading)||0))[0]}
+/* a pass into a crowd can be cut out — which is what Short passing buys you */
+const _startPassRisk=startPass;
+startPass=function(to,kind){
+ _startPassRisk(to,kind);
+ const p=playState();
+ if(!to||!p.to)return;
+ p.prevHolder=p.holder;
+ const fwd=(p.si===0?p.to.x-p.from.x:p.from.x-p.to.x);
+ p.stale=fwd>2?0:Math.min(4,(p.stale||0)+1);
+ const lane=laneBlocked(p.from,p.to,p.si);
+ const press=pressureAt(p.to,p.si);
+ const chance=clamp(lane*.16+Math.max(0,press-.6)*.07+(p.passKind==='long'?.05:0),0,.30);
+ p.cutOut=Math.random()<chance};
+/* build-up, crosses and interceptions all live in the phase of play */
+const _advBall=advancePlay;
+advancePlay=function(now){
+ const p=playState(),m=MU.m;
+ // a cross beats a pass when the ball is in the corner of the final third
+ if(m&&!m.done&&m.stage!=='HT'&&p.mode==='hold'&&now>=(p.nextAt||0)&&!p.dead){
+  const tgt=crossChance();
+  if(tgt){
+   const d=dotOf(tgt);
+   const pt=d?{x:d.x,y:d.y}:null;
+   const hp=p.holder?dotOf(p.holder):null;
+   if(pt&&hp){
+    p.from={x:hp.x,y:hp.y};
+    p.to=pt;p.t0=now;p.ms=clamp(dist2(p.from,pt)/17*1000,320,1100)/tScale();
+    p.mode='pass';p.target=tgt;p.lofted=true;p.cutOut=Math.random()<.34;
+    p.run={pl:tgt,x:pt.x,y:pt.y};
+    return}}}
+ const wasPass=p.mode;
+ _advBall(now);
+ // a pass that was cut out gives the ball away where it was going
+ if(wasPass==='pass'&&p.mode==='hold'&&p.cutOut){
+  p.cutOut=false;
+  turnover(now)}};
+/* team-mates move to give him an angle, the way a real side does */
+const _targetsSupport=pitchTargets;
+pitchTargets=function(){
+ _targetsSupport();
+ const m=MU.m,p=playState();
+ if(!m||!p.holder)return;
+ const hd=dotOf(p.holder);if(!hd)return;
+ const si=p.si,dir=dirOf(si);
+ const mates=livePlayers(si).filter(x=>x!==p.holder&&x.slot!=='GK'&&x!==(p.run&&p.run.pl))
+  .map(x=>({x,d:dist2(dotOf(x)||{x:0,y:0},hd)})).sort((a,b)=>a.d-b.d).slice(0,3);
+ mates.forEach((o,i)=>{
+  const d=dotOf(o.x);if(!d)return;
+  // one shows ahead, one drops in behind, one holds the width
+  const ahead=i===0?7:i===1?-6:0;
+  const wide=i===2?(d.y<34?-5:5):0;
+  d.tx=clamp(d.tx+dir*ahead,5.5,99.5);
+  d.ty=clamp(d.ty+wide,3.5,64.5)})};
+
+/* =====================================================================
+   THE DUGOUT — the same match, watched from the touchline
+   ---------------------------------------------------------------------
+   The dugout ran its own little drift animation and never advanced the
+   phase of play, so the ball barely moved and the players wandered.
+   It now watches exactly the same game the 2D pitch does.
+   ===================================================================== */
+const _dugShared=drawDugout;
+drawDugout=function(){
+ if(MU.m&&!MU.m.done){
+  advancePlay(performance.now());
+  pitchTargets()}
+ _dugShared();
+ // and it says who is on the ball, same as the pitch view
+ const cv=$('#dugCanvas'),m=MU.m;if(!cv||!m)return;
+ const p=playState();if(!p.holder)return;
+ const d=dotOf(p.holder);if(!d)return;
+ try{
+  const x=cv.getContext('2d'),g=dugGeom(cv),pt=g.P(d.x,d.y);
+  const W=g.W;
+  x.beginPath();x.ellipse(pt[0],pt[1],W*.020,W*.009,0,0,7);
+  x.strokeStyle='rgba(251,225,34,.9)';x.lineWidth=Math.max(1.4,W*.0024);x.stroke();
+  x.font='800 '+Math.max(9,Math.round(W*.021))+'px Inter,sans-serif';
+  x.textAlign='center';
+  x.lineWidth=Math.max(2,W*.005);x.strokeStyle='rgba(0,0,0,.75)';
+  const nm=surname(p.holder.p.name);
+  x.strokeText(nm,pt[0],pt[1]+W*.036);
+  x.fillStyle='#fbe122';x.fillText(nm,pt[0],pt[1]+W*.036);
+  x.textAlign='left'}catch(e){}};
+
+/* =====================================================================
+   THE RUNNING TEXT — newest at the top, so your eyes stay on the pitch
+   ===================================================================== */
+fillFeed=function(list,keep){
+ if(!list||!MU.m)return;
+ const feed=MU.m.feed;
+ while(MU.lastFeed<feed.length){
+  const e=feed[MU.lastFeed++];
+  const d=document.createElement('div');
+  d.className='cline'+(e.cls?' '+e.cls:'');
+  d.innerHTML='<span class="m num">'+(e.min?e.min+'&#8242;':'')+'</span><span class="tx">'+e.text+'</span>';
+  list.insertBefore(d,list.firstChild)}          // the latest line sits under the pitch
+ while(list.children.length>keep)list.removeChild(list.lastChild)};
 
 showStart();
 </script>
