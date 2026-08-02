@@ -996,7 +996,7 @@ class MatchSim{
   if(shooter.goals>=1)shot*=.9;if(shooter.goals>=2)shot*=.82; // defences key on the man in form
   const save=((10+(rawK-10)*.42)*(.79+Math.random()*.43)+.92)*(hasTrait(g,'Wall')?1.045:1);
   A.st.sh++;A.st.xg+=clamp(.13*shot/save,.02,.75);
-  if(shot>save*1.088){this.goal(A,D,shooter,creator,fromCorner?null:creator,false)}
+  if(shot>save*1.098){this.goal(A,D,shooter,creator,fromCorner?null:creator,false)}
   else if(shot>save*.86){A.st.sot++;D.st.sv++;g.rating+=.22;
    this.say(this.dispMin(),A,cf(COMM.save,{b:shooter.p.name,g:g.p.name}),'big');
    if(Math.random()<.52){A.st.cor++;this.cornerEvent(A,D)}}
@@ -12646,6 +12646,284 @@ renderTop=function(){
   return '<span class="xs" style="white-space:nowrap;margin-right:9px">'+
    (s.ic||'⚽')+' <b>'+esc(String(s.name).split(' ').pop())+'</b> '+s.min+"'"+
    '<span class="faint"> '+esc(c.short)+'</span></span>'}).join('')};
+
+
+/* =====================================================================
+   PLAYER ROLES — the thing Football Manager is actually built on
+   ---------------------------------------------------------------------
+   FM26's headline change is roles replacing duties: every player has a
+   role that says what he does in each phase of play, and the shape you
+   see on the pitch falls out of those roles rather than out of eleven
+   identical dots holding eleven identical positions.
+
+   Each role here carries:
+     dx / dy   where he actually stands, relative to his formation slot
+               (an inverted full-back tucks in, a wide centre-mid pushes
+               out, a false nine drops off the front)
+     push      how far he travels with the team when it goes forward
+     box       how eagerly he attacks the penalty area
+     recv      how much the ball is played to him
+     prog      how hard he looks for the forward pass himself
+     key       the attributes that make him good at the job
+   ===================================================================== */
+const ROLES={
+ // ---- goalkeepers ----
+ gk:{lbl:'Goalkeeper',pos:['GK'],d:'Stays on his line and deals with what reaches him.',
+  dx:0,dy:0,push:.1,box:0,recv:.5,prog:.6,key:['positioning','agility']},
+ sweeper:{lbl:'Sweeper Keeper',pos:['GK'],d:'Starts high, sweeps in behind the defence and starts the play with his feet.',
+  dx:7,dy:0,push:.3,box:0,recv:1.4,prog:1.2,key:['positioning','passing','decisions']},
+ // ---- full-backs ----
+ fb:{lbl:'Full-Back',pos:['DL','DR'],d:'Holds his position, defends first, joins in when it is safe.',
+  dx:0,dy:0,push:.85,box:.15,recv:1,prog:.9,key:['tackling','positioning']},
+ wingback:{lbl:'Wing-Back',pos:['DL','DR','WBL','WBR'],d:'Lives on the touchline and gets to the byline whenever he can.',
+  dx:8,dy:4,push:1.3,box:.55,recv:1.25,prog:1.05,key:['stamina','crossing','pace']},
+ playwb:{lbl:'Playmaking Wing-Back',pos:['DL','DR','WBL','WBR'],d:'Steps into midfield with the ball and dictates from wide.',
+  dx:6,dy:-5,push:1.15,box:.3,recv:1.5,prog:1.35,key:['passing','vision','firstTouch']},
+ invfb:{lbl:'Inverted Full-Back',pos:['DL','DR','WBL','WBR'],d:'Tucks inside alongside the holding midfielder to make a back three in possession.',
+  dx:3,dy:-11,push:.8,box:.1,recv:1.35,prog:1.15,key:['passing','positioning','decisions']},
+ // ---- centre-backs ----
+ cb:{lbl:'Central Defender',pos:['DC'],d:'Defends the box, wins his headers, keeps it simple.',
+  dx:0,dy:0,push:.75,box:.12,recv:1,prog:.75,key:['tackling','heading','positioning']},
+ ballplay:{lbl:'Ball-Playing Defender',pos:['DC'],d:'Steps out with it and breaks the first line with his passing.',
+  dx:3,dy:0,push:.9,box:.12,recv:1.45,prog:1.4,key:['passing','composure','vision']},
+ stopper:{lbl:'Stopper',pos:['DC'],d:'Goes to meet the striker rather than wait for him. Aggressive, front-foot defending.',
+  dx:5,dy:0,push:1,box:.18,recv:.9,prog:.8,key:['aggression','tackling','strength']},
+ cover:{lbl:'Cover',pos:['DC'],d:'Drops off and sweeps up everything played in behind.',
+  dx:-4,dy:0,push:.6,box:.06,recv:1,prog:.85,key:['positioning','pace','decisions']},
+ // ---- holding midfield ----
+ anchor:{lbl:'Anchor Man',pos:['DM','MC'],d:'Sits in front of the back four and never leaves it.',
+  dx:-3,dy:0,push:.55,box:.05,recv:1.2,prog:.8,key:['positioning','tackling','decisions']},
+ deeplay:{lbl:'Deep-Lying Playmaker',pos:['DM','MC'],d:'Takes the ball off the defence and sets the tempo of everything.',
+  dx:0,dy:0,push:.8,box:.08,recv:1.7,prog:1.45,key:['passing','vision','composure']},
+ ballwin:{lbl:'Ball-Winning Midfielder',pos:['DM','MC'],d:'Hunts the ball and breaks the game up. Referees know his name.',
+  dx:2,dy:0,push:.95,box:.12,recv:1,prog:.85,key:['tackling','workRate','aggression']},
+ halfback:{lbl:'Half-Back',pos:['DM'],d:'Drops between the centre-halves in possession to make it a back three.',
+  dx:-7,dy:0,push:.45,box:.03,recv:1.4,prog:1.1,key:['positioning','passing','decisions']},
+ // ---- central midfield ----
+ cm:{lbl:'Central Midfielder',pos:['MC','ML','MR'],d:'Box to box in the honest sense — links everything, does his share.',
+  dx:0,dy:0,push:1,box:.35,recv:1.2,prog:1.05,key:['passing','workRate','stamina']},
+ b2b:{lbl:'Box-to-Box Midfielder',pos:['MC'],d:'Gets in the box at one end and back into his own at the other.',
+  dx:3,dy:0,push:1.25,box:.7,recv:1.1,prog:1.15,key:['stamina','workRate','shooting']},
+ mezzala:{lbl:'Mezzala',pos:['MC'],d:'Drifts into the half-space between full-back and centre-half and creates from there.',
+  dx:6,dy:9,push:1.2,box:.55,recv:1.3,prog:1.3,key:['dribbling','vision','passing']},
+ widecm:{lbl:'Wide Central Midfielder',pos:['MC','ML','MR'],d:'Starts inside and pushes out to give the winger a partner.',
+  dx:2,dy:12,push:1.1,box:.4,recv:1.2,prog:1.15,key:['workRate','crossing','stamina']},
+ roaming:{lbl:'Roaming Playmaker',pos:['MC','AMC'],d:'Goes wherever the ball is and makes the side tick from all over.',
+  dx:4,dy:0,push:1.15,box:.45,recv:1.75,prog:1.4,key:['vision','dribbling','decisions']},
+ // ---- attacking midfield & wide ----
+ am:{lbl:'Attacking Midfielder',pos:['AMC'],d:'Plays between the lines and picks the final pass.',
+  dx:2,dy:0,push:1.15,box:.6,recv:1.5,prog:1.35,key:['vision','passing','firstTouch']},
+ shadow:{lbl:'Shadow Striker',pos:['AMC'],d:'Runs beyond the striker and arrives in the box like a second forward.',
+  dx:9,dy:0,push:1.3,box:.95,recv:1.15,prog:1.1,key:['shooting','acceleration','composure']},
+ winger:{lbl:'Winger',pos:['AML','AMR','ML','MR'],d:'Stays chalk on his boots, takes his man on and crosses.',
+  dx:4,dy:6,push:1.2,box:.5,recv:1.35,prog:1.05,key:['crossing','dribbling','pace']},
+ invwing:{lbl:'Inverted Winger',pos:['AML','AMR'],d:'Comes inside onto his stronger foot and shoots.',
+  dx:6,dy:-9,push:1.25,box:.8,recv:1.35,prog:1.2,key:['dribbling','shooting','firstTouch']},
+ raumdeuter:{lbl:'Raumdeuter',pos:['AML','AMR'],d:'Ignores the ball and hunts the space at the back post.',
+  dx:10,dy:5,push:1.3,box:1,recv:.85,prog:.8,key:['positioning','shooting','acceleration']},
+ // ---- forwards ----
+ st:{lbl:'Centre Forward',pos:['ST'],d:'Leads the line and takes what comes.',
+  dx:0,dy:0,push:1.1,box:.9,recv:1.25,prog:.9,key:['shooting','firstTouch','composure']},
+ poacher:{lbl:'Poacher',pos:['ST'],d:'Lives on the shoulder and inside the six-yard box. Does nothing else, and does not need to.',
+  dx:5,dy:0,push:1.15,box:1.2,recv:1.05,prog:.6,key:['shooting','positioning','acceleration']},
+ target:{lbl:'Target Man',pos:['ST'],d:'Holds it up, wins the header, brings everyone else into it.',
+  dx:-2,dy:0,push:1,box:.85,recv:1.5,prog:.85,key:['strength','heading','firstTouch']},
+ falsenine:{lbl:'False Nine',pos:['ST'],d:'Drops off the centre-halves to overload midfield and drag them out.',
+  dx:-9,dy:0,push:.95,box:.55,recv:1.6,prog:1.35,key:['passing','vision','firstTouch']},
+ channel:{lbl:'Channel Forward',pos:['ST'],d:'Runs the channels between full-back and centre-half all afternoon.',
+  dx:3,dy:11,push:1.15,box:.9,recv:1.2,prog:.9,key:['pace','stamina','workRate']},
+ pressfwd:{lbl:'Pressing Forward',pos:['ST','AML','AMR'],d:'First line of the defence. Never lets a centre-half settle.',
+  dx:2,dy:0,push:1.2,box:.8,recv:1,prog:.85,key:['workRate','stamina','aggression']}};
+function rolesFor(slot){
+ const out=[];for(const k in ROLES)if(ROLES[k].pos.indexOf(slot)>=0)out.push(k);
+ return out.length?out:['cm']}
+function defaultRole(slot){return rolesFor(slot)[0]}
+function roleOfSlot(ix){
+ if(!G.tacs.roles)G.tacs.roles={};
+ const slots=FORMATIONS[G.tacs.formation]||[];
+ const sl=slots[ix];if(!sl)return 'cm';
+ const r=G.tacs.roles[ix];
+ return (r&&ROLES[r]&&ROLES[r].pos.indexOf(sl[0])>=0)?r:defaultRole(sl[0])}
+function ensureRoles(){
+ if(!G.tacs.roles)G.tacs.roles={};
+ const slots=FORMATIONS[G.tacs.formation]||[];
+ slots.forEach((sl,ix)=>{
+  const r=G.tacs.roles[ix];
+  if(!r||!ROLES[r]||ROLES[r].pos.indexOf(sl[0])<0)G.tacs.roles[ix]=defaultRole(sl[0])})}
+/* the role a man on the pitch is playing, live */
+function roleOfPl(pl){
+ if(pl.role&&ROLES[pl.role])return ROLES[pl.role];
+ return ROLES[defaultRole(pl.slot)]||ROLES.cm}
+/* hand the roles to the match when the side is built */
+const _sideRoles=MatchSim.prototype._side;
+MatchSim.prototype._side=function(ci,home){
+ const s=_sideRoles.call(this,ci,home);
+ const isMy=ci===G.my;
+ const slots=FORMATIONS[s.tac.formation]||[];
+ s.onfield.forEach(pl=>{
+  const ix=slots.findIndex(sl=>sl[0]===pl.slot&&Math.abs(sl[1]-pl.hx)<1.2&&Math.abs(sl[2]-pl.hy)<1.2);
+  if(isMy&&ix>=0&&G.tacs.roles&&G.tacs.roles[ix]&&ROLES[G.tacs.roles[ix]])pl.role=G.tacs.roles[ix];
+  else pl.role=aiRole(pl,s);
+  // the role's key attributes are what he is actually judged on
+  const R=ROLES[pl.role];
+  if(R&&R.key){let bonus=0;R.key.forEach(k=>bonus+=((pl.p.attrs&&pl.p.attrs[k])||10)-10);
+   pl.roleFit=clamp(1+bonus/R.key.length*.011,.93,1.09)}
+  else pl.roleFit=1});
+ return s};
+/* the AI picks a role that suits the player it has */
+function aiRole(pl,s){
+ const opts=rolesFor(pl.slot);
+ if(opts.length<2)return opts[0];
+ let best=opts[0],bv=-99;
+ opts.forEach(k=>{
+  const R=ROLES[k];let v=0;
+  (R.key||[]).forEach(a=>v+=((pl.p.attrs&&pl.p.attrs[a])||10));
+  v/= Math.max(1,(R.key||[]).length);
+  v+=Math.random()*1.6;
+  if(v>bv){bv=v;best=k}});
+ return best}
+/* role fit feeds straight into how well he plays */
+const _effRole=MatchSim.prototype.effA;
+MatchSim.prototype.effA=function(pl,attr){
+ const v=_effRole.call(this,pl,attr);
+ return pl.roleFit?v*pl.roleFit:v};
+
+/* ---------- roles decide where he stands and what he does ---------- */
+const _targetsRole=pitchTargets;
+pitchTargets=function(){
+ _targetsRole();
+ const m=MU.m,p=playState();
+ if(!m||m.done||m.stage==='HT')return;
+ [0,1].forEach(si=>{
+  const dir=dirOf(si),inPoss=p.si===si;
+  const prog=progOf(si);
+  livePlayers(si).forEach(pl=>{
+   const d=dotOf(pl);if(!d)return;
+   if(pl===p.holder||(p.run&&p.run.pl===pl))return;
+   const R=roleOfPl(pl);if(!R)return;
+   // his own spin on the position: forward or deeper, inside or wider
+   const phase=inPoss?1:.45;
+   const wide=(dotHome(pl,si).y-34)>=0?1:-1;   // which side of the pitch he starts
+   d.tx=clamp(d.tx+dir*R.dx*phase,5.5,99.5);
+   d.ty=clamp(d.ty+wide*R.dy*phase,3.5,64.5);
+   // and how far he travels when the team goes up the pitch
+   if(inPoss&&prog>.5){
+    const extra=(prog-.5)*22*(R.push-1);
+    d.tx=clamp(d.tx+dir*extra,5.5,99.5)}})})};
+/* box runs are the role's business too */
+const _boxRunRole=boxRun;
+boxRun=function(pl,si,prog){
+ const t=_boxRunRole(pl,si,prog);
+ const R=roleOfPl(pl);
+ if(!R)return t;
+ if(!t){
+  // roles that gamble get into the area even from midfield
+  if(R.box>=.65&&prog>.66){
+   const dir=dirOf(si),goal=oppGoalX(si);
+   const eager=clamp((prog-.54)/.34,0,1);
+   return{x:goal-dir*(22-eager*10*R.box),y:34+(dotHome(pl,si).y<34?-7:7)}}
+  return null}
+ if(R.box<=.2)return null;                      // an anchor man does not go
+ const dir=dirOf(si),goal=oppGoalX(si);
+ // the deeper the role's appetite, the further from goal he stops
+ const pull=(R.box-1)*7;
+ return{x:clamp(t.x-dir*pull,4,101),y:t.y}};
+/* the ball goes to the men the shape is built around */
+const _passRole=choosePass;
+choosePass=function(){
+ const p=playState();
+ const s=MU.m&&MU.m.sides[p.si];
+ if(!s)return _passRole();
+ const out=_passRole();
+ if(!out)return out;
+ // one re-roll biased toward the playmakers, so they see more of the ball
+ const alt=livePlayers(p.si).filter(x=>{
+  if(x===p.holder)return false;
+  const R=roleOfPl(x);return R&&R.recv>=1.45});
+ if(alt.length&&Math.random()<.22){
+  const pick2=alt[Math.floor(Math.random()*alt.length)];
+  const hd=dotOf(p.holder),td=dotOf(pick2);
+  if(hd&&td&&dist2(hd,td)<34&&laneBlocked(hd,td,p.si)<.6)return pick2}
+ return out};
+/* a progressive role carries it forward himself more often */
+const _dribRole=canDribble;
+canDribble=function(){
+ const r=_dribRole();
+ if(r)return true;
+ const p=playState(),R=p.holder?roleOfPl(p.holder):null;
+ if(!R||R.prog<1.25)return false;
+ return Math.random()<.10*(R.prog-1)};
+
+/* ---------- picking them ---------- */
+ACTIONS.roleOpen=el=>{
+ ensureRoles();
+ const ix=+el.dataset.v;
+ const slots=FORMATIONS[G.tacs.formation]||[];
+ const sl=slots[ix];if(!sl)return;
+ const p=playerById(G.tacs.xi[ix]);
+ const cur=roleOfSlot(ix);
+ let h='<h3>'+sl[0]+' — role</h3>'+
+  (p?'<div class="row" style="gap:8px;margin:4px 0 12px">'+face(p,30)+
+   '<div><div style="font-weight:800">'+esc(p.name)+'</div>'+
+   '<div class="xs muted">'+posBadge(p.pos)+' · '+p.ovr+' overall</div></div></div>':'')+
+  '<div class="card tight">';
+ rolesFor(sl[0]).forEach(k=>{
+  const R=ROLES[k];
+  const fit=p?Math.round(R.key.reduce((s2,a)=>s2+((p.attrs&&p.attrs[a])||10),0)/R.key.length):0;
+  h+='<div class="mail'+(cur===k?' unread':'')+'" data-action="roleSet2" data-v="'+ix+'" data-k="'+k+'">'+
+   '<div class="ic">'+(p?'<span class="ovr '+(fit>=15?'ov-elite':fit>=13?'ov-good':fit>=11?'ov-ok':'ov-low')+
+     '" style="min-width:26px;height:20px;font-size:11px">'+fit+'</span>':'⚙️')+'</div>'+
+   '<div style="flex:1;min-width:0"><div class="tt">'+R.lbl+(cur===k?' ✅':'')+'</div>'+
+   '<div class="bd" style="white-space:normal;line-height:1.45">'+esc(R.d)+'</div>'+
+   '<div class="xs faint" style="margin-top:2px">Key: '+R.key.map(a=>ATTR_LABEL[a]||a).join(', ')+'</div></div></div>'});
+ h+='</div><button class="btn btn-ghost btn-block" style="margin-top:10px" data-action="closeModal">Close</button>';
+ openModal(h)};
+ACTIONS.roleSet2=el=>{
+ ensureRoles();
+ G.tacs.roles[+el.dataset.v]=el.dataset.k;
+ closeModal();toast('⚙️ '+ROLES[el.dataset.k].lbl);render()};
+/* the tactics pitch shows the role under every shirt, and opens the picker */
+const _vTacRoles=vTactics;
+vTactics=function(){
+ ensureRoles();
+ let h=_vTacRoles();
+ const slots=FORMATIONS[G.tacs.formation]||[];
+ // a proper role list under the pitch
+ let list='<div class="chip-lbl" style="margin-top:14px">Roles</div>'+
+  '<div class="xs faint" style="margin:-4px 0 8px 2px">What each man actually does. Tap to change — the shape on the pitch changes with it.</div>'+
+  '<div class="card tight">';
+ slots.forEach((sl,ix)=>{
+  const R=ROLES[roleOfSlot(ix)];
+  const p=playerById(G.tacs.xi[ix]);
+  const fit=p?Math.round(R.key.reduce((s2,a)=>s2+((p.attrs&&p.attrs[a])||10),0)/R.key.length):0;
+  list+='<div class="mail" data-action="roleOpen" data-v="'+ix+'">'+
+   '<div class="ic"><span class="pos-badge pg-'+POSGROUP(sl[0])+'">'+sl[0]+'</span></div>'+
+   '<div style="flex:1;min-width:0"><div class="tt">'+(p?esc(surname(p.name)):'—')+
+    ' <span class="xs faint">'+R.lbl+'</span></div>'+
+   '<div class="bd" style="white-space:normal">'+esc(R.d)+'</div></div>'+
+   (p?'<span class="ovr '+(fit>=15?'ov-elite':fit>=13?'ov-good':fit>=11?'ov-ok':'ov-low')+'">'+fit+'</span>':'')+
+   '</div>'});
+ list+='</div>';
+ return h+list};
+const _tacFormRoles=ACTIONS.tacForm;
+ACTIONS.tacForm=el=>{_tacFormRoles(el);G.tacs.roles={};ensureRoles();render()};
+const _ngRoles=newGame;
+newGame=function(i){_ngRoles(i);G.tacs.roles={};ensureRoles()};
+const _loadRoles=loadSlot;
+loadSlot=function(s){const ok=_loadRoles(s);if(ok)try{ensureRoles()}catch(e){}return ok};
+/* the in-match shape sheet shows the role too */
+const _shapeRoles=ACTIONS.mShapeOpen;
+ACTIONS.mShapeOpen=()=>{
+ _shapeRoles();
+ const host=$('#sheetBody');if(!host)return;
+ const s=mySide();if(!s)return;
+ const box=document.createElement('div');
+ box.className='card tight';box.style.marginTop='10px';
+ box.innerHTML='<div class="xs faint" style="font-weight:800;letter-spacing:.5px">ROLES ON THE PITCH</div>'+
+  s.onfield.filter(x=>!x.off).map(x=>{const R=roleOfPl(x);
+   return '<div class="xs" style="padding:2px 0"><b>'+esc(surname(x.p.name))+'</b> <span class="faint">'+
+    x.slot+' · '+(R?R.lbl:'—')+'</span></div>'}).join('');
+ host.appendChild(box)};
 
 showStart();
 </script>
