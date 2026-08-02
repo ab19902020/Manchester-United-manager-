@@ -10775,77 +10775,326 @@ MatchSim.prototype.penaltyEvent=function(A,D,dp){
  return _penSee.apply(this,arguments)};
 
 /* ---------- drawing ---------- */
+/* =====================================================================
+   PITCH 4.0 — a match you can watch
+   ---------------------------------------------------------------------
+   Everything that does not move — the stands, the mown stripes, the
+   goalmouth wear, the lines, the nets, the floodlight pools — is drawn
+   once into an offscreen canvas and blitted every frame. Only the
+   twenty-two players and the ball are drawn live, so all of this costs
+   less than the flat green rectangle it replaces.
+   ===================================================================== */
+/* squad numbers, given out the way a club gives them out */
+function shirtNo(p,c){
+ if(p.shirt)return p.shirt;
+ if(!c)return 0;
+ if(!c._shirts){
+  c._shirts={};
+  const order=[...c.players].sort((a,b)=>b.ovr-a.ovr);
+  const want={GK:[1,13,25],DR:[2,20,22],DC:[5,6,4,15,19],DL:[3,23,33],
+   WBR:[2,20],WBL:[3,23],DM:[6,16,28],MC:[8,4,14,18,39],ML:[11,26],MR:[7,17],
+   AMC:[10,8,21],AML:[11,17,36],AMR:[7,21,37],ST:[9,19,10,29,32]};
+  const used=new Set();
+  order.forEach(q=>{
+   const pool=want[q.pos]||[];
+   let n=pool.find(x=>!used.has(x));
+   if(!n){for(n=2;n<=45&&used.has(n);n++);}
+   used.add(n);c._shirts[q.id]=n});}
+ p.shirt=c._shirts[p.id]||0;
+ return p.shirt}
+/* the parts of the picture that never move */
+function buildPitchBg(W,H,sx,sy,flip,hc,ac){
+ const key=W+'x'+H+'|'+(flip?1:0)+'|'+hc.key+'|'+ac.key;
+ if(MU._bg&&MU._bg.key===key)return MU._bg.cv;
+ const cv=document.createElement('canvas');cv.width=W;cv.height=H;
+ const g=cv.getContext('2d');
+ const R=(x,y,w,h)=>g.strokeRect(x*sx,y*sy,w*sx,h*sy);
+ // ---- the ground around the pitch ----
+ g.fillStyle='#070b08';g.fillRect(0,0,W,H);
+ // the near rows, catching the light off the pitch
+ const band=g.createLinearGradient(0,0,0,H);
+ band.addColorStop(0,'#141a22');band.addColorStop(.5,'#0c1218');band.addColorStop(1,'#141a22');
+ g.fillStyle=band;g.fillRect(0,0,W,H);
+ const rng=mulberry(hashStr('stands'+hc.key));
+ for(let i=0;i<1500;i++){                                  // people in the stands
+  const edge=Math.floor(rng()*4);
+  let x,y;
+  if(edge<2){x=rng()*W;y=edge?H-rng()*sy*1.9:rng()*sy*1.9}
+  else{x=edge===2?rng()*sx*1.9:W-rng()*sx*1.9;y=rng()*H}
+  const home=(x<W/2)!==!!flip;
+  const c=rng()<.42?(home?hc.c1:ac.c1):(rng()<.5?'#2a3140':'#3a4250');
+  g.fillStyle=c;g.globalAlpha=.28+rng()*.55;
+  g.fillRect(x,y,Math.max(1,sx*.26),Math.max(1,sy*.26))}
+ g.globalAlpha=1;
+ // the advertising hoardings that ring the pitch
+ g.fillStyle='rgba(255,255,255,.06)';
+ g.fillRect(1.1*sx,1.1*sy,102.8*sx,.55*sy);g.fillRect(1.1*sx,66.35*sy,102.8*sx,.55*sy);
+ g.fillRect(1.1*sx,1.1*sy,.55*sx,65.8*sy);g.fillRect(103.35*sx,1.1*sy,.55*sx,65.8*sy);
+ // ---- turf ----
+ const turf=g.createLinearGradient(0,0,0,H);
+ turf.addColorStop(0,'#12401c');turf.addColorStop(.5,'#15481f');turf.addColorStop(1,'#0f3618');
+ g.fillStyle=turf;g.fillRect(2*sx,2*sy,101*sx,64*sy);
+ for(let i=0;i<10;i++){                                    // mown stripes
+  if(i%2)continue;
+  g.fillStyle='rgba(255,255,255,.030)';
+  g.fillRect((2+i*10.1)*sx,2*sy,10.1*sx,64*sy)}
+ // wear: goalmouths, the centre, and the spots the keepers stand on
+ [[8,34,7,13],[97,34,7,13],[52.5,34,11,10],[19,34,6,11],[86,34,6,11]].forEach(([x,y,rx,ry])=>{
+  const gr=g.createRadialGradient(x*sx,y*sy,0,x*sx,y*sy,rx*sx);
+  gr.addColorStop(0,'rgba(120,105,60,.16)');gr.addColorStop(1,'rgba(120,105,60,0)');
+  g.fillStyle=gr;g.beginPath();g.ellipse(x*sx,y*sy,rx*sx,ry*sy,0,0,7);g.fill()});
+ // ---- floodlights: four pools and a vignette ----
+ [[18,10],[87,10],[18,58],[87,58]].forEach(([x,y])=>{
+  const gr=g.createRadialGradient(x*sx,y*sy,0,x*sx,y*sy,42*sx);
+  gr.addColorStop(0,'rgba(255,252,225,.085)');gr.addColorStop(1,'rgba(255,252,225,0)');
+  g.fillStyle=gr;g.fillRect(0,0,W,H)});
+ const vg=g.createRadialGradient(W/2,H/2,Math.min(W,H)*.30,W/2,H/2,Math.max(W,H)*.72);
+ vg.addColorStop(0,'rgba(0,0,0,0)');vg.addColorStop(1,'rgba(0,0,0,.42)');
+ g.fillStyle=vg;g.fillRect(0,0,W,H);
+ // ---- markings ----
+ g.strokeStyle='rgba(248,252,248,.62)';g.lineWidth=Math.max(1.1,sx*.30);
+ g.shadowColor='rgba(255,255,255,.35)';g.shadowBlur=Math.max(1,sx*.5);
+ R(2,2,101,64);
+ g.beginPath();g.moveTo(52.5*sx,2*sy);g.lineTo(52.5*sx,66*sy);g.stroke();
+ g.beginPath();g.arc(52.5*sx,34*sy,9.15*sx,0,7);g.stroke();
+ R(2,15,16.5,38);R(86.5,15,16.5,38);                      // penalty areas
+ R(2,25.5,5.5,17);R(97.5,25.5,5.5,17);                    // six-yard boxes
+ // the D
+ g.beginPath();g.arc(13*sx,34*sy,9.15*sx,-0.93,0.93);g.stroke();
+ g.beginPath();g.arc(92*sx,34*sy,9.15*sx,Math.PI-0.93,Math.PI+0.93);g.stroke();
+ // corner arcs
+ [[2,2,0,.5],[103,2,.5,1],[103,66,1,1.5],[2,66,1.5,2]].forEach(([x,y,a,b])=>{
+  g.beginPath();g.arc(x*sx,y*sy,1*sx,a*Math.PI,b*Math.PI);g.stroke()});
+ g.shadowBlur=0;
+ g.fillStyle='rgba(248,252,248,.72)';
+ [[52.5,34],[13,34],[92,34]].forEach(([x,y])=>{
+  g.beginPath();g.arc(x*sx,y*sy,Math.max(1.2,sx*.42),0,7);g.fill()});
+ // ---- goals: frame, net, and the shadow they throw ----
+ [[2,-1],[103,1]].forEach(([gx,dir])=>{
+  const x0=gx*sx,depth=2.4*sx*dir;
+  g.save();
+  g.fillStyle='rgba(255,255,255,.035)';
+  g.fillRect(Math.min(x0,x0+depth),30.34*sy,Math.abs(depth),7.32*sy);
+  g.strokeStyle='rgba(255,255,255,.14)';g.lineWidth=Math.max(.5,sx*.10);
+  for(let i=0;i<=8;i++){                                   // net mesh
+   const t=i/8;
+   g.beginPath();g.moveTo(x0,(30.34+t*7.32)*sy);g.lineTo(x0+depth,(30.34+t*7.32)*sy);g.stroke()}
+  for(let i=0;i<=4;i++){
+   const t=i/4;
+   g.beginPath();g.moveTo(x0+depth*t,30.34*sy);g.lineTo(x0+depth*t,37.66*sy);g.stroke()}
+  g.strokeStyle='#f2f6f2';g.lineWidth=Math.max(1.6,sx*.55);
+  g.beginPath();g.moveTo(x0,30.34*sy);g.lineTo(x0,37.66*sy);g.stroke();
+  g.restore()});
+ // corner flags: a short pole standing on the corner with a pennant on it
+ [[2,2],[103,2],[2,66],[103,66]].forEach(([x,y])=>{
+  const up=(y>34?-1:1)*-1;                                // the pole always stands up on screen
+  const top=y+up*2.2;
+  g.strokeStyle='rgba(255,255,255,.55)';g.lineWidth=Math.max(1,sx*.20);
+  g.beginPath();g.moveTo(x*sx,y*sy);g.lineTo(x*sx,top*sy);g.stroke();
+  const into=(x<52?1:-1)*1.7;
+  g.fillStyle='#fbe122';
+  g.beginPath();g.moveTo(x*sx,top*sy);
+  g.lineTo((x+into)*sx,(top-up*.55)*sy);
+  g.lineTo(x*sx,(top-up*1.1)*sy);
+  g.closePath();g.fill()});
+ MU._bg={key,cv};
+ return cv}
+/* the camera: full pitch, or in tight on the ball like a broadcast */
+function camApply(ctx,W,H,sx,sy){
+ if(!MU.cam)MU.cam={mode:'broadcast',x:52.5,y:34,z:1};
+ const c=MU.cam;
+ if(c.mode!=='broadcast'){c.z=1;return 1}
+ const z=1.55;
+ const tx=clamp(MU.ball.x,52.5/z*1.0,105-52.5/z);
+ const ty=clamp(MU.ball.y,34/z,68-34/z);
+ c.x+=(tx-c.x)*.055;c.y+=(ty-c.y)*.055;c.z+=(z-c.z)*.08;
+ ctx.translate(W/2,H/2);ctx.scale(c.z,c.z);
+ ctx.translate(-c.x*sx,-c.y*sy);
+ return c.z}
+/* a player: shadow, shirt, number, and the way he is facing */
+function drawMan(ctx,d,si,c,sx,sy,z,opt){
+ const px=d.x*sx,py=d.y*sy;
+ const r=Math.max(3.4,sx*1.75)/Math.sqrt(z);
+ const sp=Math.hypot(d.vx||0,d.vy||0);
+ // he leans into a sprint
+ const lean=clamp(sp*7,0,.9);
+ const ang=sp>.02?Math.atan2(d.vy,d.vx):(d.face||0);
+ d.face=ang;
+ ctx.save();
+ // sprint ghosts
+ if(sp>.09&&sp<.6&&!d.pl.off)for(let i=1;i<=2;i++){
+  ctx.globalAlpha=.13/i;
+  ctx.beginPath();ctx.arc(px-(d.vx||0)*sx*i*3.4,py-(d.vy||0)*sy*i*3.4,r*.9,0,7);
+  ctx.fillStyle=c.c1;ctx.fill()}
+ ctx.globalAlpha=1;
+ // shadow on the grass, thrown away from the near floodlight
+ ctx.beginPath();
+ ctx.ellipse(px+r*.30,py+r*.55,r*1.06,r*.52,0,0,7);
+ ctx.fillStyle='rgba(0,0,0,.34)';ctx.fill();
+ if(opt.holder){                                           // the man on the ball
+  const pulse=.78+Math.sin(performance.now()/180)*.16;
+  ctx.beginPath();ctx.arc(px,py,r*2.0,0,7);
+  ctx.strokeStyle='rgba(251,225,34,'+pulse+')';
+  ctx.lineWidth=Math.max(1.3,sx*.42)/Math.sqrt(z);ctx.stroke()}
+ if(opt.dim)ctx.globalAlpha=.42;
+ // the shirt: one clear kit colour, lit from the top left
+ const gk=d.pl.slot==='GK';
+ const kit=gk?'#e9c400':c.c1;
+ const grd=ctx.createRadialGradient(px-r*.35,py-r*.45,r*.1,px,py,r*1.05);
+ grd.addColorStop(0,shade(kit,1.30));grd.addColorStop(.55,kit);grd.addColorStop(1,shade(kit,.80));
+ ctx.beginPath();ctx.arc(px,py,r,0,7);ctx.fillStyle=grd;ctx.fill();
+ ctx.globalAlpha=opt.dim?.42:1;
+ // the trim, in the club's second colour, so two red sides still read apart
+ if(!gk&&c.c2&&c.c2!==c.c1){
+  ctx.lineWidth=Math.max(1,sx*.30)/Math.sqrt(z);
+  ctx.strokeStyle=c.c2;
+  ctx.beginPath();ctx.arc(px,py,r*.86,0,7);ctx.stroke()}
+ ctx.lineWidth=Math.max(.9,sx*.26)/Math.sqrt(z);
+ ctx.strokeStyle=si===0?'rgba(255,255,255,.94)':'rgba(12,12,12,.9)';
+ ctx.beginPath();ctx.arc(px,py,r,0,7);ctx.stroke();
+ // which way he is running
+ if(sp>.03){
+  ctx.beginPath();
+  ctx.moveTo(px+Math.cos(ang)*r*1.28,py+Math.sin(ang)*r*1.28);
+  ctx.lineTo(px+Math.cos(ang+2.5)*r*.72,py+Math.sin(ang+2.5)*r*.72);
+  ctx.lineTo(px+Math.cos(ang-2.5)*r*.72,py+Math.sin(ang-2.5)*r*.72);
+  ctx.closePath();
+  ctx.fillStyle='rgba(255,255,255,'+(.20+lean*.35)+')';ctx.fill()}
+ // squad number
+ if(r>4.6&&opt.num){
+  ctx.font='800 '+Math.round(r*1.28)+'px Inter,sans-serif';
+  ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillStyle=kitInk(kit);
+  ctx.fillText(String(opt.num),px,py+r*.05);
+  ctx.textBaseline='alphabetic'}
+ ctx.restore()}
+/* black or white, whichever can be read on that shirt */
+function kitInk(hex){
+ const h=String(hex).replace('#','');
+ if(h.length!==6)return '#fff';
+ const n=parseInt(h,16);
+ const l=((n>>16&255)*.299+(n>>8&255)*.587+(n&255)*.114);
+ return l>150?'rgba(15,20,15,.92)':'rgba(255,255,255,.94)'}
+/* ---------- the frame ---------- */
 drawPitch=function(){
  const cv=$('#pitchCanvas');if(!cv||!MU.m)return;
  const m=MU.m,ctx=cv.getContext('2d'),sx=cv._sx,sy=cv._sy;
  const now=performance.now(),W=cv.width,H=cv.height;
  const p=playState();
- // ---- turf ----
- ctx.fillStyle='#0d2a12';ctx.fillRect(0,0,W,H);
- ctx.fillStyle='rgba(255,255,255,.03)';
- for(let i=0;i<8;i+=2)ctx.fillRect(i*13.125*sx,0,13.125*sx,H);
- ctx.strokeStyle='rgba(240,245,240,.42)';ctx.lineWidth=Math.max(1,sx*.33);
- ctx.strokeRect(2*sx,2*sy,101*sx,64*sy);
- ctx.beginPath();ctx.moveTo(52.5*sx,2*sy);ctx.lineTo(52.5*sx,66*sy);ctx.stroke();
- ctx.beginPath();ctx.arc(52.5*sx,34*sy,9.15*sx,0,7);ctx.stroke();
- ctx.beginPath();ctx.arc(52.5*sx,34*sy,Math.max(1.4,sx*.5),0,7);ctx.fillStyle='rgba(240,245,240,.42)';ctx.fill();
- ctx.strokeRect(2*sx,15*sy,16.5*sx,38*sy);ctx.strokeRect(86.5*sx,15*sy,16.5*sx,38*sy);
- ctx.strokeRect(2*sx,25.5*sy,5.5*sx,17*sy);ctx.strokeRect(97.5*sx,25.5*sy,5.5*sx,17*sy);
- ctx.fillStyle='rgba(240,245,240,.6)';
- [[13,34],[92,34]].forEach(q=>{ctx.beginPath();ctx.arc(q[0]*sx,q[1]*sy,Math.max(1.2,sx*.42),0,7);ctx.fill()});
- ctx.strokeStyle='rgba(255,255,255,.75)';ctx.lineWidth=Math.max(1.4,sx*.5);
- ctx.strokeRect(.2*sx,30.4*sy,1.8*sx,7.2*sy);ctx.strokeRect(103*sx,30.4*sy,1.8*sx,7.2*sy);
- // ---- the game ----
+ const hc=G.clubs[m.sides[0].ci],ac=G.clubs[m.sides[1].ci];
+ if(!MU.viz)MU.viz={names:true,shape:false};
+ // ---- advance the model ----
  advancePlay(now);
  pitchTargets();
- // ball trail
  MU.trail=MU.trail||[];
  if(!MU.trail.length||dist2(MU.trail[MU.trail.length-1],MU.ball)>.6){
-  MU.trail.push({x:MU.ball.x,y:MU.ball.y,t:now});if(MU.trail.length>14)MU.trail.shift()}
+  MU.trail.push({x:MU.ball.x,y:MU.ball.y,t:now});if(MU.trail.length>16)MU.trail.shift()}
  MU.dots.forEach(d=>{
   const ease=d.pl.off?.05:(p.holder===d.pl?.20:.075);
+  const ox=d.x,oy=d.y;
   d.x+=((d.tx==null?d.x:d.tx)-d.x)*ease;
-  d.y+=((d.ty==null?d.y:d.ty)-d.y)*ease});
- MU.ball.x+=(MU.ballT.x-MU.ball.x)*(p.mode==='pass'||p.mode==='carry'?1:.22);
- MU.ball.y+=(MU.ballT.y-MU.ball.y)*(p.mode==='pass'||p.mode==='carry'?1:.22);
+  d.y+=((d.ty==null?d.y:d.ty)-d.y)*ease;
+  d.vx=(d.vx||0)*.75+(d.x-ox)*.25;
+  d.vy=(d.vy||0)*.75+(d.y-oy)*.25});
+ const flying=(p.mode==='pass'||p.mode==='carry');
+ MU.ball.x+=(MU.ballT.x-MU.ball.x)*(flying?1:.22);
+ MU.ball.y+=(MU.ballT.y-MU.ball.y)*(flying?1:.22);
  MU.ball.x=clamp(MU.ball.x,.6,104.4);MU.ball.y=clamp(MU.ball.y,1.2,66.8);
- // pass line, so the eye can follow the move
- if((p.mode==='pass')&&p.from&&p.to){
-  ctx.beginPath();ctx.moveTo(p.from.x*sx,p.from.y*sy);ctx.lineTo(MU.ball.x*sx,MU.ball.y*sy);
-  ctx.strokeStyle='rgba(255,255,255,.20)';ctx.lineWidth=Math.max(1,sx*.28);ctx.stroke()}
- // players
+ // how high off the ground it is, so a clipped ball looks clipped
+ let hgt=0;
+ if(p.mode==='pass'&&p.from&&p.to&&p.ms){
+  const k=clamp((now-p.t0)/p.ms,0,1);
+  const far=dist2(p.from,p.to);
+  hgt=Math.sin(Math.PI*k)*(p.lofted?Math.min(9,far*.22):Math.min(2.2,far*.05))}
+ MU.ballH=hgt;
+ // ---- paint ----
+ ctx.setTransform(1,0,0,1,0,0);
+ ctx.clearRect(0,0,W,H);
+ ctx.save();
+ const z=camApply(ctx,W,H,sx,sy);
+ ctx.drawImage(buildPitchBg(W,H,sx,sy,halfFlip(),hc,ac),0,0);
+ // the shape of the two sides, if you want to see it
+ if(MU.viz.shape)[0,1].forEach(si=>{
+  const line=livePlayers(si).filter(x=>x.slot!=='GK').map(x=>dotOf(x)).filter(Boolean);
+  if(line.length<3)return;
+  const c=si===0?hc:ac;
+  const back=line.slice().sort((a,b)=>atkRight(si)?a.x-b.x:b.x-a.x)[0];
+  ctx.beginPath();ctx.moveTo(back.x*sx,2*sy);ctx.lineTo(back.x*sx,66*sy);
+  ctx.setLineDash([sx*1.4,sx*1.4]);
+  ctx.strokeStyle=c.c1;ctx.globalAlpha=.45;ctx.lineWidth=Math.max(1,sx*.24);
+  ctx.stroke();ctx.setLineDash([]);ctx.globalAlpha=1});
+ // where the ball is going
+ if(p.mode==='pass'&&p.from&&p.to){
+  ctx.beginPath();
+  ctx.moveTo(p.from.x*sx,p.from.y*sy);ctx.lineTo(MU.ball.x*sx,MU.ball.y*sy);
+  ctx.strokeStyle='rgba(255,255,255,.22)';
+  ctx.lineWidth=Math.max(.9,sx*.26)/Math.sqrt(z);ctx.stroke();
+  if(p.target){
+   const t=dotOf(p.target);
+   if(t){ctx.beginPath();ctx.arc(t.x*sx,t.y*sy,Math.max(4,sx*2.4)/Math.sqrt(z),0,7);
+    ctx.strokeStyle='rgba(255,255,255,.20)';ctx.setLineDash([sx*.8,sx*.8]);
+    ctx.lineWidth=Math.max(.8,sx*.2);ctx.stroke();ctx.setLineDash([])}}}
+ // ---- the players ----
+ const order=MU.dots.slice().sort((a,b)=>a.y-b.y);
  const lbl=[];
- MU.dots.forEach(d=>{
+ order.forEach(d=>{
   const c=G.clubs[m.sides[d.si].ci];
-  const px=d.x*sx,py=d.y*sy,r=Math.max(4,sx*1.85);
+  drawMan(ctx,d,d.si,c,sx,sy,z,
+   {holder:p.holder===d.pl,dim:d.pl.off,num:shirtNo(d.pl.p,c)})});
+ // names, but only where they can be read: the ones that matter go first,
+ // and anything that would sit on top of another is dropped
+ if(MU.viz.names)order.slice().sort((a,b)=>
+   (p.holder===b.pl?1:0)-(p.holder===a.pl?1:0)||
+   dist2(a,MU.ball)-dist2(b,MU.ball)).forEach(d=>{
+  if(d.pl.off)return;
+  const px=d.x*sx,py=d.y*sy,r=Math.max(3.4,sx*1.75)/Math.sqrt(z);
   const isHolder=p.holder===d.pl;
-  if(isHolder){ctx.beginPath();ctx.arc(px,py,r*1.95,0,7);
-   ctx.strokeStyle='rgba(251,225,34,.92)';ctx.lineWidth=Math.max(1.4,sx*.44);ctx.stroke()}
-  ctx.beginPath();ctx.arc(px,py,r,0,7);
-  ctx.fillStyle=d.pl.slot==='GK'?'#e9c400':c.c1;ctx.fill();
-  ctx.lineWidth=Math.max(1,sx*.28);
-  ctx.strokeStyle=d.si===0?'rgba(255,255,255,.92)':'rgba(15,15,15,.85)';ctx.stroke();
-  const ly=py+r*2.5;
-  const crowded=lbl.some(q=>Math.abs(q[0]-px)<sx*7&&Math.abs(q[1]-ly)<sy*2.2);
-  if(!d.pl.off&&(isHolder||!crowded)){
-   lbl.push([px,ly]);
-   ctx.font='700 '+Math.max(7,Math.round(sx*2.05))+'px Inter,sans-serif';
-   ctx.textAlign='center';
-   ctx.lineWidth=Math.max(2,sx*.7);ctx.strokeStyle='rgba(0,0,0,.75)';
-   const nm=surname(d.pl.p.name);
-   ctx.strokeText(nm,px,ly);
-   ctx.fillStyle=isHolder?'#fbe122':'rgba(240,245,240,.8)';
-   ctx.fillText(nm,px,ly)}});
- // ball
- const bx=MU.ball.x*sx,by=MU.ball.y*sy,br=Math.max(2.6,sx*1.05);
+  const ly=py+r*2.6;
+  const near=lbl.some(q=>Math.abs(q[0]-px)<sx*11/z&&Math.abs(q[1]-ly)<sy*5.2/z);
+  if(!isHolder&&near)return;
+  lbl.push([px,ly]);
+  ctx.font='700 '+Math.max(7,Math.round(sx*1.9/Math.sqrt(z)))+'px Inter,sans-serif';
+  ctx.textAlign='center';
+  // a soft plate behind it reads better than a heavy outline
+  const nm=surname(d.pl.p.name);
+  const w=ctx.measureText(nm).width;
+  ctx.fillStyle='rgba(6,10,7,.62)';
+  ctx.beginPath();
+  ctx.roundRect(px-w/2-sx*.5,ly-sy*1.5,w+sx*1.0,sy*2.0,sy*.5);
+  ctx.fill();
+  ctx.fillStyle=isHolder?'#fbe122':'rgba(238,244,238,.82)';
+  ctx.fillText(nm,px,ly)});
+ // ---- the ball ----
+ const bx=MU.ball.x*sx,by=(MU.ball.y-hgt*.55)*sy;
+ const br=Math.max(2.2,sx*.95)*(1+hgt*.055)/Math.sqrt(z);
  for(let i=1;i<MU.trail.length;i++){
-  const a=(i/MU.trail.length)*.30;
-  ctx.beginPath();ctx.arc(MU.trail[i].x*sx,MU.trail[i].y*sy,br*.55,0,7);
+  const a=(i/MU.trail.length)*.26;
+  ctx.beginPath();ctx.arc(MU.trail[i].x*sx,MU.trail[i].y*sy,br*.5,0,7);
   ctx.fillStyle='rgba(255,255,255,'+a+')';ctx.fill()}
- ctx.beginPath();ctx.arc(bx,by+br*.7,br*.95,0,7);ctx.fillStyle='rgba(0,0,0,.32)';ctx.fill();
- ctx.beginPath();ctx.arc(bx,by,br,0,7);ctx.fillStyle='#fff';ctx.fill();
- ctx.lineWidth=Math.max(1,sx*.24);ctx.strokeStyle='#1a1a1a';ctx.stroke();
- // goal flash
+ // the shadow stays on the grass and softens as it climbs
+ ctx.beginPath();
+ ctx.ellipse(MU.ball.x*sx,MU.ball.y*sy+br*.5,br*(1+hgt*.10),br*.55*(1+hgt*.10),0,0,7);
+ ctx.fillStyle='rgba(0,0,0,'+(0.34/(1+hgt*.30))+')';ctx.fill();
+ const halo=ctx.createRadialGradient(bx,by,br*.6,bx,by,br*2.6);
+ halo.addColorStop(0,'rgba(255,255,255,.30)');halo.addColorStop(1,'rgba(255,255,255,0)');
+ ctx.fillStyle=halo;ctx.beginPath();ctx.arc(bx,by,br*2.6,0,7);ctx.fill();
+ ctx.beginPath();ctx.arc(bx,by,br,0,7);
+ const bg2=ctx.createRadialGradient(bx-br*.35,by-br*.4,br*.1,bx,by,br);
+ bg2.addColorStop(0,'#ffffff');bg2.addColorStop(1,'#cfd6cf');
+ ctx.fillStyle=bg2;ctx.fill();
+ // panels, turning as it travels
+ const spin=(MU.ball.x+MU.ball.y)*.55;
+ ctx.save();ctx.translate(bx,by);ctx.rotate(spin);
+ ctx.fillStyle='rgba(24,26,24,.85)';
+ ctx.beginPath();
+ for(let i=0;i<5;i++){const a=i/5*Math.PI*2;
+  ctx[i?'lineTo':'moveTo'](Math.cos(a)*br*.42,Math.sin(a)*br*.42)}
+ ctx.closePath();ctx.fill();ctx.restore();
+ ctx.lineWidth=Math.max(.7,sx*.2);ctx.strokeStyle='rgba(20,20,20,.65)';
+ ctx.beginPath();ctx.arc(bx,by,br,0,7);ctx.stroke();
+ ctx.restore();
+ // ---- overlays, in screen space ----
+ ctx.setTransform(1,0,0,1,0,0);
  if(MU.goalFlashP&&now<MU.goalFlashP){
   const k=1-(MU.goalFlashP-now)/1700;
   ctx.fillStyle='rgba(251,225,34,'+(0.30*(1-k))+')';ctx.fillRect(0,0,W,H);
@@ -10856,17 +11105,52 @@ drawPitch=function(){
  // header strip: possession, clock, and who is on the ball
  const tot=Math.max(1,m.poss[0]+m.poss[1]);
  const hp=Math.round(m.poss[0]/tot*100);
- ctx.fillStyle='rgba(0,0,0,.44)';ctx.fillRect(0,0,W,Math.round(sy*4.2));
- ctx.fillStyle=G.clubs[m.sides[0].ci].c1;ctx.fillRect(0,0,W*hp/100,Math.round(sy*1.1));
- ctx.fillStyle=G.clubs[m.sides[1].ci].c1;ctx.fillRect(W*hp/100,0,W*(100-hp)/100,Math.round(sy*1.1));
+ ctx.fillStyle='rgba(0,0,0,.5)';ctx.fillRect(0,0,W,Math.round(sy*4.2));
+ ctx.fillStyle=hc.c1;ctx.fillRect(0,0,W*hp/100,Math.round(sy*1.1));
+ ctx.fillStyle=ac.c1;ctx.fillRect(W*hp/100,0,W*(100-hp)/100,Math.round(sy*1.1));
  ctx.font='800 '+Math.max(8,Math.round(sx*2.2))+'px Inter,sans-serif';
  ctx.textAlign='left';ctx.fillStyle='rgba(240,245,240,.9)';
- ctx.fillText(G.clubs[m.sides[0].ci].short+' '+hp+'%',sx*1.5,sy*3.4);
+ ctx.fillText(hc.short+' '+hp+'%',sx*1.5,sy*3.4);
  ctx.textAlign='right';
- ctx.fillText((100-hp)+'% '+G.clubs[m.sides[1].ci].short,W-sx*1.5,sy*3.4);
+ ctx.fillText((100-hp)+'% '+ac.short,W-sx*1.5,sy*3.4);
  ctx.textAlign='center';ctx.fillStyle='#fbe122';
  ctx.fillText(m.done?'FT':m.stage==='HT'?'HT':m.dispMin()+"'",W/2,sy*3.4);
  ctx.textAlign='left'};
+/* ---------- the viewer's controls ---------- */
+ACTIONS.pitchCam=()=>{
+ if(!MU.cam)MU.cam={mode:'broadcast',x:52.5,y:34,z:1};
+ MU.cam.mode=MU.cam.mode==='broadcast'?'full':'broadcast';
+ toast(MU.cam.mode==='broadcast'?'🎥 Broadcast camera':'🗺️ Full pitch');
+ renderMCtl()};
+ACTIONS.pitchNames=()=>{
+ if(!MU.viz)MU.viz={names:true,shape:false};
+ MU.viz.names=!MU.viz.names;renderMCtl()};
+ACTIONS.pitchShape=()=>{
+ if(!MU.viz)MU.viz={names:true,shape:false};
+ MU.viz.shape=!MU.viz.shape;
+ toast(MU.viz.shape?'📐 Showing both defensive lines':'📐 Lines hidden');
+ renderMCtl()};
+const _mctlPitch=renderMCtl;
+renderMCtl=function(){
+ const r=_mctlPitch.apply(this,arguments);
+ const c=$('#mCtl');if(!c||MU.tab!=='pitch')return r;
+ if(c.querySelector('[data-action="pitchCam"]'))return r;
+ const cam=(MU.cam&&MU.cam.mode)||'broadcast';
+ const v=MU.viz||{names:true,shape:false};
+ c.insertAdjacentHTML('beforeend',
+  '<div class="row" style="justify-content:center;gap:8px;margin-top:8px">'+
+  '<button class="chip'+(cam==='broadcast'?' on':'')+'" data-action="pitchCam">'+
+   (cam==='broadcast'?'🎥 Broadcast':'🗺️ Full pitch')+'</button>'+
+  '<button class="chip'+(v.names?' on':'')+'" data-action="pitchNames">🏷️ Names</button>'+
+  '<button class="chip'+(v.shape?' on':'')+'" data-action="pitchShape">📐 Lines</button></div>');
+ return r};
+/* a new match starts on a fresh background and a centred camera */
+const _initDotsCam=initDots;
+initDots=function(){
+ _initDotsCam();
+ MU._bg=null;
+ MU.cam={mode:(MU.cam&&MU.cam.mode)||'broadcast',x:52.5,y:34,z:1};
+ MU.ballH=0};
 /* kick-off: everybody back to their own half, ball on the centre spot */
 initDots=function(){
  _initDotsLive();
@@ -13973,6 +14257,538 @@ renderDock=function(){
   const um=(typeof userMatchOn==='function')?userMatchOn(G.day):null;
   if(btn&&um&&!um.played)btn.classList.add('dock-match')}
  catch(e){}
+ return r};
+
+
+/* =====================================================================
+   AUDIO 2.0 — a stadium, a crowd made of people, and a voice
+   ---------------------------------------------------------------------
+   The first pass at sound was a set of bare oscillators played dry into
+   the speakers. It was recognisably a whistle and recognisably a roar,
+   but it sounded like a phone in a bedroom rather than a ground with
+   fifty thousand people in it. Three things were missing.
+
+   THE ROOM. Everything now goes through a convolution reverb whose
+   impulse response is generated here — three seconds of exponentially
+   decaying noise with early reflections stamped into the first eighty
+   milliseconds, which is what a big concrete bowl actually does to a
+   whistle. The whistle is sent to it hard, the crowd barely at all,
+   because the crowd IS the room.
+
+   PEOPLE. The old crowd was one band of noise. A real one is layers:
+   a low rumble, a mid hiss of thousands of voices, individual shouts
+   cutting through, and hands. So there are now chatter grains and clap
+   transients scheduled at a density that rises with the excitement,
+   plus a slow swell so the whole thing breathes, plus a chant that
+   comes in on a two-beat when the ground is behind the side.
+
+   A VOICE. The browser can speak, and it costs nothing and needs no
+   connection. So the press now ASK you their questions out loud, each
+   journalist with their own voice, pitch and delivery, and the stadium
+   announcer reads the scorer's name over the tannoy.
+
+   And if you would rather have real recordings: there is a sample
+   loader. Point it at a folder of audio files on the web, or pick
+   files off your own device, and any sound it recognises replaces the
+   synthesised one. Anything it cannot load falls back silently to the
+   synth, so the game never goes quiet.
+   ===================================================================== */
+
+/* ---------------------------------------------------------------------
+   1. THE ROOM
+   --------------------------------------------------------------------- */
+const A2={rev:null,revSend:null,dry:null,buf:{},pack:null,voices:[],ttsReady:false,
+ crowd:null,grainT:0,excite:0,chant:0};
+function a2Build(){
+ const ctx=sfxCtx();if(!ctx||A2.rev)return ctx;
+ try{
+  // an impulse response for a large, half-full concrete bowl
+  const sr=ctx.sampleRate,len=Math.floor(sr*2.6);
+  const ir=ctx.createBuffer(2,len,sr);
+  for(let ch=0;ch<2;ch++){
+   const d=ir.getChannelData(ch);
+   for(let i=0;i<len;i++){
+    const t=i/len,ms=i/sr*1000;
+    // the tail takes ~60ms to become diffuse, which is what leaves the
+    // early reflections standing clear of it in a real bowl
+    const build=Math.min(1,ms/80);
+    d[i]=(Math.random()*2-1)*Math.pow(1-t,2.6)*(1-t*.35)*build*.5}
+   // early reflections: the near stands answering back
+   [[.011,1.4],[.019,1.1],[.029,.90],[.041,.75],[.057,.60],[.078,.45],[.101,.34]].forEach(([tm,g])=>{
+    const ix=Math.floor(tm*sr*(ch?1.037:1));
+    if(ix<len)d[ix]+=g*(Math.random()<.5?-1:1)});}
+  A2.rev=ctx.createConvolver();A2.rev.buffer=ir;
+  const wet=ctx.createGain();wet.gain.value=.85;
+  A2.rev.connect(wet);wet.connect(SFX.master);
+  A2.revSend=ctx.createGain();A2.revSend.gain.value=1;
+  A2.revSend.connect(A2.rev)}
+ catch(e){A2.rev=null}
+ return ctx}
+/* send a node into the ground as well as straight out */
+function a2Wet(node,amt){
+ if(!A2.revSend||!amt)return;
+ try{const g=SFX.ctx.createGain();g.gain.value=amt;node.connect(g);g.connect(A2.revSend)}catch(e){}}
+
+/* ---------------------------------------------------------------------
+   2. BUILDING BLOCKS
+   --------------------------------------------------------------------- */
+/* a short filtered noise burst — claps, chatter, ball contact, nets */
+function a2Burst(o){
+ const ctx=sfxCtx();if(!ctx||!sfxOn())return;
+ const t=ctx.currentTime+(o.at||0);
+ const src=ctx.createBufferSource();src.buffer=SFX.noise;src.loop=true;
+ src.playbackRate.value=o.rate||1;
+ const f=ctx.createBiquadFilter();
+ f.type=o.filter||'bandpass';f.frequency.value=o.f;f.Q.value=o.q==null?1:o.q;
+ const g=ctx.createGain();
+ g.gain.setValueAtTime(0,t);
+ g.gain.linearRampToValueAtTime(o.g==null?.2:o.g,t+(o.a||.002));
+ g.gain.exponentialRampToValueAtTime(.0001,t+o.d);
+ src.connect(f);f.connect(g);g.connect(SFX.master);
+ a2Wet(g,o.wet||0);
+ src.start(t);src.stop(t+o.d+.03)}
+/* the whistle, properly: two detuned bands with the pea rattling in it */
+function a2Whistle(n,len){
+ const ctx=a2Build();if(!ctx||!sfxOn())return;
+ const times=n===3?[0,.26,.54]:n===2?[0,.28]:[0];
+ const D=len||.30;
+ times.forEach(at=>{
+  const t0=ctx.currentTime+at;
+  // the breath going in before it sounds
+  a2Burst({f:1400,q:.6,d:.05,g:.035,at,filter:'highpass',wet:.15});
+  [[2620,15,.11],[3930,20,.055],[5240,24,.02]].forEach(([fq,q,gain],i)=>{
+   const src=ctx.createBufferSource();src.buffer=SFX.noise;src.loop=true;
+   const f=ctx.createBiquadFilter();f.type='bandpass';f.frequency.value=fq;f.Q.value=q;
+   // the pea: a fast wobble on the filter, which is what makes it a whistle
+   const lfo=ctx.createOscillator(),lg=ctx.createGain();
+   lfo.frequency.value=27+i*3;lg.gain.value=fq*.045;
+   lfo.connect(lg);lg.connect(f.frequency);
+   const g=ctx.createGain();
+   g.gain.setValueAtTime(.0001,t0);
+   g.gain.exponentialRampToValueAtTime(gain,t0+.022);
+   g.gain.setValueAtTime(gain,t0+D*.72);
+   g.gain.exponentialRampToValueAtTime(.0001,t0+D);
+   src.connect(f);f.connect(g);g.connect(SFX.master);
+   a2Wet(g,.55);
+   src.start(t0);src.stop(t0+D+.05);
+   lfo.start(t0);lfo.stop(t0+D+.05)})})}
+/* a ball being struck: the click, the leather, the thump */
+function a2Kick(power){
+ const ctx=a2Build();if(!ctx||!sfxOn())return;
+ const p=power==null?.7:clamp(power,.2,1);
+ a2Burst({f:4200,q:.5,d:.026,g:.09*p,filter:'highpass',wet:.25});        // the contact
+ a2Burst({f:900,q:1.2,d:.07,g:.07*p,wet:.3});                            // leather
+ sTone({f:120+p*70,to:52,d:.10+p*.05,type:'sine',g:.13*p});              // the thump
+ if(p>.75)a2Burst({f:2400,q:.8,d:.18,g:.02,filter:'highpass',at:.02,wet:.5})}
+/* the net */
+function a2Net(){
+ a2Burst({f:3300,q:.9,d:.11,g:.075,filter:'bandpass',wet:.4});
+ a2Burst({f:1700,q:1.6,d:.22,g:.035,at:.02,wet:.4});
+ sTone({f:210,to:150,d:.14,type:'triangle',g:.03,at:.01})}
+/* woodwork */
+function a2Post(){
+ [1180,1790,2630].forEach((f,i)=>sTone({f,d:.9-i*.2,type:'sine',g:.09-i*.025,a:.002}));
+ a2Burst({f:2600,q:.5,d:.05,g:.06,filter:'highpass',wet:.6})}
+/* hands: a single pair, or a stand full of them */
+function a2Claps(n,spread,gain,at){
+ for(let i=0;i<n;i++)
+  a2Burst({f:1600+Math.random()*2600,q:.7+Math.random(),d:.035+Math.random()*.03,
+   g:(gain||.03)*(.5+Math.random()),at:(at||0)+Math.random()*spread,filter:'bandpass',wet:.45})}
+/* one voice in the crowd */
+function a2Chatter(at,gain){
+ const f=280+Math.random()*900;
+ a2Burst({f,q:2.5+Math.random()*3,d:.10+Math.random()*.28,g:gain*(.4+Math.random()*.9),
+  a:.03,at,filter:'bandpass',wet:.3})}
+
+/* ---------------------------------------------------------------------
+   3. THE CROWD, MADE OF PEOPLE
+   --------------------------------------------------------------------- */
+function crowdStart(){
+ const ctx=a2Build();if(!ctx||!sfxOn()||!sfxCfg().crowd||A2.crowd)return;
+ try{
+  const mk=(fq,q,type,g0)=>{
+   const src=ctx.createBufferSource();src.buffer=SFX.noise;src.loop=true;
+   src.playbackRate.value=.55+Math.random()*.3;
+   const f=ctx.createBiquadFilter();f.type=type;f.frequency.value=fq;f.Q.value=q;
+   const g=ctx.createGain();g.gain.value=g0;
+   src.connect(f);f.connect(g);
+   src.start();
+   return{src,f,g}};
+  const bus=ctx.createGain();bus.gain.value=0;
+  bus.connect(SFX.master);
+  const low=mk(160,.7,'lowpass',1);                     // the rumble underneath
+  const mid=mk(760,1.1,'bandpass',.55);                 // thousands of voices
+  const air=mk(2600,.6,'highpass',.10);                 // the hiss off the top
+  [low,mid,air].forEach(l=>l.g.connect(bus));
+  // the whole thing breathes
+  const swell=ctx.createOscillator(),sg=ctx.createGain();
+  swell.frequency.value=.07;sg.gain.value=.28;
+  swell.connect(sg);sg.connect(bus.gain);swell.start();
+  // and the mid band wanders, so it never sits still
+  const wob=ctx.createOscillator(),wg=ctx.createGain();
+  wob.frequency.value=.11;wg.gain.value=190;
+  wob.connect(wg);wg.connect(mid.f.frequency);wob.start();
+  A2.crowd={bus,low,mid,air,swell,wob,started:ctx.currentTime};
+  SFX.amb=low.src;SFX.ambGain=bus;                      // the old controls still work
+  bus.gain.setTargetAtTime(.05,ctx.currentTime,1.2);
+  a2Grains()}
+ catch(e){}}
+function crowdStop(){
+ const c=A2.crowd;
+ if(!c){SFX.amb=null;SFX.ambGain=null;return}
+ A2.crowd=null;SFX.amb=null;SFX.ambGain=null;
+ clearTimeout(A2.grainT);
+ try{
+  const ctx=SFX.ctx,t=ctx.currentTime;
+  c.bus.gain.cancelScheduledValues(t);
+  c.bus.gain.setValueAtTime(c.bus.gain.value,t);
+  c.bus.gain.linearRampToValueAtTime(.0001,t+.9);
+  setTimeout(()=>{try{[c.low,c.mid,c.air].forEach(l=>l.src.stop());c.swell.stop();c.wob.stop()}catch(e){}},1100)}
+ catch(e){}}
+/* individual voices and hands, scheduled on top of the bed */
+function a2Grains(){
+ clearTimeout(A2.grainT);
+ if(!A2.crowd||!sfxOn())return;
+ const ex=A2.excite;                                    // 0 dull, 1 bedlam
+ const n=1+Math.round(ex*4);
+ for(let i=0;i<n;i++)a2Chatter(Math.random()*.9,.010+ex*.020);
+ if(ex>.35&&Math.random()<ex)a2Claps(2+Math.round(ex*8),.8,.008+ex*.014,Math.random()*.4);
+ if(A2.chant>0&&Math.random()<A2.chant){                // a two-beat off the Stretford End
+  const t=Math.random()*.3;
+  a2Burst({f:190,q:1.4,d:.20,g:.030*A2.chant,a:.05,at:t,wet:.5});
+  a2Burst({f:190,q:1.4,d:.20,g:.030*A2.chant,a:.05,at:t+.42,wet:.5});
+  a2Claps(5,.1,.012*A2.chant,t);a2Claps(5,.1,.012*A2.chant,t+.42)}
+ A2.grainT=setTimeout(a2Grains,700+Math.random()*500)}
+/* how loud, and how excited, the ground should be right now */
+function crowdTarget(){
+ const m=MU.m;
+ if(!m||m.done){A2.excite=.15;A2.chant=0;return .02}
+ if(m.stage==='HT'){A2.excite=.10;A2.chant=0;return .018}
+ const diff=Math.abs(m.fix.hs-m.fix.as);
+ const late=m.min>=85?1.45:m.min>=75?1.32:m.min>=60?1.15:1;
+ let v=.040*late*(diff===0?1.15:diff===1?1.1:diff>=3?.8:1);
+ let ex=.25+(late-1)*1.1+(diff===0?.15:diff>=3?-.1:0);
+ if(MU.ball){
+  const near=Math.min(MU.ball.x,105-MU.ball.x);
+  if(near<24){const k=(24-near)/24;v*=1+k*.55;ex+=k*.45}}
+ // the home end sings when their side is on top
+ const my=m.sides&&m.sides.findIndex(s=>s.isMy);
+ if(my>=0){
+  const gf=my===0?m.fix.hs:m.fix.as,ga=my===0?m.fix.as:m.fix.hs;
+  const home=(my===0);
+  A2.chant=clamp((home?.35:.12)+(gf>ga?.35:gf<ga?-.2:0)+(m.min>60?.15:0),0,.8)}
+ A2.excite=clamp(ex,0,1);
+ return clamp(v,0,.13)}
+/* the noise when it goes in */
+function a2Roar(mine){
+ const ctx=a2Build();if(!ctx||!sfxOn())return;
+ if(mine){
+  // a wall of sound that arrives fast and takes six seconds to fall away
+  const src=ctx.createBufferSource();src.buffer=SFX.noise;src.loop=true;
+  const f=ctx.createBiquadFilter();f.type='bandpass';f.Q.value=.55;
+  const t=ctx.currentTime;
+  f.frequency.setValueAtTime(220,t);
+  f.frequency.exponentialRampToValueAtTime(1250,t+.55);
+  f.frequency.exponentialRampToValueAtTime(420,t+5.5);
+  const g=ctx.createGain();
+  g.gain.setValueAtTime(.0001,t);
+  g.gain.exponentialRampToValueAtTime(.30,t+.30);
+  g.gain.exponentialRampToValueAtTime(.0001,t+6);
+  src.connect(f);f.connect(g);g.connect(SFX.master);
+  a2Wet(g,.35);
+  src.start(t);src.stop(t+6.2);
+  // and thousands of hands
+  for(let k=0;k<9;k++)a2Claps(9,.55,.020*(1-k/11),.15+k*.42);
+  for(let k=0;k<14;k++)a2Chatter(.1+Math.random()*4.5,.028);
+  A2.excite=1;A2.chant=.85}
+ else{
+  const src=ctx.createBufferSource();src.buffer=SFX.noise;src.loop=true;
+  const f=ctx.createBiquadFilter();f.type='bandpass';f.Q.value=.6;
+  const t=ctx.currentTime;
+  f.frequency.setValueAtTime(1050,t);
+  f.frequency.exponentialRampToValueAtTime(210,t+2.2);
+  const g=ctx.createGain();
+  g.gain.setValueAtTime(.0001,t);
+  g.gain.exponentialRampToValueAtTime(.19,t+.35);
+  g.gain.exponentialRampToValueAtTime(.0001,t+2.6);
+  src.connect(f);f.connect(g);g.connect(SFX.master);
+  a2Wet(g,.3);src.start(t);src.stop(t+2.8);
+  sTone({f:190,to:126,d:1.5,type:'sawtooth',g:.045,a:.3});
+  A2.excite=.12;A2.chant=0}}
+
+/* ---------------------------------------------------------------------
+   4. THE NEW LIBRARY — same names, better sounds
+   --------------------------------------------------------------------- */
+SOUNDS.whistle=n=>a2Whistle(n);
+SOUNDS.whistleLong=()=>a2Whistle(1,.85);
+SOUNDS.kick=p=>a2Kick(typeof p==='number'?p:.7);
+SOUNDS.strike=()=>a2Kick(1);
+SOUNDS.net=()=>a2Net();
+SOUNDS.post=()=>a2Post();
+SOUNDS.goal=()=>{a2Net();a2Roar(true)};
+SOUNDS.conceded=()=>{a2Net();a2Roar(false)};
+SOUNDS.ooh=()=>{
+ a2Burst({f:520,q:1.1,d:.85,g:.11,a:.14,wet:.35});
+ for(let i=0;i<7;i++)a2Chatter(Math.random()*.7,.024)};
+SOUNDS.save=()=>{
+ a2Burst({f:2100,q:.7,d:.05,g:.07,filter:'highpass',wet:.3});   // gloves on it
+ a2Burst({f:640,q:1.0,d:.7,g:.085,a:.16,wet:.35});
+ a2Claps(9,.7,.014,.12)};
+SOUNDS.card=y=>{
+ a2Whistle(1,.22);
+ setTimeout(()=>{
+  if(y){for(let i=0;i<9;i++)a2Chatter(Math.random()*.5,.020)}
+  else{a2Burst({f:400,q:.8,d:1.5,g:.13,a:.20,wet:.4});
+   for(let i=0;i<16;i++)a2Chatter(Math.random()*1.4,.030)}},210)};
+SOUNDS.tackle=()=>{
+ a2Burst({f:260,q:.9,d:.09,g:.10,wet:.25});
+ a2Burst({f:3000,q:.6,d:.035,g:.04,filter:'highpass',wet:.2})};
+SOUNDS.applause=()=>{for(let k=0;k<6;k++)a2Claps(8,.5,.016,k*.4)};
+SOUNDS.win=()=>{for(let k=0;k<7;k++)a2Claps(10,.5,.020,k*.38);
+ [523,659,784,1046].forEach((f,i)=>sTone({f,d:.6,type:'triangle',g:.07,at:i*.12}))};
+SOUNDS.lose=()=>{a2Burst({f:330,q:.8,d:2.2,g:.09,a:.35,wet:.45});
+ [523,466,392,311].forEach((f,i)=>sTone({f,d:.6,type:'triangle',g:.055,at:i*.14}))};
+
+/* ---------------------------------------------------------------------
+   5. REAL RECORDINGS, IF YOU WANT THEM
+   A sound is looked up in the sample table first; if nothing is loaded
+   under that name, the synthesised one plays. Nothing here can make the
+   game silent — a failed load simply leaves the synth in place.
+   --------------------------------------------------------------------- */
+const A2_NAMES=['whistle','whistleLong','kick','strike','net','post','goal','conceded',
+ 'ooh','save','card','tackle','applause','win','lose','crowd','mail','cash','tap','nav','urgent'];
+function a2Play(name,gain){
+ const ctx=sfxCtx(),b=A2.buf[name];
+ if(!ctx||!b||!sfxOn())return false;
+ try{
+  const src=ctx.createBufferSource();src.buffer=b;
+  const g=ctx.createGain();g.gain.value=gain==null?.9:gain;
+  src.connect(g);g.connect(SFX.master);
+  a2Wet(g,.18);
+  src.start();return true}
+ catch(e){return false}}
+async function a2Decode(name,arr){
+ const ctx=sfxCtx();if(!ctx)return false;
+ try{A2.buf[name]=await ctx.decodeAudioData(arr);return true}
+ catch(e){return false}}
+async function a2LoadPack(base){
+ const ctx=sfxCtx();if(!ctx)return{ok:0,fail:0};
+ const root=String(base||'').replace(/\/+$/,'');
+ let ok=0,fail=0;
+ await Promise.all(A2_NAMES.map(async n=>{
+  for(const ext of ['mp3','ogg','wav','m4a']){
+   try{
+    const r=await fetch(root+'/'+n+'.'+ext,{mode:'cors'});
+    if(!r.ok)continue;
+    const a=await r.arrayBuffer();
+    if(await a2Decode(n,a)){ok++;return}}
+   catch(e){}}
+  fail++}));
+ if(ok)G.sfxPack={base:root,n:ok};
+ return{ok,fail}}
+ACTIONS.sfxPackAsk=()=>{
+ const cur=(G.sfxPack&&G.sfxPack.base)||'';
+ openModal('<h3>🎚️ High-definition sound pack</h3>'+
+  '<div class="small muted" style="margin:4px 0 10px;line-height:1.65">The game generates every sound itself, so it works with no connection at all. '+
+  'If you would rather hear real recordings, point it at a folder of audio files and it will use those instead — '+
+  'anything it cannot find stays synthesised.</div>'+
+  '<div class="card tight" style="margin-bottom:10px"><div class="xs faint" style="line-height:1.7">'+
+  'It looks for <b>'+A2_NAMES.slice(0,8).join('</b>, <b>')+'</b> and more, as <b>.mp3</b>, <b>.ogg</b>, <b>.wav</b> or <b>.m4a</b>.<br>'+
+  'The folder has to allow cross-origin requests, or the browser will refuse to read it.</div></div>'+
+  '<input id="packUrl" type="text" placeholder="https://example.com/united-sounds" value="'+esc(cur)+'" '+
+  'style="width:100%;padding:11px;border-radius:10px;background:rgba(255,255,255,.05);'+
+  'border:1px solid var(--chalk-strong);color:var(--ink);font-size:13px;margin-bottom:10px">'+
+  '<button class="btn btn-primary btn-block" data-action="sfxPackGo">Load from that address</button>'+
+  '<div class="xs faint" style="text-align:center;margin:10px 0 6px">or</div>'+
+  '<button class="btn btn-ghost btn-block" data-action="sfxPackFiles">📂 Pick audio files from this device</button>'+
+  '<input type="file" id="packFiles" accept="audio/*" multiple style="display:none">'+
+  (G.sfxPack?'<button class="btn btn-danger btn-block" style="margin-top:12px" data-action="sfxPackClear">Back to synthesised sound</button>':'')+
+  '<button class="btn btn-ghost btn-block" style="margin-top:8px" data-action="closeModal">Close</button>')};
+ACTIONS.sfxPackGo=async()=>{
+ const el=$('#packUrl');if(!el||!el.value.trim()){toast('Give it an address first.');return}
+ toast('⏳ Fetching the sound pack…',6000);
+ const r=await a2LoadPack(el.value.trim());
+ closeModal();
+ if(r.ok)toast('🎚️ '+r.ok+' sound'+(r.ok>1?'s':'')+' loaded'+(r.fail?', '+r.fail+' still synthesised':''));
+ else toast('Nothing could be loaded from there — staying synthesised.');
+ render()};
+ACTIONS.sfxPackFiles=()=>{const f=$('#packFiles');if(f)f.click()};
+ACTIONS.sfxPackClear=()=>{A2.buf={};G.sfxPack=null;closeModal();toast('🔊 Back to synthesised sound');render()};
+document.addEventListener('change',async e=>{
+ if(e.target.id!=='packFiles'||!e.target.files||!e.target.files.length)return;
+ const files=[...e.target.files];e.target.value='';
+ let ok=0;
+ for(const f of files){
+  const name=f.name.replace(/\.[^.]+$/,'').toLowerCase();
+  if(A2_NAMES.indexOf(name)<0)continue;
+  try{if(await a2Decode(name,await f.arrayBuffer()))ok++}catch(err){}}
+ closeModal();
+ toast(ok?'🎚️ '+ok+' sound'+(ok>1?'s':'')+' loaded from your device':'None of those filenames matched a game sound.');
+ if(ok)G.sfxPack={base:'(local files)',n:ok};
+ render()});
+/* a loaded sample wins; otherwise the synth */
+const _sfxSynth=sfx;
+sfx=function(k,arg){
+ if(!sfxOn())return;
+ if(A2.buf[k]&&a2Play(k))return;
+ return _sfxSynth(k,arg)};
+
+/* ---------------------------------------------------------------------
+   6. A VOICE
+   The browser can speak. It costs nothing, needs no connection, and it
+   turns a press conference from a wall of text into somebody actually
+   asking you something.
+   --------------------------------------------------------------------- */
+function ttsCfg(){
+ const c=sfxCfg();
+ if(c.tts==null)c.tts=true;
+ if(c.pa==null)c.pa=true;
+ return c}
+function ttsAvailable(){return typeof speechSynthesis!=='undefined'&&typeof SpeechSynthesisUtterance!=='undefined'}
+function ttsVoices(){
+ if(!ttsAvailable())return[];
+ const all=speechSynthesis.getVoices()||[];
+ A2.voices=all.filter(v=>/^en/i.test(v.lang));
+ if(!A2.voices.length)A2.voices=all;
+ return A2.voices}
+if(ttsAvailable()){
+ try{speechSynthesis.getVoices();
+  speechSynthesis.onvoiceschanged=()=>{ttsVoices();A2.ttsReady=true}}catch(e){}}
+function ttsStop(){if(ttsAvailable())try{speechSynthesis.cancel()}catch(e){}}
+/* every journalist gets the same voice every time */
+function ttsSay(text,who,opt){
+ if(!ttsAvailable()||!sfxOn()||!ttsCfg().tts)return false;
+ const t=String(text||'').replace(/<[^>]*>/g,'').replace(/[“”]/g,'').trim();
+ if(!t)return false;
+ try{
+  speechSynthesis.cancel();
+  const u=new SpeechSynthesisUtterance(t);
+  const vs=ttsVoices();
+  const o=opt||{};
+  // the voice comes from whatever the browser has; the delivery is ours,
+  // so two journalists still sound different on a device with one voice
+  const seed=hashStr(String(who||'reporter'));
+  if(vs.length)u.voice=vs[seed%vs.length];
+  const r=mulberry(seed);
+  u.pitch=clamp((o.pitch||1)+(r()*.5-.25),.4,1.8);
+  u.rate=clamp((o.rate||1)+(r()*.24-.12),.6,1.6);
+  u.volume=clamp((sfxCfg().vol||.7)*(o.vol||1),0,1);
+  speechSynthesis.speak(u);
+  return true}
+ catch(e){return false}}
+/* the tannoy: clipped, loud, slightly too fast, like every ground */
+function paSay(text){
+ if(!ttsCfg().pa)return;
+ ttsSay(text,'stadium-announcer',{pitch:.85,rate:1.05,vol:1})}
+
+/* ---------- the press room speaks ---------- */
+function pressAsk(){
+ const c=G.pressCtx;if(!c)return;
+ const q=(typeof pressQuestion==='function')?pressQuestion():'';
+ if(!q)return;
+ A2._lastQ=q;A2._lastRep=c.rep||'reporter';
+ ttsSay(q,c.rep||('reporter'+(c.q||0)),{rate:.98});}
+ACTIONS.pressSay=()=>{
+ const c=G.pressCtx;if(!c)return;
+ if(!ttsAvailable()){toast('This browser cannot speak.');return}
+ if(!ttsCfg().tts){toast('Turn the reading voice on in Sound settings.');return}
+ ttsSay(A2._lastQ||pressQuestion(),c.rep||'reporter',{rate:.98})};
+const _pressSheetTTS=openPressSheet;
+openPressSheet=function(reaction){
+ const r=_pressSheetTTS(reaction);
+ const host=$('#sheetBody');
+ const c=G.pressCtx;
+ if(host&&c){
+  // a button to hear it again, next to the question
+  const qEl=host.querySelector('.presser-q');
+  if(qEl&&!host.querySelector('[data-action="pressSay"]')){
+   const b=document.createElement('button');
+   b.className='btn btn-ghost btn-sm';
+   b.style.cssText='margin:8px 0 2px';
+   b.setAttribute('data-action','pressSay');
+   b.innerHTML='🔊 Hear the question again';
+   qEl.insertAdjacentElement('afterend',b)}
+  setTimeout(pressAsk,260)}
+ return r};
+/* leaving the room shuts them up */
+const _pressLeaveTTS=ACTIONS.pressLeave;
+if(_pressLeaveTTS)ACTIONS.pressLeave=function(){ttsStop();return _pressLeaveTTS.apply(this,arguments)};
+const _closeModalTTS=closeModal;
+closeModal=function(){ttsStop();return _closeModalTTS.apply(this,arguments)};
+
+/* ---------- the tannoy at the ground ---------- */
+const _goalPA=MatchSim.prototype.goal;
+MatchSim.prototype.goal=function(A,D,shooter,creator,assister,pen){
+ const r=_goalPA.apply(this,arguments);
+ if(liveMatch(this)&&shooter&&shooter.p){
+  const nm=shooter.p.name;
+  const surname=nm.split(' ').slice(-1)[0];
+  const no=shooter.p.shirt?'number '+shooter.p.shirt+', ':'';
+  setTimeout(()=>paSay('Goal, '+A.c.name+'. Scored by '+no+nm+'. '+surname+'!'),2600)}
+ return r};
+const _ftPA=MatchSim.prototype.finish;
+MatchSim.prototype.finish=function(){
+ const r=_ftPA.apply(this,arguments);
+ if(liveMatch(this)){
+  const f=this.fix,h=G.clubs[f.h],a=G.clubs[f.a];
+  setTimeout(()=>paSay('Full time here. '+h.name+' '+f.hs+', '+a.name+' '+f.as+'.'),2200)}
+ return r};
+
+/* ---------- the ball, when you can see it ---------- */
+const _shotSound=MatchSim.prototype.shotEvent;
+MatchSim.prototype.shotEvent=function(A,D,sh,cr,head){
+ if(liveMatch(this)&&sGate('strike',260))sfx('strike');
+ return _shotSound.apply(this,arguments)};
+const _foulSound=MatchSim.prototype.foulEvent;
+MatchSim.prototype.foulEvent=function(D,dp,A,inBox){
+ const r=_foulSound.apply(this,arguments);
+ if(liveMatch(this)&&sGate('tackle',500))sfx('tackle');
+ return r};
+
+/* ---------------------------------------------------------------------
+   7. THE CONTROLS
+   --------------------------------------------------------------------- */
+ACTIONS.sfxTTS=()=>{
+ const c=ttsCfg();c.tts=!c.tts;
+ if(!c.tts)ttsStop();else ttsSay('The press are ready for you, boss.','preview');
+ toast(c.tts?'🗣️ Questions will be read aloud':'🗣️ Reading voice off');render()};
+ACTIONS.sfxPA=()=>{
+ const c=ttsCfg();c.pa=!c.pa;
+ toast(c.pa?'📣 Stadium announcer on':'📣 Stadium announcer off');render()};
+ACTIONS.sfxTestVoice=()=>{
+ if(!ttsAvailable()){toast('This browser cannot speak.');return}
+ ttsSay('So, boss — after that performance, are you still the right man for this job?','test-reporter',{rate:.98})};
+const _vSaveA2=vSave;
+vSave=function(){
+ const c=ttsCfg();
+ let h=_vSaveA2();
+ const vn=ttsAvailable()?ttsVoices().length:0;
+ const extra='<div class="card" style="margin-top:-6px">'+
+  '<div class="chip-lbl" style="margin-top:0">Voice</div><div class="chips">'+
+  '<button class="chip'+(c.tts?' on':'')+'" data-action="sfxTTS">🗣️ Read the press questions</button>'+
+  '<button class="chip'+(c.pa?' on':'')+'" data-action="sfxPA">📣 Stadium announcer</button>'+
+  '<button class="chip" data-action="sfxTestVoice">▶️ Hear a voice</button></div>'+
+  '<div class="xs faint" style="margin-top:8px;line-height:1.6">'+
+  (ttsAvailable()
+   ?'Your browser speaks with '+(vn||'its own')+' voice'+(vn===1?'':'s')+'. Every journalist is given one of them and keeps it, '+
+    'so you learn who is asking before you have read a word. The announcer reads the scorer over the tannoy.'
+   :'This browser has no speech engine, so the reading voice is unavailable.')+'</div>'+
+  '<div class="chip-lbl">Sound pack</div>'+
+  '<button class="btn btn-ghost btn-sm btn-block" data-action="sfxPackAsk">🎚️ '+
+   (G.sfxPack?'Sound pack: '+esc(G.sfxPack.base)+' ('+G.sfxPack.n+' loaded)':'Use real recordings instead')+'</button>'+
+  '</div>';
+ // slot it in under the sound card
+ const cut=h.indexOf('<div class="sec"><div class="t">💾');
+ return cut>0?h.slice(0,cut)+extra+h.slice(cut):h+extra};
+/* the match bar gets the announcer toggle too */
+const _mctlA2=renderMCtl;
+renderMCtl=function(){
+ const r=_mctlA2.apply(this,arguments);
+ const c=$('#mCtl');if(!c)return r;
+ const row=c.querySelector('[data-action="sfxCrowd"]');
+ if(row&&!c.querySelector('[data-action="sfxPA"]'))
+  row.insertAdjacentHTML('afterend',
+   '<button class="chip'+(ttsCfg().pa?' on':'')+'" data-action="sfxPA">📣 Tannoy</button>');
  return r};
 
 showStart();
