@@ -16900,7 +16900,7 @@ showStart=function(){
      '<span class="fi">▶</span></button>':'')+
    '<button class="fbtn red" data-action="frontNew">'+
     '<span class="fl">NEW CAREER</span>'+
-    '<span class="fd">Eighty-four clubs, six divisions, one job</span>'+
+    '<span class="fd">The whole English pyramid, twenty European leagues, one job</span>'+
     '<span class="fi">⚽</span></button>'+
    '<button class="fbtn" data-action="frontLoad">'+
     '<span class="fl">LOAD A SAVE</span>'+
@@ -17086,6 +17086,8 @@ MatchSim.prototype.avg=function(side,attrs,zone){
    a better answer than a wrong scoreline, so the engine keeps easing off
    the way it did.
    --------------------------------------------------------------------- */
+
+
 
 
 
@@ -18224,10 +18226,18 @@ function euroAllocation(){
   els.push(...el);ecs.push(...ec);
   // whatever is left of a top division can be called on to fill Europe up
   while(ix<ord.length)spare.push({i:ord[ix],coef:LEAGUES[div].coef,pos:ix++})});
- // holders: winning the Champions League gets you back in whatever you did
+ /* Winning the Champions League puts you in it again whatever you finished,
+    and so does winning the Europa League — and if that place was already
+    yours through the league, the one below you keeps his. The club has to
+    come OUT of the other two lists as it goes in, or it ends up entered
+    twice. */
  const hold=G.euroHolders||{};
- if(hold.CL!=null&&!cls.includes(hold.CL))cls.push(hold.CL);
- if(hold.EL!=null&&!cls.includes(hold.EL))cls.push(hold.EL);
+ const promote=i=>{
+  if(i==null||cls.includes(i))return;
+  let ix=els.indexOf(i);if(ix>=0)els.splice(ix,1);
+  ix=ecs.indexOf(i);if(ix>=0)ecs.splice(ix,1);
+  cls.push(i)};
+ promote(hold.CL);promote(hold.EL);
  /* the qualifying rounds, without making you sit through them: places are
     handed out a rung at a time across every country before anybody gets a
     second helping, and no country may put more than nine clubs in Europe */
@@ -19333,8 +19343,12 @@ genYouthPlayer=function(ci,rng){
  const pos=pick(['GK','DL','DC','DC','DR','DM','MC','MC','AMC','AML','AMR','ST','ST']);
  // a sixteen year old is a long way short of the first team wherever he is
  const ovr=clamp(Math.round(std-18+r()*12),32,66);
- // and how high he might go is the real difference between academies
- const reach=6+r()*16+(c.rep/620)*(r()<.10?1.5:1);
+ // How high he might go is the real difference between academies — but it
+ // has to be measured against the club he is at, not added on top of it.
+ // A flat "plus six to twenty-two" meant a National League academy turned
+ // out players fourteen points better than anyone already in the side, and
+ // sixteen seasons of that dragged the bottom of the pyramid up by twelve.
+ const reach=4+r()*10+(c.rep/900)*(r()<.10?1.6:1);
  const pot=clamp(Math.round(ovr+reach),ovr+3,97);
  const used=clubNames(c);
  const nm=worldName(c.cc||'ENG',r,used);
