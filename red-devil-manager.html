@@ -15272,6 +15272,474 @@ initDots=function(){
 const _sizeDug2=sizeDugCanvas;
 sizeDugCanvas=function(){const r=_sizeDug2();DUG.sky=null;return r};
 
+
+/* =====================================================================
+   VOICES THAT SOUND LIKE PEOPLE, A LOUDER GROUND, AND A TOUCHLINE
+   ---------------------------------------------------------------------
+   · The reading voice picked whatever the browser handed it first,
+     which on most machines meant every journalist in the room — Laura,
+     James, Priya, Danny — spoke in the same woman's voice, and a wide
+     random spread on pitch and rate made all of them sound like a
+     robot. Now each reporter has a gender, the engine is asked for the
+     best voice it owns of that gender, and the delivery only varies
+     within the range a real person's does.
+   · Every sound went straight out dry and centred. There is now a
+     compressor and a shelf on the master so it has body, and anything
+     that happens on the pitch is PANNED to where it happened — a
+     tackle by the near corner flag comes from that corner.
+   · The dugout has a referee and two assistants in it, kits with
+     stripes and hoops, the fourth official's board when you make a
+     change, a camera that shakes when one goes in and a scorer who
+     runs to the corner to celebrate.
+   · And you can now manage from the touchline without opening a menu:
+     nine shouts, one tap each, that really move the tactics.
+   ===================================================================== */
+
+/* ---------------------------------------------------------------------
+   1. VOICES
+   --------------------------------------------------------------------- */
+/* who is who — the press room, and anyone else the game names */
+const NAME_F=new Set(['laura','priya','sofia','sophia','sarah','sara','emma','olivia','ava','isla',
+ 'grace','chloe','amelia','hannah','ruth','nia','sandra','anna','maria','elena','ines','yuki',
+ 'aisha','fatima','zoe','claire','clara','helen','jane','kate','katie','lucy','megan','naomi',
+ 'nicola','rachel','rebecca','sian','tessa','vicky','victoria','bex','terri','sofie','marta',
+ 'ffion','bethan','carys','erin','freya','imogen','jess','jessica','leah','maisie','martha',
+ 'nadia','paula','rosa','tara','ursula','wendy','yasmin','beatrice','charlotte','diana']);
+const NAME_M=new Set(['james','danny','daniel','tom','thomas','marcus','dean','ollie','oliver',
+ 'terry','steve','steven','stephen','mike','michael','paul','john','jack','harry','george',
+ 'charlie','alfie','archie','freddie','theo','louie','kai','mason','reece','tyler','callum',
+ 'lewis','owen','rhys','jayden','luca','mateo','diego','rafael','thiago','enzo','hugo',
+ 'antoine','moussa','ibrahim','amadou','sekou','youssef','karim','emre','milan','luka',
+ 'nikola','jan','sven','lars','timo','pablo','iker','joao','tiago','kaito','sho','frank',
+ 'noel','matt','matthew','rob','robert','sam','samuel','will','william','andy','andrew',
+ 'gary','graham','scott','bazza','ben','craig','declan','eddie','gareth','ian','joe','keith',
+ 'liam','neil','nick','pete','peter','phil','ray','ricky','ross','sean','simon','stuart','wayne']);
+function nameGender(who){
+ const first=String(who||'').trim().split(/\s+/)[0].toLowerCase().replace(/[^a-zà-ÿ]/g,'');
+ if(NAME_F.has(first))return 'f';
+ if(NAME_M.has(first))return 'm';
+ // a reasonable guess for anything the tables miss, then stable either way
+ if(/(a|ia|ie|ine|elle|ette)$/.test(first)&&!/(luca|joshua|elijah|noah)$/.test(first))return 'f';
+ return (hashStr(first)%2)?'f':'m'}
+/* which of the browser's voices belong to whom, and which are any good */
+const V_FEM=/(female|samantha|karen|moira|tessa|fiona|victoria|susan|zira|hazel|serena|allison|ava|joanna|salli|kendra|kimberly|ivy|sonia|libby|aria|jenny|michelle|nicky|catherine|amelie|martha|emily|kate|linda|heather|zoe|clara|maisie|olivia|elizabeth|natasha|nora|amber|luciana|paulina|google us english|karen|veena|rishi_f)/i;
+const V_MAL=/(\bmale\b|daniel|\balex\b|\bfred\b|oliver|thomas|\btom\b|aaron|\bdavid\b|\bmark\b|george|\bguy\b|ryan|brandon|christopher|\beric\b|roger|steffan|arthur|rishi|gordon|\blee\b|\bjames\b|william|matthew|liam|ethan|nathan|reed|tony|bruce|albert|\bjunior\b|\bnathan\b|\bralph\b|\brichard\b)/i;
+function voiceGender(v){
+ const n=(v.name||'')+' ';
+ if(V_MAL.test(n))return 'm';
+ if(V_FEM.test(n))return 'f';
+ return null}
+/* the engine usually owns several voices; some of them are dreadful */
+function voiceScore(v){
+ const n=(v.name||'').toLowerCase(),l=(v.lang||'');
+ let s=0;
+ if(/natural|neural|premium|enhanced/.test(n))s+=70;
+ if(/siri/.test(n))s+=55;
+ if(/online/.test(n))s+=25;
+ if(/google/.test(n))s+=34;
+ if(/microsoft/.test(n))s+=12;
+ if(v.localService)s+=8;
+ if(v.default)s+=4;
+ if(/^en-GB/i.test(l))s+=22;
+ else if(/^en-(AU|IE|NZ|ZA)/i.test(l))s+=13;
+ else if(/^en/i.test(l))s+=7;
+ if(/compact|eloquence|espeak|pico|novelty|bad news|good news|bells|bubbles|whisper|zarvox|trinoids|albert|jester|organ|cellos|boing|deranged|hysterical|deranged|wobble/.test(n))s-=120;
+ return s}
+function voiceBank(){
+ if(!ttsAvailable())return{f:[],m:[],all:[]};
+ const now=(speechSynthesis.getVoices()||[]);
+ if(A2._vbN===now.length&&A2._vb)return A2._vb;
+ let en=now.filter(v=>/^en/i.test(v.lang||''));
+ if(!en.length)en=now.slice();
+ const rank=(a,b)=>voiceScore(b)-voiceScore(a);
+ const f=en.filter(v=>voiceGender(v)==='f').sort(rank);
+ const m=en.filter(v=>voiceGender(v)==='m').sort(rank);
+ const all=en.slice().sort(rank);
+ A2._vb={f,m,all};A2._vbN=now.length;
+ return A2._vb}
+/* the best voice of the right gender, with different reporters getting
+   different ones where the machine has more than one */
+function pickVoice(gender,seed){
+ const b=voiceBank();
+ let pool=gender==='f'?b.f:gender==='m'?b.m:b.all;
+ if(!pool.length)pool=b.all;
+ if(!pool.length)return null;
+ // only ever choose between voices of comparable quality
+ const top=voiceScore(pool[0]);
+ const good=pool.filter(v=>voiceScore(v)>=top-18);
+ return good[(seed>>>0)%good.length]}
+/* the delivery: real people vary a little, not a lot */
+ttsSay=function(text,who,opt){
+ if(!ttsAvailable()||!sfxOn()||!ttsCfg().tts)return false;
+ const t=String(text||'').replace(/<[^>]*>/g,'').replace(/[“”]/g,'').trim();
+ if(!t)return false;
+ try{
+  speechSynthesis.cancel();
+  const u=new SpeechSynthesisUtterance(t);
+  const o=opt||{};
+  const seed=hashStr(String(who||'reporter'));
+  const gender=o.gender||nameGender(who);
+  const v=pickVoice(gender,seed);
+  // a voice the engine will not accept must never cost us the sentence
+  try{if(v)u.voice=v;if(v&&v.lang)u.lang=v.lang}catch(e){}
+  const r=mulberry(seed);
+  u.pitch=clamp((o.pitch||1)+(r()*.20-.10),.55,1.6);
+  u.rate=clamp((o.rate||1)+(r()*.14-.07),.7,1.5);
+  u.volume=clamp((sfxCfg().vol||.7)*(o.vol||1),0,1);
+  A2._lastVoice=v?v.name+' ('+v.lang+')':'default';
+  speechSynthesis.speak(u);
+  return true}
+ catch(e){return false}};
+/* the tannoy is a man with a microphone in a concrete bowl */
+paSay=function(text){
+ if(!ttsCfg().pa)return;
+ ttsSay(text,'stadium-announcer',{gender:'m',pitch:.90,rate:1.0,vol:1})};
+/* the press room asks in the right voice */
+pressAsk=function(){
+ const c=G.pressCtx;if(!c)return;
+ const q=(typeof pressQuestion==='function')?pressQuestion():'';
+ if(!q)return;
+ A2._lastQ=q;A2._lastRep=c.rep||'reporter';
+ ttsSay(q,c.rep||'reporter',{gender:nameGender(c.rep),rate:.99})};
+/* a wider press room, so you meet more of them */
+if(typeof REPORTERS!=='undefined'&&REPORTERS.push)
+ ['Nia Fletcher','Marcus Reeve','Sandra Beckwith','Dean Whitlock','Bethan Lloyd',
+  'Terry Docherty','Aisha Rahman','Ollie Grant'].forEach(n=>{
+   if(REPORTERS.indexOf(n)<0)REPORTERS.push(n)});
+
+/* ---------------------------------------------------------------------
+   2. THE MASTER CHAIN — body, and a sense of where things happen
+   --------------------------------------------------------------------- */
+const _ctxChain=sfxCtx;
+sfxCtx=function(){
+ const ctx=_ctxChain();
+ if(!ctx||A2._chain)return ctx;
+ try{
+  A2._chain=1;
+  SFX.master.disconnect();
+  // a shelf to take the mud out, then a compressor to hold it together
+  const lo=ctx.createBiquadFilter();lo.type='highpass';lo.frequency.value=48;
+  const hi=ctx.createBiquadFilter();hi.type='highshelf';hi.frequency.value=5200;hi.gain.value=3.5;
+  const comp=ctx.createDynamicsCompressor();
+  comp.threshold.value=-19;comp.knee.value=22;comp.ratio.value=4.2;
+  comp.attack.value=.006;comp.release.value=.22;
+  const out=ctx.createGain();out.gain.value=1.5;   // the compressor takes it down, this puts it back
+  SFX.master.connect(lo);lo.connect(hi);hi.connect(comp);comp.connect(out);
+  out.connect(ctx.destination);
+  A2.out=out}
+ catch(e){try{SFX.master.connect(ctx.destination)}catch(e2){}}
+ return ctx};
+/* where on the pitch a thing happened, as a stereo position */
+function panFor(x){
+ if(x==null)return 0;
+ const c=(MU.cam&&DUG&&MU.tab==='dugout')?DUG.cam.x:52.5;
+ return clamp((x-c)/44,-.85,.85)}
+function panNode(pan){
+ const ctx=SFX.ctx;
+ if(!ctx||!ctx.createStereoPanner||!pan)return null;
+ try{const p=ctx.createStereoPanner();p.pan.value=clamp(pan,-1,1);
+  p.connect(SFX.master);return p}catch(e){return null}}
+/* every generator can now be placed */
+const _sTonePan=sTone;
+sTone=function(o){
+ if(!o||!o.pan)return _sTonePan(o);
+ const p=panNode(o.pan);
+ if(!p)return _sTonePan(o);
+ const realM=SFX.master;SFX.master=p;
+ try{_sTonePan(o)}finally{SFX.master=realM}};
+const _sNoisePan=sNoise;
+sNoise=function(o){
+ if(!o||!o.pan)return _sNoisePan(o);
+ const p=panNode(o.pan);
+ if(!p)return _sNoisePan(o);
+ const realM=SFX.master;SFX.master=p;
+ try{_sNoisePan(o)}finally{SFX.master=realM}};
+const _burstPan=a2Burst;
+a2Burst=function(o){
+ if(!o||!o.pan)return _burstPan(o);
+ const p=panNode(o.pan);
+ if(!p)return _burstPan(o);
+ const realM=SFX.master;SFX.master=p;
+ try{_burstPan(o)}finally{SFX.master=realM}};
+
+/* ---------------------------------------------------------------------
+   3. RICHER SOUNDS
+   --------------------------------------------------------------------- */
+/* a struck ball: the crack of the boot, the shell of the ball, the air */
+a2Kick=function(power,pan){
+ const ctx=a2Build();if(!ctx||!sfxOn())return;
+ const p=power==null?.7:clamp(power,.2,1);
+ const j=()=>1+(Math.random()*.22-.11);            // never twice the same
+ a2Burst({f:4600*j(),q:.5,d:.022,g:.10*p,filter:'highpass',wet:.25,pan});
+ a2Burst({f:1050*j(),q:1.4,d:.06,g:.08*p,wet:.28,pan});
+ a2Burst({f:340*j(),q:3.2,d:.13,g:.06*p,wet:.2,pan});   // the shell ringing
+ sTone({f:(126+p*74)*j(),to:48,d:.11+p*.06,type:'sine',g:.15*p,pan});
+ if(p>.72)a2Burst({f:2600,q:.8,d:.20,g:.024,filter:'highpass',at:.02,wet:.5,pan})};
+SOUNDS.kick=p=>a2Kick(typeof p==='number'?p:.7,panFor(MU.ball&&MU.ball.x));
+SOUNDS.strike=()=>a2Kick(1,panFor(MU.ball&&MU.ball.x));
+SOUNDS.tackle=()=>{
+ const pan=panFor(MU.ball&&MU.ball.x);
+ a2Burst({f:230,q:.9,d:.10,g:.11,wet:.25,pan});
+ a2Burst({f:3200,q:.6,d:.03,g:.045,filter:'highpass',wet:.2,pan});
+ a2Burst({f:780,q:2.2,d:.16,g:.03,wet:.3,pan})};
+SOUNDS.net=()=>{
+ const pan=panFor(MU.ball&&MU.ball.x);
+ a2Burst({f:3300,q:.9,d:.11,g:.08,wet:.4,pan});
+ a2Burst({f:1700,q:1.6,d:.24,g:.038,at:.02,wet:.4,pan});
+ sTone({f:205,to:148,d:.16,type:'triangle',g:.032,at:.01,pan})};
+/* the ground's own opinions */
+SOUNDS.boo=()=>{
+ a2Burst({f:210,q:.8,d:2.4,g:.14,a:.42,wet:.45});
+ a2Burst({f:430,q:1.1,d:2.0,g:.06,a:.5,wet:.4});
+ for(let i=0;i<14;i++)a2Chatter(Math.random()*1.8,.030)};
+SOUNDS.jeer=()=>{                                   // whistling at the referee
+ for(let i=0;i<22;i++){
+  const at=Math.random()*1.6;
+  a2Burst({f:2300+Math.random()*1400,q:11+Math.random()*8,d:.16+Math.random()*.2,
+   g:.010+Math.random()*.012,a:.03,at,filter:'bandpass',wet:.5,
+   pan:(Math.random()*2-1)*.7})}};
+SOUNDS.ovation=()=>{
+ for(let k=0;k<8;k++)a2Claps(11,.5,.019,k*.36);
+ for(let i=0;i<10;i++)a2Chatter(Math.random()*2.4,.024)};
+/* a stab off the public address after one goes in */
+SOUNDS.paStab=()=>{
+ [261.6,329.6,392,523.3].forEach((f,i)=>{
+  sTone({f,d:.55,type:'sawtooth',g:.045,at:i*.055,a:.01});
+  sTone({f:f*2,d:.4,type:'square',g:.018,at:i*.055})});
+ a2Burst({f:120,q:1,d:.5,g:.09,wet:.4})};
+/* the crowd reacts to what the referee does */
+const _cardCrowd=MatchSim.prototype.card;
+MatchSim.prototype.card=function(D,dp){
+ const before=dp.yc;
+ const r=_cardCrowd.apply(this,arguments);
+ if(liveMatch(this)&&dp.yc>before&&sGate('jeer',2200)){
+  // if he books one of ours the ground lets him know
+  setTimeout(()=>sfx(D.isMy?'jeer':'ovation'),420)}
+ return r};
+const _offCrowd=MatchSim.prototype.sendOff;
+MatchSim.prototype.sendOff=function(D,dp,straight){
+ const r=_offCrowd.apply(this,arguments);
+ if(liveMatch(this))setTimeout(()=>sfx(D.isMy?'boo':'ovation'),500);
+ return r};
+const _goalStab=MatchSim.prototype.goal;
+MatchSim.prototype.goal=function(A,D,shooter,creator,assister,pen){
+ const r=_goalStab.apply(this,arguments);
+ if(liveMatch(this)&&A.isMy)setTimeout(()=>sfx('paStab'),1500);
+ return r};
+
+/* ---------------------------------------------------------------------
+   4. THE DUGOUT, CLOSER STILL
+   --------------------------------------------------------------------- */
+/* officials: the referee in black, an assistant on each touchline */
+function dugOfficials(g,P,W,now){
+ const m=MU.m;if(!m)return;
+ if(!MU.off3){
+  MU.off3={ref:{x:52.5,y:34},l1:{x:30,y:1.2},l2:{x:75,y:66.8}}}
+ const o=MU.off3;
+ // the referee keeps a diagonal on the ball
+ const bx=MU.ball.x,by=MU.ball.y;
+ o.ref.x+=((bx-(bx-52.5)*.18)-o.ref.x)*.035;
+ o.ref.y+=((by+(by<34?7:-7))-o.ref.y)*.035;
+ o.ref.x=clamp(o.ref.x,4,101);o.ref.y=clamp(o.ref.y,5,63);
+ // the assistants run the line, level with the second-last man
+ [['l1',1.2],['l2',66.8]].forEach(([k,ly],i)=>{
+  const side=i===0?0:1;
+  const back=livePlayers(side).filter(x=>x.slot!=='GK')
+   .map(x=>dotOf(x)).filter(Boolean).sort((a,b)=>atkRight(side)?a.x-b.x:b.x-a.x);
+  const want=back.length>1?back[1].x:52.5;
+  o[k].x+=(clamp(want,3,102)-o[k].x)*.05;o[k].y=ly});
+ [[o.ref,'#15181c','#f2c400'],[o.l1,'#15181c','#f2c400'],[o.l2,'#15181c','#f2c400']].forEach(([pos,kit,trim],i)=>{
+  const p=P(pos.x,pos.y,0);
+  const u=p[2]*1.82/8;
+  if(u<.5)return;
+  g.beginPath();g.ellipse(p[0],p[1],u*1.3,u*.5,0,0,7);
+  g.fillStyle='rgba(0,0,0,.38)';g.fill();
+  const hip=p[1]-u*3.4,top=p[1]-u*5.8;
+  g.fillStyle='#1b1f24';g.fillRect(p[0]-u*.66,hip,u*1.32,u*1.5);      // shorts
+  g.fillStyle='#0e1114';g.fillRect(p[0]-u*.60,hip+u*1.5,u*1.2,u*1.5); // socks
+  g.fillStyle=kit;g.fillRect(p[0]-u*.85,top,u*1.7,u*2.5);             // shirt
+  if(i){g.fillStyle=trim;                                             // and a flag
+   g.fillRect(p[0]+u*.85,top-u*1.6,u*1.5,u*1.0)}
+  g.beginPath();g.arc(p[0],top-u*.6,u*.6,0,7);
+  g.fillStyle='#e0b393';g.fill()})}
+/* kits are not all plain: stripes and hoops, from the club's two colours */
+const KIT_PLAIN=['MUN','LIV','ARS','CHE','MCI','TOT','AVL','LEE'];
+function kitPattern(c){
+ if(KIT_PLAIN.indexOf(c.key)>=0)return 'plain';   // these sides wear one colour
+ const h=hashStr(c.key||c.short||'x')%7;
+ return h===0?'stripe':h===1?'hoop':h===2?'sash':'plain'}
+/* the fourth official holds up his board when you make a change */
+function dugSubBoard(g,W,H,now){
+ const b=MU.subBoard;
+ if(!b||now>b.until)return;
+ const k=clamp((b.until-now)/3600,0,1);
+ const bw=W*.20,bh=bw*.62,bx=W*.5-bw/2,by=H*.52;
+ g.save();g.globalAlpha=Math.min(1,k*3);
+ g.fillStyle='#0b0d10';g.beginPath();g.roundRect(bx,by,bw,bh,bw*.05);g.fill();
+ g.strokeStyle='rgba(255,255,255,.25)';g.lineWidth=Math.max(1,W*.002);g.stroke();
+ g.textAlign='center';
+ g.font='900 '+Math.round(bh*.42)+'px Inter,sans-serif';
+ g.fillStyle='#ff4b3a';g.fillText('▼ '+(b.off||''),bx+bw/2,by+bh*.42);
+ g.fillStyle='#3ddc84';g.fillText('▲ '+(b.on||''),bx+bw/2,by+bh*.84);
+ g.restore()}
+const _subDoBoard=ACTIONS.subDo;
+if(_subDoBoard)ACTIONS.subDo=function(el){
+ try{const outP=playerById(+el.dataset.arg),inP=playerById(+el.dataset.id);
+  if(outP&&inP)MU.subBoard={off:shirtNo(outP,G.clubs[G.my])||'',on:shirtNo(inP,G.clubs[G.my])||'',
+   until:performance.now()+3600}}catch(e){}
+ return _subDoBoard.apply(this,arguments)};
+/* one goes in: the picture shakes and the scorer runs to the corner */
+const _goalShake=MatchSim.prototype.goal;
+MatchSim.prototype.goal=function(A,D,shooter,creator,assister,pen){
+ const r=_goalShake.apply(this,arguments);
+ if(liveMatch(this)){
+  DUG.shake=performance.now()+700;
+  if(shooter){
+   const si=A===this.sides[0]?0:1;
+   const cx=atkRight(si)?101:4,cy=MU.ball.y<34?4:64;
+   DUG.celebrate={pl:shooter,x:cx,y:cy,until:performance.now()+5200}}}
+ return r};
+/* the scorer peels away to the corner flag — this has to sit outside
+   pitchTargets, which would otherwise put him straight back on his mark */
+const _targetsCel=pitchTargets;
+pitchTargets=function(){
+ const r=_targetsCel.apply(this,arguments);
+ const cel=DUG.celebrate;
+ if(!cel)return r;
+ if(performance.now()>=cel.until){DUG.celebrate=null;return r}
+ const d=dotOf(cel.pl);
+ if(d){d.tx=cel.x;d.ty=cel.y}
+ // and two of his team-mates chase after him
+ try{
+  const side=MU.m.sides.findIndex(s=>s.onfield.indexOf(cel.pl)>=0);
+  livePlayers(side).map(x=>dotOf(x)).filter(Boolean)
+   .sort((p,q)=>dist2(p,d)-dist2(q,d)).slice(1,3)
+   .forEach((m2,i)=>{m2.tx=cel.x+(i?5:-5);m2.ty=clamp(cel.y+(i?4:-4),3,65)})}
+ catch(e){}
+ return r};
+/* the finished frame: officials, the board, the shake, the celebration */
+const _dugMore=drawDugout;
+drawDugout=function(){
+ const now=performance.now();
+ const cv=$('#dugCanvas');
+ const shake=DUG.shake&&now<DUG.shake;
+ if(shake&&cv){
+  const k=(DUG.shake-now)/700;
+  const g0=cv.getContext('2d');
+  g0.setTransform(1,0,0,1,(Math.random()*2-1)*cv.width*.012*k,(Math.random()*2-1)*cv.height*.012*k)}
+ const r=_dugMore.apply(this,arguments);
+ if(!cv||!MU.m)return r;
+ const g=cv.getContext('2d');
+ const W=cv.width,H=cv.height;
+ try{
+  const P=dugProject(W,H);
+  dugOfficials(g,P,W,now);
+  dugSubBoard(g,W,H,now)}catch(e){}
+ g.setTransform(1,0,0,1,0,0);
+ return r};
+/* kit patterns on the figures */
+const _figPattern=dugFigure;
+dugFigure=function(g,d,c,P,W,now){
+ const r=_figPattern(g,d,c,P,W,now);
+ if(d.pl.slot==='GK'||!c.c2||c.c2===c.c1)return r;
+ const pat=kitPattern(c);
+ if(pat==='plain')return r;
+ const p=P(d.x,d.y,0),u=p[2]*1.82/8;
+ if(u<2.2)return r;
+ const px=p[0],torsoT=p[1]-u*6.3,hipY=p[1]-u*3.7;
+ g.save();
+ g.beginPath();
+ g.moveTo(px-u*.95,torsoT+u*.35);
+ g.quadraticCurveTo(px,torsoT-u*.20,px+u*.95,torsoT+u*.35);
+ g.lineTo(px+u*.82,hipY+u*.08);g.lineTo(px-u*.82,hipY+u*.08);
+ g.closePath();g.clip();
+ g.fillStyle=c.c2;g.globalAlpha=.85;
+ if(pat==='stripe')for(let i=-2;i<=2;i+=2)g.fillRect(px+i*u*.36,torsoT-u,u*.30,u*4);
+ else if(pat==='hoop')for(let i=0;i<3;i++)g.fillRect(px-u,torsoT+u*(.5+i*.9),u*2,u*.42);
+ else{g.beginPath();g.moveTo(px-u,torsoT+u*.2);g.lineTo(px-u*.55,torsoT+u*.2);
+  g.lineTo(px+u,hipY);g.lineTo(px+u*.55,hipY);g.closePath();g.fill()}
+ g.restore();
+ return r};
+
+/* ---------------------------------------------------------------------
+   5. THE TOUCHLINE — manage without opening a menu
+   --------------------------------------------------------------------- */
+const TOUCHLINE=[
+ {k:'behind',ic:'🛡️',lbl:'Get behind the ball',say:'get behind the ball',
+  set:{mentality:'Defensive',line:'Deep',press:'Low',counter:'Drop off'}},
+ {k:'push',ic:'⬆️',lbl:'Push up',say:'push up',
+  set:{line:'High',press:'High'}},
+ {k:'press',ic:'🔥',lbl:'Press them',say:'get after them',
+  set:{press:'High',counter:'Counter-press',tackling:'Aggressive'}},
+ {k:'keep',ic:'🎯',lbl:'Keep the ball',say:'keep the ball',
+  set:{passStyle:'Short',mentality:'Balanced',width:'Standard'}},
+ {k:'forward',ic:'🚀',lbl:'Get it forward',say:'get it forward',
+  set:{passStyle:'Direct',mentality:'Attacking'}},
+ {k:'wide',ic:'↔️',lbl:'Use the width',say:'use the width',
+  set:{width:'Wide',passFocus:'Left Flank'}},
+ {k:'slow',ic:'🐢',lbl:'Take your time',say:'take your time',
+  set:{passStyle:'Short',mentality:'Counter',timeWaste:'Off'}},
+ {k:'waste',ic:'⏳',lbl:'Waste time',say:'take the sting out of it',
+  set:{timeWaste:'On',mentality:'Defensive',passStyle:'Short'}},
+ {k:'allout',ic:'⚔️',lbl:'Everyone forward',say:'everyone forward',
+  set:{mentality:'Overload',line:'High',press:'High',passStyle:'Direct'}}];
+function touchCool(){
+ const m=MU.m;if(!m)return 0;
+ if(MU.lastTouch==null)return 0;
+ return Math.max(0,4-(m.min-MU.lastTouch))}
+ACTIONS.touchCall=el=>{
+ const s=mySide(),m=MU.m;
+ if(!s||!m||m.done)return;
+ const t=TOUCHLINE.find(x=>x.k===el.dataset.v);if(!t)return;
+ const wait=touchCool();
+ if(wait>0){toast('Give them a minute — '+wait+' more');return}
+ MU.lastTouch=m.min;
+ // it changes the side for this match only — your saved plan is untouched
+ for(const k in t.set)s.tac[k]=t.set[k];
+ applyTalk(s,'Encourage');
+ m.say(m.dispMin(),s,'The manager is on the edge of his area — “'+t.say+'!”');
+ sfx('nav');
+ toast(t.ic+' '+t.lbl);
+ renderMCtl()};
+ACTIONS.touchForm=el=>{
+ const s=mySide(),m=MU.m;
+ if(!s||!m||m.done)return;
+ if(typeof ACTIONS.mForm==='function')ACTIONS.mForm(el);
+ closeModal();renderMCtl()};
+ACTIONS.touchMore=()=>{
+ const s=mySide();if(!s)return;
+ const forms=Object.keys(FORMATIONS);
+ openModal('<h3>📋 From the touchline</h3>'+
+  '<div class="chip-lbl" style="margin-top:2px">Shape</div><div class="chips">'+
+  forms.map(f=>'<button class="chip'+(s.tac.formation===f?' on':'')+'" data-action="touchForm" data-v="'+f+'">'+f+'</button>').join('')+
+  '</div><div class="chip-lbl">Mentality</div><div class="chips">'+
+  MENTALITIES.map(x=>'<button class="chip'+(s.tac.mentality===x?' on':'')+'" data-action="mInstr" data-k="mentality" data-v="'+x+'">'+x+'</button>').join('')+
+  '</div><div class="chip-lbl">Every shout</div><div class="chips">'+
+  TOUCHLINE.map(t=>'<button class="chip" data-action="touchCall" data-v="'+t.k+'">'+t.ic+' '+t.lbl+'</button>').join('')+
+  '</div><button class="btn btn-primary btn-block" style="margin-top:12px" data-action="closeModal">Back to the game</button>')};
+/* a row of them on the touchline, always there, no menu */
+const _mctlTouch=renderMCtl;
+renderMCtl=function(){
+ const r=_mctlTouch.apply(this,arguments);
+ const c=$('#mCtl'),m=MU.m;
+ if(!c||!m||m.done||m.stage==='HT')return r;
+ if(c.querySelector('[data-action="touchCall"]'))return r;
+ const s=mySide();if(!s)return r;
+ const wait=touchCool();
+ const quick=['behind','press','forward','waste','allout'];
+ c.insertAdjacentHTML('afterbegin',
+  '<div class="xs faint" style="text-align:center;margin:-2px 0 5px">'+
+   (wait>0?'The bench has just shouted — '+wait+' min':'📣 Shout from the touchline')+'</div>'+
+  '<div class="secnav" style="padding-bottom:8px;gap:6px">'+
+  TOUCHLINE.filter(t=>quick.indexOf(t.k)>=0).map(t=>
+   '<button class="chip'+(wait>0?'':'')+'" data-action="touchCall" data-v="'+t.k+'" '+
+   'style="flex:none'+(wait>0?';opacity:.45':'')+'">'+t.ic+' '+t.lbl+'</button>').join('')+
+  '<button class="chip" data-action="touchMore" style="flex:none">⋯ More</button></div>');
+ return r};
+const _initTouch=initDots;
+initDots=function(){_initTouch();MU.lastTouch=null;MU.subBoard=null;
+ MU.off3=null;DUG.shake=0;DUG.celebrate=null};
+
 showStart();
 </script>
 </body>
