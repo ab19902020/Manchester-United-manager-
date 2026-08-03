@@ -11037,6 +11037,12 @@ drawPitch=function(){
  // ---- the players ----
  const order=MU.dots.slice().sort((a,b)=>a.y-b.y);
  const lbl=[];
+ // what the camera can actually see, in the coordinates we are drawing in,
+ // so a name never runs off the picture or hides under the score strip
+ const vb=(MU.cam&&MU.cam.mode==='broadcast')
+  ?{x0:MU.cam.x*sx-(W/2)/z, x1:MU.cam.x*sx+(W/2)/z,
+    y0:MU.cam.y*sy-(H/2)/z+sy*4.4/z, y1:MU.cam.y*sy+(H/2)/z}
+  :{x0:0,x1:W,y0:sy*4.4,y1:H};
  order.forEach(d=>{
   const c=G.clubs[m.sides[d.si].ci];
   drawMan(ctx,d,d.si,c,sx,sy,z,
@@ -11049,21 +11055,22 @@ drawPitch=function(){
   if(d.pl.off)return;
   const px=d.x*sx,py=d.y*sy,r=Math.max(3.4,sx*1.75)/Math.sqrt(z);
   const isHolder=p.holder===d.pl;
-  const ly=py+r*2.6;
-  const near=lbl.some(q=>Math.abs(q[0]-px)<sx*11/z&&Math.abs(q[1]-ly)<sy*5.2/z);
-  if(!isHolder&&near)return;
-  lbl.push([px,ly]);
   ctx.font='700 '+Math.max(7,Math.round(sx*1.9/Math.sqrt(z)))+'px Inter,sans-serif';
   ctx.textAlign='center';
-  // a soft plate behind it reads better than a heavy outline
   const nm=surname(d.pl.p.name);
   const w=ctx.measureText(nm).width;
+  // keep it on the canvas, and flip it above a man on the bottom touchline
+  const L=labelSpot(px,py,r,w,vb,sy);
+  const near=lbl.some(q=>Math.abs(q[0]-L.x)<sx*11/z&&Math.abs(q[1]-L.y)<sy*5.2/z);
+  if(!isHolder&&near)return;
+  lbl.push([L.x,L.y]);
+  // a soft plate behind it reads better than a heavy outline
   ctx.fillStyle='rgba(6,10,7,.62)';
   ctx.beginPath();
-  ctx.roundRect(px-w/2-sx*.5,ly-sy*1.5,w+sx*1.0,sy*2.0,sy*.5);
+  ctx.roundRect(L.x-w/2-sx*.5,L.y-sy*1.5,w+sx*1.0,sy*2.0,sy*.5);
   ctx.fill();
   ctx.fillStyle=isHolder?'#fbe122':'rgba(238,244,238,.82)';
-  ctx.fillText(nm,px,ly)});
+  ctx.fillText(nm,L.x,L.y)});
  // ---- the ball ----
  const bx=MU.ball.x*sx,by=(MU.ball.y-hgt*.55)*sy;
  const br=Math.max(2.2,sx*.95)*(1+hgt*.055)/Math.sqrt(z);
@@ -14790,6 +14797,480 @@ renderMCtl=function(){
   row.insertAdjacentHTML('afterend',
    '<button class="chip'+(ttsCfg().pa?' on':'')+'" data-action="sfxPA">📣 Tannoy</button>');
  return r};
+
+
+/* =====================================================================
+   THE DUGOUT, REBUILT — and two flaws in the 2D view
+   ---------------------------------------------------------------------
+   FLAW ONE. Name labels on the 2D pitch were drawn wherever the player
+   happened to be, so anybody standing on the bottom touchline had his
+   name sliced in half by the edge of the canvas, and anybody near the
+   right-hand side had it running off the picture. Worst of all it hit
+   the man on the ball — the one name you actually want to read.
+
+   FLAW TWO. The dugout view was a flat drawing with a nearly parallel
+   perspective, twenty-two identical blobs and a band of confetti for a
+   crowd. It never moved and it never told you anything.
+
+   THE DUGOUT NOW. A real pinhole camera stands on the halfway line,
+   nine metres up, and pans along the touchline with the ball the way a
+   television camera does — tightening when play reaches a box. The
+   pitch is projected through it properly, so the far touchline
+   converges and the far goal is genuinely smaller than the near one.
+   The stands behind sit on their own wide canvas and parallax past at
+   a third of the speed, because they are a hundred metres further away.
+
+   The players are no longer blobs. Each one is a figure with a head,
+   a torso in his club's kit, sleeves and shorts and socks in the
+   second colour, and arms and legs on a running cycle whose speed is
+   driven by how fast he is actually moving. He carries his squad
+   number on his back, and turns to face the way he is going.
+   ===================================================================== */
+
+/* ---------------------------------------------------------------------
+   1. THE 2D LABEL FIX
+   --------------------------------------------------------------------- */
+/* keep a label on the canvas: nudge it inside, and put it above a man
+   standing on the bottom touchline rather than off the bottom edge */
+function labelSpot(px,py,r,w,vb,sy){
+ const pad=sy*.6;
+ let x=clamp(px,vb.x0+w/2+pad,vb.x1-w/2-pad);
+ let y=py+r*2.6;
+ if(y+sy*.9>vb.y1-sy*.4)y=py-r*2.0;              // he is on the bottom touchline
+ y=clamp(y,vb.y0+sy*1.6,vb.y1-sy*.9);
+ return{x,y}}
+
+/* ---------------------------------------------------------------------
+   2. THE CAMERA
+   A pinhole on the halfway line, nine metres up and eighteen back,
+   panning with the ball and tightening near a goal.
+   --------------------------------------------------------------------- */
+const DUG={cam:{x:52.5,f:1,tilt:0},sky:null,phase:{},rain:null};
+function dugCam(W,H){
+ const c=DUG.cam;
+ const m=MU.m;
+ const bx=(MU.ball&&MU.ball.x)||52.5;
+ // the camera tracks the ball along the touchline, but never swings so far
+ // that it is looking at an empty corner
+ const want=clamp(bx,19,86);
+ c.x+=(want-c.x)*.05;
+ // and tightens when the ball is in a box
+ const near=Math.min(bx,105-bx);
+ const wantF=near<20?1.10:near<32?1.05:1;
+ c.f+=(wantF-c.f)*.03;
+ if(!m||m.stage==='HT')c.f+=(1-c.f)*.06;
+ return c}
+/* world (across, depth, height) -> screen. depth 0 is the near touchline */
+/* a real broadcast camera: twenty-two metres up, forty-two metres back
+   from the near touchline. Those two numbers are what make the near goal
+   bigger than the far one and the touchlines converge. */
+const DUG_H=22,DUG_BACK=42;
+function dugProject(W,H){
+ const c=DUG.cam;
+ const focal=H*1.945*c.f;
+ const horizon=H*-0.029;
+ return function(x,y,h){
+  const dz=y+DUG_BACK;                           // distance from the camera plane
+  const s=focal/dz;
+  return[W/2+(x-c.x)*s, horizon+(DUG_H-(h||0))*s, s]}}
+/* where the far touchline lands, so the stands can sit on it */
+function dugFarY(W,H){return dugProject(W,H)(52.5,68,0)[1]}
+
+/* ---------------------------------------------------------------------
+   3. THE GROUND BEHIND — one wide canvas, parallaxed
+   --------------------------------------------------------------------- */
+function dugSky(W,H,hc,ac){
+ const key=W+'x'+H+'|'+hc.key+'|'+ac.key;
+ if(DUG.sky&&DUG.sky.key===key)return DUG.sky;
+ const SW=Math.round(W*2.4),SH=Math.round(H*.62);
+ const cv=document.createElement('canvas');cv.width=SW;cv.height=SH;
+ const g=cv.getContext('2d');
+ const rng=mulberry(hashStr('sky'+hc.key+ac.key));
+ // night sky
+ let grd=g.createLinearGradient(0,0,0,SH);
+ grd.addColorStop(0,'#020406');grd.addColorStop(.55,'#070d14');grd.addColorStop(1,'#0d151c');
+ g.fillStyle=grd;g.fillRect(0,0,SW,SH);
+ for(let i=0;i<140;i++){                          // a few stars over the roof
+  g.fillStyle='rgba(255,255,255,'+(.08+rng()*.22)+')';
+  g.fillRect(rng()*SW,rng()*SH*.30,1,1)}
+ // four floodlight pylons
+ [0.10,0.36,0.64,0.90].forEach(fx=>{
+  const px=fx*SW,py=SH*.16;
+  const rg=g.createRadialGradient(px,py,0,px,py,SW*.13);
+  rg.addColorStop(0,'rgba(255,250,228,.55)');rg.addColorStop(.18,'rgba(255,250,228,.13)');
+  rg.addColorStop(1,'rgba(255,250,228,0)');
+  g.fillStyle=rg;g.fillRect(0,0,SW,SH);
+  g.fillStyle='#161d24';g.fillRect(px-SW*.006,py,SW*.012,SH*.34);
+  g.fillStyle='#0f151b';g.fillRect(px-SW*.035,py-SH*.045,SW*.07,SH*.052);
+  for(let r=0;r<3;r++)for(let c2=0;c2<5;c2++){
+   g.fillStyle='#f4f8ff';
+   g.fillRect(px-SW*.030+c2*SW*.0135,py-SH*.040+r*SH*.0155,SW*.009,SH*.010)}});
+ // the roof
+ const roofY=SH*.36;
+ g.fillStyle='#0a0f14';g.fillRect(0,roofY,SW,SH*.055);
+ g.fillStyle='rgba(255,255,255,.05)';g.fillRect(0,roofY,SW,SH*.010);
+ // three tiers of seats, each with people in them
+ const tiers=[[roofY+SH*.055,SH*.135,.55],[roofY+SH*.19,SH*.155,.75],[roofY+SH*.345,SH*.185,1]];
+ tiers.forEach(([ty,th,lit],ti)=>{
+  const tg=g.createLinearGradient(0,ty,0,ty+th);
+  tg.addColorStop(0,'#0d141b');tg.addColorStop(1,'#18222b');
+  g.fillStyle=tg;g.fillRect(0,ty,SW,th);
+  // the seats themselves, in blocks of club colour
+  const cols=Math.round(SW/(W*.028));
+  for(let i=0;i<cols;i++){
+   const bx=i*SW/cols;
+   const home=(i%9)<5;
+   g.fillStyle=(i%13===6)?'#e8eef4':(home?hc.c1:shade(hc.c1,.45));
+   g.globalAlpha=.16;g.fillRect(bx,ty,SW/cols-1,th);g.globalAlpha=1}
+  // and the people
+  const n=Math.round(SW*th/(W*W*.00018));
+  for(let i=0;i<n;i++){
+   const x=rng()*SW,y=ty+rng()*th;
+   const r2=rng();
+   g.fillStyle=r2<.34?(rng()<.5?hc.c1:hc.c2||'#222'):r2<.42?ac.c1:
+    ['#c9b8a4','#8e7f72','#57606b','#2f3a44','#d7dde3'][Math.floor(rng()*5)];
+   g.globalAlpha=(.35+rng()*.55)*lit;
+   const s=Math.max(1,W*.0032);
+   g.fillRect(x,y,s,s*1.25)}
+  g.globalAlpha=1;
+  // the gangway between tiers
+  g.fillStyle='rgba(0,0,0,.45)';g.fillRect(0,ty+th-SH*.012,SW,SH*.012)});
+ // the tunnel mouth and two dugouts along the front
+ const frontY=SH*.90;
+ g.fillStyle='#05080b';g.fillRect(SW*.47,frontY-SH*.085,SW*.06,SH*.085);
+ [[0.30,hc],[0.63,ac]].forEach(([fx,c])=>{
+  const bx=fx*SW,bw=SW*.075,bh=SH*.062;
+  g.fillStyle='#0b1116';g.fillRect(bx,frontY-bh,bw,bh);
+  g.fillStyle='rgba(255,255,255,.07)';g.fillRect(bx,frontY-bh,bw,SH*.008);
+  g.fillStyle=c.c1;g.globalAlpha=.5;g.fillRect(bx,frontY-bh*.22,bw,SH*.006);g.globalAlpha=1;
+  for(let i=0;i<5;i++){                           // substitutes on the bench
+   g.fillStyle=c.c1;g.globalAlpha=.75;
+   g.fillRect(bx+bw*(.10+i*.18),frontY-bh*.55,SW*.006,SH*.026);
+   g.fillStyle='#d8b394';
+   g.fillRect(bx+bw*(.10+i*.18),frontY-bh*.62,SW*.006,SW*.006);g.globalAlpha=1}});
+ // sponsor hoardings, the last thing before the grass
+ const ads=[[hc.c1,hc.short.toUpperCase()],['#10161d','FLYAWAY'],[ac.c1,ac.short.toUpperCase()],
+  ['#1b1030','NEXUS'],['#0f2a18','KESTREL'],['#241016','VANTAGE']];
+ const adH=SH*.062,adY=SH-adH;
+ for(let i=0;i<10;i++){
+  const [col,txt]=ads[i%ads.length];
+  const bx=i*SW/10;
+  g.fillStyle=col;g.fillRect(bx,adY,SW/10-2,adH);
+  g.fillStyle='rgba(255,255,255,.9)';
+  g.font='800 '+Math.round(adH*.60)+'px Inter,sans-serif';
+  g.textAlign='center';g.globalAlpha=.85;
+  g.fillText(txt,bx+SW/20,adY+adH*.72);g.globalAlpha=1}
+ g.fillStyle='rgba(255,255,255,.16)';g.fillRect(0,adY,SW,adH*.12);
+ DUG.sky={key,cv,SW,SH};
+ return DUG.sky}
+
+/* ---------------------------------------------------------------------
+   4. A FOOTBALLER
+   --------------------------------------------------------------------- */
+function dugFigure(g,d,c,P,W,now){
+ const pl=d.pl;
+ const gk=pl.slot==='GK';
+ const p=P(d.x,d.y,0);
+ const s=p[2];                                    // metres -> pixels at his depth
+ if(p[1]<0||p[1]>1e5)return;
+ const kit=gk?'#e9c400':c.c1;
+ const trim=gk?'#8a7400':(c.c2&&c.c2!==c.c1?c.c2:shade(c.c1,.5));
+ const HT=1.82;                                   // he is a person, so he is person-sized
+ const px=p[0],py=p[1];
+ const u=s*HT/8;                                  // one eighth of a man
+ if(u<.6)return;
+ // the run cycle turns over as fast as he is running
+ const sp=Math.hypot(d.vx||0,d.vy||0);
+ const ph=DUG.phase;
+ // (||) would restart the cycle every time it happened to land on zero
+ ph[pl.p.id]=(ph[pl.p.id]==null?pl.p.id%6:ph[pl.p.id])+(0.09+Math.min(sp,.55)*1.9);
+ const t=ph[pl.p.id];
+ const swing=Math.sin(t)*Math.min(1,.25+sp*7);
+ const bob=Math.abs(Math.cos(t))*u*.22*Math.min(1,.3+sp*6);
+ const face=(d.vx||0)>=0?1:-1;                    // which way he is running
+ const y0=py-bob;                                 // the ground under his feet
+ // shadow
+ g.beginPath();g.ellipse(px,py,u*1.5,u*.55,0,0,7);
+ g.fillStyle='rgba(0,0,0,.42)';g.fill();
+ if(pl.off)g.globalAlpha=.35;
+ const hipY=y0-u*3.7,torsoT=y0-u*6.3,headR=u*.66;
+ // legs, swinging
+ [[-1,swing],[1,-swing]].forEach(([sgn,sw])=>{
+  g.save();
+  g.translate(px+sgn*u*.42,hipY);
+  g.rotate(sw*.55);
+  g.fillStyle=trim;                               // shorts
+  g.fillRect(-u*.42,0,u*.84,u*1.5);
+  g.fillStyle=shade(trim,1.5);                    // thighs
+  g.fillRect(-u*.34,u*1.6,u*.68,u*.55);
+  g.fillStyle='#f0f3f0';                          // socks
+  g.fillRect(-u*.33,u*2.05,u*.66,u*1.30);
+  g.fillStyle='#14181c';                          // boots
+  g.fillRect(-u*.36,u*3.30,u*1.0*(sgn===1?1:-1)+u*.36,u*.42);
+  g.restore()});
+ // arms, opposite to the legs
+ [[-1,-swing],[1,swing]].forEach(([sgn,sw])=>{
+  g.save();
+  g.translate(px+sgn*u*.92,torsoT+u*.6);
+  g.rotate(sw*.7);
+  g.fillStyle=kit;g.fillRect(-u*.26,0,u*.52,u*1.1);
+  g.fillStyle='#e2b493';g.fillRect(-u*.24,u*1.05,u*.48,u*1.0);
+  g.restore()});
+ // the shirt
+ g.beginPath();
+ g.moveTo(px-u*.95,torsoT+u*.35);
+ g.quadraticCurveTo(px,torsoT-u*.20,px+u*.95,torsoT+u*.35);
+ g.lineTo(px+u*.82,hipY+u*.08);
+ g.lineTo(px-u*.82,hipY+u*.08);
+ g.closePath();
+ const sg=g.createLinearGradient(px-u,torsoT,px+u,hipY);
+ sg.addColorStop(0,shade(kit,1.18));sg.addColorStop(.55,kit);sg.addColorStop(1,shade(kit,.74));
+ g.fillStyle=sg;g.fill();
+ // sleeves and collar in the second colour
+ g.fillStyle=trim;
+ g.fillRect(px-u*.95,torsoT+u*.30,u*.30,u*.66);
+ g.fillRect(px+u*.65,torsoT+u*.30,u*.30,u*.66);
+ g.fillRect(px-u*.30,torsoT-u*.02,u*.60,u*.20);
+ // his number, on the back if he is running away from the camera
+ if(u>2.0){
+  g.font='800 '+Math.round(u*1.5)+'px Inter,sans-serif';
+  g.textAlign='center';g.textBaseline='middle';
+  g.fillStyle=kitInk(kit);g.globalAlpha=(pl.off?.35:.92);
+  g.fillText(String(shirtNo(pl.p,c)||''),px,torsoT+u*1.45);
+  g.globalAlpha=pl.off?.35:1;g.textBaseline='alphabetic'}
+ // head, hair, and a glance in the direction of travel
+ g.beginPath();g.arc(px,torsoT-headR*.55,headR,0,7);
+ g.fillStyle=['#f0c6a4','#dda87f','#b3784f','#8a5a3a','#6b4226'][pl.p.id%5];g.fill();
+ g.beginPath();
+ g.arc(px,torsoT-headR*.72,headR*.98,Math.PI*1.02,Math.PI*2.02);
+ g.fillStyle=['#241a12','#12100e','#4a3520','#6b4a25','#161616'][(pl.p.id>>2)%5];g.fill();
+ if(u>2.4){
+  g.fillStyle='rgba(20,20,20,.55)';
+  g.fillRect(px+face*headR*.30,torsoT-headR*.62,headR*.20,headR*.16)}
+ g.globalAlpha=1}
+
+/* ---------------------------------------------------------------------
+   5. THE FRAME
+   --------------------------------------------------------------------- */
+drawDugout=function(){
+ const cv=$('#dugCanvas'),m=MU.m;if(!cv||!m)return;
+ const g=cv.getContext('2d');
+ const W=cv.width,H=cv.height;
+ const now=performance.now();
+ const hc=G.clubs[m.sides[0].ci],ac=G.clubs[m.sides[1].ci];
+ // advance the same model the 2D pitch uses
+ if(!m.done){advancePlay(now);pitchTargets()}
+ const pp=(typeof playState==='function')?playState():{};
+ MU.dots.forEach(d=>{
+  const ease=d.pl.off?.05:(pp.holder===d.pl?.20:.075);
+  const ox=d.x,oy=d.y;
+  d.x+=((d.tx==null?d.x:d.tx)-d.x)*ease;
+  d.y+=((d.ty==null?d.y:d.ty)-d.y)*ease;
+  d.vx=(d.vx||0)*.75+(d.x-ox)*.25;
+  d.vy=(d.vy||0)*.75+(d.y-oy)*.25});
+ const mv=(pp.mode==='pass'||pp.mode==='carry')?1:.22;
+ MU.ball.x+=(MU.ballT.x-MU.ball.x)*mv;MU.ball.y+=(MU.ballT.y-MU.ball.y)*mv;
+ MU.ball.x=clamp(MU.ball.x,.6,104.4);MU.ball.y=clamp(MU.ball.y,1.2,66.8);
+ let hgt=0;
+ if(pp.mode==='pass'&&pp.from&&pp.to&&pp.ms){
+  const k=clamp((now-pp.t0)/pp.ms,0,1);
+  const far=dist2(pp.from,pp.to);
+  hgt=Math.sin(Math.PI*k)*(pp.lofted?Math.min(9,far*.22):Math.min(2.2,far*.05))}
+ MU.ballH=hgt;
+ const c=dugCam(W,H);
+ const P=dugProject(W,H);
+ // ---- the ground behind, parallaxed ----
+ g.setTransform(1,0,0,1,0,0);
+ g.clearRect(0,0,W,H);
+ const sky=dugSky(W,H,hc,ac);
+ const farY=P(52.5,68,0)[1];
+ const drawH=Math.max(4,farY);
+ const drawW=sky.SW*(drawH/sky.SH);
+ const off=(c.x-52.5)/52.5;                       // the stands are far away, so
+ g.drawImage(sky.cv,-(drawW-W)/2-off*W*.30,0,drawW,drawH);   // they slide past slowly
+ // ---- the grass ----
+ const far=P(0,68,0),near=P(0,0,0);
+ const gg=g.createLinearGradient(0,far[1],0,H);
+ gg.addColorStop(0,'#103c18');gg.addColorStop(.35,'#185423');gg.addColorStop(1,'#1c6229');
+ g.fillStyle=gg;g.fillRect(0,far[1]-2,W,H-far[1]+2);
+ // the floodlights pool on the middle of the pitch
+ const pool=g.createRadialGradient(W/2,far[1]+(H-far[1])*.50,0,W/2,far[1]+(H-far[1])*.50,W*.78);
+ pool.addColorStop(0,'rgba(255,252,228,.075)');pool.addColorStop(1,'rgba(255,252,228,0)');
+ g.fillStyle=pool;g.fillRect(0,far[1]-2,W,H-far[1]+2);
+ const quad=(a,b,cc,d2)=>{g.beginPath();g.moveTo(a[0],a[1]);g.lineTo(b[0],b[1]);
+  g.lineTo(cc[0],cc[1]);g.lineTo(d2[0],d2[1]);g.closePath();g.fill()};
+ for(let i=0;i<10;i+=2){                          // mown stripes running across
+  const x0=i*10.5,x1=(i+1)*10.5;
+  g.fillStyle='rgba(255,255,255,.035)';
+  quad(P(x0,0,0),P(x1,0,0),P(x1,68,0),P(x0,68,0))}
+ // ---- the markings ----
+ g.strokeStyle='rgba(246,251,246,.72)';g.lineJoin='round';
+ const line=(pts,w)=>{g.lineWidth=Math.max(1,w||W*.0022);g.beginPath();
+  pts.forEach((q,i)=>{const s=P(q[0],q[1],0);i?g.lineTo(s[0],s[1]):g.moveTo(s[0],s[1])});g.stroke()};
+ const arc=(cx,cy,r,a0,a1)=>{g.beginPath();
+  for(let i=0;i<=40;i++){const a=a0+(a1-a0)*i/40;
+   const s=P(cx+Math.cos(a)*r,cy+Math.sin(a)*r,0);i?g.lineTo(s[0],s[1]):g.moveTo(s[0],s[1])}
+  g.lineWidth=Math.max(1,W*.0022);g.stroke()};
+ line([[0,0],[105,0],[105,68],[0,68],[0,0]]);
+ line([[52.5,0],[52.5,68]]);
+ arc(52.5,34,9.15,0,Math.PI*2);
+ [[0,16.5],[105,88.5]].forEach(([gx,bx])=>{
+  line([[gx,13.85],[bx,13.85],[bx,54.15],[gx,54.15]]);
+  const sxx=gx===0?5.5:99.5;
+  line([[gx,24.85],[sxx,24.85],[sxx,43.15],[gx,43.15]]);
+  const spot=P(gx===0?11:94,34,0);
+  g.beginPath();g.arc(spot[0],spot[1],Math.max(1.2,spot[2]*.28),0,7);
+  g.fillStyle='rgba(246,251,246,.8)';g.fill();
+  arc(gx===0?11:94,34,9.15,gx===0?-0.93:Math.PI-0.93,gx===0?0.93:Math.PI+0.93)});
+ const csp=P(52.5,34,0);
+ g.beginPath();g.arc(csp[0],csp[1],Math.max(1.2,csp[2]*.28),0,7);
+ g.fillStyle='rgba(246,251,246,.8)';g.fill();
+ // corner flags
+ [[0,0],[105,0],[0,68],[105,68]].forEach(([x,y])=>{
+  const b1=P(x,y,0),b2=P(x,y,1.5);
+  g.strokeStyle='rgba(255,255,255,.6)';g.lineWidth=Math.max(1,W*.0016);
+  g.beginPath();g.moveTo(b1[0],b1[1]);g.lineTo(b2[0],b2[1]);g.stroke();
+  const w=b1[2]*.9;
+  g.fillStyle='#fbe122';g.beginPath();
+  g.moveTo(b2[0],b2[1]);g.lineTo(b2[0]+(x<52?w:-w),b2[1]+w*.35);
+  g.lineTo(b2[0],b2[1]+w*.7);g.closePath();g.fill()});
+ // ---- goals, in perspective, with nets ----
+ const post=2.44;                                 // the crossbar, in metres
+ const goals=[[0],[105]].map(([gx])=>{
+  const a=P(gx,30.34,0),b=P(gx,37.66,0);
+  const at=P(gx,30.34,post),bt=P(gx,37.66,post);
+  return{gx,a,b,at,bt}});
+ goals.forEach(({gx,a,b,at,bt})=>{
+  g.save();
+  g.fillStyle='rgba(255,255,255,.05)';
+  g.beginPath();g.moveTo(a[0],a[1]);g.lineTo(at[0],at[1]);g.lineTo(bt[0],bt[1]);g.lineTo(b[0],b[1]);
+  g.closePath();g.fill();
+  g.strokeStyle='rgba(255,255,255,.20)';g.lineWidth=Math.max(.6,W*.0009);
+  for(let i=1;i<7;i++){const t=i/7;
+   const p1=P(gx,30.34+7.32*t,0),p2=P(gx,30.34+7.32*t,post);
+   g.beginPath();g.moveTo(p1[0],p1[1]);g.lineTo(p2[0],p2[1]);g.stroke()}
+  for(let i=1;i<5;i++){const t=i/5;
+   const p1=P(gx,30.34,post*t),p2=P(gx,37.66,post*t);
+   g.beginPath();g.moveTo(p1[0],p1[1]);g.lineTo(p2[0],p2[1]);g.stroke()}
+  g.strokeStyle='#f4f8f4';g.lineWidth=Math.max(1.8,a[2]*.14);
+  g.beginPath();g.moveTo(a[0],a[1]);g.lineTo(at[0],at[1]);
+  g.lineTo(bt[0],bt[1]);g.lineTo(b[0],b[1]);g.stroke();
+  g.restore()});
+ // ---- everybody, back to front ----
+ const ents=MU.dots.map(d=>({y:d.y,d}));
+ ents.push({y:MU.ball.y,ball:1});
+ ents.sort((p1,p2)=>p2.y-p1.y);                   // far side first
+ ents.forEach(e=>{
+  if(e.ball){
+   const gp=P(MU.ball.x,MU.ball.y,0);
+   const bp=P(MU.ball.x,MU.ball.y,hgt);
+   const r=Math.max(1.9,gp[2]*.135);
+   g.beginPath();g.ellipse(gp[0],gp[1],r*1.15,r*.5,0,0,7);
+   g.fillStyle='rgba(0,0,0,'+(0.40/(1+hgt*.3))+')';g.fill();
+   const bg2=g.createRadialGradient(bp[0]-r*.35,bp[1]-r*.4,r*.1,bp[0],bp[1],r);
+   bg2.addColorStop(0,'#ffffff');bg2.addColorStop(1,'#c8cfc8');
+   g.beginPath();g.arc(bp[0],bp[1],r,0,7);g.fillStyle=bg2;g.fill();
+   g.lineWidth=Math.max(.6,r*.22);g.strokeStyle='rgba(24,28,24,.7)';g.stroke();
+   return}
+  const d=e.d;
+  dugFigure(g,d,G.clubs[m.sides[d.si].ci],P,W,now)});
+ // ---- who is on it ----
+ if(pp.holder){
+  const d=dotOf(pp.holder);
+  if(d){
+   const p=P(d.x,d.y,0);
+   const u=p[2]*1.82/8;
+   g.beginPath();g.ellipse(p[0],p[1],u*1.9,u*.72,0,0,7);
+   g.strokeStyle='rgba(251,225,34,'+(0.72+Math.sin(now/180)*.2)+')';
+   g.lineWidth=Math.max(1.2,u*.22);g.stroke();
+   const nm=surname(pp.holder.p.name);
+   const no=shirtNo(pp.holder.p,G.clubs[m.sides[dotSide(d)].ci]);
+   const txt=(no?no+'  ':'')+nm;
+   g.font='800 '+Math.max(9,Math.round(u*1.35))+'px Inter,sans-serif';
+   g.textAlign='center';
+   const tw=g.measureText(txt).width;
+   const ty=clamp(p[1]-u*8.4,H*.14,H-u*2);
+   g.fillStyle='rgba(6,10,7,.72)';
+   g.beginPath();g.roundRect(p[0]-tw/2-u*.6,ty-u*1.3,tw+u*1.2,u*1.9,u*.5);g.fill();
+   g.fillStyle='#fbe122';g.fillText(txt,p[0],ty)}}
+ // ---- rain, if the night calls for it ----
+ const wx=(m.fix&&m.fix.ctx&&m.fix.ctx.wx)||null;
+ if(wx&&/rain|Heavy pitch/i.test(wx.k)){
+  if(!DUG.rain||DUG.rain.length!==160){
+   DUG.rain=[];for(let i=0;i<160;i++)DUG.rain.push({x:Math.random()*W,y:Math.random()*H,
+    v:H*.020+Math.random()*H*.016,l:H*.020+Math.random()*H*.018})}
+  g.strokeStyle='rgba(190,215,240,.30)';g.lineWidth=Math.max(1,W*.0012);
+  g.beginPath();
+  DUG.rain.forEach(r=>{
+   g.moveTo(r.x,r.y);g.lineTo(r.x-W*.006,r.y+r.l);
+   r.y+=r.v;r.x-=W*.0016;
+   if(r.y>H){r.y=-r.l;r.x=Math.random()*W}});
+  g.stroke()}
+ else if(wx&&/Freezing/i.test(wx.k)){
+  if(!DUG.rain||DUG.rain.length!==90){
+   DUG.rain=[];for(let i=0;i<90;i++)DUG.rain.push({x:Math.random()*W,y:Math.random()*H,
+    v:H*.004+Math.random()*H*.004,l:0,d:Math.random()*7})}
+  g.fillStyle='rgba(255,255,255,.55)';
+  DUG.rain.forEach(r=>{
+   g.beginPath();g.arc(r.x,r.y,Math.max(1,W*.0022),0,7);g.fill();
+   r.y+=r.v;r.d+=.05;r.x+=Math.sin(r.d)*W*.0009;
+   if(r.y>H){r.y=-4;r.x=Math.random()*W}})}
+ // ---- a goal, and everything that comes with it ----
+ const scored=MU.fix.sc.length;
+ if(scored>MU.lastGoals){
+  MU.lastGoals=scored;MU.goalFlash=110;
+  const last=MU.fix.sc[MU.fix.sc.length-1],cc=G.clubs[last.ci];
+  MU.fx=[];
+  for(let i=0;i<130;i++)MU.fx.push({x:Math.random()*W,y:-Math.random()*H*.5,
+   vx:(Math.random()-.5)*W*.005,vy:H*.004+Math.random()*H*.007,
+   c:Math.random()<.62?cc.c1:(Math.random()<.5?'#ffffff':cc.c2||'#fbe122'),
+   r:Math.max(2,W*.0055*Math.random()),rot:Math.random()*7})}
+ if(MU.goalFlash>0){
+  MU.goalFlash--;
+  MU.fx.forEach(f=>{f.x+=f.vx;f.y+=f.vy;f.rot+=.16;
+   g.save();g.translate(f.x,f.y);g.rotate(f.rot);g.fillStyle=f.c;
+   g.globalAlpha=Math.min(1,MU.goalFlash/45);
+   g.fillRect(-f.r,-f.r*.45,f.r*2,f.r*.9);g.restore()});
+  g.globalAlpha=1;
+  const a=Math.min(1,MU.goalFlash/34);
+  const last=MU.fix.sc[MU.fix.sc.length-1];
+  g.save();g.globalAlpha=a;g.textAlign='center';
+  g.font='900 '+Math.round(W*.135)+'px "Archivo Black",Impact,sans-serif';
+  g.lineWidth=W*.013;g.strokeStyle='rgba(0,0,0,.75)';
+  g.strokeText('GOAL!',W/2,H*.30);g.fillStyle='#fbe122';g.fillText('GOAL!',W/2,H*.30);
+  g.font='800 '+Math.round(W*.044)+'px Inter,sans-serif';
+  g.lineWidth=W*.009;g.strokeText(last.name+"  "+last.min+"'",W/2,H*.375);
+  g.fillStyle='#fff';g.fillText(last.name+"  "+last.min+"'",W/2,H*.375);
+  g.restore()}
+ // ---- the corners of the picture fall away, the way a lens does ----
+ const vg=g.createRadialGradient(W/2,H*.55,W*.30,W/2,H*.55,W*.92);
+ vg.addColorStop(0,'rgba(0,0,0,0)');vg.addColorStop(1,'rgba(0,0,0,.38)');
+ g.fillStyle=vg;g.fillRect(0,0,W,H);
+ // ---- the score bug ----
+ const f=MU.fix;
+ const bw=W*.34,bh=H*.058,bx=W*.025,by=H*.025;
+ g.fillStyle='rgba(5,9,7,.82)';
+ g.beginPath();g.roundRect(bx,by,bw,bh,bh*.28);g.fill();
+ g.fillStyle=hc.c1;g.fillRect(bx,by,bw*.04,bh);
+ g.fillStyle=ac.c1;g.fillRect(bx+bw*.96,by,bw*.04,bh);
+ g.font='800 '+Math.round(bh*.50)+'px Inter,sans-serif';
+ g.textAlign='center';g.fillStyle='#eef3ee';
+ g.fillText(hc.short+'  '+f.hs+' – '+f.as+'  '+ac.short,bx+bw/2,by+bh*.66);
+ const mw=W*.135;
+ g.fillStyle='rgba(5,9,7,.82)';
+ g.beginPath();g.roundRect(bx+bw+W*.012,by,mw,bh,bh*.28);g.fill();
+ g.fillStyle='#fbe122';
+ g.fillText(m.done?'FT':m.stage==='HT'?'HT':m.dispMin()+"'",bx+bw+W*.012+mw/2,by+bh*.66);
+ g.textAlign='left'};
+/* which side a dot belongs to */
+function dotSide(d){return d.si}
+/* a new match gets a fresh ground and a camera back on the halfway line */
+const _initDug2=initDots;
+initDots=function(){
+ _initDug2();
+ DUG.cam={x:52.5,f:1,tilt:0};DUG.phase={};DUG.rain=null;DUG.sky=null};
+const _sizeDug2=sizeDugCanvas;
+sizeDugCanvas=function(){const r=_sizeDug2();DUG.sky=null;return r};
 
 showStart();
 </script>
