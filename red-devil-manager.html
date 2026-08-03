@@ -17115,6 +17115,10 @@ MatchSim.prototype.avg=function(side,attrs,zone){
 
 
 
+
+
+
+
 /*#w1_data.js#*/
 
 /* =====================================================================
@@ -18178,7 +18182,8 @@ function simTie(t){
  return big?quickSim(t):fastSim(t)}
 function resolveTie(t){
  simTie(t);
- if(t.leg===1)return;                 // a first leg never settles anything
+ if(t.lg)return;                      // a league-phase draw is a draw, not a shootout
+ if(t.leg===1)return;                 // and a first leg never settles anything
  if(t.leg===2){
   const first=G.cups[t.cup].ties.find(x=>x.tid===t.tid&&x.leg===1);
   if(first){const x=first.hs+t.as,y=first.as+t.hs;if(x===y)aiShootout(t)}
@@ -18384,8 +18389,14 @@ function initCups(){
  if(SUPPRESS_CUPS||!LEAGUES.PL){G.cups=null;return}
  TID=1;
  G.cups={};
+ /* the roll of honour belongs to the save, not to the season. Rebuilding
+    the cups every August was throwing away every winner that came before,
+    so no competition had a past and no cup winner could be looked up when
+    Europe was being handed out. */
+ G.cupHistory=G.cupHistory||{};
  ['FA','LC','CL','EL','EC'].forEach(k=>{
-  G.cups[k]={key:k,round:0,stage:CUP_DEFS[k].stages[0],winner:null,ties:[],history:[]}});
+  if(!G.cupHistory[k])G.cupHistory[k]=[];
+  G.cups[k]={key:k,round:0,stage:CUP_DEFS[k].stages[0],winner:null,ties:[],history:G.cupHistory[k]}});
  /* ---- Europe first: the domestic cups need to know who is in it ---- */
  const alloc=euroAllocation();
  G.euroEntry=alloc;
@@ -18523,10 +18534,15 @@ endSeason=function(){
  let alloc=null;
  try{alloc=euroAllocation()}catch(e){}
  const mine=alloc&&(alloc.CL.includes(G.my)?'CL':alloc.EL.includes(G.my)?'EL':alloc.EC.includes(G.my)?'EC':null);
+ /* This has to be stored BEFORE the season rolls over, because rolling it
+    over is what draws next season's cups, and they need to know who has
+    qualified. Setting it afterwards meant the draw fell back on working
+    the places out from a table with no games played in it — so the cup
+    winners' places and half the final positions were quietly ignored. */
+ if(alloc)G.euroNext=alloc;
  _endSeasonEuro();
  G.euroEntry=alloc;
  if(alloc){
-  G.euroNext=alloc;
   if(mine)mail('award',EURO_DEFS[mine].icon+' '+EURO_DEFS[mine].name+' qualification',
    'The club has qualified for next season’s <b>'+EURO_DEFS[mine].name+'</b>. Thirty-six clubs, eight matches, and a table that decides who goes through.');
   else mail('news','No European football next season','The club finished outside the places. The league is the only way back in.')}};
