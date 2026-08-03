@@ -17110,6 +17110,9 @@ MatchSim.prototype.avg=function(side,attrs,zone){
 
 
 
+
+
+
 /*#w1_data.js#*/
 
 /* =====================================================================
@@ -17760,9 +17763,9 @@ function buildWorld(){
  // keyed off a club's short code
  const bn=byName['Barnsley'];if(bn&&bn.key==='BAR')bn.key='BNS';
  // English divisions that already exist keep their definition
- LEAGUES.PL={k:'PL',cc:'ENG',country:'England',name:'Premier League',tier:1,coef:5,size:20,euro:[4,2,1]};
+ LEAGUES.PL={k:'PL',cc:'ENG',country:'England',name:'Premier League',tier:1,coef:5,size:20,euro:[4,2,1],repTop:9400,repBot:6300};
  W_LG.forEach(L=>{
-  LEAGUES[L.k]={k:L.k,cc:L.cc,country:L.country,name:L.name,tier:L.tier,coef:L.coef,size:L.size,euro:L.euro};
+  LEAGUES[L.k]={k:L.k,cc:L.cc,country:L.country,name:L.name,tier:L.tier,coef:L.coef,size:L.size,euro:L.euro,repTop:L.repTop,repBot:L.repBot};
   const recs=wParseLeague(L);
   // clubs already in the game keep the reputation they were given by hand;
   // they simply take their place on the ladder so the ones built here slot
@@ -18004,13 +18007,26 @@ function simRestOfDay(){
   ct.forEach(t=>resolveTie(t));
   const played=new Set();ct.forEach(t=>{played.add(t.h);played.add(t.a)});
   played.forEach(ci=>G.clubs[ci].players.forEach(p=>{if(p.susp>0)p.susp--}));
+  /* the inbox is not a fixture list. You get every result from the cups
+     you are actually in, and from the two English ones; everything else in
+     Europe is one round-up, and only the clubs from your own country. */
   const byCup={};ct.forEach(t=>{(byCup[t.cup]=byCup[t.cup]||[]).push(t)});
+  const myCc=G.clubs[G.my].cc;
+  const line=t=>G.clubs[t.h].short+' <b>'+t.hs+'–'+t.as+'</b>'+
+   (t.ph!=null?' <span class="xs">('+t.ph+'–'+t.pa+'p)</span>':'')+' '+G.clubs[t.a].short;
+  const round=[];
   for(const k in byCup){const def=CUP_DEFS[k],list=byCup[k];
    if(!def)continue;
-   const notable=list.filter(t=>t.h===G.my||t.a===G.my||G.clubs[t.h].cc===G.clubs[G.my].cc||G.clubs[t.a].cc===G.clubs[G.my].cc||k==='CL'||k==='EL');
-   const show=(notable.length?notable:list).slice(0,24);
-   const res=show.map(t=>G.clubs[t.h].short+' <b>'+t.hs+'–'+t.as+'</b>'+(t.ph!=null?' <span class="xs">('+t.ph+'–'+t.pa+'p)</span>':'')+' '+G.clubs[t.a].short).join('<br>');
-   mail('match',def.icon+' '+def.name+' — '+(def.rn[list[0].r]||'results'),res)}}
+   const mine=list.some(t=>t.h===G.my||t.a===G.my);
+   const inIt=G.cups[k].teams?G.cups[k].teams.includes(G.my):(k==='FA'||k==='LC');
+   if(mine||inIt||k==='FA'||k==='LC'){
+    const home=list.filter(t=>G.clubs[t.h].cc===myCc||G.clubs[t.a].cc===myCc);
+    const show=(home.length?home:list).slice(0,26);
+    mail('match',def.icon+' '+def.name+' — '+(def.rn[list[0].r]||'results'),show.map(line).join('<br>'))}
+   else{
+    const home=list.filter(t=>G.clubs[t.h].cc===myCc||G.clubs[t.a].cc===myCc);
+    if(home.length)round.push('<b>'+def.icon+' '+def.name+'</b><br>'+home.map(line).join('<br>'))}}
+  if(round.length)mail('news','🌍 European round-up',round.join('<br><br>'))}
  progressCups();}
 
 /* clubs outside the user's own division are simulated, so they no longer
@@ -19406,9 +19422,32 @@ function aiSquadRefresh(){
    const nm=worldName(c.cc||'ENG',rng,clubNames(c));
    c.players.push(genPlayer([nm,'GK',irnd(22,31),Math.round(std-2),Math.round(std+2)],c.i))}
   c._nm=null})}
+/* ---------------------------------------------------------------------
+   THE LEVEL OF EACH DIVISION
+   ---------------------------------------------------------------------
+   Promotion adds three hundred to a club's reputation and relegation takes
+   two hundred and sixty away, so every swap leaks forty points into the
+   system. Over sixteen seasons that carried the National League from a
+   standard of forty-four up to fifty-six while the Premier League stayed
+   where it was, and the distance between the top and the bottom of the
+   pyramid halved. A division is now pulled gently back toward the band it
+   was built with each summer — gently enough that a well-run club still
+   climbs within it, firmly enough that the whole ladder does not drift.
+   --------------------------------------------------------------------- */
+function normaliseReps(){
+ leagueKeys().forEach(k=>{
+  const L=LEAGUES[k];
+  if(!L||L.repTop==null||L.repBot==null)return;
+  const mem=G.clubs.filter(c=>c.league===k).sort((a,b)=>b.rep-a.rep);
+  const n=mem.length;if(n<2)return;
+  mem.forEach((c,ix)=>{
+   const target=L.repTop+(L.repBot-L.repTop)*(ix/(n-1));
+   c.rep=Math.round(c.rep+(target-c.rep)*.14);
+   c.wageCap=Math.max(c.wageCap,Math.round(c.rep*(L.tier===1?(L.coef>=4?300:150):90)))})})}
 const _endSeasonYouth=endSeason;
 endSeason=function(){
  const r=_endSeasonYouth.apply(this,arguments);
+ try{normaliseReps()}catch(e){}
  try{aiSquadRefresh()}catch(e){}
  /* your own academy is never allowed to run dry — graduations and the
     over-nineteens leaving used to empty it out over a decade */
@@ -19903,7 +19942,62 @@ clubStaffHtml=function(c){
  if(!known)h+='<div class="xs faint" style="padding:6px 2px">Backroom staff at this level are not public record — these are the club’s own appointments in your save.</div>';
  return h};
 
-/*#w14_managers.js#*/
+/*#w14_managers.js#*//*#w15_polish.js#*/
+
+/* =====================================================================
+   SMALL THINGS THAT WERE WRONG
+   ===================================================================== */
+
+/* 1. The unread badge counted every message ever sent, including the ones
+      trimmed off the end of the inbox — so it could read "216 new" over an
+      inbox holding thirty. It now counts what is actually in there.
+      Several places bump the counter directly rather than through mail(),
+      so the clamp goes where every one of them ends up: the redraw. */
+const _renderUnread=render;
+render=function(){
+ try{const n=(G.inbox||[]).filter(m=>!m.read).length;
+  if(G.unread>n)G.unread=n}catch(e){}
+ return _renderUnread.apply(this,arguments)};
+
+/* 2. The academy screen now shows who you have already brought through and
+      what became of them, which is the whole point of running one. */
+const _vSquadGrad=vSquad;
+vSquad=function(){
+ const h=_vSquadGrad.apply(this,arguments);
+ if((UI.squadTab||'first')!=='academy')return h;
+ try{return h+vGraduates()}catch(e){return h}};
+
+/* 3. A player's nationality is now a real thing, so the profile shows it. */
+const _profNat=openProfile;
+openProfile=function(pid){
+ _profNat(pid);
+ try{
+  const p=playerById(pid);if(!p)return;
+  const sb=$('#sheetBody');if(!sb)return;
+  const h3=sb.querySelector('h3')||sb.querySelector('.tt');
+  if(!h3||h3.dataset.nat)return;
+  h3.dataset.nat='1';
+  const n=natOf(p);
+  const tag=document.createElement('div');
+  tag.className='xs faint';tag.style.margin='2px 0 6px';
+  tag.innerHTML=ccFlag(n)+' '+esc(natName(n))+
+   ((p.caps||0)?' · <b>'+p.caps+'</b> caps'+((p.intCareerGoals||0)?', '+p.intCareerGoals+' goals':''):'')+
+   (p.academy?' · academy graduate':'');
+  h3.parentNode.insertBefore(tag,h3.nextSibling)}
+ catch(e){}};
+
+/* 4. The board's season preview said "Premier League" whatever division you
+      were in, because the hero card was written before there were others. */
+const _vHomeDiv=vHome;
+vHome=function(){
+ let h=_vHomeDiv.apply(this,arguments);
+ try{
+  const d=DIV_NAMES[myDiv()];
+  if(d&&d!=='Premier League')h=h.replace(/<div class="comp">Premier League ·/g,'<div class="comp">'+esc(d)+' ·')}
+ catch(e){}
+ return h};
+
+/*#w15_polish.js#*/
 showStart();
 </script>
 </body>
