@@ -17108,6 +17108,8 @@ MatchSim.prototype.avg=function(side,attrs,zone){
 
 
 
+
+
 /*#w1_data.js#*/
 
 /* =====================================================================
@@ -19167,7 +19169,7 @@ function vIntl(){
  if(!mine.length)h+='<div class="card tight"><div class="small muted" style="padding:6px 2px">Nobody in the squad is currently good enough for their country. Develop one and the call will come.</div></div>';
  else{
   h+='<div class="card tight">'+mine.sort((a,b)=>b.ovr-a.ovr).map(p=>
-   '<div class="spread" data-action="playerView" data-id="'+p.id+'" style="padding:6px 3px;border-bottom:1px solid var(--chalk)">'+
+   '<div class="spread" data-action="profile" data-id="'+p.id+'" style="padding:6px 3px;border-bottom:1px solid var(--chalk)">'+
    '<div class="row" style="gap:7px;min-width:0"><span>'+ccFlag(natOf(p))+'</span>'+
    '<div style="min-width:0"><div class="small" style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(p.name)+'</div>'+
    '<div class="xs faint">'+esc(natName(natOf(p)))+' · '+p.pos+'</div></div></div>'+
@@ -19258,19 +19260,47 @@ ENG2:('Walker Hughes Bennett Clarke Robinson Turner Wright Foster Barnes Chapman
  'Radcliffe Standish Tunnicliffe Uttley Vickery Wadsworth Yorke Alderton Birtwistle Cawley Duxbury Entwistle Fothergill Gledhill Haworth Iveson Jellicoe Kenworthy Lightfoot Massey '+
  'Naylor Openshaw Pilkington Quill Rushworth Shackleton Thistlethwaite Umber Vine Winstanley Yates Adeyemi Boateng Chukwu Danquah Eze Frimpong Gyasi Hylton Idowu Johnson '+
  'Kamau Lartey Mensah Nkemelu Owusu Pryce Quansah Riddick Sackey Thompson Uduka Vaughan Wanyama Yeboah Zaki').split(' ')};
+const Y_EXTRA={
+ESP:'Aguirre Beltrán Cabrera Delgado Escudero Fuentes Gallardo Heredia Izaguirre Jiménez Lozano Maldonado Ochoa Prieto Quesada Rojas Salazar Trujillo Ureña Valverde Zamora Arrieta Bermejo Cañizares',
+ITA:'Amato Bellini Colombo De Luca Ferraro Gentile Longo Marino Neri Orlando Pagano Riva Sartori Testa Valli Zanetti Basso Caputo Damico Ferrante',
+GER:'Albrecht Böhme Dietrich Engel Frank Gerber Hein Jung Kaiser Lorenz Mayer Nagel Otto Pfeiffer Reuter Sommer Thiele Ulrich Vogt Winter',
+FRA:'Arnaud Bertrand Chevalier Deschamps Escoffier Fontaine Gauthier Herve Imbert Jourdain Laurent Marchal Noel Olivier Poirier Renaud Sauvage Thibault Vasseur Weber',
+POR:'Amorim Barros Cabral Duarte Esteves Freitas Guedes Henriques Infante Jesus Leal Macedo Nogueira Osório Paiva Quaresma Rocha Salgado Tavares Valente',
+NED:'Aalders Bruggink Cornelissen Driessen Everts Faber Geerts Hofman Ijssel Jonker Klaassen Lammers Maas Nijhuis Overmars Prins Reinders Stam Terpstra Vermeer',
+BEL:'Aerts Bogaert Coppens Deblauwe Everaert Fransen Geerinck Hermans Ivens Jacobs Keppens Loos Martens Nuyts Onkelinx Pauwels Rombouts Steenackers Thys Vanhoof',
+TUR:'Acar Balcı Coşkun Duran Erdem Fırat Güneş Hakan İnan Kara Levent Mutlu Nalbant Öztekin Pehlivan Sarı Taş Uçar Varol Yavuz',
+GRE:'Alexiou Barkas Chatzis Dimitriou Efthymiou Fotakis Galanis Hristou Iosifidis Kalogeras Lambropoulos Manolis Nikolaidis Oikonomou Petrou Rallis Stavrou Theodorou Vasileiou Zisis',
+CZE:'Bartoš Cerný Doležal Fiala Hruška Jelínek Kadlec Lukas Matějka Nedvěd Ondrák Pavlík Rezník Šimek Tichý Urban Vávra Zeman Bláha Čapek',
+DEN:'Agger Bech Dahl Eriksen Frost Gade Holm Iversen Jakobsen Krogh Lund Mathiesen Nørgaard Overgaard Petersen Riis Storm Toft Vestergaard Winther',
+NOR:'Aas Bakken Dahle Engen Fjeld Gran Hagen Iversen Jakobsen Knudsen Lie Moen Nordby Opsahl Riise Sandvik Tveit Ulven Vik Wold',
+POL:'Adamczyk Baran Chmiel Duda Eliasz Fabian Górski Hoffman Iwanicki Jasiński Kaczmarek Lis Michalak Nowicki Olszewski Pawlak Rutkowski Sikora Tomczyk Walczak',
+SRB:'Antić Bogdanović Cvetković Damjanović Erić Filipović Gajić Hadžić Ivanović Jerković Kovačević Lazarević Mihajlović Nedeljković Obradović Perić Ranković Simonović Todorović Vasić',
+UKR:'Antonenko Bilyk Chernenko Danylko Fedorenko Hrytsenko Ivanenko Kravets Lysenko Marchenko Nazarenko Ostapenko Petrenko Romanenko Savchenko Tkachuk Usenko Vasylenko Yakovenko Zhuk',
+CRO:'Antunović Blažević Cvitanović Dujmović Frankić Grgić Horvat Ivić Jurić Klarić Lovrić Marić Novak Oreški Pavić Radić Šarić Tomić Vuković Zorić',
+SCO:'Aitken Baxter Cairns Dalgleish Elphinstone Forsyth Galbraith Hunter Irvine Johnstone Kinnear Lennox Mackay Nicol Ogilvie Paterson Rennie Shankly Tulloch Wallace',
+AUT:'Aigner Brandstätter Deutsch Ecker Frank Grabner Haas Innerhofer Jäger Kraus Lechner Mayrhofer Neuhold Ortner Pucher Reiter Schwarz Trummer Unger Windisch',
+SUI:'Ammann Bühler Christen Dubois Egger Furrer Gerber Hodel Iten Jost Küng Lehmann Moser Näf Odermatt Perren Rieder Sutter Tanner Wyss'};
 function bigPool(cc){
  const p=wNamePool(cc);
  if(cc==='ENG')return{f:Y_FN.ENG,l:Y_FN.ENG2};
- // elsewhere: the country's own names, widened by pairing every first name
- // with every surname the game knows for that country
- return{f:p._f||p[0].split(' '),l:p._l||p[1].split(' ')}}
+ if(!p._big){
+  const base=(p._l||p[1].split(' '));
+  const extra=(Y_EXTRA[cc]||'').split(' ').filter(Boolean);
+  p._big={f:(p._f||p[0].split(' ')),l:base.concat(extra),
+   // Spain, Portugal, Italy and Latin America genuinely use two surnames,
+   // which is both accurate and the difference between six hundred names
+   // and fifteen thousand
+   dbl:/^(ESP|POR|ITA)$/.test(cc)?.35:0}}
+ return p._big}
 function worldName(cc,rng,avoid){
  const P=bigPool(cc||'ENG');
  const r=rng||Math.random;
- for(let k=0;k<14;k++){
-  const nm=P.f[Math.floor(r()*P.f.length)]+' '+P.l[Math.floor(r()*P.l.length)];
-  if(!avoid||!avoid.has(nm))return nm}
- return P.f[Math.floor(r()*P.f.length)]+' '+P.l[Math.floor(r()*P.l.length)]}
+ const one=()=>{
+  const sur=P.l[Math.floor(r()*P.l.length)];
+  const two=(P.dbl&&r()<P.dbl)?' '+P.l[Math.floor(r()*P.l.length)]:'';
+  return P.f[Math.floor(r()*P.f.length)]+' '+sur+two};
+ for(let k=0;k<14;k++){const nm=one();if(!avoid||!avoid.has(nm))return nm}
+ return one()}
 function clubNames(c){
  if(!c._nm){c._nm=new Set();
   (c.players||[]).forEach(p=>c._nm.add(p.name));
@@ -19335,14 +19365,15 @@ function aiSquadRefresh(){
    p.wage=Math.max(1500,Math.round(wageFor(p.ovr,c.rep)*.4/500)*500);
    c.players.push(p)});
   c.youth=c.youth.filter(p=>p.age<=19);
+  while(c.youth.length<(c.tier===1?8:6))c.youth.push(genYouthPlayer(c.i));
   // an academy the game never shows you does not need twenty players in it
-  const cap=c.tier===1?11:9;
+  const cap=c.tier===1?12:10;
   if(c.youth.length>cap){c.youth.sort((a,b)=>b.pot-a.pot);c.youth.length=cap}
   // 2. keep the squad at a sensible size, at the club's own standard
-  const want=c.tier===1?23:21;
-  if(c.players.length>want+4){
+  const want=c.tier===1?21:19;
+  if(c.players.length>want+3){
    c.players.sort((a,b)=>(b.ovr+(b.pot-b.ovr)*.4)-(a.ovr+(a.pot-a.ovr)*.4));
-   c.players.length=want+3}
+   c.players.length=want+2}
   if(c.players.length<want){
    const std=ovrForRep(c.rep);
    const need=want-c.players.length;
@@ -19350,13 +19381,26 @@ function aiSquadRefresh(){
    const shape=['GK','DC','DR','DL','DM','MC','AMC','AMR','AML','ST','DC','MC','ST'];
    for(let k=0;k<need;k++){
     const pos=shape[k%shape.length];
-    const ovr=clamp(Math.round(std-4+rng()*9),34,92);
+    const ovr=clamp(Math.round(std-8+rng()*9),32,Math.round(std+3));
     const age=irnd(19,29);
     const nm=worldName(c.cc||'ENG',rng,used);used.add(nm);
     const np=genPlayer([nm,pos,age,ovr,clamp(ovr+(age<23?irnd(2,10):irnd(0,3)),ovr,95)],c.i);
     np.contract=irnd(2,4);
     c.players.push(np)}}
-  // 3. a squad without a goalkeeper is not a squad
+  // 3. the elite stay elite. Left alone, the ninety-rated players retire
+  //    and nobody replaces them, and after twenty seasons the best player
+  //    in the world is an eighty-eight.
+  if(c.rep>=8800){
+   const std=ovrForRep(c.rep);
+   const stars=c.players.filter(p=>p.ovr>=std+4).length;
+   if(stars<2){
+    const used=clubNames(c);
+    const nm=worldName(c.cc||'ENG',rng,used);used.add(nm);
+    const age=irnd(22,27);
+    const ovr=clamp(Math.round(std+4+rng()*4),60,95);
+    const sp=genPlayer([nm,pick(['ST','AMC','AMR','AML','MC','DC','GK']),age,ovr,clamp(ovr+irnd(1,6),ovr,97)],c.i);
+    sp.contract=irnd(3,5);c.players.push(sp)}}
+  // 4. a squad without a goalkeeper is not a squad
   if(!c.players.some(p=>p.pos==='GK')){
    const std=ovrForRep(c.rep);
    const nm=worldName(c.cc||'ENG',rng,clubNames(c));
@@ -19366,6 +19410,17 @@ const _endSeasonYouth=endSeason;
 endSeason=function(){
  const r=_endSeasonYouth.apply(this,arguments);
  try{aiSquadRefresh()}catch(e){}
+ /* your own academy is never allowed to run dry — graduations and the
+    over-nineteens leaving used to empty it out over a decade */
+ try{
+  const me=G.clubs[G.my];me.youth=me.youth||[];
+  const before=me.youth.length;
+  while(me.youth.length<12)me.youth.push(genYouthPlayer(G.my));
+  if(me.youth.length>before)
+   mail('scout','🎓 The academy restocks',
+    'The Head of Youth has brought <b>'+(me.youth.length-before)+'</b> more scholars into the building. '+
+    'There are <b>'+me.youth.length+'</b> in the academy going into the new season.');
+  me._nm=null}catch(e){}
  return r};
 
 /* ---------------------------------------------------------------------
@@ -19664,7 +19719,191 @@ ACTIONS.frontAbout=()=>{
   'to another device.'+
   '</div></div><button class="btn btn-primary btn-block" data-action="closeModal">Got it</button>')};
 
-/*#w13_front.js#*/
+/*#w13_front.js#*//*#w14_managers.js#*/
+
+/* =====================================================================
+   THE MEN IN THE OTHER DUGOUT
+   ---------------------------------------------------------------------
+   The Premier League and the biggest European clubs already had their
+   real managers. Everything else in Europe had a name pulled out of a
+   hat, which made every away trip anonymous. This fills in the rest of
+   the clubs you can actually be drawn against, and gives the top clubs
+   their assistant as well, because the assistant is the one who takes the
+   press conference when the manager is serving a touchline ban.
+
+   One honest caveat, written here rather than buried: MANAGERS CHANGE.
+   Half a dozen of these will be out of date within a season of you
+   reading it, and the game has no way to check. Club names, grounds and
+   competition formats do not move; dugouts do. Treat this list as the
+   state of play when the game was built, not as gospel — and once your
+   save is running, sackings and appointments inside the game take over
+   anyway.
+   ===================================================================== */
+const MGR_BY_NAME={
+ /* Spain */
+ 'Athletic Club':['Ernesto Valverde','Jon Aspiazu'],
+ 'Real Sociedad':['Sergio Francisco','Aitor Zulaika'],
+ 'Villarreal':['Marcelino','Guillermo Fernández'],
+ 'Real Betis':['Manuel Pellegrini','Rubén Cousillas'],
+ 'Sevilla':['Matías Almeyda','Diego Dabove'],
+ 'Valencia':['Carlos Corberán','Rubén Uría'],
+ 'Celta Vigo':['Claudio Giráldez','Pablo Prieto'],
+ 'Girona':['Míchel','Jordi Guerrero'],
+ 'Rayo Vallecano':['Íñigo Pérez','Alberto Fernández'],
+ 'Osasuna':['Alessio Lisci','Iñigo Idiakez'],
+ 'Getafe':['José Bordalás','Juan Antonio Mena'],
+ 'Mallorca':['Jagoba Arrasate','Alberto Aguilar'],
+ 'Deportivo Alavés':['Eduardo Coudet','Ariel Broggi'],
+ 'Espanyol':['Manolo González','Rubén Coto'],
+ 'Elche':['Eder Sarabia','Miguel Ángel Ferrer'],
+ 'Levante':['Julián Calero','Alberto Mula'],
+ 'Real Oviedo':['Luis Carrión','Toni Amor'],
+ /* Italy */
+ 'Lazio':['Maurizio Sarri','Marco Ianni'],
+ 'Fiorentina':['Paolo Vanoli','Simone Bonomi'],
+ 'Bologna':['Vincenzo Italiano','Daniel Niccolini'],
+ 'Torino':['Marco Baroni','Filippo Lorenzon'],
+ 'Udinese':['Kosta Runjaić','Marcin Kuźba'],
+ 'Como':['Cesc Fàbregas','Marcos Álvarez'],
+ 'Genoa':['Daniele De Rossi','Marco Amelia'],
+ 'Cagliari':['Fabio Pisacane','Mauro Bonomi'],
+ 'Parma':['Carlos Cuesta','Alberto Bertolini'],
+ 'Lecce':['Eusebio Di Francesco','Paolo Bianco'],
+ 'Hellas Verona':['Paolo Zanetti','Michele Serena'],
+ 'Sassuolo':['Fabio Grosso','Vincenzo Vivarini'],
+ 'Pisa':['Alberto Gilardino','Luca Bucci'],
+ 'Cremonese':['Davide Nicola','Nicola Belmonte'],
+ /* Germany */
+ 'Bayer Leverkusen':['Kasper Hjulmand','Ricardo Moniz'],
+ 'Eintracht Frankfurt':['Dino Toppmöller','Ronald Brunmayr'],
+ 'VfB Stuttgart':['Sebastian Hoeneß','Michael Wimmer'],
+ 'Borussia Mönchengladbach':['Eugen Polanski','Sandro Wagner'],
+ 'VfL Wolfsburg':['Paul Simonis','Rick Kruys'],
+ 'SC Freiburg':['Julian Schuster','Florian Bruns'],
+ 'Werder Bremen':['Horst Steffen','Marcus Steegmann'],
+ 'TSG Hoffenheim':['Christian Ilzer','Uwe Hölzl'],
+ '1. FSV Mainz 05':['Bo Henriksen','Steffen Krebs'],
+ 'FC Augsburg':['Sandro Wagner','Ronny Zimmermann'],
+ '1. FC Union Berlin':['Steffen Baumgart','René Klingbeil'],
+ '1. FC Köln':['Lukas Kwasniok','Marco Antwerpen'],
+ 'Hamburger SV':['Merlin Polzin','Loïc Favé'],
+ 'FC St. Pauli':['Alexander Blessin','Peter Nemeth'],
+ '1. FC Heidenheim':['Frank Schmidt','Bernhard Raab'],
+ /* France */
+ 'Lille OSC':['Bruno Génésio','Fabrice Grange'],
+ 'Olympique Lyonnais':['Paulo Fonseca','Jorge Maciel'],
+ 'OGC Nice':['Franck Haise','Éric Assadourian'],
+ 'RC Lens':['Pierre Sage','Benoît Cheyrou'],
+ 'Stade Rennais':['Habib Beye','Bruno Irles'],
+ 'RC Strasbourg':['Liam Rosenior','Nicolas Rabuel'],
+ 'FC Nantes':['Luís Castro','Nuno Coelho'],
+ 'Toulouse FC':['Carles Martínez Novell','Marc García'],
+ 'Stade Brestois':['Éric Roy','Grégory Lorenzi'],
+ 'AJ Auxerre':['Christophe Pélissier','Sébastien Grimaldi'],
+ 'Angers SCO':['Alexandre Dujeux','Yohan Betsch'],
+ 'Le Havre AC':['Didier Digard','Cédric Coulibaly'],
+ 'FC Metz':['Stéphane Le Mignan','Jérôme Munier'],
+ 'FC Lorient':['Olivier Pantaloni','Julien Beneteau'],
+ 'Paris FC':['Stéphane Gilli','Antonin Da Fonseca'],
+ 'Marseille':['Roberto De Zerbi','Nicola Bonacina'],
+ 'AS Monaco':['Sébastien Pocognoli','Frédéric Barilaro'],
+ /* Portugal, the Netherlands, Scotland, Belgium, Turkey and the rest */
+ 'Benfica':['José Mourinho','Rui Silva'],
+ 'SC Braga':['Carlos Vicens','Nuno Campos'],
+ 'Vitória de Guimarães':['Luís Freire','Bruno Dias'],
+ 'Ajax':['Fred Grim','Marcel Keizer'],
+ 'PSV Eindhoven':['Peter Bosz','Rob Maas'],
+ 'Feyenoord':['Robin van Persie','John Heitinga'],
+ 'AZ Alkmaar':['Maarten Martens','Bas Sibum'],
+ 'FC Twente':['John van den Brom','Sandor van der Heide'],
+ 'FC Utrecht':['Ron Jans','Michael Silberbauer'],
+ 'Celtic':['Martin O’Neill','Shaun Maloney'],
+ 'Rangers':['Danny Röhl','Steven Smith'],
+ 'Heart of Midlothian':['Derek McInnes','Paul Sheerin'],
+ 'Hibernian':['David Gray','John Rankin'],
+ 'Aberdeen':['Jimmy Thelin','Peter Leven'],
+ 'Club Brugge':['Nicky Hayen','Rik De Mil'],
+ 'Union Saint-Gilloise':['David Hubert','Cédric Fauré'],
+ 'RSC Anderlecht':['Besnik Hasi','Frédéric Frans'],
+ 'KRC Genk':['Thorsten Fink','Bernd Hollerbach'],
+ 'Galatasaray':['Okan Buruk','Levent Şahin'],
+ 'Fenerbahçe':['Domenico Tedesco','Andrea Maldera'],
+ 'Beşiktaş':['Sergen Yalçın','Serdar Topraktepe'],
+ 'Trabzonspor':['Fatih Tekke','Ersun Yanal'],
+ 'Red Bull Salzburg':['Thomas Letsch','Onur Cinel'],
+ 'Sturm Graz':['Jürgen Säumel','Michael Madl'],
+ 'BSC Young Boys':['Giorgio Contini','Marco Schällibaum'],
+ 'FC Basel':['Ludovic Magnin','Marco Walker'],
+ 'Olympiacos':['José Luis Mendilibar','Juan Bautista Ochoa'],
+ 'PAOK':['Răzvan Lucescu','Vladan Ivić'],
+ 'AEK Athens':['Marko Nikolić','Nenad Milovanović'],
+ 'Panathinaikos':['Christos Kontis','Giannis Goumas'],
+ 'Slavia Praha':['Jindřich Trpišovský','Zdeněk Houštecký'],
+ 'Sparta Praha':['Brian Priske','Jakub Podaný'],
+ 'Viktoria Plzeň':['Martin Hyský','Marek Bakoš'],
+ 'FC København':['Jacob Neestrup','Rasmus Bertelsen'],
+ 'FC Midtjylland':['Mike Tullberg','Rasmus Bech'],
+ 'Bodø/Glimt':['Kjetil Knutsen','Morten Kalvenes'],
+ 'Molde FK':['Erling Moe','Trond Strande'],
+ 'Legia Warszawa':['Edward Iordănescu','Marek Saganowski'],
+ 'Lech Poznań':['Niels Frederiksen','Mats Rits'],
+ 'Crvena zvezda':['Vladan Milojević','Nenad Sakić'],
+ 'Partizan':['Srđan Blagojević','Ivan Tomić'],
+ 'Shakhtar Donetsk':['Arda Turan','Serhiy Nagornyak'],
+ 'Dynamo Kyiv':['Oleksandr Shovkovskyi','Ihor Kostyuk'],
+ 'Dinamo Zagreb':['Mario Kovačević','Marijan Budimir'],
+ 'Hajduk Split':['Gonzalo García','Ivan Leko']};
+/* the clubs that already had a manager get an assistant to go with him */
+const ASSIST_BY_KEY={
+ MUN:'Steve Holland',MCI:'Willy Caballero',LIV:'Vicente Guaita',ARS:'Albert Stuivenberg',
+ CHE:'Sebas Parrilla',TOT:'Nicola Bonacina',NEW:'Graeme Jones',AVL:'Pako Ayestarán',
+ BHA:'Andrey Wood',EVE:'Jimmy Lumsden',NFO:'Michael Angerschmid',FUL:'Stuart Gray',
+ CRY:'Paddy McCarthy',BRE:'Justin Cochrane',BOU:'Alexander Zickler',LEE:'Edmund Riemer',
+ SUN:'Michael Proctor',WHU:'Rui Silva',WOL:'Luís Nascimento',BUR:'Craig Bellamy',
+ RMA:'Davide Ancelotti',BAR:'Marcus Sorg',BAY:'Aaron Danks',PSG:'Pablo Sanz',
+ NAP:'Cristian Stellini',MIL:'Marco Landucci',ATM:'Nelson Vivas',ROM:'Tullio Gritti',
+ ATA:'Marco Amelia',JUV:'Marco Domenichini',INT:'Massimiliano Farris',DOR:'Sebastian Kehl',
+ POR:'Tiago Fernandes',SPO:'Emanuel Ferro',RBL:'Frank Geideck'};
+/* the game already knows the manager by club key; teach it the rest by name */
+(function seedManagers(){
+ if(typeof MANAGERS!=='object')return;
+ MGR_BY_NAME._seeded=true})();
+const _managerOfWorld=managerOf;
+managerOf=function(c){
+ if(!c)return '—';
+ if(c.i===G.my)return 'You';
+ if(G.mgrOverride&&G.mgrOverride[c.key])return G.mgrOverride[c.key];
+ if(MANAGERS[c.key])return MANAGERS[c.key];
+ const m=MGR_BY_NAME[c.name];
+ if(m)return m[0];
+ return _managerOfWorld(c)};
+function assistantOf(c){
+ if(!c)return '—';
+ if(G.assistOverride&&G.assistOverride[c.key])return G.assistOverride[c.key];
+ if(c.i===G.my)return (G.staff&&G.staff.assistant)?G.staff.assistant.name:'—';
+ if(ASSIST_BY_KEY[c.key])return ASSIST_BY_KEY[c.key];
+ const m=MGR_BY_NAME[c.name];
+ if(m&&m[1])return m[1];
+ const rng=mulberry(hashStr('asst'+c.key));
+ return wName(c.cc||'ENG',rng)}
+/* a club dossier now names both men, and only invents the rest of the staff */
+const _clubStaffWorld=clubStaffHtml;
+clubStaffHtml=function(c){
+ if(c.i===G.my)return _clubStaffWorld(c);
+ const rng=mulberry(hashStr('staffW'+c.key));
+ const row=(role,name,stars)=>
+  '<div class="spread" style="padding:5px 2px;border-bottom:1px solid var(--chalk)">'+
+  '<span class="small" style="font-weight:700">'+role+'</span>'+
+  '<span class="small">'+esc(name)+' '+starHtml(stars)+'</span></div>';
+ const known=!!(MANAGERS[c.key]||MGR_BY_NAME[c.name]);
+ const top=clamp(Math.round(2+rng()*1.5+c.rep/2600),1,5);
+ let h=row('Manager',managerOf(c),top)+row('Assistant Manager',assistantOf(c),clamp(top-1,1,5));
+ ['First-team Coach','Goalkeeping Coach','Head Physio','Sports Scientist','Data Analyst','Head of Youth']
+  .forEach(r=>h+=row(r,wName(c.cc||'ENG',rng),clamp(Math.round(1+rng()*2+c.rep/3300),1,5)));
+ if(!known)h+='<div class="xs faint" style="padding:6px 2px">Backroom staff at this level are not public record — these are the club’s own appointments in your save.</div>';
+ return h};
+
+/*#w14_managers.js#*/
 showStart();
 </script>
 </body>
