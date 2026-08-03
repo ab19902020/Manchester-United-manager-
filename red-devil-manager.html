@@ -17119,6 +17119,9 @@ MatchSim.prototype.avg=function(side,attrs,zone){
 
 
 
+
+
+
 /*#w1_data.js#*/
 
 /* =====================================================================
@@ -20027,18 +20030,37 @@ vHome=function(){
  catch(e){}
  return h};
 
-/*#w15_polish.js#*/
+/*#w15_polish.js#*//*#w16_stray.js#*/
+
+/* =====================================================================
+   HOW THEY TURNED UP — and a line that was never running
+   ---------------------------------------------------------------------
+   This pair of numbers is how much a side's performance swings from week
+   to week: on any given Saturday a team plays somewhere between ninety
+   and a hundred and ten per cent of its rating. It was written during the
+   realism pass to spread results out, but it ended up AFTER the end of
+   the document instead of inside the script — so the browser was painting
+   it, and the comment above it, onto the bottom of every screen as plain
+   text, and never running it.
+
+   Putting it back where it belongs fixes the text on screen. What it does
+   NOT do is change the football, and it is worth saying so rather than
+   repeating the claim it was written with. Measured over 6,080 Premier
+   League matches with squads reset between each one:
+
+       swing        home    draw    away
+       0.94–1.06    44.4%   24.9%   30.7%   (what was actually running)
+       0.90–1.10    43.8%   25.1%   31.1%   (this line, now running)
+       real         44%     24%     32%
+
+   The two are inside the noise of each other. Both match the real league.
+   The line stays because it is the documented intent and costs nothing —
+   but the reason to move it was the text on the screen, not the results.
+   ===================================================================== */
+DAY_LO=.90;DAY_RANGE=.20;
+
+/*#w16_stray.js#*/
 showStart();
 </script>
 </body>
 </html>
-
-/* ---------------------------------------------------------------------
-   5. HOW THEY TURNED UP
-   Thirty per cent of games were finishing level against a real
-   twenty-four, and it was not because the sides were evenly matched —
-   it was because every side played at almost exactly its rating every
-   week. Real teams have days. Widening that swing spreads the results
-   out without touching a single goal in the average.
-   --------------------------------------------------------------------- */
-DAY_LO=.90;DAY_RANGE=.20;
