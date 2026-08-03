@@ -3358,7 +3358,7 @@ function simRestOfDay(){
 const _endSeason5=endSeason;
 endSeason=function(){
  // seal final standings so prizes/history read the true tables
- G._sealed={};['PL','CH','L1','L2','NL','EU'].forEach(d=>{G._sealed[d]=tableRows(d)});
+ G._sealed={};(typeof sealedDivs==='function'?sealedDivs():['PL','CH','L1','L2','NL','EU']).forEach(d=>{G._sealed[d]=tableRows(d)});
  G._preDiv=myDiv();G._finalPos=leaguePos(G.my);G._finalExp=expectPos(G.my);
  const moves=[];
  const swap=(hiDiv,loDiv,n)=>{
@@ -3372,7 +3372,8 @@ endSeason=function(){
    c.budget=Math.round(c.budget*2.4+8e6);c.wageCap=Math.round(c.wageCap*1.6);
    moves.push('\u2b06\ufe0f '+esc(c.name)+' PROMOTED to the '+DIV_NAMES[hiDiv]);
    if(ci===G.my){c.patience=clamp(c.patience+30,0,100);G.honours.push({season:G.season,comp:DIV_NAMES[loDiv]+' promotion'})}})};
- swap('PL','CH',3);swap('CH','L1',2);swap('L1','L2',2);swap('L2','NL',2);
+ if(typeof WORLD_PR==='function')WORLD_PR(swap,moves);
+ else{swap('PL','CH',3);swap('CH','L1',2);swap('L1','L2',2);swap('L2','NL',2)}
  const myMove=moves.find(m=>m.includes(esc(G.clubs[G.my].name)));
  _endSeason5();
  G._sealed=null;G._preDiv=null;G._finalPos=null;G._finalExp=null;
@@ -3845,74 +3846,8 @@ function clubStaffHtml(c){
   const st=clamp(Math.round(1+rng()*2+c.rep/3300),1,5);
   return '<div class="spread" style="padding:5px 2px;border-bottom:1px solid var(--chalk)"><span class="small" style="font-weight:700">'+r+'</span><span class="small">'+esc(nm)+' '+starHtml(st)+'</span></div>'}).join('')}
 
-/* =====================================================================
-   CHAMPIONS CUP 2.0 — 24-team league phase, then straight knockout
-   ===================================================================== */
-CUP_DEFS.CL={name:'Champions Cup',icon:'\u2b50',
- days:[38,52,87,108,122,129,164,178,199,220,238,248],
- rn:['League MD1','League MD2','League MD3','League MD4','League MD5','League MD6','League MD7','League MD8','Round of 16','Quarter-final','Semi-final','Final'],
- prize:[15e5,15e5,15e5,15e5,15e5,15e5,15e5,15e5,9e6,13e6,18e6,3e7],venue:'Stade de France'};
-const CL_LG_ROUNDS=8;
-const _initCupsCL=initCups;
-initCups=function(){
- _initCupsCL();
- if(!G.cups||!G.cups.CL)return;
- const euro=[...G.clSpots,...G.clubs.filter(c=>c.league==='EU').map(c=>c.i)];
- G.cups.CL.teams=euro;
- // rebuild CL as a league phase using the first 8 Berger rounds of all 24
- const cl=G.cups.CL;cl.ties=[];cl.round=0;cl.phase='league';
- const R=rrPairs(euro.slice());
- for(let r=0;r<CL_LG_ROUNDS;r++){
-  (R[r]||[]).forEach(([h,a])=>cl.ties.push({h,a,day:(G.seasonStart||0)+CUP_DEFS.CL.days[r],played:false,hs:0,as:0,sc:[],cup:'CL',r,lg:1,comp:'Champions Cup \u00b7 '+CUP_DEFS.CL.rn[r]}))}
- if(euro.includes(G.my)){
-  const opps=cl.ties.filter(t=>t.h===G.my||t.a===G.my).map(t=>{const o=G.clubs[t.h===G.my?t.a:t.h];return esc(o.short)+(t.h===G.my?' (H)':' (a)')});
-  mail('award','\u2b50 Champions Cup league phase draw','Eight games against Europe\u2019s elite decide your seeding: '+opps.join(', ')+'. Top sixteen advance to the knockout rounds.')}
-};
-function clTable(){
- const cl=G.cups&&G.cups.CL;if(!cl)return[];
- const map={};cl.teams.forEach(i=>map[i]={i,p:0,w:0,d:0,l:0,gf:0,ga:0,pts:0});
- cl.ties.filter(t=>t.lg&&t.played).forEach(t=>{
-  const H=map[t.h],A=map[t.a];if(!H||!A)return;
-  H.p++;A.p++;H.gf+=t.hs;H.ga+=t.as;A.gf+=t.as;A.ga+=t.hs;
-  if(t.hs>t.as){H.w++;A.l++;H.pts+=3}else if(t.hs<t.as){A.w++;H.l++;A.pts+=3}else{H.d++;A.d++;H.pts++;A.pts++}});
- return Object.values(map).map(r=>(r.gd=r.gf-r.ga,r)).sort((a,b)=>b.pts-a.pts||b.gd-a.gd||b.gf-a.gf)}
-const _progressCL=progressCups;
-progressCups=function(){
- // CL league phase progression handled here; knockout + LC/FA fall through
- const cl=G.cups&&G.cups.CL;
- if(cl&&cl.phase==='league'){
-  const lg=cl.ties.filter(t=>t.lg);
-  if(lg.length&&lg.every(t=>t.played)){
-   cl.phase='ko';cl.round=CL_LG_ROUNDS;
-   const top=clTable().slice(0,16).map(r=>r.i);
-   const ties=[];
-   for(let k=0;k<8;k++)ties.push({h:top[k],a:top[15-k],day:(G.seasonStart||0)+CUP_DEFS.CL.days[8],played:false,hs:0,as:0,sc:[],cup:'CL',r:8,comp:'Champions Cup \u00b7 Round of 16'});
-   cl.ties.push(...ties);
-   const mine=ties.find(t=>t.h===G.my||t.a===G.my);
-   const meIn=cl.teams.includes(G.my);
-   if(mine){const seed=top.indexOf(G.my)+1;const o=G.clubs[mine.h===G.my?mine.a:mine.h];
-    G.clubs[G.my].bank+=6e6;
-    mail('award','\u2b50 Into the last sixteen (seeded '+ordinal(seed)+')','The league phase is done \u2014 <b>'+esc(o.name)+'</b> await in the knockout rounds. Advancing banks <b>'+fmtM(6e6)+'</b>.')}
-   else if(meIn)mail('match','\u2b50 Out of the Champions Cup','Outside the top sixteen after the league phase. Europe is over for this season.')}
-  else{
-   // per-matchday user reward mail handled by simRestOfDay results
-   const doneRounds=new Set(lg.filter(t=>t.played).map(t=>t.r));
-   cl.round=Math.min(CL_LG_ROUNDS-1,doneRounds.size)}}
- _progressCL()};
-/* CL section in the cups view: live league table + knockout bracket */
-const _vCupsCL=vCups;
-vCups=function(){
- let h=_vCupsCL();
- const cl=G.cups&&G.cups.CL;if(!cl)return h;
- const rows=clTable();
- let t='<div class="sec"><div class="t">\u2b50 Champions Cup \u2014 league phase</div><div class="ln"></div><div class="sub">top 16 advance</div></div><div class="card tight"><table class="tbl"><tbody>';
- rows.forEach((r,ix)=>{const c=G.clubs[r.i];
-  t+='<tr data-action="clubView" data-id="'+r.i+'" style="'+(r.i===G.my?'background:rgba(218,41,28,.13);':'')+(ix===15?'border-bottom:2px solid var(--gold);':'')+'">'+
-  '<td class="c num" style="width:24px;font-weight:800">'+(ix+1)+'</td><td><div class="row" style="gap:7px">'+crest(c,18)+'<span style="font-weight:'+(r.i===G.my?'800':'600')+';font-size:12px">'+esc(c.short)+'</span></div></td>'+
-  '<td class="c num">'+r.p+'</td><td class="c num">'+(r.gd>0?'+':'')+r.gd+'</td><td class="r num" style="font-weight:800">'+r.pts+'</td></tr>'});
- t+='</tbody></table></div>';
- return t+h};
-
+/* The 24-team Champions Cup that used to live here has been replaced by the
+   real 36-club league phase further down this file. */
 /* =====================================================================
    THE BACKROOM — hire your coaching, medical & analytics team
    ===================================================================== */
@@ -16965,7 +16900,7 @@ showStart=function(){
      '<span class="fi">▶</span></button>':'')+
    '<button class="fbtn red" data-action="frontNew">'+
     '<span class="fl">NEW CAREER</span>'+
-    '<span class="fd">Eighty-four clubs, six divisions, one job</span>'+
+    '<span class="fd">The whole English pyramid, twenty European leagues, one job</span>'+
     '<span class="fi">⚽</span></button>'+
    '<button class="fbtn" data-action="frontLoad">'+
     '<span class="fl">LOAD A SAVE</span>'+
@@ -17152,6 +17087,2947 @@ MatchSim.prototype.avg=function(side,attrs,zone){
    the way it did.
    --------------------------------------------------------------------- */
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/*#w1_data.js#*/
+
+/* =====================================================================
+   THE WORLD — every division the game needs, as it really is
+   ---------------------------------------------------------------------
+   Up to now the game had twenty real Premier League squads, a handful of
+   English clubs below them and a made-up "Continental League" standing in
+   for the whole of Europe. That is replaced here by the real thing: the
+   full English pyramid down to the National League, and Europe as what it
+   actually is — separate national leagues, each with its own table, its
+   own promotion and relegation, and its own route into Europe.
+
+   A NOTE ON WHAT IS REAL AND WHAT IS NOT, because it matters:
+     · CLUB NAMES, GROUNDS, CAPACITIES, DIVISIONS AND LEAGUE SIZES are
+       real. So are the competition formats — the FA Cup entry rounds, the
+       League Cup entry rounds, the Champions League league phase, the
+       World Cup and Euros cycle. None of that changes season to season,
+       so none of it can go stale.
+     · SQUADS outside the Premier League and the biggest European clubs
+       are GENERATED, not copied. They are built to the right shape and
+       the right standard for the division, and they are stable across a
+       save, but they are not this morning's teamsheet and the game does
+       not pretend otherwise.
+   Every club below is listed strongest first; reputation, budget and
+   wage ceiling are interpolated down the list from the league's own
+   ceiling and floor, which is why a mid-table Serie A side outranks a
+   good Eredivisie one without either being typed out by hand.
+   ===================================================================== */
+
+/* record: Name | SHORT | primary | secondary | capacity | ground
+   everything after the name is optional; anything missing is derived    */
+const W_LG=[
+/* ---------------------------------------------------------------- ENGLAND */
+{k:'CH',cc:'ENG',country:'England',name:'Championship',tier:2,coef:0,size:24,
+ repTop:5600,repBot:4300,budTop:18,budBot:5,add:`
+Sheffield Wednesday|SHW|0055a5|ffffff|39732|Hillsborough;
+Preston North End|PRE|ffffff|1a3668|23404|Deepdale;
+Millwall|MIL|00205b|ffffff|20146|The Den;
+Queens Park Rangers|QPR|1d5ba4|ffffff|18439|Loftus Road;
+Blackburn Rovers|BLB|009ee0|ffffff|31367|Ewood Park;
+Swansea City|SWA|ffffff|000000|21088|Swansea.com Stadium;
+Derby County|DER|ffffff|000000|32956|Pride Park;
+Portsmouth|POR2|001489|ffffff|20899|Fratton Park;
+Oxford United|OXF|ffe500|003087|12500|Kassam Stadium;
+Charlton Athletic|CHA|d81920|ffffff|27111|The Valley;
+Wrexham|WRX|d40000|ffffff|13500|Racecourse Ground;
+Cardiff City|CAR|0060a9|ffffff|33280|Cardiff City Stadium`},
+
+{k:'L1',cc:'ENG',country:'England',name:'League One',tier:3,coef:0,size:24,
+ repTop:3950,repBot:3200,budTop:4.5,budBot:1.6,add:`
+Bradford City|BRA|8a2432|ffd200|25136|Valley Parade;
+Plymouth Argyle|PLY|007b5f|ffffff|17900|Home Park;
+Luton Town|LUT|f78f1e|002d62|12000|Kenilworth Road;
+Stockport County|STK|005ca9|ffffff|10852|Edgeley Park;
+Doncaster Rovers|DON|d40000|ffffff|15231|Eco-Power Stadium;
+Lincoln City|LIN|d40000|ffffff|10669|Sincil Bank;
+Port Vale|PVA|ffffff|000000|19052|Vale Park;
+Northampton Town|NTH|8a1538|ffffff|7798|Sixfields;
+Burton Albion|BUR2|ffe500|000000|6912|Pirelli Stadium;
+Leyton Orient|LEY|d40000|ffffff|9271|Brisbane Road;
+Shrewsbury Town|SHR|1a3668|f8c300|9875|Croud Meadow;
+AFC Wimbledon|WIM|1a3668|ffe500|9215|Cherry Red Records Stadium`},
+
+{k:'L2',cc:'ENG',country:'England',name:'League Two',tier:4,coef:0,size:24,
+ repTop:3200,repBot:2700,budTop:1.8,budBot:.6,add:`
+Bristol Rovers|BRR|005ca9|ffffff|12300|Memorial Stadium;
+Cambridge United|CAM|f8b500|000000|8127|Abbey Stadium;
+MK Dons|MKD|ffffff|000000|30500|Stadium MK;
+Oldham Athletic|OLD|1a3668|ffffff|13513|Boundary Park;
+Carlisle United|CRL|1a3668|ffffff|17949|Brunton Park;
+Barrow|BRW|1a3668|ffffff|5045|Holker Street;
+Bromley|BRM|ffffff|000000|5000|Hayes Lane;
+Newport County|NPT|f8b500|000000|8700|Rodney Parade;
+Accrington Stanley|ACC|d40000|ffffff|5450|Wham Stadium;
+Harrogate Town|HAR|ffe500|000000|5000|Wetherby Road;
+Fleetwood Town|FLE|d40000|ffffff|5327|Highbury Stadium;
+Cheltenham Town|CHT|d40000|ffffff|7066|Whaddon Road;
+Crawley Town|CRW|d40000|ffffff|5800|Broadfield Stadium;
+Morecambe|MOR|d40000|ffffff|6476|Mazuma Stadium`},
+
+{k:'NL',cc:'ENG',country:'England',name:'National League',tier:5,coef:0,size:24,
+ repTop:2600,repBot:2050,budTop:.9,budBot:.2,add:`
+Hartlepool United|HTL|1a3668|ffffff|7856|Victoria Park;
+Scunthorpe United|SCU|8a1538|ffffff|9088|Glanford Park;
+Yeovil Town|YEO|00a650|ffffff|9565|Huish Park;
+Sutton United|SUT|f8b500|1a3668|5013|Gander Green Lane;
+Woking|WOK|d40000|ffffff|6036|Kingfield Stadium;
+Aldershot Town|ALD|d40000|1a3668|7100|EBB Stadium;
+Dagenham & Redbridge|DAG|d40000|1a3668|6078|Victoria Road;
+Ebbsfleet United|EBB|d40000|ffffff|5011|Kuflink Stadium;
+Maidenhead United|MAI|000000|ffe500|4000|York Road;
+Wealdstone|WEA|1a3668|ffffff|4085|Grosvenor Vale;
+Tamworth|TAM|d40000|ffffff|4000|The Lamb;
+Boston United|BOS|f8b500|000000|5000|Jakemans Stadium;
+Braintree Town|BRT|ffe500|1a3668|4151|Cressing Road;
+Truro City|TRU|ffffff|000000|3500|Treyew Road`},
+
+/* ------------------------------------------------------------------ SPAIN */
+{k:'ESP',cc:'ESP',country:'Spain',name:'La Liga',tier:1,coef:5,size:20,
+ repTop:9850,repBot:6400,budTop:220,budBot:14,euro:[4,2,1],add:`
+Real Madrid;FC Barcelona;Atlético Madrid;
+Athletic Club|ATH|ee2523|ffffff|53289|San Mamés;
+Real Sociedad|RSO|0067b1|ffffff|39500|Reale Arena;
+Villarreal|VIL|ffe500|005ca9|23500|Estadio de la Cerámica;
+Real Betis|BET|00954c|ffffff|60721|Benito Villamarín;
+Sevilla|SEV|ffffff|d40000|43883|Ramón Sánchez-Pizjuán;
+Valencia|VAL|ffffff|f18e00|48600|Mestalla;
+Celta Vigo|CEL2|8ac3ee|ffffff|29000|Balaídos;
+Girona|GIR|d40000|ffffff|14624|Montilivi;
+Rayo Vallecano|RAY|ffffff|d40000|14708|Estadio de Vallecas;
+Osasuna|OSA|d40000|001489|23576|El Sadar;
+Getafe|GET|005ca9|ffffff|17393|Coliseum;
+Mallorca|MAL|d40000|000000|23142|Son Moix;
+Deportivo Alavés|ALA|005ca9|ffffff|19840|Mendizorroza;
+Espanyol|ESY|005ca9|ffffff|40000|RCDE Stadium;
+Elche|ELC|00954c|ffffff|33732|Martínez Valero;
+Levante|LEV2|005ca9|8a1538|26354|Ciutat de València;
+Real Oviedo|OVI|005ca9|ffffff|30500|Carlos Tartiere`},
+
+{k:'ESP2',cc:'ESP',country:'Spain',name:'Segunda División',tier:2,coef:5,size:20,
+ repTop:6100,repBot:4600,budTop:12,budBot:3,add:`
+Real Zaragoza|ZAR|ffffff|005ca9|33608|La Romareda;
+Deportivo La Coruña|DEP|005ca9|ffffff|32660|Riazor;
+Sporting Gijón|SPG|d40000|ffffff|29029|El Molinón;
+Racing Santander|RAC|ffffff|00954c|22222|El Sardinero;
+UD Las Palmas|LPA|ffe500|005ca9|32400|Gran Canaria;
+Cádiz|CAD|ffe500|005ca9|20724|Nuevo Mirandilla;
+Granada|GRA|d40000|ffffff|19336|Los Cármenes;
+Real Valladolid|VLL|8a2be2|ffffff|27618|José Zorrilla;
+Almería|ALM|d40000|ffffff|15274|Power Horse Stadium;
+Leganés|LEG|005ca9|ffffff|12450|Butarque;
+Málaga|MLG|005ca9|ffffff|30044|La Rosaleda;
+Eibar|EIB|d40000|005ca9|8164|Ipurua;
+Huesca|HUE|005ca9|d40000|9100|El Alcoraz;
+Albacete|ALB|ffffff|000000|17300|Carlos Belmonte;
+Burgos|BUG|ffffff|000000|12200|El Plantío;
+Castellón|CAS|000000|ffffff|15500|Castalia;
+Córdoba|COR|ffffff|00954c|21822|Nuevo Arcángel;
+Mirandés|MIR|d40000|000000|5860|Anduva;
+Andorra|AND|ffe500|005ca9|3306|Estadi Nacional;
+AD Ceuta|CEU|ffffff|000000|6500|Alfonso Murube`},
+
+/* ------------------------------------------------------------------ ITALY */
+{k:'ITA',cc:'ITA',country:'Italy',name:'Serie A',tier:1,coef:5,size:20,
+ repTop:9100,repBot:6300,budTop:95,budBot:12,euro:[4,2,1],add:`
+Inter Milan;Napoli;AC Milan;Juventus;Atalanta;
+AS Roma|ROM|8a1538|f8b500|72698|Stadio Olimpico;
+Lazio|LAZ|8ac3ee|ffffff|72698|Stadio Olimpico;
+Fiorentina|FIO|592a8a|ffffff|43147|Artemio Franchi;
+Bologna|BOL2|8a1538|1a3668|38279|Renato Dall'Ara;
+Torino|TOR|8a1538|ffffff|28177|Stadio Olimpico Grande Torino;
+Udinese|UDI|000000|ffffff|25144|Bluenergy Stadium;
+Como|COM|005ca9|ffffff|13602|Giuseppe Sinigaglia;
+Genoa|GEN|8a1538|001489|33205|Luigi Ferraris;
+Cagliari|CAG|d40000|001489|16416|Unipol Domus;
+Parma|PAR|ffe500|005ca9|22885|Ennio Tardini;
+Lecce|LEC|ffe500|d40000|31533|Via del Mare;
+Hellas Verona|VER|ffe500|001489|39211|Marcantonio Bentegodi;
+Sassuolo|SAS|00954c|000000|23717|Mapei Stadium;
+Pisa|PIS|005ca9|ffffff|25000|Arena Garibaldi;
+Cremonese|CRM|d40000|ffffff|20641|Giovanni Zini`},
+
+{k:'ITA2',cc:'ITA',country:'Italy',name:'Serie B',tier:2,coef:5,size:20,
+ repTop:6000,repBot:4500,budTop:11,budBot:2.5,add:`
+Sampdoria|SAM|005ca9|ffffff|33205|Luigi Ferraris;
+Palermo|PAL|ff90c0|000000|36349|Renzo Barbera;
+Empoli|EMP|005ca9|ffffff|16284|Carlo Castellani;
+Monza|MNZ|d40000|ffffff|15039|U-Power Stadium;
+Venezia|VEN|000000|f58220|11150|Pierluigi Penzo;
+Spezia|SPZ|ffffff|000000|10336|Alberto Picco;
+Bari|BAI|d40000|ffffff|58270|San Nicola;
+Frosinone|FRO|001489|ffe500|16227|Benito Stirpe;
+Catanzaro|CTZ|ffe500|d40000|14650|Nicola Ceravolo;
+Cesena|CES|ffffff|000000|23860|Dino Manuzzi;
+Modena|MOD|ffe500|005ca9|21151|Alberto Braglia;
+Reggiana|REG|8a1538|ffffff|21525|Città del Tricolore;
+Südtirol|SUD|ffffff|d40000|5500|Druso;
+Juve Stabia|JST|ffe500|001489|7642|Romeo Menti;
+Avellino|AVE|00954c|ffffff|26308|Partenio;
+Padova|PAD|ffffff|000000|32336|Euganeo;
+Mantova|MAN2|d40000|ffffff|7500|Danilo Martelli;
+Carrarese|CAR2|ffe500|001489|4500|Dei Marmi;
+Virtus Entella|ENT|8ac3ee|ffffff|5535|Comunale;
+Pescara|PES|005ca9|ffffff|20476|Adriatico`},
+
+/* ---------------------------------------------------------------- GERMANY */
+{k:'GER',cc:'GER',country:'Germany',name:'Bundesliga',tier:1,coef:5,size:18,
+ repTop:9700,repBot:6300,budTop:150,budBot:12,euro:[4,2,1],add:`
+Bayern München;Bayer Leverkusen;Borussia Dortmund;
+RB Leipzig|RBL|dd0741|ffffff|47069|Red Bull Arena;
+Eintracht Frankfurt|EIN|000000|d40000|58000|Deutsche Bank Park;
+VfB Stuttgart|STU|ffffff|d40000|60449|MHPArena;
+Borussia Mönchengladbach|BMG|ffffff|000000|54042|Borussia-Park;
+VfL Wolfsburg|WOB|65b32e|ffffff|30000|Volkswagen Arena;
+SC Freiburg|FRE|d40000|ffffff|34700|Europa-Park Stadion;
+Werder Bremen|WER|00954c|ffffff|42100|Weserstadion;
+TSG Hoffenheim|HOF|005ca9|ffffff|30150|PreZero Arena;
+1. FSV Mainz 05|MAI2|d40000|ffffff|33305|Mewa Arena;
+FC Augsburg|AUG|d40000|00954c|30660|WWK Arena;
+1. FC Union Berlin|UNI|d40000|ffe500|22012|An der Alten Försterei;
+1. FC Köln|KOL|ffffff|d40000|50000|RheinEnergieStadion;
+Hamburger SV|HSV|005ca9|000000|57000|Volksparkstadion;
+FC St. Pauli|STP|6d4534|ffffff|29546|Millerntor-Stadion;
+1. FC Heidenheim|HEI|d40000|001489|15000|Voith-Arena`},
+
+{k:'GER2',cc:'GER',country:'Germany',name:'2. Bundesliga',tier:2,coef:5,size:18,
+ repTop:6200,repBot:4600,budTop:14,budBot:3,add:`
+FC Schalke 04|S04|005ca9|ffffff|62271|Veltins-Arena;
+Hertha BSC|HER|005ca9|ffffff|74667|Olympiastadion;
+1. FC Kaiserslautern|KAI|d40000|ffffff|49780|Fritz-Walter-Stadion;
+Hannover 96|H96|00954c|000000|49000|Heinz von Heiden Arena;
+VfL Bochum|BOC|005ca9|ffffff|26000|Vonovia Ruhrstadion;
+1. FC Nürnberg|NUR|8a1538|ffffff|50000|Max-Morlock-Stadion;
+Fortuna Düsseldorf|F95|d40000|ffffff|54600|Merkur Spiel-Arena;
+Karlsruher SC|KSC|005ca9|ffffff|34302|BBBank Wildpark;
+1. FC Magdeburg|MAG|005ca9|ffffff|30098|MDCC-Arena;
+Holstein Kiel|KIE|005ca9|ffffff|15034|Holstein-Stadion;
+SC Paderborn 07|PAD2|005ca9|ffffff|15000|Home Deluxe Arena;
+Eintracht Braunschweig|BSC|ffe500|005ca9|23325|Eintracht-Stadion;
+Dynamo Dresden|DYN|ffe500|000000|32066|Rudolf-Harbig-Stadion;
+SV Elversberg|ELV|000000|ffffff|10000|Ursapharm-Arena;
+Arminia Bielefeld|BIE|005ca9|ffffff|26515|SchücoArena;
+SpVgg Greuther Fürth|FUR|00954c|ffffff|16626|Sportpark Ronhof;
+SV Darmstadt 98|DAR|005ca9|ffffff|17810|Merck-Stadion;
+Preußen Münster|MUN2|00954c|ffffff|15050|Preußenstadion`},
+
+/* ----------------------------------------------------------------- FRANCE */
+{k:'FRA',cc:'FRA',country:'France',name:'Ligue 1',tier:1,coef:5,size:18,
+ repTop:9800,repBot:6200,budTop:200,budBot:10,euro:[3,2,1],add:`
+Paris Saint-Germain;Marseille;AS Monaco;
+Lille OSC|LIL|d40000|ffffff|50186|Stade Pierre-Mauroy;
+Olympique Lyonnais|LYO|ffffff|005ca9|59186|Groupama Stadium;
+OGC Nice|NIC|d40000|000000|36178|Allianz Riviera;
+RC Lens|LEN|ffe500|d40000|38223|Stade Bollaert-Delelis;
+Stade Rennais|REN|d40000|000000|29778|Roazhon Park;
+RC Strasbourg|STR|005ca9|ffffff|26109|Stade de la Meinau;
+FC Nantes|NAN|ffe500|00954c|37473|Stade de la Beaujoire;
+Toulouse FC|TOU|592a8a|ffffff|33150|Stadium de Toulouse;
+Stade Brestois|BRE|d40000|ffffff|15931|Stade Francis-Le Blé;
+AJ Auxerre|AUX|ffffff|005ca9|18541|Stade Abbé-Deschamps;
+Angers SCO|ANG|000000|ffffff|18000|Stade Raymond Kopa;
+Le Havre AC|HAV|8ac3ee|001489|25178|Stade Océane;
+FC Metz|MET|8a1538|ffffff|30000|Stade Saint-Symphorien;
+FC Lorient|LOR|f58220|000000|18500|Stade du Moustoir;
+Paris FC|PFC|005ca9|ffffff|20000|Stade Jean-Bouin`},
+
+{k:'FRA2',cc:'FRA',country:'France',name:'Ligue 2',tier:2,coef:5,size:18,
+ repTop:6100,repBot:4500,budTop:14,budBot:3,add:`
+AS Saint-Étienne|ASE|00954c|ffffff|41965|Stade Geoffroy-Guichard;
+Montpellier HSC|MTP|005ca9|f58220|32900|Stade de la Mosson;
+Stade de Reims|REI|d40000|ffffff|21684|Stade Auguste-Delaune;
+Girondins de Bordeaux|BOR2|001489|ffffff|42115|Matmut Atlantique;
+EA Guingamp|GUI|d40000|000000|18378|Stade du Roudourou;
+ESTAC Troyes|TRY|005ca9|ffffff|20400|Stade de l'Aube;
+Amiens SC|AMI|ffffff|000000|12097|Stade de la Licorne;
+Clermont Foot|CLE|8a1538|005ca9|11980|Stade Gabriel-Montpied;
+Grenoble Foot|GRE|005ca9|ffffff|20068|Stade des Alpes;
+SC Bastia|BAS|005ca9|ffffff|16480|Stade Armand-Cesari;
+USL Dunkerque|DUN|005ca9|ffffff|4500|Stade Marcel-Tribut;
+Pau FC|PAU|ffe500|005ca9|4000|Nouste Camp;
+Rodez AF|ROD|005ca9|ffffff|5955|Stade Paul-Lignon;
+Stade Lavallois|LAV|f58220|ffffff|18739|Stade Francis-Le Basser;
+FC Annecy|ANN|d40000|ffffff|15660|Parc des Sports;
+AS Nancy|NCY|d40000|ffffff|20087|Stade Marcel-Picot;
+US Boulogne|BOU|d40000|000000|15000|Stade de la Libération;
+Le Mans FC|LMA|ffe500|d40000|25064|MMArena`},
+
+/* --------------------------------------------------------------- PORTUGAL */
+{k:'POR',cc:'POR',country:'Portugal',name:'Primeira Liga',tier:1,coef:4,size:18,
+ repTop:8300,repBot:5200,budTop:60,budBot:3,euro:[2,2,1],add:`
+Benfica;FC Porto;Sporting CP;
+SC Braga|BRG|d40000|ffffff|30286|Estádio Municipal de Braga;
+Vitória de Guimarães|VIT|ffffff|000000|30000|Estádio D. Afonso Henriques;
+FC Famalicão|FAM|ffffff|005ca9|5186|Estádio Municipal de Famalicão;
+Rio Ave|RIA|00954c|ffffff|12815|Estádio dos Arcos;
+Moreirense|MOR2|00954c|ffffff|6153|Parque de Jogos Comendador;
+Estoril Praia|EST|ffe500|005ca9|8000|Estádio António Coimbra da Mota;
+Gil Vicente|GIL2|d40000|005ca9|12504|Estádio Cidade de Barcelos;
+Santa Clara|SCL|d40000|ffffff|12500|Estádio de São Miguel;
+Casa Pia|CPA|000000|ffffff|4000|Estádio Pina Manique;
+FC Arouca|ARO|ffe500|d40000|5600|Estádio Municipal de Arouca;
+CD Nacional|NAC|000000|ffffff|5132|Estádio da Madeira;
+Estrela da Amadora|EAM|00954c|d40000|9288|Estádio José Gomes;
+AVS|AVS|ffffff|00954c|5000|Estádio do Clube Desportivo das Aves;
+CD Tondela|TON|ffe500|005ca9|5000|Estádio João Cardoso;
+FC Alverca|ALV|d40000|ffffff|6000|Estádio do Alverca`},
+
+/* ------------------------------------------------------------ NETHERLANDS */
+{k:'NED',cc:'NED',country:'Netherlands',name:'Eredivisie',tier:1,coef:4,size:18,
+ repTop:8100,repBot:5000,budTop:55,budBot:3,euro:[2,2,1],add:`
+Ajax;
+PSV Eindhoven|PSV|d40000|ffffff|35000|Philips Stadion;
+Feyenoord|FEY|d40000|ffffff|51117|De Kuip;
+AZ Alkmaar|AZ|d40000|ffffff|19478|AFAS Stadion;
+FC Twente|TWE|d40000|ffffff|30205|De Grolsch Veste;
+FC Utrecht|UTR|d40000|ffffff|23750|Stadion Galgenwaard;
+Go Ahead Eagles|GAE|ffe500|d40000|10400|De Adelaarshorst;
+NEC Nijmegen|NEC|d40000|00954c|12500|De Goffert;
+Sparta Rotterdam|SPR|ffffff|d40000|11026|Het Kasteel;
+SC Heerenveen|HEE|005ca9|ffffff|27224|Abe Lenstra Stadion;
+FC Groningen|GRO|00954c|ffffff|22525|Euroborg;
+Fortuna Sittard|FOR|ffe500|00954c|12500|Fortuna Sittard Stadion;
+PEC Zwolle|PEC|005ca9|ffffff|12500|MAC³PARK Stadion;
+Heracles Almelo|HER2|000000|ffffff|12080|Erve Asito;
+NAC Breda|NAC2|ffe500|000000|19000|Rat Verlegh Stadion;
+Excelsior|EXC|d40000|000000|4500|Van Donge & De Roo Stadion;
+Telstar|TEL|ffffff|005ca9|3625|BUKO Stadion;
+FC Volendam|VOL|f58220|000000|7384|Kras Stadion`},
+
+/* ---------------------------------------------------------------- BELGIUM */
+{k:'BEL',cc:'BEL',country:'Belgium',name:'Belgian Pro League',tier:1,coef:3,size:16,
+ repTop:7700,repBot:4900,budTop:35,budBot:2.5,euro:[2,1,1],add:`
+Club Brugge|CLB|005ca9|000000|29042|Jan Breydel Stadion;
+Union Saint-Gilloise|USG|ffe500|005ca9|9400|Stade Joseph Marien;
+RSC Anderlecht|AND2|592a8a|ffffff|21500|Lotto Park;
+KRC Genk|GNK|005ca9|ffffff|23718|Cegeka Arena;
+KAA Gent|GEN2|005ca9|ffffff|20000|Ghelamco Arena;
+Royal Antwerp|ANT|d40000|ffffff|16144|Bosuilstadion;
+Standard Liège|STA|d40000|ffffff|27670|Stade Maurice Dufrasne;
+Cercle Brugge|CER|00954c|000000|8000|Jan Breydel Stadion;
+Sporting Charleroi|CHR|000000|ffffff|15000|Stade du Pays de Charleroi;
+KV Mechelen|MEC|d40000|ffe500|16672|AFAS Stadion;
+KVC Westerlo|WES|ffe500|005ca9|8035|Het Kuipje;
+OH Leuven|OHL|ffffff|000000|10020|Den Dreef;
+Sint-Truiden|STV|ffe500|005ca9|14600|Stayen;
+Zulte Waregem|ZUL|d40000|00954c|12500|Regenboogstadion;
+FCV Dender|DEN2|d40000|ffffff|5000|Florent Beeckmanstadion;
+RAAL La Louvière|LAL|ffffff|000000|8000|Stade du Tivoli`},
+
+/* ----------------------------------------------------------------- TURKEY */
+{k:'TUR',cc:'TUR',country:'Turkey',name:'Süper Lig',tier:1,coef:3,size:18,
+ repTop:8000,repBot:4900,budTop:70,budBot:3,euro:[2,2,1],add:`
+Galatasaray|GAL|d40000|ffe500|52223|RAMS Park;
+Fenerbahçe|FEN|001489|ffe500|50509|Şükrü Saracoğlu;
+Beşiktaş|BJK|000000|ffffff|41903|Tüpraş Stadyumu;
+Trabzonspor|TRA2|8a1538|8ac3ee|40782|Papara Park;
+İstanbul Başakşehir|IBF|f58220|001489|17319|Başakşehir Fatih Terim;
+Samsunspor|SAM2|d40000|ffffff|33919|Samsun New Stadium;
+Göztepe|GOZ|d40000|ffe500|20035|Gürsel Aksel;
+Konyaspor|KON|00954c|ffffff|42000|Konya Büyükşehir;
+Alanyaspor|ALY|f58220|00954c|10842|Bahçeşehir Okulları;
+Antalyaspor|ANT2|d40000|ffffff|32539|Corendon Airlines Park;
+Kasımpaşa|KAS|005ca9|ffffff|14234|Recep Tayyip Erdoğan;
+Çaykur Rizespor|RIZ|00954c|005ca9|15332|Çaykur Didi;
+Gaziantep FK|GAZ|d40000|000000|33502|Kalyon Stadyumu;
+Eyüpspor|EYU|592a8a|ffe500|6500|Eyüp Stadyumu;
+Kayserispor|KAY|d40000|ffe500|32864|RHG Enertürk Enerji;
+Kocaelispor|KOC|00954c|000000|34712|Kocaeli Stadyumu;
+Gençlerbirliği|GNC|d40000|000000|21000|Eryaman Stadyumu;
+Fatih Karagümrük|KAR2|d40000|000000|10000|Atatürk Olimpiyat`},
+
+/* --------------------------------------------------------------- SCOTLAND */
+{k:'SCO',cc:'SCO',country:'Scotland',name:'Scottish Premiership',tier:1,coef:2,size:12,
+ repTop:7400,repBot:4500,budTop:35,budBot:1.5,euro:[1,2,1],add:`
+Celtic;Rangers;
+Heart of Midlothian|HRT|8a1538|ffffff|19852|Tynecastle Park;
+Hibernian|HIB|00954c|ffffff|20421|Easter Road;
+Aberdeen|ABE|d40000|ffffff|20866|Pittodrie;
+Dundee United|DUN2|f58220|000000|14223|Tannadice Park;
+Motherwell|MOT|f8b500|8a1538|13750|Fir Park;
+St Mirren|SMI|ffffff|000000|8023|SMiSA Stadium;
+Kilmarnock|KIL|005ca9|ffffff|17889|Rugby Park;
+Dundee|DUD|001489|d40000|11775|Dens Park;
+Falkirk|FAL|001489|ffffff|7937|Falkirk Stadium;
+Livingston|LIV2|ffe500|000000|9713|Almondvale`},
+
+/* ----------------------------------------------------------------- AUSTRIA */
+{k:'AUT',cc:'AUT',country:'Austria',name:'Austrian Bundesliga',tier:1,coef:2,size:12,
+ repTop:7500,repBot:4400,budTop:32,budBot:1.5,euro:[1,2,1],add:`
+Red Bull Salzburg|RBS|d40000|ffffff|30188|Red Bull Arena;
+Sturm Graz|STG|000000|ffffff|16364|Merkur Arena;
+Rapid Wien|RAP|00954c|ffffff|28000|Allianz Stadion;
+Austria Wien|AUW|592a8a|ffffff|17656|Generali Arena;
+LASK|LAS|000000|ffffff|19080|Raiffeisen Arena;
+Wolfsberger AC|WAC|000000|ffe500|7300|Lavanttal-Arena;
+TSV Hartberg|HTB|000000|ffffff|4700|Profertil Arena;
+Blau-Weiß Linz|BWL|005ca9|ffffff|5595|Hofmann Personal Stadion;
+Grazer AK|GAK|d40000|ffffff|15400|Merkur Arena;
+SCR Altach|ALT2|d40000|ffffff|8500|Cashpoint Arena;
+WSG Tirol|WSG|00954c|ffffff|6000|Tivoli Stadion;
+SV Ried|RIE|00954c|ffffff|7680|Innviertel Arena`},
+
+/* ------------------------------------------------------------- SWITZERLAND */
+{k:'SUI',cc:'SUI',country:'Switzerland',name:'Swiss Super League',tier:1,coef:2,size:12,
+ repTop:7300,repBot:4400,budTop:28,budBot:1.5,euro:[1,2,1],add:`
+BSC Young Boys|YB|ffe500|000000|31500|Wankdorf;
+FC Basel|BSL|d40000|005ca9|38512|St. Jakob-Park;
+Servette FC|SER|8a1538|ffffff|30084|Stade de Genève;
+FC Lugano|LUG|000000|ffffff|6390|Cornaredo;
+FC Zürich|FCZ|ffffff|005ca9|26104|Letzigrund;
+FC St. Gallen|SG|00954c|ffffff|19694|Kybunpark;
+FC Luzern|LUZ|005ca9|ffffff|16800|Swissporarena;
+FC Lausanne-Sport|LAU|005ca9|ffffff|12544|Stade de la Tuilière;
+Grasshopper Club|GCZ|005ca9|ffffff|26104|Letzigrund;
+FC Sion|SIO|d40000|ffffff|14283|Tourbillon;
+FC Winterthur|WIN|d40000|ffffff|8550|Schützenwiese;
+FC Thun|THU|d40000|ffffff|10014|Stockhorn Arena`},
+
+/* ------------------------------------------------------------------ GREECE */
+{k:'GRE',cc:'GRE',country:'Greece',name:'Super League Greece',tier:1,coef:2,size:14,
+ repTop:7600,repBot:4400,budTop:35,budBot:1.5,euro:[1,2,1],add:`
+Olympiacos|OLY|d40000|ffffff|32115|Karaiskakis;
+PAOK|PAO2|000000|ffffff|28703|Toumba;
+AEK Athens|AEK|ffe500|000000|32500|Agia Sophia;
+Panathinaikos|PAN|00954c|ffffff|69618|Olympic Stadium;
+Aris Thessaloniki|ARI|ffe500|000000|22800|Kleanthis Vikelidis;
+OFI Crete|OFI|000000|ffffff|9000|Theodoros Vardinogiannis;
+Volos NFC|VOL2|005ca9|ffffff|5500|Panthessaliko;
+Atromitos|ATR|005ca9|ffffff|10200|Peristeri;
+Levadiakos|LVD|00954c|ffffff|5915|Levadia Municipal;
+Panetolikos|PNT|ffe500|005ca9|7126|Panetolikos Stadium;
+Asteras Tripolis|AST|ffe500|005ca9|7500|Theodoros Kolokotronis;
+Kifisia|KIF|d40000|ffffff|3000|Zirineio;
+AEL Larissa|LAR|8a1538|ffffff|16118|AEL FC Arena;
+Panserraikos|PSR|d40000|ffffff|7000|Serres Municipal`},
+
+/* ---------------------------------------------------------------- CZECHIA */
+{k:'CZE',cc:'CZE',country:'Czechia',name:'Czech First League',tier:1,coef:2,size:16,
+ repTop:7500,repBot:4300,budTop:30,budBot:1.2,euro:[1,2,1],add:`
+Slavia Praha|SLA|d40000|ffffff|19370|Fortuna Arena;
+Sparta Praha|SPA|8a1538|ffe500|18944|epet Arena;
+Viktoria Plzeň|PLZ|005ca9|d40000|11700|Doosan Arena;
+Baník Ostrava|BAN|005ca9|ffffff|15123|Městský stadion;
+Sigma Olomouc|SIG|005ca9|ffffff|12566|Andrův stadion;
+Slovan Liberec|LIB|005ca9|ffffff|9900|Stadion u Nisy;
+Mladá Boleslav|MBO|005ca9|ffffff|5000|Lokotrans Aréna;
+Jablonec|JAB|00954c|ffe500|6108|Stadion Střelnice;
+Bohemians 1905|BOH|00954c|ffffff|5200|Ďolíček;
+Hradec Králové|HKR|005ca9|ffffff|9300|Malšovická aréna;
+Teplice|TEP|ffe500|005ca9|18221|Na Stínadlech;
+Dukla Praha|DUK|ffe500|8a1538|8150|Juliska;
+Karviná|KAV|00954c|ffffff|4833|Městský stadion;
+Slovácko|SLO|005ca9|ffffff|8121|Městský fotbalový stadion;
+Pardubice|PRD|d40000|ffffff|4500|CFIG Arena;
+Zlín|ZLI|ffe500|005ca9|6375|Stadion Letná`},
+
+/* ---------------------------------------------------------------- DENMARK */
+{k:'DEN',cc:'DEN',country:'Denmark',name:'Danish Superliga',tier:1,coef:2,size:12,
+ repTop:7400,repBot:4400,budTop:30,budBot:1.5,euro:[1,2,1],add:`
+FC København|FCK|ffffff|005ca9|38065|Parken;
+FC Midtjylland|FCM|000000|d40000|11800|MCH Arena;
+Brøndby IF|BRO|ffe500|005ca9|28000|Brøndby Stadion;
+FC Nordsjælland|FCN|d40000|ffe500|10300|Right to Dream Park;
+AGF Aarhus|AGF|ffffff|005ca9|19433|Ceres Park;
+Randers FC|RAN2|ffffff|005ca9|10300|Cepheus Park;
+Silkeborg IF|SIL|ffffff|005ca9|10000|JYSK Park;
+Viborg FF|VIB|00954c|ffffff|10000|Energi Viborg Arena;
+SønderjyskE|SON|005ca9|ffffff|10000|Sydbank Park;
+Vejle BK|VEJ|d40000|ffffff|10418|Vejle Stadion;
+AaB|AAB|d40000|ffffff|13800|Aalborg Portland Park;
+FC Fredericia|FRD|d40000|ffffff|10000|Monjasa Park`},
+
+/* ----------------------------------------------------------------- NORWAY */
+{k:'NOR',cc:'NOR',country:'Norway',name:'Eliteserien',tier:1,coef:2,size:16,
+ repTop:7500,repBot:4300,budTop:30,budBot:1.2,euro:[1,2,1],add:`
+Bodø/Glimt|BOD|ffe500|000000|8270|Aspmyra;
+Molde FK|MOL|005ca9|ffffff|11800|Aker Stadion;
+SK Brann|BRN|d40000|ffffff|17686|Brann Stadion;
+Rosenborg BK|ROS|ffffff|000000|21166|Lerkendal;
+Viking FK|VIK|005ca9|ffffff|16600|SR-Bank Arena;
+Lillestrøm SK|LSK|ffe500|000000|11500|Åråsen;
+Vålerenga|VAL2|005ca9|d40000|17000|Intility Arena;
+Tromsø IL|TRO|d40000|ffffff|6801|Romssa Arena;
+Fredrikstad FK|FRE2|d40000|ffffff|12500|Fredrikstad Stadion;
+Sarpsborg 08|SAR|005ca9|ffffff|8000|Sarpsborg Stadion;
+FK Haugesund|HAU|005ca9|ffffff|8754|Haugesund Stadion;
+Sandefjord|SAN|005ca9|ffffff|6582|Jotun Arena;
+KFUM Oslo|KFU|005ca9|ffffff|3000|KFUM Arena;
+HamKam|HAM|00954c|ffffff|8068|Briskeby;
+Kristiansund BK|KRI|005ca9|ffffff|4444|Kristiansund Stadion;
+Bryne FK|BRY|d40000|ffffff|4000|Bryne Stadion`},
+
+/* ----------------------------------------------------------------- POLAND */
+{k:'POL',cc:'POL',country:'Poland',name:'Ekstraklasa',tier:1,coef:2,size:18,
+ repTop:7400,repBot:4300,budTop:28,budBot:1.2,euro:[1,2,1],add:`
+Legia Warszawa|LEG2|00954c|ffffff|31103|Stadion Wojska Polskiego;
+Lech Poznań|LEC2|005ca9|ffffff|43269|Enea Stadion;
+Raków Częstochowa|RAK|d40000|005ca9|5500|Miejski Stadion;
+Jagiellonia Białystok|JAG|ffe500|d40000|22386|Stadion Miejski;
+Pogoń Szczecin|POG|005ca9|8a1538|21163|Stadion Pogoni;
+Górnik Zabrze|GOR|005ca9|ffffff|24563|Arena Zabrze;
+Cracovia|CRA|d40000|ffffff|15016|Stadion Cracovii;
+Widzew Łódź|WID|d40000|ffffff|18018|Stadion Widzewa;
+Wisła Płock|WIS|005ca9|ffffff|10980|Stadion Wisły;
+Zagłębie Lubin|ZAG|f58220|005ca9|16068|Stadion Zagłębia;
+Korona Kielce|KOR|ffe500|d40000|15550|Suzuki Arena;
+Radomiak Radom|RAD|00954c|ffffff|10000|Stadion Radomiaka;
+Piast Gliwice|PIA|d40000|005ca9|9913|Stadion Piasta;
+Motor Lublin|MOT2|ffe500|005ca9|15200|Arena Lublin;
+Lechia Gdańsk|LGD|00954c|ffffff|41620|Polsat Plus Arena;
+GKS Katowice|GKS|ffe500|000000|14000|Stadion GKS;
+Arka Gdynia|ARK|ffe500|005ca9|15139|Stadion Miejski;
+Bruk-Bet Termalica|TER|00954c|ffffff|4666|Stadion Termalica`},
+
+/* ----------------------------------------------------------------- SERBIA */
+{k:'SRB',cc:'SRB',country:'Serbia',name:'Serbian SuperLiga',tier:1,coef:1,size:12,
+ repTop:7300,repBot:4100,budTop:22,budBot:1,euro:[1,2,1],add:`
+Crvena zvezda|CZV|d40000|ffffff|53000|Rajko Mitić;
+Partizan|PRT|000000|ffffff|29775|Partizan Stadium;
+Vojvodina|VOJ|d40000|ffffff|14458|Karađorđe;
+TSC Bačka Topola|TSC|005ca9|ffffff|4500|TSC Arena;
+Čukarički|CUK|000000|ffffff|4070|Čukarički Stadium;
+Radnički Niš|RNI|d40000|005ca9|18151|Čair;
+Napredak Kruševac|NAP2|005ca9|ffffff|10331|Mladost;
+Novi Pazar|NPZ|005ca9|ffffff|6000|Novi Pazar City;
+Železničar Pančevo|ZEL|005ca9|ffffff|4000|Gradski stadion;
+Spartak Subotica|SPS|005ca9|ffffff|13000|Gradski stadion;
+Javor Ivanjica|JAV|00954c|ffffff|4000|Kraljevica;
+Mladost Lučani|MLD|00954c|ffffff|8000|Mladost Stadium`},
+
+/* ---------------------------------------------------------------- UKRAINE */
+{k:'UKR',cc:'UKR',country:'Ukraine',name:'Ukrainian Premier League',tier:1,coef:1,size:12,
+ repTop:7600,repBot:4200,budTop:28,budBot:1,euro:[1,2,1],add:`
+Shakhtar Donetsk|SHK|f58220|000000|34915|Arena Lviv;
+Dynamo Kyiv|DKY|ffffff|005ca9|70050|Olimpiyskiy;
+Polissya Zhytomyr|PLS|00954c|ffffff|12000|Polissya Stadium;
+Zorya Luhansk|ZOR|000000|ffffff|12000|Slavutych Arena;
+Kryvbas Kryvyi Rih|KRY|d40000|ffffff|31000|Metalurh;
+Oleksandriya|OLK|ffe500|005ca9|7000|KSK Nika;
+Kolos Kovalivka|KOL2|00954c|ffffff|5000|Kolos Stadium;
+Vorskla Poltava|VOR|00954c|ffffff|24795|Vorskla Stadium;
+Rukh Lviv|RUK|d40000|ffffff|5000|Rukh Arena;
+Karpaty Lviv|KRP|00954c|ffffff|28051|Ukraina Stadium;
+LNZ Cherkasy|LNZ|005ca9|ffffff|4000|Cherkasy Central;
+Veres Rivne|VER2|00954c|ffffff|5000|Avangard`},
+
+/* ---------------------------------------------------------------- CROATIA */
+{k:'CRO',cc:'CRO',country:'Croatia',name:'HNL',tier:1,coef:1,size:10,
+ repTop:7300,repBot:4200,budTop:22,budBot:1,euro:[1,2,1],add:`
+Dinamo Zagreb|DZG|005ca9|ffffff|24851|Maksimir;
+Hajduk Split|HAJ|ffffff|005ca9|33987|Poljud;
+Rijeka|RIJ|ffffff|005ca9|8136|Rujevica;
+Osijek|OSI|005ca9|ffffff|12000|Opus Arena;
+Slaven Belupo|SLB|005ca9|ffffff|3134|Gradski vrt;
+Varaždin|VAR|005ca9|ffffff|10800|Varteks;
+Lokomotiva Zagreb|LOK|005ca9|ffffff|5000|Kranjčevićeva;
+Istra 1961|IST|00954c|ffe500|8923|Aldo Drosina;
+Gorica|GOR2|ffe500|005ca9|5200|Radnik;
+Vukovar 1991|VUK|005ca9|ffffff|4000|Gradski stadion`}
+];
+
+/*#w1_data.js#*//*#w2_build.js#*/
+
+/* =====================================================================
+   NAMES — a squad in Seville should not read like a squad in Salford
+   ===================================================================== */
+const W_NAMES={
+ENG:['Jack Harry Oliver George Charlie Alfie Archie Freddie Louie Kai Mason Reece Tyler Callum Lewis Owen Marcus Jayden Ollie Finley Bailey Kieran Dylan Rhys Josh',
+     'Walker Hughes Bennett Clarke Robinson Turner Wright Foster Barnes Chapman Dawson Ellis Gibson Hardy Ingram Jennings Kerr Lowe Mercer Nash Osborne Palmer Reid Shaw Webb'],
+ESP:['Sergio Álvaro Pablo Iker Javier Rubén Adrián Marcos Hugo Diego Jorge Iván Aitor Unai Mikel Nacho Borja Raúl Óscar Gonzalo Bryan Ander Asier Carlos Juan',
+     'García Fernández Martínez Moreno Navarro Sánchez Ruiz Ramos Gómez Torres Herrera Vázquez Iglesias Cuenca Larrea Zubimendi Etxeberria Olmo Quintana Serrano Cortés Bravo Alonso Peña Rivas'],
+ITA:['Lorenzo Matteo Alessandro Riccardo Federico Andrea Davide Nicolò Gianluca Simone Tommaso Marco Luca Giacomo Samuele Filippo Cristian Emanuele Pietro Stefano Michele Giuseppe Antonio Fabio Daniele',
+     'Rossi Ricci Moretti Ferrari Esposito Romano Conti Greco Bruno Gallo Costa Mancini Marchetti Barbieri Lombardi Fontana Caruso Rizzo Serra Pellegrini Vitale Sartori Bianchi Villa Donati'],
+GER:['Leon Luca Finn Jonas Niklas Maximilian Tim Julian Lukas Felix Moritz Elias Nico Marvin Florian Philipp Erik Jannik Robin Sebastian Kevin Til Malte Fabian Janis',
+     'Müller Schmidt Schneider Fischer Weber Wagner Becker Hoffmann Schäfer Koch Bauer Richter Klein Wolf Neumann Zimmermann Braun Krüger Hartmann Lange Werner Krause Schulz Böhm Vogel'],
+FRA:['Antoine Lucas Théo Maxime Hugo Enzo Nathan Clément Baptiste Romain Alexis Mathis Kylian Adrien Florian Rayan Noah Amine Yanis Corentin Bilal Ilan Axel Jules Ousmane',
+     'Dubois Lefèvre Moreau Girard Bonnet Fournier Mercier Renard Lambert Rousseau Marchand Perrin Diallo Traoré Keita Camara Sylla Coulibaly Ndiaye Barry Fofana Cissé Sanogo Bamba Doucouré'],
+POR:['João Tiago Rúben Diogo Bruno Rafael Miguel Gonçalo Pedro Duarte Tomás Afonso Vasco Ricardo Nuno Fábio Hélder Ivo Salvador Martim Dinis Eduardo Xavier André Luís',
+     'Silva Santos Costa Pereira Ferreira Rodrigues Oliveira Carvalho Lopes Marques Gomes Almeida Ribeiro Cardoso Teixeira Moreira Faria Antunes Machado Barbosa Pinto Neves Fonseca Correia Matos'],
+NED:['Daan Sem Luuk Bram Thijs Sven Ruben Jesse Milan Stijn Tijmen Joep Youri Jurriën Kick Wout Teun Quinten Mees Lars Rick Guus Dylan Ryan Kaj',
+     'de Jong van Dijk Bakker Visser Smit Meijer Mulder de Boer Bos Vos Peters Hendriks Dekker Willems Kuipers Verhoeven van Leeuwen Timmermans Postma Groot Blom Kroon Veenstra Rietveld Sanders'],
+SCO:['Callum Kieran Lewis Ryan Scott Cameron Fraser Kyle Aidan Blair Euan Struan Rory Angus Finlay Connor Jamie Craig Grant Murray Ross Gregor Innes Duncan Hamish',
+     'MacDonald Campbell Stewart Fraser Murray Ferguson Gordon Robertson MacLeod Kerr Buchanan Hendry McGinn McTominay Docherty Sinclair Rennie Nisbet Ralston Considine Boyle Grant Baird McKenna Cairney'],
+BEL:['Lars Wout Arne Thibaut Senne Jarne Maxim Lander Nathan Jonas Milan Bryan Aster Cisse Amadou Zeno Yorbe Ruben Siebe Vic Mathis Elias Dries Toon Simon',
+     'Peeters Janssens Maes Willems Claes Wouters De Smet Declercq Vermeulen Van Damme Lemmens Cools Verhoeven Michiels Vandenberghe Goossens Dewulf Buyse Coppens Vervoort Segers Standaert Baert Dhondt Naert'],
+TUR:['Emre Burak Arda Kerem Yusuf Mert Cengiz Barış Ozan Halil Kaan Berkay Umut Enes Furkan Deniz Onur Serdar Doğukan Efe Batuhan Eren Salih Taha Uğur',
+     'Yılmaz Demir Kaya Çelik Şahin Yıldız Aydın Öztürk Arslan Doğan Koç Kurt Aslan Çetin Erdoğan Polat Korkmaz Bulut Şimşek Güler Kılıç Tekin Sönmez Akgün Uzun'],
+GRE:['Giorgos Dimitris Kostas Nikos Vangelis Christos Panagiotis Petros Thanasis Stefanos Alexandros Ilias Manolis Fotis Andreas Vasilis Anastasios Leonidas Sotiris Michalis Yannis Tasos Lefteris Spyros Marios',
+     'Papadopoulos Nikolaou Georgiou Ioannidis Pappas Vlachos Karagiannis Christodoulou Athanasiou Makris Antoniou Samaras Mitroglou Fortounis Bakasetas Masouras Sidiropoulos Zafeiris Douvikas Kourbelis Giannoulis Tzolakis Retsos Rota Pelkas'],
+CZE:['Jan Tomáš Petr Lukáš Jakub Martin Ondřej Michal David Filip Vojtěch Adam Matěj Daniel Radek Marek Patrik Václav Dominik Štěpán Antonín Jaroslav Milan Zdeněk Karel',
+     'Novák Svoboda Novotný Dvořák Černý Procházka Kučera Veselý Horák Němec Marek Pospíšil Hájek Král Beneš Sedláček Souček Chytil Provod Schick Krejčí Douděra Zima Hložek Kalvach'],
+DEN:['Mikkel Frederik Rasmus Emil Magnus Kasper Anders Jonas Oliver Lucas Victor Mathias Tobias Nikolaj Sebastian Christian Andreas Simon Alexander Marcus Gustav Noah Malte Jeppe Silas',
+     'Jensen Nielsen Hansen Pedersen Andersen Christensen Larsen Sørensen Rasmussen Jørgensen Madsen Kristensen Olsen Thomsen Poulsen Johansen Møller Mortensen Damsgaard Skov Bruun Hjulmand Wind Dreyer Bah'],
+NOR:['Erling Martin Kristian Håkon Sander Even Andreas Jonas Mathias Sondre Ola Fredrik Emil Aron Oscar Marius Jørgen Sigurd Torbjørn Vegard Simen Adrian Niklas Bendik Isak',
+     'Hansen Johansen Olsen Larsen Andersen Pedersen Nilsen Kristiansen Jensen Karlsen Berg Haaland Ødegaard Sørloth Ryerson Strand Bobb Nusa Thorsby Berge Aursnes Østigård Hauge Solbakken Meling'],
+POL:['Jakub Kacper Szymon Filip Mateusz Bartosz Kamil Piotr Michał Wojciech Adam Dawid Sebastian Paweł Damian Krzysztof Tomasz Marcin Łukasz Karol Jan Nikola Przemysław Rafał Grzegorz',
+     'Nowak Kowalski Wiśniewski Wójcik Kamiński Lewandowski Zieliński Szymański Woźniak Dąbrowski Kozłowski Jankowski Mazur Krawczyk Piątek Grosicki Bednarek Frankowski Świderski Skorupski Cash Zalewski Kiwior Slisz Urbański'],
+SRB:['Nikola Aleksandar Marko Stefan Luka Miloš Dušan Filip Nemanja Uroš Lazar Vukašin Petar Ognjen Andrija Strahinja Veljko Đorđe Miodrag Bogdan Dragan Vladimir Srđan Ivan Zoran',
+     'Jovanović Petrović Nikolić Ilić Marković Popović Stojanović Milošević Pavlović Đorđević Mitrović Tadić Kostić Gudelj Živković Ratkov Samardžić Lukić Veljković Erakovic Radonjić Babić Simić Vukotić Ristić'],
+UKR:['Andriy Oleksandr Serhiy Yaroslav Bohdan Mykola Vitaliy Denys Ruslan Ihor Artem Roman Volodymyr Maksym Danylo Heorhiy Illia Taras Oleh Vadym Yevhen Pavlo Dmytro Kyrylo Nazar',
+     'Shevchenko Kovalenko Bondarenko Tkachenko Kravchenko Oliynyk Melnyk Sydorchuk Zinchenko Mudryk Yarmolenko Dovbyk Tsygankov Matviyenko Konoplya Sudakov Brazhko Zabarnyi Trubin Malinovskyi Yaremchuk Karavaev Bushchan Stepanenko Pikhalonok'],
+CRO:['Luka Ivan Marko Josip Mateo Ante Domagoj Petar Filip Nikola Borna Martin Toma Dario Mario Lovro Franjo Karlo Roko Duje Fran Andrej Bruno Stipe Kristijan',
+     'Modrić Perišić Kovačić Brozović Gvardiol Sučić Baturina Sosa Juranović Stanišić Vlašić Majer Petković Livaković Erlić Šutalo Pašalić Budimir Musa Ivanušec Moro Pjaca Fruk Beljo Kramarić'],
+AUT:['Marcel Stefan David Christoph Manuel Alexander Patrick Michael Konrad Nikolas Romano Sasa Maximilian Xaver Junior Yusuf Matthias Florian Thomas Andreas Lukas Raul Leopold Dominik Philipp',
+     'Gruber Huber Bauer Wagner Müller Pichler Steiner Moser Mayer Hofer Leitner Berger Fuchs Wimmer Eder Baumgartner Sabitzer Alaba Laimer Danso Posch Wöber Grillitsch Lienhart Prass'],
+SUI:['Noah Liam Elias Julian Leon Nico Andrin Silvan Fabian Loris Dario Yann Ricardo Renato Ruben Zeki Michel Simon Cedric Denis Vincent Lucas Ardon Bastien Filip',
+     'Meier Keller Brunner Widmer Schär Zuber Freuler Sow Embolo Okafor Rieder Ndoye Vargas Amdouni Aebischer Stergiou Comert Jashari Sierro Zesiger Xhaka Steffen Frei Kobel Omlin']};
+W_NAMES.SCO2=W_NAMES.SCO;
+function wNamePool(cc){const n=W_NAMES[cc]||W_NAMES.ENG;
+ if(!n._f){n._f=n[0].split(' ');n._l=n[1].split(' ')}return n}
+function wName(cc,rng){const n=wNamePool(cc);
+ return n._f[Math.floor(rng()*n._f.length)]+' '+n._l[Math.floor(rng()*n._l.length)]}
+
+/* =====================================================================
+   BUILDING THE WORLD
+   ---------------------------------------------------------------------
+   Reputation and money run down each league's own ladder, so a fifteenth
+   place Serie A club is worth more than the best side in Croatia without
+   either number being typed by hand. Squad standard follows reputation on
+   a curve fitted to the squads that ARE real — the Premier League ones —
+   so a Championship side comes out in the sixties and a National League
+   side in the low forties, which is where they belong.
+   ===================================================================== */
+const LEAGUES={};
+/* fitted to the squads that ARE real: Real Madrid's reputation comes out
+   at a squad averaging the mid eighties, Leicester's in the high sixties,
+   a League Two side around fifty, a National League side in the forties */
+function ovrForRep(rep){return clamp(26.7*Math.log(Math.max(1200,rep))-161.5,38,88)}
+/* a shape a manager would actually pick, then cover for it */
+const W_SHAPE=['GK','DC','DC','DR','DL','DM','MC','AMC','AMR','AML','ST',
+               'GK','DC','MC','ST','DR','DL','AMC','ST','WBL','AMR','DM'];
+function wStadium(name,given){return given||(name.split(' ')[0]+' Stadium')}
+function wShort(name){
+ const w=name.replace(/^(FC|AC|AS|SC|SV|SK|FK|RC|CD|UD|AD|BSC|VfB|VfL|TSG|SpVgg|KV|KRC|KAA|RSC|OGC|AJ|US|USL|EA|ESTAC|MK)\s+/,'').split(/[\s\/]+/);
+ if(w.length>=2)return (w[0].slice(0,3)+w[1].slice(0,1)).toUpperCase();
+ return name.slice(0,3).toUpperCase()}
+function wHex(h,fb){if(!h)return fb;h=h.replace('#','');
+ if(h.length===3)h=h[0]+h[0]+h[1]+h[1]+h[2]+h[2];return '#'+h}
+function wParseLeague(L){
+ const recs=L.add.split(';').map(s=>s.trim()).filter(Boolean).map(s=>s.split('|').map(x=>x.trim()));
+ return recs}
+function wSquad(c,cc,size){
+ const rng=mulberry(hashStr('sq|'+c.key));
+ const mean=ovrForRep(c.rep);
+ // the squad spreads either side of the club's standard: a first choice
+ // eleven above it, cover and kids below
+ const slots=[];
+ for(let k=0;k<size;k++){
+  const t=k/(size-1);
+  slots.push(clamp(Math.round(mean+5.5-11*t+(rng()*4-2)),34,93))}
+ // dealt across the pitch rather than down it — the best eleven ratings go
+ // to the first-choice shape, the rest to the bench, each shuffled inside
+ // itself so a club's strength is not always at the same end of the pitch
+ const mix=(lo,hi)=>{for(let k=hi;k>lo;k--){const j=lo+Math.floor(rng()*(k-lo+1));const t=slots[k];slots[k]=slots[j];slots[j]=t}};
+ mix(0,Math.min(10,slots.length-1));if(slots.length>11)mix(11,slots.length-1);
+ const posns=W_SHAPE.slice(0,size);
+ while(posns.length<size)posns.push('MC');
+ posns.forEach((pos,k)=>{
+  const ovr=slots[k];
+  const age=Math.round(17+rng()*(ovr>=mean?16:12));
+  const pot=clamp(ovr+(age<=21?Math.round(4+rng()*12):age<=24?Math.round(1+rng()*7):Math.round(rng()*3)),ovr,96);
+  c.players.push(genPlayer([wName(cc,rng),pos,age,ovr,pot],c.i))})}
+function buildWorld(){
+ // the leagues that were already here keep their squads and simply move
+ // into the country they actually play in
+ const byName={};G.clubs.forEach(c=>byName[c.name]=c);
+ // Barnsley and Barcelona both answered to BAR, which muddled everything
+ // keyed off a club's short code
+ const bn=byName['Barnsley'];if(bn&&bn.key==='BAR')bn.key='BNS';
+ // English divisions that already exist keep their definition
+ LEAGUES.PL={k:'PL',cc:'ENG',country:'England',name:'Premier League',tier:1,coef:5,size:20,euro:[4,2,1],repTop:9400,repBot:6300};
+ W_LG.forEach(L=>{
+  LEAGUES[L.k]={k:L.k,cc:L.cc,country:L.country,name:L.name,tier:L.tier,coef:L.coef,size:L.size,euro:L.euro,repTop:L.repTop,repBot:L.repBot};
+  const recs=wParseLeague(L);
+  // clubs already in the game keep the reputation they were given by hand;
+  // they simply take their place on the ladder so the ones built here slot
+  // in underneath them rather than on top of them
+  const already=G.clubs.filter(c=>c.league===L.k&&!recs.some(r=>r[0]===c.name));
+  const total=recs.length+already.length;
+  let rank=already.length,prevRep=1e9;
+  already.forEach(c=>{c.cc=L.cc;c.tier=L.tier;prevRep=Math.min(prevRep,c.rep)});
+  recs.forEach(r=>{
+   const nm=r[0];
+   const old=byName[nm];
+   if(old){old.league=L.k;old.cc=L.cc;old.tier=L.tier;prevRep=Math.min(prevRep,old.rep);rank++;return}
+   const t=total<=1?0:rank/(total-1);
+   const rep=Math.min(prevRep-15,Math.round(L.repTop+(L.repBot-L.repTop)*t));
+   prevRep=rep;
+   const bud=L.budTop*Math.pow(L.budBot/L.budTop,t);
+   const i=G.clubs.length;
+   // a club's key has to be unique across the world; its badge does not,
+   // so Celta go on the badge as CEL even though the key says otherwise
+   let key=(r[1]||wShort(nm)).toUpperCase();
+   const short=(r[1]||wShort(nm)).replace(/\d+$/,'');
+   if(G.clubs.some(c=>c.key===key))key=key+L.k;
+   const c={i,key,name:nm,short,
+    c1:wHex(r[2],'#'+((hashStr(nm)>>>0)%0xffffff).toString(16).padStart(6,'0')),
+    c2:wHex(r[3],'#ffffff'),
+    rep,budget:Math.round(bud*1e6),bank:Math.round(bud*1e6*1.4),
+    wageCap:Math.round(rep*(L.tier===1?(L.coef>=4?300:150):90)),
+    stadium:wStadium(nm,r[5]),cap:+(r[4]||0)||Math.round(4000+rep*2.2),
+    players:[],patience:60,league:L.k,cc:L.cc,tier:L.tier,
+    tacs:{formation:pick(['4-4-2','4-3-3','4-2-3-1','3-5-2','5-3-2']),mentality:'Balanced'}};
+   G.clubs.push(c);byName[nm]=c;
+   wSquad(c,L.cc,L.coef>=4?18:L.tier===1?17:16);
+   rank++});
+  // anything left in this league from the old data gets its country stamped
+  G.clubs.filter(c=>c.league===L.k).forEach(c=>{c.cc=L.cc;c.tier=L.tier})});
+ G.clubs.forEach(c=>{if(!c.cc){c.cc='ENG';c.tier=1}});
+ // the placeholder "Continental League" no longer exists — anything still
+ // in it (there should be nothing) joins the league it really plays in
+ G.clubs.filter(c=>c.league==='EU').forEach(c=>{c.league='ESP';c.cc='ESP';c.tier=1});
+ // every cached table and division list is now out of date
+ if(typeof invalidateTables==='function')invalidateTables();
+ for(const k in LEAGUES)DIV_NAMES[k]=LEAGUES[k].name;
+ delete DIV_NAMES.EU;
+}
+/* the pyramid, per country: who goes up into whom, and how many */
+const PYRAMIDS={
+ ENG:[['PL','CH',3],['CH','L1',3],['L1','L2',4],['L2','NL',2]],
+ ESP:[['ESP','ESP2',3]],ITA:[['ITA','ITA2',3]],
+ GER:[['GER','GER2',3]],FRA:[['FRA','FRA2',3]]};
+function leagueKeys(){return Object.keys(LEAGUES)}
+function leaguesOf(cc){return leagueKeys().filter(k=>LEAGUES[k].cc===cc).sort((a,b)=>LEAGUES[a].tier-LEAGUES[b].tier)}
+function countries(){const s=[];for(const k in LEAGUES)if(!s.includes(LEAGUES[k].cc))s.push(LEAGUES[k].cc);
+ return s.sort((a,b)=>{const A=leaguesOf(a)[0],B=leaguesOf(b)[0];return LEAGUES[B].coef-LEAGUES[A].coef||LEAGUES[A].country.localeCompare(LEAGUES[B].country)})}
+
+/* =====================================================================
+   THE CALENDAR — every division fits inside one season, and nothing is
+   asked to play on a day the cups have already claimed
+   ===================================================================== */
+const RESERVED=new Set();
+function reserveCupDays(){RESERVED.clear();
+ for(const k in CUP_DEFS)(CUP_DEFS[k].days||[]).forEach(d=>{RESERVED.add(d);RESERVED.add(d+1)});
+ (typeof CL_EXTRA_DAYS!=='undefined'?CL_EXTRA_DAYS:[]).forEach(d=>RESERVED.add(d));
+ (typeof INT_BREAKS!=='undefined'?INT_BREAKS:[]).forEach(d=>{for(let x=0;x<8;x++)RESERVED.add(d+x)})}
+function buildFixtures(startDay){
+ reserveCupDays();
+ G.fixtures=[];
+ leagueKeys().forEach(div=>{
+  const mem=divMembers(div);if(mem.length<2)return;
+  let R=rrPairs(mem);
+  if(mem.length<=12)R=R.concat(rrPairs(mem).slice(0,mem.length-1)); // small leagues play a third cycle
+  // spread the rounds evenly across the season, stepping over cup weeks
+  const span=292-startDay,step=Math.max(3,Math.floor(span/Math.max(1,R.length-1)));
+  let day=startDay;
+  R.forEach((ps,r)=>{
+   let d=day;let guard=0;
+   while(RESERVED.has(d)&&guard++<6)d++;
+   ps.forEach(([h,a])=>G.fixtures.push({r,day:d,h,a,played:false,hs:0,as:0,sc:[],div}));
+   day+=step})})}
+
+/* =====================================================================
+   THE BACKGROUND SIMULATOR
+   ---------------------------------------------------------------------
+   Four hundred and seventy clubs playing every week is roughly two
+   hundred matches a day. Running the full engine on all of them would
+   stall the game for the better part of a second every time you pressed
+   continue, so only the matches that can affect you get the full
+   treatment: your own division, every cup tie, and every European night.
+   Everything else goes through a scoring model tuned to the same numbers
+   the full engine produces — the same goals per game, the same home
+   advantage — and still hands its goals to real players, so the top
+   scorer charts in Portugal are somebody's, not nobody's.
+   ===================================================================== */
+function clubStrength(c){
+ if(c._strDay!=null&&c._strDay===G.day&&c._str!=null)return c._str;
+ const fit=c.players.filter(p=>!p.injury||p.injury.days<=0);
+ const use=(fit.length>=11?fit:c.players).slice().sort((a,b)=>b.ovr-a.ovr).slice(0,13);
+ const v=use.length?use.reduce((s,p)=>s+p.ovr,0)/use.length:55;
+ c._str=v;c._strDay=G.day;return v}
+function poisson(l,rng){let L=Math.exp(-l),k=0,p=1;
+ do{k++;p*=rng()}while(p>L);return k-1}
+function pickScorer(c,rng){
+ const wgt={ST:12,AMC:6,AML:6,AMR:6,MR:4,ML:4,MC:3,DM:1.2,WBL:1,DL:.8,DR:.8,DC:1,GK:.02};
+ const fit=c.players.filter(p=>!p.injury||p.injury.days<=0);
+ const pool=fit.length?fit:c.players;
+ let tot=0;const w=pool.map(p=>{const x=(wgt[p.pos]||2)*Math.pow(Math.max(1,p.ovr-40)/20,1.6);tot+=x;return x});
+ let r=rng()*tot;
+ for(let i=0;i<pool.length;i++){r-=w[i];if(r<=0)return pool[i]}
+ return pool[pool.length-1]}
+function fastSim(fix){
+ const H=G.clubs[fix.h],A=G.clubs[fix.a];
+ const rng=mulberry(hashStr('fs'+fix.h+'|'+fix.a+'|'+fix.day+'|'+G.season+'|'+(fix.r||0)));
+ const sH=clubStrength(H),sA=clubStrength(A);
+ const neutral=!!fix.neutral;
+ // 1.32 goals a side before anything else, home advantage worth the same
+ // 1.17/0.87 split the full engine settles on
+ const edge=(sH-sA)/13;
+ let lH=1.32*Math.exp(edge*.5)*(neutral?1:1.17);
+ let lA=1.32*Math.exp(-edge*.5)*(neutral?1:.87);
+ lH=clamp(lH,.25,4.6);lA=clamp(lA,.2,4.4);
+ const hs=Math.min(8,poisson(lH,rng)),as=Math.min(8,poisson(lA,rng));
+ fix.hs=hs;fix.as=as;fix.played=true;fix.sc=fix.sc||[];
+ const mins=[];
+ for(let k=0;k<hs+as;k++)mins.push(1+Math.floor(rng()*90));
+ mins.sort((a,b)=>a-b);
+ let mi=0;
+ const put=(c,ci,n)=>{for(let k=0;k<n;k++){
+  const p=pickScorer(c,rng);
+  fix.sc.push({min:mins[mi++]+"'",pid:p.id,name:p.name,ci,pen:rng()<.08});
+  p.stats.goals++;
+  if(rng()<.62){const q=pickScorer(c,rng);if(q!==p)q.stats.assists++}}};
+ // interleave so the scorer list reads in order
+ const order=[];for(let k=0;k<hs;k++)order.push(0);for(let k=0;k<as;k++)order.push(1);
+ shuffle(order);
+ order.forEach(s=>put(s?A:H,s?fix.a:fix.h,1));
+ fix.sc.sort((a,b)=>parseInt(a.min,10)-parseInt(b.min,10));
+ [[H,as],[A,hs]].forEach(([c,conceded])=>{
+  const xi=c.players.filter(p=>!p.injury||p.injury.days<=0).sort((a,b)=>b.ovr-a.ovr).slice(0,11);
+  xi.forEach(p=>{p.stats.apps++;p.stats.rSum+=5.6+rng()*1.6;
+   if(p.pos==='GK'&&conceded===0)p.stats.cleanSheets++});
+  // the odd knock, at roughly the rate the full engine produces
+  if(rng()<.09&&xi.length){const p=xi[Math.floor(rng()*xi.length)];
+   if(!p.injury)p.injury={type:pick(['Knock','Hamstring strain','Ankle sprain','Groin strain']),days:Math.round(3+rng()*24)}}});
+ return null}
+/* the divisions that always get the real engine */
+function fullSimDiv(div){
+ if(!div)return true;
+ if(div===myDiv())return true;
+ const L=LEAGUES[div];
+ return !!(L&&L.cc===G.clubs[G.my].cc&&L.tier<=2)}
+function simFixture(f){
+ if(f.cup||fullSimDiv(f.div))return quickSim(f);
+ return fastSim(f)}
+
+/*#w2_build.js#*//*#w3_season.js#*/
+
+/* =====================================================================
+   PROMOTION AND RELEGATION, EVERYWHERE
+   ---------------------------------------------------------------------
+   England still moves three, three, four and two. Spain, Italy, Germany
+   and France move three between their two tiers. The countries with a
+   single division in the game have nowhere to send anybody, so nobody
+   goes down — which is also what happens if you only model one tier.
+   ===================================================================== */
+function WORLD_PR(swap,moves){
+ for(const cc in PYRAMIDS)PYRAMIDS[cc].forEach(([hi,lo,n])=>{
+  if(LEAGUES[hi]&&LEAGUES[lo])swap(hi,lo,n)});
+ // clubs have changed division, so nothing cached about them still holds
+ if(typeof invalidateTables==='function')invalidateTables()}
+
+/* the whole world's tables get sealed, not just England's */
+function sealedDivs(){return leagueKeys()}
+
+/* =====================================================================
+   THE LEAGUE TABLES SCREEN — a world of them now, so pick a country
+   ===================================================================== */
+const CC_FLAG={ENG:'\u{1F3F4}\u{E0067}\u{E0062}\u{E0065}\u{E006E}\u{E0067}\u{E007F}',ESP:'🇪🇸',ITA:'🇮🇹',GER:'🇩🇪',FRA:'🇫🇷',POR:'🇵🇹',NED:'🇳🇱',BEL:'🇧🇪',TUR:'🇹🇷',
+ SCO:'\u{1F3F4}\u{E0067}\u{E0062}\u{E0073}\u{E0063}\u{E0074}\u{E007F}',AUT:'🇦🇹',SUI:'🇨🇭',GRE:'🇬🇷',CZE:'🇨🇿',DEN:'🇩🇰',NOR:'🇳🇴',POL:'🇵🇱',SRB:'🇷🇸',UKR:'🇺🇦',CRO:'🇭🇷',
+ BRA:'🇧🇷',ARG:'🇦🇷',USA:'🇺🇸',JPN:'🇯🇵',NGA:'🇳🇬',SEN:'🇸🇳',MAR:'🇲🇦',CIV:'🇨🇮',GHA:'🇬🇭',CMR:'🇨🇲',EGY:'🇪🇬',URU:'🇺🇾',COL:'🇨🇴',MEX:'🇲🇽',KOR:'🇰🇷',AUS:'🇦🇺',
+ SWE:'🇸🇪',FIN:'🇫🇮',ISL:'🇮🇸',WAL:'\u{1F3F4}\u{E0067}\u{E0062}\u{E0077}\u{E006C}\u{E0073}\u{E007F}',IRL:'🇮🇪',NIR:'\u{1F3F4}\u{E0067}\u{E0062}\u{E006E}\u{E0069}\u{E0072}\u{E007F}',
+ ALB:'🇦🇱',SVK:'🇸🇰',SVN:'🇸🇮',HUN:'🇭🇺',ROU:'🇷🇴',BUL:'🇧🇬',BIH:'🇧🇦',MKD:'🇲🇰',MNE:'🇲🇪',GEO:'🇬🇪',ARM:'🇦🇲',ISR:'🇮🇱',KVX:'🇽🇰',LUX:'🇱🇺',
+ CAN:'🇨🇦',CRC:'🇨🇷',PAN:'🇵🇦',JAM:'🇯🇲',HON:'🇭🇳',ECU:'🇪🇨',PER:'🇵🇪',CHI:'🇨🇱',PAR:'🇵🇾',VEN:'🇻🇪',BOL:'🇧🇴',
+ ALG:'🇩🇿',TUN:'🇹🇳',MLI:'🇲🇱',BFA:'🇧🇫',GUI:'🇬🇳',COD:'🇨🇩',RSA:'🇿🇦',ANG:'🇦🇴',ZAM:'🇿🇲',CPV:'🇨🇻',GAB:'🇬🇦',
+ KSA:'🇸🇦',IRN:'🇮🇷',QAT:'🇶🇦',UAE:'🇦🇪',IRQ:'🇮🇶',UZB:'🇺🇿',CHN:'🇨🇳',NZL:'🇳🇿',JOR:'🇯🇴'};
+function ccFlag(cc){return CC_FLAG[cc]||'🏳️'}
+function vTable(){
+ if(!UI.tblDiv||!LEAGUES[UI.tblDiv])UI.tblDiv=myDiv();
+ if(!UI.tblCC)UI.tblCC=LEAGUES[UI.tblDiv].cc;
+ const ccs=countries();
+ let h='<div class="chips" style="margin-bottom:8px;overflow-x:auto;flex-wrap:nowrap">'+ccs.map(cc=>
+  '<button class="chip'+(UI.tblCC===cc?' on':'')+'" data-action="tblCC" data-v="'+cc+'" style="white-space:nowrap">'+ccFlag(cc)+' '+esc(LEAGUES[leaguesOf(cc)[0]].country)+'</button>').join('')+'</div>';
+ const divs=leaguesOf(UI.tblCC);
+ if(divs.indexOf(UI.tblDiv)<0)UI.tblDiv=divs[0];
+ if(divs.length>1)h+='<div class="chips" style="margin-bottom:10px">'+divs.map(d=>
+  '<button class="chip'+(UI.tblDiv===d?' on':'')+'" data-action="tblDiv" data-v="'+d+'">'+esc(DIV_NAMES[d])+'</button>').join('')+'</div>';
+ const rows=tableRows(UI.tblDiv);
+ const L=LEAGUES[UI.tblDiv];
+ const pyr=PYRAMIDS[L.cc]||[];
+ const relRow=pyr.find(p=>p[0]===UI.tblDiv),promoRow=pyr.find(p=>p[1]===UI.tblDiv);
+ const nRel=relRow?relRow[2]:0,nPromo=promoRow?promoRow[2]:0;
+ const euro=L.tier===1&&L.euro?L.euro:null;
+ const nCL=euro?euro[0]:0,nEL=euro?euro[0]+euro[1]:0,nEC=euro?euro[0]+euro[1]+euro[2]:0;
+ h+='<div class="card tight"><table class="tbl"><thead><tr><th class="c">#</th><th>Club</th><th class="c">P</th><th class="c">W</th><th class="c">D</th><th class="c">L</th><th class="c">GD</th><th class="r">Pts</th></tr></thead><tbody>';
+ rows.forEach((r,ix)=>{const c=G.clubs[r.i];const my=r.i===G.my;
+  const bar=ix<nCL?'var(--gold)':ix<nEL?'#7fc1ff':ix<nEC?'#4caf50':
+   (nPromo&&ix<nPromo)?'var(--gold)':(nRel&&ix>=rows.length-nRel)?'var(--danger)':'';
+  h+='<tr data-action="clubView" data-id="'+r.i+'" style="'+(my?'background:rgba(218,41,28,.13)':'')+(bar?';box-shadow:inset 3px 0 0 '+bar:'')+'">'+
+  '<td class="c num" style="font-weight:800">'+(ix+1)+'</td><td><div class="row" style="gap:7px">'+crest(c,20)+'<span style="font-weight:'+(my?'800':'600')+';font-size:12px">'+esc(c.short)+'</span></div></td>'+
+  '<td class="c num">'+r.p+'</td><td class="c num">'+r.w+'</td><td class="c num">'+r.d+'</td><td class="c num">'+r.l+'</td><td class="c num">'+(r.gd>0?'+':'')+r.gd+'</td><td class="r num" style="font-weight:800">'+r.pts+'</td></tr>'});
+ h+='</tbody></table></div><div class="xs faint" style="padding:4px">'+esc(DIV_NAMES[UI.tblDiv])+
+  (euro?' · <span style="color:var(--gold)">Champions League</span> · <span style="color:#7fc1ff">Europa League</span> · <span style="color:#4caf50">Conference</span>':'')+
+  (nPromo?' · <span style="color:var(--gold)">promotion</span>':'')+
+  (nRel?' · <span style="color:var(--danger)">relegation</span>':'')+'</div>';
+ return h}
+ACTIONS.tblCC=el=>{UI.tblCC=el.dataset.v;UI.tblDiv=leaguesOf(UI.tblCC)[0];render()};
+
+/* =====================================================================
+   MATCHDAYS — the real engine where it matters, the model everywhere else
+   ===================================================================== */
+function simRestOfRound(){
+ const fx=fixturesOn(G.day).filter(f=>!f.played);
+ if(!fx.length)return;
+ fx.forEach(f=>simFixture(f));
+ afterRound(G.day);
+ const mine=fx.filter(f=>f.div===myDiv());
+ if(mine.length){
+  const res=mine.map(f=>G.clubs[f.h].short+' <b>'+f.hs+'–'+f.as+'</b> '+G.clubs[f.a].short).join('<br>');
+  mail('news',DIV_NAMES[myDiv()]+' — Matchday '+(mine[0].r+1),res)}}
+function simRestOfDay(){
+ const fx=fixturesOn(G.day).filter(f=>!f.played);
+ if(fx.length){
+  fx.forEach(f=>simFixture(f));
+  afterRound(G.day);
+  const mine=fx.filter(f=>f.div===myDiv());
+  if(mine.length){
+   const res=mine.map(f=>G.clubs[f.h].short+' <b>'+f.hs+'–'+f.as+'</b> '+G.clubs[f.a].short).join('<br>');
+   mail('news',DIV_NAMES[myDiv()]+' — Matchday '+(mine[0].r+1),res)}}
+ const ct=tiesOn(G.day).filter(t=>!t.played);
+ if(ct.length){
+  ct.forEach(t=>resolveTie(t));
+  const played=new Set();ct.forEach(t=>{played.add(t.h);played.add(t.a)});
+  played.forEach(ci=>G.clubs[ci].players.forEach(p=>{if(p.susp>0)p.susp--}));
+  /* the inbox is not a fixture list. You get every result from the cups
+     you are actually in, and from the two English ones; everything else in
+     Europe is one round-up, and only the clubs from your own country. */
+  const byCup={};ct.forEach(t=>{(byCup[t.cup]=byCup[t.cup]||[]).push(t)});
+  const myCc=G.clubs[G.my].cc;
+  const line=t=>G.clubs[t.h].short+' <b>'+t.hs+'–'+t.as+'</b>'+
+   (t.ph!=null?' <span class="xs">('+t.ph+'–'+t.pa+'p)</span>':'')+' '+G.clubs[t.a].short;
+  const round=[];
+  for(const k in byCup){const def=CUP_DEFS[k],list=byCup[k];
+   if(!def)continue;
+   const mine=list.some(t=>t.h===G.my||t.a===G.my);
+   const inIt=G.cups[k].teams?G.cups[k].teams.includes(G.my):(k==='FA'||k==='LC');
+   if(mine||inIt||k==='FA'||k==='LC'){
+    const home=list.filter(t=>G.clubs[t.h].cc===myCc||G.clubs[t.a].cc===myCc);
+    const show=(home.length?home:list).slice(0,26);
+    mail('match',def.icon+' '+def.name+' — '+(def.rn[list[0].r]||'results'),show.map(line).join('<br>'))}
+   else{
+    const home=list.filter(t=>G.clubs[t.h].cc===myCc||G.clubs[t.a].cc===myCc);
+    if(home.length)round.push('<b>'+def.icon+' '+def.name+'</b><br>'+home.map(line).join('<br>'))}}
+  if(round.length)mail('news','🌍 European round-up',round.join('<br><br>'))}
+ progressCups();}
+
+/* clubs outside the user's own division are simulated, so they no longer
+   need the abstract sharpness top-up the old code gave them */
+const _wkTrainWorld=weeklyTraining;
+weeklyTraining=function(){_wkTrainWorld()};
+
+/* =====================================================================
+   WIRING IT UP
+   ===================================================================== */
+const _newGameWorld=newGame;
+newGame=function(i){
+ _newGameWorld(i);
+ buildWorld();
+ buildAcademies();
+ buildFixtures(14);
+ // the first pass drew cups for a world that no longer exists
+ G.inbox=(G.inbox||[]).filter(m=>!/draw|qualification|league phase/i.test(m.title||''));
+ G.cups=null;
+ initCups();
+ G.worldBuilt=true};
+
+/*#w3_season.js#*//*#w4_cups.js#*/
+
+/* =====================================================================
+   THE COMPETITIONS, AS THEY ACTUALLY WORK
+   ---------------------------------------------------------------------
+   The old cups were a convenience: everybody in at once, one leg, done.
+   That is why Manchester United were entering the FA Cup in a round of
+   sixty-four alongside National League sides, which never happens. The
+   real thing is a staircase — the smallest clubs start in November and
+   the Premier League does not appear until January.
+
+   FA CUP           First Round        League One, League Two, non-league
+                    Second Round       plus the byes
+                    Third Round        the Premier League and Championship
+                                       enter here — 64 clubs, as in life
+                    Fourth, Fifth, Quarter, Semi (Wembley), Final (Wembley)
+
+   LEAGUE CUP       First Round        the EFL, less anybody in Europe
+                    Second Round       Premier League clubs not in Europe
+                    Third Round        the European clubs enter — 32 left
+                    Fourth, Quarter, Semi-final over two legs, Final
+
+   CHAMPIONS LEAGUE 36 clubs, one league table, eight matches each against
+                    eight different opponents drawn two from each seeding
+                    pot. Top eight go straight to the last sixteen; ninth
+                    to twenty-fourth play a two-legged play-off for the
+                    other eight places; twenty-fifth and below are out
+                    altogether. Knockouts over two legs, one-off final.
+                    The Europa League and the Conference League run the
+                    same way alongside it.
+   ===================================================================== */
+
+/* ---- the calendar. Day 0 is the first of August. ---- */
+CUP_DEFS.FA={name:'FA Cup',icon:'🏆',venue:'Wembley Stadium',
+ days:[103,124,165,193,213,240,263,289],
+ rn:['First Round','Second Round','Third Round','Fourth Round','Fifth Round','Quarter-final','Semi-final','Final'],
+ prize:[1e5,2e5,5e5,9e5,15e5,25e5,4e6,8e6],
+ neutralFrom:6};
+CUP_DEFS.LC={name:'League Cup',icon:'🥈',venue:'Wembley Stadium',
+ days:[18,26,57,88,137,166,186,205],
+ rn:['First Round','Second Round','Third Round','Fourth Round','Quarter-final','Semi-final','Semi-final','Final'],
+ prize:[6e4,1e5,2e5,4e5,8e5,15e5,15e5,45e5],
+ legs:{5:1,6:2},neutralFrom:7};
+const EURO_DEFS={
+ CL:{key:'CL',name:'Champions League',icon:'⭐',venue:'Wembley Stadium',size:36,off:0,
+  pot:[26e6,21e5],prize:[11e6,14e6,19e6,25e6,4e7]},
+ EL:{key:'EL',name:'Europa League',icon:'🌍',venue:'San Mamés',size:36,off:1,
+  pot:[42e5,4e5],prize:[18e5,23e5,3e6,45e5,13e6]},
+ EC:{key:'EC',name:'Conference League',icon:'🥉',venue:'Arena Kombëtare',size:36,off:2,
+  pot:[31e5,2e5],prize:[8e5,12e5,17e5,25e5,7e6]}};
+const EURO_DAYS={lg:[46,60,81,95,116,130,172,180],po:[200,207],r16:[221,228],qf:[249,256],sf:[270,277],f:[286]};
+const EURO_RN=['League phase 1','League phase 2','League phase 3','League phase 4','League phase 5',
+ 'League phase 6','League phase 7','League phase 8','Knockout play-off','Knockout play-off',
+ 'Round of 16','Round of 16','Quarter-final','Quarter-final','Semi-final','Semi-final','Final'];
+function euroDef(k){return EURO_DEFS[k]}
+function euroDays(k){const o=EURO_DEFS[k].off;
+ return [...EURO_DAYS.lg,...EURO_DAYS.po,...EURO_DAYS.r16,...EURO_DAYS.qf,...EURO_DAYS.sf,...EURO_DAYS.f]
+  .map((d,ix)=>d+(ix===16?(k==='CL'?0:k==='EL'?-3:-6):o))}
+['CL','EL','EC'].forEach(k=>{const D=EURO_DEFS[k];
+ CUP_DEFS[k]={name:D.name,icon:D.icon,venue:D.venue,days:euroDays(k),rn:EURO_RN.slice(),
+  prize:EURO_RN.map((n,ix)=>ix<8?D.pot[1]*3:ix<10?D.prize[0]*.4:D.prize[Math.min(4,Math.floor((ix-10)/2))]),
+  legs:{8:2,10:2,12:2,14:2},neutralFrom:16,euro:true}});
+const CL_EXTRA_DAYS=[];
+
+/* =====================================================================
+   THE ENGINE — ties that can have two legs, and a draw that can seed
+   ===================================================================== */
+let TID=1;
+function cupTies(key,r){return (G.cups[key]?G.cups[key].ties:[]).filter(t=>t.r===r)}
+function tieGroups(key,r){
+ const by={};cupTies(key,r).forEach(t=>{(by[t.tid]=by[t.tid]||[]).push(t)});
+ return Object.keys(by).map(k=>by[k].sort((a,b)=>a.leg-b.leg))}
+function legsOf(def,r){return (def.legs&&def.legs[r])||1}
+function makeTie(key,r,h,a,seeded){
+ const def=CUP_DEFS[key],cup=G.cups[key];
+ const n=legsOf(def,r),tid=TID++;
+ const neutral=def.neutralFrom!=null&&r>=def.neutralFrom;
+ const out=[];
+ for(let L=1;L<=n;L++){
+  // over two legs the seeded side plays the second at home, as it should
+  const swap=n===2&&L===2;
+  out.push({h:swap?a:h,a:swap?h:a,day:(G.seasonStart||0)+def.days[r]+(n===2&&L===2?0:0),
+   played:false,hs:0,as:0,sc:[],cup:key,r:n===2?r+L-1:r,tid,leg:n===2?L:0,
+   comp:def.name+' · '+def.rn[n===2?r+L-1:r],neutral:neutral&&n===1})}
+ if(n===2){out[0].day=(G.seasonStart||0)+def.days[r];out[1].day=(G.seasonStart||0)+def.days[r+1]}
+ cup.ties.push(...out);
+ return out}
+function cupDraw(key,r,teams,seeds){
+ const def=CUP_DEFS[key],cup=G.cups[key];
+ const list=teams.slice();
+ const made=[];
+ if(seeds&&seeds.length){
+  // seeded rounds: a seeded club is drawn against an unseeded one
+  const un=shuffle(list.filter(i=>seeds.indexOf(i)<0));
+  seeds.forEach((s,ix)=>{const o=un[ix];if(o==null)return;made.push(makeTie(key,r,o,s,true))})}
+ else{
+  shuffle(list);
+  for(let i=0;i+1<list.length;i+=2)made.push(makeTie(key,r,list[i],list[i+1]));
+  if(list.length%2){ // an odd draw gives somebody a bye into the next round
+   const nx=nextStage(key,r),ix=nx==null?null:def.stages.indexOf(nx);
+   if(ix!=null&&ix>=0){cup.byes=cup.byes||{};(cup.byes[ix]=cup.byes[ix]||[]).push(list[list.length-1])}}}
+ const mine=cup.ties.filter(t=>t.r===r&&(t.h===G.my||t.a===G.my)).sort((a,b)=>a.leg-b.leg)[0];
+ if(mine){const opp=G.clubs[mine.h===G.my?mine.a:mine.h];
+  const two=legsOf(def,r)===2;
+  mail('match',def.icon+' '+def.name+' draw: '+def.rn[r],
+   'You have drawn <b>'+esc(opp.name)+'</b>'+
+   (mine.neutral?' at '+esc(def.venue):(mine.h===G.my?' at home':' away'))+
+   (two?', over two legs':'')+'. '+def.rn[r]+' · '+fmtDate(mine.day)+'.')}
+ return made}
+/* somebody always goes through. If a tie somehow reaches here without a
+   shootout having been taken, the better side gets it rather than the
+   round quietly stalling with nobody in it. */
+function tieFallback(t){return G.clubs[t.h].rep>=G.clubs[t.a].rep?t.h:t.a}
+function tieWinner(legs){
+ if(!legs||!legs.length)return null;
+ if(legs.length===1){const w=winnerOf(legs[0]);return w==null?tieFallback(legs[0]):w}
+ const A=legs[0],B=legs[1];
+ const x=A.hs+B.as, y=A.as+B.hs;      // A.h is B.a
+ if(x>y)return A.h;
+ if(y>x)return A.a;
+ return B.pw!=null?B.pw:tieFallback(A)}
+function simTie(t){
+ const eng=G.clubs[G.my].cc;
+ const big=t.h===G.my||t.a===G.my||G.clubs[t.h].cc===eng||G.clubs[t.a].cc===eng;
+ return big?quickSim(t):fastSim(t)}
+function resolveTie(t){
+ simTie(t);
+ if(t.lg)return;                      // a league-phase draw is a draw, not a shootout
+ if(t.leg===1)return;                 // and a first leg never settles anything
+ if(t.leg===2){
+  const first=G.cups[t.cup].ties.find(x=>x.tid===t.tid&&x.leg===1);
+  if(first){const x=first.hs+t.as,y=first.as+t.hs;if(x===y)aiShootout(t)}
+  return}
+ if(t.hs===t.as)aiShootout(t)}
+
+/* =====================================================================
+   WHO IS IN, AND FROM WHERE
+   ---------------------------------------------------------------------
+   Each country's places come off its own final table. England's route is
+   modelled in full — five into the Champions League, the FA Cup winner
+   and sixth into the Europa League, the League Cup winner into the
+   Conference — because England is the country whose cups the game
+   actually plays. Everywhere else the places come off the league table
+   alone; those countries' domestic cups are not simulated, so their cup
+   winners' places pass down the league instead.
+   ===================================================================== */
+const EURO_BASE={ENG:[5,2,1],ESP:[4,2,1],ITA:[4,2,1],GER:[4,2,1],FRA:[3,2,1],
+ NED:[2,2,1],POR:[2,2,1],BEL:[1,2,1],TUR:[1,2,1],SCO:[1,2,1],AUT:[1,2,1],SUI:[1,2,1],
+ GRE:[1,2,1],CZE:[1,2,1],DEN:[1,2,1],NOR:[1,2,1],POL:[0,2,2],SRB:[1,1,1],UKR:[1,1,1],CRO:[1,1,1]};
+function finalOrder(div){
+ const rows=(G._sealed&&G._sealed[div])||tableRows(div);
+ return rows.map(r=>r.i)}
+function topFlightOf(cc){return leaguesOf(cc).find(k=>LEAGUES[k].tier===1)}
+function euroAllocation(){
+ /* build every country's list, then top each competition up to 36 with the
+    next club down from the strongest countries — which is exactly what the
+    qualifying rounds do, without making you sit through them */
+ const cls=[],els=[],ecs=[],spare=[];
+ countries().forEach(cc=>{
+  const div=topFlightOf(cc);if(!div)return;
+  const ord=finalOrder(div);
+  const q=EURO_BASE[cc]||[1,1,1];
+  let ix=0;
+  const take=n=>{const out=[];while(out.length<n&&ix<ord.length)out.push(ord[ix++]);return out};
+  cls.push(...take(q[0]));
+  const el=take(q[1]),ec=take(q[2]);
+  if(cc==='ENG'){
+   // the FA Cup winner takes a Europa place and the League Cup winner a
+   // Conference place; if they have already qualified it passes down
+   const fa=G.cups&&G.cups.FA&&G.cups.FA.winner,lc=G.cups&&G.cups.LC&&G.cups.LC.winner;
+   const has=i=>cls.includes(i)||el.includes(i)||ec.includes(i);
+   if(fa!=null&&!has(fa)){el.pop();el.unshift(fa)}
+   if(lc!=null&&!has(lc)){ec.pop();ec.unshift(lc)}}
+  els.push(...el);ecs.push(...ec);
+  // whatever is left of a top division can be called on to fill Europe up
+  while(ix<ord.length)spare.push({i:ord[ix],coef:LEAGUES[div].coef,pos:ix++})});
+ /* Winning the Champions League puts you in it again whatever you finished,
+    and so does winning the Europa League — and if that place was already
+    yours through the league, the one below you keeps his. The club has to
+    come OUT of the other two lists as it goes in, or it ends up entered
+    twice. */
+ const hold=G.euroHolders||{};
+ const promote=i=>{
+  if(i==null||cls.includes(i))return;
+  let ix=els.indexOf(i);if(ix>=0)els.splice(ix,1);
+  ix=ecs.indexOf(i);if(ix>=0)ecs.splice(ix,1);
+  cls.push(i)};
+ promote(hold.CL);promote(hold.EL);
+ /* the qualifying rounds, without making you sit through them: places are
+    handed out a rung at a time across every country before anybody gets a
+    second helping, and no country may put more than nine clubs in Europe */
+ spare.sort((a,b)=>a.pos-b.pos||b.coef-a.coef||G.clubs[b.i].rep-G.clubs[a.i].rep);
+ const used=new Set([...cls,...els,...ecs]);
+ const perCC={};const bump=i=>{const c=G.clubs[i].cc;perCC[c]=(perCC[c]||0)+1};
+ [...cls,...els,...ecs].forEach(bump);
+ const fill=(arr,n)=>{
+  const held=[];
+  while(arr.length<n&&spare.length){
+   const s=spare.shift();
+   if(used.has(s.i)){continue}
+   const cc=G.clubs[s.i].cc;
+   if((perCC[cc]||0)>=9){held.push(s);continue}
+   used.add(s.i);bump(s.i);arr.push(s.i)}
+  spare.unshift(...held);
+  if(arr.length>n){
+   // too many places for the size of the competition: the last ones in
+   // from the weakest countries are the ones that miss out
+   const rank=i=>{const cc=G.clubs[i].cc,div=topFlightOf(cc);
+    return (LEAGUES[div]?LEAGUES[div].coef:0)*1e6+G.clubs[i].rep};
+   arr.sort((a,b)=>rank(b)-rank(a));
+   arr.splice(n).forEach(i=>{used.delete(i);const cc=G.clubs[i].cc;perCC[cc]--})}
+  return arr};
+ fill(cls,36);fill(els,36);fill(ecs,36);
+ return{CL:cls,EL:els,EC:ecs}}
+
+/* =====================================================================
+   THE LEAGUE PHASE DRAW
+   Eight opponents, two from each of the four pots, one home and one away
+   in every pot, and never the same club twice.
+   ===================================================================== */
+function leaguePhaseDraw(teams){
+ const n=teams.length,perPot=n/4;
+ for(let attempt=0;attempt<300;attempt++){
+  const order=shuffle(teams.slice());
+  const pots=[0,1,2,3].map(p=>teams.slice(p*perPot,(p+1)*perPot));
+  const fx=[],seen=new Set();
+  let ok=true;
+  for(let p=0;p<4&&ok;p++){
+   const pot=shuffle(pots[p].slice());
+   const s=Math.floor(Math.random()*perPot);
+   for(let k=0;k<order.length;k++){
+    const t=order[k];
+    const home=pot[(k+s)%perPot];          // t hosts this one
+    const away=pot[(k+s+1+Math.floor(k/perPot))%perPot]; // t visits this one
+    if(home===t||away===t||home===away){ok=false;break}
+    const kh=t+'|'+home,ka=away+'|'+t;
+    if(seen.has(kh)||seen.has(home+'|'+t)||seen.has(ka)||seen.has(t+'|'+away)){ok=false;break}
+    seen.add(kh);seen.add(ka);
+    fx.push([t,home]);fx.push([away,t])}}
+  if(ok&&fx.length===n*4)return fx}
+ // a fallback that still gives everybody eight different opponents, four
+ // at home and four away, if the pot-perfect draw will not come out
+ const fx=[],seen=new Set(),need={};teams.forEach(t=>need[t]={h:4,a:4});
+ const pool=shuffle(teams.slice());
+ for(let pass=0;pass<600&&fx.length<teams.length*4;pass++){
+  for(const t of pool)for(const u of pool){
+   if(t===u||need[t].h<=0||need[u].a<=0)continue;
+   if(seen.has(t+'|'+u)||seen.has(u+'|'+t))continue;
+   seen.add(t+'|'+u);need[t].h--;need[u].a--;fx.push([t,u]);
+   if(fx.length>=teams.length*4)break}}
+ return fx}
+/* Splitting 144 fixtures into eight matchdays of eighteen, with nobody
+   playing twice in a week, is the same problem as colouring the edges of
+   the draw. A plain greedy pass leaves a handful of games with nowhere to
+   go; when that happens, one of the games already placed is moved out of
+   the way to make room — which is enough to finish the job every time. */
+function matchdaySplit(fx,days){
+ const md=[];for(let d=0;d<days;d++)md.push([]);
+ const busy={};const mark=(t,d,on)=>{(busy[t]=busy[t]||{})[d]=on};
+ const free=(t,d)=>!(busy[t]&&busy[t][d]);
+ const place=(m,d)=>{md[d].push(m);mark(m[0],d,1);mark(m[1],d,1);m[2]=d};
+ const lift=(m)=>{const d=m[2];md[d].splice(md[d].indexOf(m),1);mark(m[0],d,0);mark(m[1],d,0);m[2]=-1};
+ const cap=Math.ceil(fx.length/days);
+ const stuck=[];
+ fx.forEach(m=>{
+  let best=-1;
+  for(let d=0;d<days;d++)if(free(m[0],d)&&free(m[1],d)&&md[d].length<cap)
+   if(best<0||md[d].length<md[best].length)best=d;
+  if(best>=0)place(m,best);else stuck.push(m)});
+ stuck.forEach(m=>{
+  for(let d=0;d<days&&m[2]!==d;d++){
+   if(md[d].length>=cap)continue;
+   const blockers=md[d].filter(x=>x[0]===m[0]||x[1]===m[0]||x[0]===m[1]||x[1]===m[1]);
+   if(blockers.length!==1)continue;
+   const x=blockers[0];lift(x);
+   let moved=-1;
+   for(let e=0;e<days;e++)if(e!==d&&free(x[0],e)&&free(x[1],e)&&md[e].length<cap){moved=e;break}
+   if(moved<0){place(x,d);continue}
+   place(x,moved);place(m,d);break}
+  if(m[2]==null||m[2]<0){ // last resort: the emptiest day that will take it
+   let best=0;for(let d=1;d<days;d++)if(md[d].length<md[best].length)best=d;
+   place(m,best)}});
+ return md.map(list=>list.map(m=>[m[0],m[1]]))}
+function euroInit(key,teams){
+ const def=CUP_DEFS[key],cup=G.cups[key];
+ cup.teams=teams.slice();cup.phase='league';cup.round=0;cup.ties=[];
+ // pots by strength, which is what a club coefficient is standing in for
+ const seeded=teams.slice().sort((a,b)=>G.clubs[b].rep-G.clubs[a].rep);
+ const fx=leaguePhaseDraw(seeded);
+ const md=matchdaySplit(shuffle(fx),8);
+ md.forEach((ps,r)=>ps.forEach(([h,a])=>cup.ties.push({h,a,
+  day:(G.seasonStart||0)+def.days[r],played:false,hs:0,as:0,sc:[],cup:key,r,lg:1,leg:0,
+  comp:def.name+' · '+def.rn[r]})));
+ if(teams.includes(G.my)){
+  const opps=cup.ties.filter(t=>t.h===G.my||t.a===G.my)
+   .sort((a,b)=>a.day-b.day)
+   .map(t=>esc(G.clubs[t.h===G.my?t.a:t.h].short)+(t.h===G.my?' (H)':' (A)'));
+  G.clubs[G.my].bank+=def.prize[0]*3;
+  mail('award',def.icon+' '+def.name+' league phase draw',
+   'Eight matches decide your place in a table of thirty-six.<br><br><b>'+opps.join('</b> · <b>')+'</b>'+
+   '<br><br>Finish in the top eight and you go straight to the last sixteen. Ninth to twenty-fourth go into a two-legged play-off. Twenty-fifth or below and you are out.')}}
+function euroTable(key){
+ const cup=G.cups&&G.cups[key];if(!cup||!cup.teams)return[];
+ const map={};cup.teams.forEach(i=>map[i]={i,p:0,w:0,d:0,l:0,gf:0,ga:0,pts:0});
+ cup.ties.filter(t=>t.lg&&t.played).forEach(t=>{
+  const H=map[t.h],A=map[t.a];if(!H||!A)return;
+  H.p++;A.p++;H.gf+=t.hs;H.ga+=t.as;A.gf+=t.as;A.ga+=t.hs;
+  if(t.hs>t.as){H.w++;A.l++;H.pts+=3}else if(t.hs<t.as){A.w++;H.l++;A.pts+=3}else{H.d++;A.d++;H.pts++;A.pts++}});
+ return Object.values(map).map(r=>(r.gd=r.gf-r.ga,r))
+  .sort((a,b)=>b.pts-a.pts||b.gd-a.gd||b.gf-a.gf||G.clubs[b.i].rep-G.clubs[a.i].rep)}
+function clTable(){return euroTable('CL')}
+
+/*#w4_cups.js#*//*#w5_cups2.js#*/
+
+CUP_DEFS.LC.legs={5:2};
+CUP_DEFS.FA.stages=[0,1,2,3,4,5,6,7];
+CUP_DEFS.LC.stages=[0,1,2,3,4,5,7];
+['CL','EL','EC'].forEach(k=>{CUP_DEFS[k].stages=[8,10,12,14,16];CUP_DEFS[k].lgRounds=8});
+
+function stageTies(key,s){const n=legsOf(CUP_DEFS[key],s);
+ return (G.cups[key]?G.cups[key].ties:[]).filter(t=>t.r>=s&&t.r<s+n)}
+function stageGroups(key,s){
+ const by={};stageTies(key,s).forEach(t=>{(by[t.tid]=by[t.tid]||[]).push(t)});
+ return Object.keys(by).map(k=>by[k].sort((a,b)=>a.leg-b.leg))}
+function nextStage(key,s){const st=CUP_DEFS[key].stages;const ix=st.indexOf(s);return ix<0?null:st[ix+1]}
+
+/* =====================================================================
+   SETTING THE CUPS UP
+   ===================================================================== */
+function initCups(){
+ G.clSpots=G.clSpots||[];
+ if(SUPPRESS_CUPS||!LEAGUES.PL){G.cups=null;return}
+ TID=1;
+ G.cups={};
+ /* the roll of honour belongs to the save, not to the season. Rebuilding
+    the cups every August was throwing away every winner that came before,
+    so no competition had a past and no cup winner could be looked up when
+    Europe was being handed out. */
+ G.cupHistory=G.cupHistory||{};
+ ['FA','LC','CL','EL','EC'].forEach(k=>{
+  if(!G.cupHistory[k])G.cupHistory[k]=[];
+  G.cups[k]={key:k,round:0,stage:CUP_DEFS[k].stages[0],winner:null,ties:[],history:G.cupHistory[k]}});
+ /* ---- Europe first: the domestic cups need to know who is in it ---- */
+ const alloc=euroAllocation();
+ G.euroEntry=alloc;
+ ['CL','EL','EC'].forEach(k=>{
+  G.cups[k].stage=8;euroInit(k,alloc[k])});
+ const inEurope=new Set([...alloc.CL,...alloc.EL,...alloc.EC]);
+ G.clSpots=alloc.CL.filter(i=>G.clubs[i].cc==='ENG');
+
+ /* ---- FA Cup: the pyramid enters in stages, the big clubs in January ---- */
+ const byTier=d=>G.clubs.filter(c=>c.league===d).map(c=>c.i);
+ const top=[...byTier('PL'),...byTier('CH')];
+ const below=[...byTier('L1'),...byTier('L2'),...byTier('NL')].sort((a,b)=>G.clubs[b].rep-G.clubs[a].rep);
+ const r3Size=64;
+ let r2Size=Math.max(2,2*(r3Size-top.length));
+ let faByes=clamp(2*r2Size-below.length,0,below.length);
+ if((below.length-faByes)%2)faByes++;
+ G.cups.FA.entryLater={2:top};
+ G.cups.FA.byes={1:below.slice(0,faByes)};
+ cupDraw('FA',0,below.slice(faByes));
+
+ /* ---- League Cup: the EFL first, then the Premier League, then Europe ---- */
+ const pl=byTier('PL');
+ const euroEng=pl.filter(i=>inEurope.has(i));
+ const plRest=pl.filter(i=>!inEurope.has(i));
+ const efl=[...byTier('CH'),...byTier('L1'),...byTier('L2')].sort((a,b)=>G.clubs[b].rep-G.clubs[a].rep);
+ let lcByes=clamp(16-2*euroEng.length,0,efl.length);
+ if((efl.length-lcByes)%2)lcByes++;
+ G.cups.LC.entryLater={1:plRest,2:euroEng};
+ G.cups.LC.byes={1:efl.slice(0,lcByes)};
+ cupDraw('LC',0,efl.slice(lcByes));
+
+ if(alloc.CL.includes(G.my)||alloc.EL.includes(G.my)||alloc.EC.includes(G.my)){
+  const k=alloc.CL.includes(G.my)?'CL':alloc.EL.includes(G.my)?'EL':'EC';
+  G.clubs[G.my].rep+=k==='CL'?60:20}}
+
+/* =====================================================================
+   MOVING THEM ALONG
+   ===================================================================== */
+function cupPrize(key,s){const p=CUP_DEFS[key].prize;return p[Math.min(p.length-1,s)]||0}
+function cupComplete(key,winner,runner){
+ const cup=G.cups[key],def=CUP_DEFS[key];
+ if(winner==null||!G.clubs[winner])return;
+ if(runner==null||!G.clubs[runner])runner=winner;
+ cup.winner=winner;
+ cup.history.push({season:G.season,winner,runner});
+ G.euroHolders=G.euroHolders||{};
+ if(key==='CL'||key==='EL')G.euroHolders[key]=winner;
+ const nm=G.clubs[winner].name;
+ if(winner===G.my){
+  const pr=cupPrize(key,def.stages[def.stages.length-1]);
+  G.clubs[G.my].bank+=pr;
+  G.clubs[G.my].patience=clamp(G.clubs[G.my].patience+(key==='CL'?22:key==='FA'?14:10),0,100);
+  G.clubs[G.my].rep+=key==='CL'?260:key==='EL'?120:key==='FA'?90:60;
+  G.honours=G.honours||[];
+  G.honours.push({season:G.season,comp:def.name+' winners'});
+  mail('award',def.icon+' '+def.name+' WINNERS','<b>'+esc(nm)+'</b> lift the '+esc(def.name)+
+   '. <b>'+fmtM(pr)+'</b> in prize money, and a night nobody at the club forgets.');
+  try{sfx('cheer')}catch(e){}}
+ else mail('news',def.icon+' '+def.name+' final','<b>'+esc(nm)+'</b> win the '+esc(def.name)+
+  (runner!==winner?', beating <b>'+esc(G.clubs[runner].name)+'</b>':'')+'.')}
+function advanceCup(key){
+ const cup=G.cups[key],def=CUP_DEFS[key];
+ if(!cup||cup.winner!=null)return;
+ if(def.euro&&cup.phase==='league'){
+  const lg=cup.ties.filter(t=>t.lg);
+  if(!lg.length||lg.some(t=>!t.played))return;
+  cup.phase='ko';
+  const T=euroTable(key);
+  const top8=T.slice(0,8).map(r=>r.i),po=T.slice(8,24).map(r=>r.i);
+  cup.top8=top8;cup.stage=8;cup.round=8;
+  cupDraw(key,8,po,po.slice(0,8));
+  const meIx=T.findIndex(r=>r.i===G.my);
+  if(meIx>=0){
+   const me=G.clubs[G.my];
+   if(meIx<8){me.bank+=cupPrize(key,10);
+    mail('award',def.icon+' Straight through — '+ordinal(meIx+1)+' in the league phase',
+     'Finishing in the top eight means no play-off. You are in the last sixteen, seeded, and you play the second leg at home.')}
+   else if(meIx<24)mail('match',def.icon+' Into the knockout play-off ('+ordinal(meIx+1)+')',
+    'A two-legged play-off stands between you and the last sixteen.');
+   else mail('news',def.icon+' Out of the '+def.name,
+    ordinal(meIx+1)+' of thirty-six. The European nights are over for this season.')}
+  return}
+ const s=cup.stage;
+ if(s==null)return;
+ const groups=stageGroups(key,s);
+ if(!groups.length||groups.some(g=>g.some(t=>!t.played)))return;
+ let winners=groups.map(tieWinner).filter(i=>i!=null);
+ const nxt=nextStage(key,s);
+ /* what the user's own tie did for them */
+ const mineG=groups.find(g=>g.some(t=>t.h===G.my||t.a===G.my));
+ if(mineG){
+  const won=tieWinner(mineG)===G.my;
+  if(won){const pr=cupPrize(key,s);G.clubs[G.my].bank+=pr;
+   if(nxt!=null)mail('match',def.icon+' Through to the '+def.rn[nxt],
+    'Worth <b>'+fmtM(pr)+'</b>. The draw follows shortly.')}
+  else{const late=nxt==null||nxt>=(def.stages[def.stages.length-2]||99);
+   if(late)G.clubs[G.my].patience=clamp(G.clubs[G.my].patience-(def.euro?3:2),0,100);
+   mail('match',def.icon+' Out of the '+def.name,'Beaten in the '+def.rn[s]+'. '+
+    (late?'The board will not pretend that does not sting.':'Attention turns back to the league.'))}}
+ if(nxt==null){
+  const f=groups[0];const w=tieWinner(f);
+  if(w==null||!G.clubs[w]){cup.winner=cup.teams?cup.teams[0]:0;return}
+  cupComplete(key,w,w===f[0].h?f[0].a:f[0].h);
+  return}
+ /* anybody entering at the next round joins the winners */
+ const nextIx=def.stages.indexOf(nxt);
+ const joinRound=(cup.entryLater||{})[nextIx];
+ const byes=(cup.byes||{})[nextIx];
+ if(joinRound)winners=winners.concat(joinRound);
+ if(byes)winners=winners.concat(byes);
+ cup.stage=nxt;cup.round=nxt;
+ if(def.euro){
+  // the last sixteen is seeded on where you finished the league phase
+  if(nxt===10)cupDraw(key,10,cup.top8.concat(winners),cup.top8);
+  else cupDraw(key,nxt,winners);}
+ else cupDraw(key,nxt,winners)}
+function progressCups(){
+ if(!G.cups)return;
+ for(const k in G.cups)advanceCup(k)}
+
+/* the season cannot close while a cup final is still to be played */
+const _cseCups=checkSeasonEnd;
+checkSeasonEnd=function(){
+ if(G.cups)for(const k in G.cups){const c=G.cups[k];
+  if(c.winner==null&&c.ties&&c.ties.length)return}
+ _cseCups()};
+
+/* =====================================================================
+   EUROPEAN PLACES, DECIDED THE SEASON THEY ARE EARNED
+   ===================================================================== */
+const _endSeasonEuro=endSeason;
+endSeason=function(){
+ // work out next season's Europe off THIS season's tables, before anybody
+ // is promoted or relegated
+ let alloc=null;
+ try{alloc=euroAllocation()}catch(e){}
+ const mine=alloc&&(alloc.CL.includes(G.my)?'CL':alloc.EL.includes(G.my)?'EL':alloc.EC.includes(G.my)?'EC':null);
+ /* This has to be stored BEFORE the season rolls over, because rolling it
+    over is what draws next season's cups, and they need to know who has
+    qualified. Setting it afterwards meant the draw fell back on working
+    the places out from a table with no games played in it — so the cup
+    winners' places and half the final positions were quietly ignored. */
+ if(alloc)G.euroNext=alloc;
+ _endSeasonEuro();
+ G.euroEntry=alloc;
+ if(alloc){
+  if(mine)mail('award',EURO_DEFS[mine].icon+' '+EURO_DEFS[mine].name+' qualification',
+   'The club has qualified for next season’s <b>'+EURO_DEFS[mine].name+'</b>. Thirty-six clubs, eight matches, and a table that decides who goes through.');
+  else mail('news','No European football next season','The club finished outside the places. The league is the only way back in.')}};
+
+/* next season's cups are drawn from the places just earned */
+function euroAllocationCached(){
+ if(G.euroNext){const a=G.euroNext;G.euroNext=null;return a}
+ return null}
+const _euroAllocRaw=euroAllocation;
+euroAllocation=function(){const c=euroAllocationCached();return c||_euroAllocRaw()};
+
+/*#w5_cups2.js#*//*#w6_cupview.js#*/
+
+/* a stalled cup must never trap you in a season that will not end */
+const _cseGuard=checkSeasonEnd;
+checkSeasonEnd=function(){
+ if(G.day>(G.seasonStart||0)+330&&G.fixtures.every(f=>f.played)&&!G._seasonClosed){
+  if(G.cups)for(const k in G.cups){const c=G.cups[k];
+   if(c.winner==null&&c.ties.length){const last=c.ties[c.ties.length-1];
+    c.ties.forEach(t=>{if(!t.played)resolveTie(t)});advanceCup(k)}}}
+ _cseGuard()};
+
+/* =====================================================================
+   THE CUPS SCREEN — five competitions, so it needs tabs
+   ===================================================================== */
+function cupStageLabel(key){
+ const cup=G.cups&&G.cups[key];if(!cup)return '';
+ const def=CUP_DEFS[key];
+ if(cup.winner!=null)return 'Won by '+G.clubs[cup.winner].short;
+ if(def.euro&&cup.phase==='league'){
+  const done=cup.ties.filter(t=>t.lg&&t.played).length,all=cup.ties.filter(t=>t.lg).length;
+  return 'League phase · '+Math.min(8,Math.ceil(done/Math.max(1,all/8)))+' of 8'}
+ return def.rn[cup.stage]||''}
+function myCupRun(key){
+ const cup=G.cups&&G.cups[key];if(!cup)return null;
+ const mine=cup.ties.filter(t=>t.h===G.my||t.a===G.my);
+ return mine.length?mine:null}
+function vCups(){
+ if(!G.cups)return '<div class="card"><div class="small muted">No cup competitions are running.</div></div>';
+ const keys=Object.keys(G.cups).filter(k=>CUP_DEFS[k]);
+ if(!UI.cupTab||!G.cups[UI.cupTab]){
+  UI.cupTab=keys.find(k=>myCupRun(k)&&G.cups[k].winner==null)||keys[0]}
+ let h='<div class="chips" style="margin-bottom:10px;overflow-x:auto;flex-wrap:nowrap">'+keys.map(k=>
+  '<button class="chip'+(UI.cupTab===k?' on':'')+'" data-action="cupTab" data-v="'+k+'" style="white-space:nowrap">'+
+  CUP_DEFS[k].icon+' '+esc(CUP_DEFS[k].name.replace('Champions League','Champions').replace('Conference League','Conference').replace('Europa League','Europa'))+
+  (myCupRun(k)?'':' <span class="xs faint">·</span>')+'</button>').join('')+'</div>';
+ const key=UI.cupTab,cup=G.cups[key],def=CUP_DEFS[key];
+ h+='<div class="sec"><div class="t">'+def.icon+' '+esc(def.name)+'</div><div class="ln"></div><div class="sub">'+esc(cupStageLabel(key))+'</div></div>';
+
+ /* the league phase table, for the three European competitions */
+ if(def.euro&&cup.teams){
+  const rows=euroTable(key);
+  h+='<div class="card tight" style="max-height:340px;overflow:auto"><table class="tbl"><tbody>';
+  rows.forEach((r,ix)=>{const c=G.clubs[r.i];
+   const bar=ix<8?'var(--gold)':ix<24?'#7fc1ff':'var(--danger)';
+   h+='<tr data-action="clubView" data-id="'+r.i+'" style="'+(r.i===G.my?'background:rgba(218,41,28,.13);':'')+'box-shadow:inset 3px 0 0 '+bar+'">'+
+   '<td class="c num" style="width:24px;font-weight:800">'+(ix+1)+'</td>'+
+   '<td style="width:22px">'+ccFlag(c.cc)+'</td>'+
+   '<td><div class="row" style="gap:6px">'+crest(c,16)+'<span style="font-weight:'+(r.i===G.my?'800':'600')+';font-size:11.5px">'+esc(c.short)+'</span></div></td>'+
+   '<td class="c num">'+r.p+'</td><td class="c num">'+(r.gd>0?'+':'')+r.gd+'</td><td class="r num" style="font-weight:800">'+r.pts+'</td></tr>'});
+  h+='</tbody></table></div>'+
+  '<div class="xs faint" style="padding:4px"><span style="color:var(--gold)">1–8 straight to the last 16</span> · <span style="color:#7fc1ff">9–24 play off</span> · <span style="color:var(--danger)">25–36 out</span></div>'}
+
+ /* your own route through it */
+ const mine=myCupRun(key);
+ if(mine){
+  h+='<div class="sec"><div class="t">Your run</div><div class="ln"></div></div><div class="card tight">';
+  mine.slice().sort((a,b)=>a.day-b.day).forEach(t=>{
+   const opp=G.clubs[t.h===G.my?t.a:t.h],home=t.h===G.my;
+   const res=t.played?(t.h===G.my?t.hs+'–'+t.as:t.as+'–'+t.hs):'';
+   const won=t.played&&tieWinner([t])===G.my;
+   h+='<div class="spread" style="padding:6px 3px;border-bottom:1px solid var(--chalk)">'+
+   '<div class="row" style="gap:7px;min-width:0">'+crest(opp,18)+
+   '<div style="min-width:0"><div class="small" style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+(t.neutral?'':home?'':'@ ')+esc(opp.short)+(t.leg?' <span class="xs faint">leg '+t.leg+'</span>':'')+'</div>'+
+   '<div class="xs faint">'+esc(def.rn[t.r]||'')+' · '+fmtDateShort(t.day)+'</div></div></div>'+
+   '<div class="num" style="font-weight:800;color:'+(t.played?(won?'var(--gold)':(t.hs===t.as?'inherit':'var(--danger)')):'var(--muted)')+'">'+
+   (res||fmtDateShort(t.day))+(t.ph!=null?' <span class="xs">('+t.ph+'–'+t.pa+'p)</span>':'')+'</div></div>'});
+  h+='</div>'}
+
+ /* the current round in full */
+ const s=cup.stage;
+ const cur=def.euro&&cup.phase==='league'
+  ?cup.ties.filter(t=>t.lg&&!t.played).slice(0,14)
+  :stageTies(key,s);
+ if(cur.length){
+  h+='<div class="sec"><div class="t">'+esc(def.euro&&cup.phase==='league'?'Next up':def.rn[s]||'Current round')+'</div><div class="ln"></div></div>'+
+  '<div class="card tight" style="max-height:300px;overflow:auto">';
+  cur.slice(0,32).forEach(t=>{const H=G.clubs[t.h],A=G.clubs[t.a];
+   h+='<div class="spread" style="padding:5px 3px;border-bottom:1px solid var(--chalk)">'+
+   '<span class="xs" style="flex:1;text-align:right;font-weight:'+(t.h===G.my?'800':'600')+'">'+esc(H.short)+'</span>'+
+   '<span class="num xs" style="padding:0 8px;font-weight:800;min-width:52px;text-align:center">'+(t.played?t.hs+'–'+t.as:fmtDateShort(t.day))+'</span>'+
+   '<span class="xs" style="flex:1;font-weight:'+(t.a===G.my?'800':'600')+'">'+esc(A.short)+'</span></div>'});
+  h+='</div>'}
+
+ /* who has won it before */
+ if(cup.history&&cup.history.length){
+  h+='<div class="sec"><div class="t">Roll of honour</div><div class="ln"></div></div><div class="card tight">'+
+   cup.history.slice().reverse().slice(0,8).map(x=>
+   '<div class="spread" style="padding:5px 3px"><span class="xs faint">Season '+x.season+'</span>'+
+   '<span class="small" style="font-weight:700">'+esc(G.clubs[x.winner].name)+'</span></div>').join('')+'</div>'}
+ return h}
+ACTIONS.cupTab=el=>{UI.cupTab=el.dataset.v;render()};
+
+/*#w6_cupview.js#*//*#w7_perf.js#*/
+
+/* =====================================================================
+   KEEPING IT QUICK
+   ---------------------------------------------------------------------
+   Twenty-eight divisions and nearly nine thousand fixtures means that
+   working out a league table is no longer free, and the end of a season
+   asks for one several thousand times over — every club's finishing
+   position, every board expectation, every prize. Left alone that took
+   nine seconds on the day the season turned over.
+
+   The tables are now worked out once and kept until something actually
+   changes them: a match is played, a day passes, or a screen is drawn.
+   ===================================================================== */
+let TBL_V=0,TBL_CACHE=null,TBL_KEY='',MEM_CACHE=null,MEM_KEY='';
+function invalidateTables(){TBL_V++}
+function tableKey(){return G.season+'|'+G.day+'|'+TBL_V+'|'+G.clubs.length+'|'+(G._sealed?'s':'-')}
+function buildAllTables(){
+ const out={};
+ const map={};
+ G.clubs.forEach(c=>{
+  if(!out[c.league]){out[c.league]=[]}
+  const r={i:c.i,p:0,w:0,d:0,l:0,gf:0,ga:0,pts:0,gd:0};
+  map[c.i]=r;out[c.league].push(r)});
+ const F=G.fixtures;
+ for(let k=0;k<F.length;k++){const f=F[k];
+  if(!f.played)continue;
+  const H=map[f.h],A=map[f.a];
+  if(!H||!A||G.clubs[f.h].league!==f.div||G.clubs[f.a].league!==f.div)continue;
+  H.p++;A.p++;H.gf+=f.hs;H.ga+=f.as;A.gf+=f.as;A.ga+=f.hs;
+  if(f.hs>f.as){H.w++;A.l++;H.pts+=3}else if(f.hs<f.as){A.w++;H.l++;A.pts+=3}else{H.d++;A.d++;H.pts++;A.pts++}}
+ for(const d in out){
+  out[d].forEach(r=>r.gd=r.gf-r.ga);
+  out[d].sort((a,b)=>b.pts-a.pts||b.gd-a.gd||b.gf-a.gf||G.clubs[b.i].rep-G.clubs[a.i].rep)}
+ return out}
+tableRows=function(div){
+ div=div||myDiv();
+ let rows;
+ if(G._sealed&&G._sealed[div])rows=G._sealed[div];
+ else{const k=tableKey();
+  if(TBL_KEY!==k||!TBL_CACHE){TBL_CACHE=buildAllTables();TBL_KEY=k}
+  rows=TBL_CACHE[div]||[]}
+ // a points deduction under the sustainability rules still applies
+ if(G.psrDeduction&&rows.length){
+  const me=rows.find(r=>r.i===G.my);
+  if(me&&!me._ded){me.pts=Math.max(0,me.pts-G.psrDeduction);me._ded=true;
+   rows.sort((a,b)=>b.pts-a.pts||b.gd-a.gd||b.gf-a.gf)}}
+ return rows};
+divMembers=function(div){
+ const k=tableKey();
+ if(MEM_KEY!==k||!MEM_CACHE){MEM_CACHE={};G.clubs.forEach(c=>{(MEM_CACHE[c.league]=MEM_CACHE[c.league]||[]).push(c.i)});MEM_KEY=k}
+ return MEM_CACHE[div]||[]};
+/* the board's expectation is a fixed property of a division, not something
+   worth re-sorting five hundred clubs for on every glance */
+let EXP_CACHE=null,EXP_KEY='';
+expectPos=function(ci){
+ const k=tableKey();
+ if(EXP_KEY!==k||!EXP_CACHE){
+  EXP_CACHE={};
+  const by={};G.clubs.forEach(c=>{(by[c.league]=by[c.league]||[]).push(c)});
+  for(const d in by){by[d].sort((a,b)=>b.rep-a.rep)
+   .forEach((c,ix)=>EXP_CACHE[c.i]=Math.min(by[d].length,ix+2))}
+  EXP_KEY=k}
+ // new owners with money expect the title, whatever the table says
+ if(ci===G.my&&G.tko&&G.tko.stage==='complete')return 1;
+ const v=EXP_CACHE[ci];
+ return v==null?1:v};
+
+/* everything that can change a table says so */
+const _qsInval=quickSim;
+quickSim=function(f){const m=_qsInval(f);invalidateTables();return m};
+const _fsInval=fastSim;
+fastSim=function(f){const r=_fsInval(f);invalidateTables();return r};
+const _renderInval=render;
+render=function(){invalidateTables();return _renderInval.apply(this,arguments)};
+const _endSeasonInval=endSeason;
+endSeason=function(){invalidateTables();const r=_endSeasonInval.apply(this,arguments);invalidateTables();return r};
+const _afterRoundInval=afterRound;
+afterRound=function(d){invalidateTables();return _afterRoundInval.apply(this,arguments)};
+
+/*#w7_perf.js#*//*#w8_save.js#*/
+
+/* =====================================================================
+   SAVING A WORLD
+   ---------------------------------------------------------------------
+   Four hundred and eighty clubs means eight thousand players, and written
+   out the obvious way that is an eight and a half megabyte save — which a
+   browser will not store. It refused, quietly, every time.
+
+   The fix is to stop writing the same thirty key names eight thousand
+   times. Every player is written as a bare list of values against one
+   shared list of names, and attributes are stored to a tenth of a point
+   instead of to seventeen decimal places. Nothing is thrown away that the
+   game reads back; the same save, the same squads, about two megabytes.
+   ===================================================================== */
+function playerLists(g){
+ const out=[];
+ (g.clubs||[]).forEach(c=>{
+  if(Array.isArray(c.players))out.push([c,'players']);
+  if(Array.isArray(c.youth))out.push([c,'youth'])});
+ return out}
+function packG(g){
+ const pk=[],ak=[],sk=[],ps={},as={},ss={};
+ const lists=playerLists(g);
+ lists.forEach(([c,f])=>c[f].forEach(p=>{
+  for(const k in p){if(k==='attrs'||k==='stats')continue;
+   if(!ps[k]){ps[k]=0;pk.push(k)}ps[k]++}
+  if(p.attrs)for(const k in p.attrs)if(!as[k]){as[k]=1;ak.push(k)}
+  if(p.stats)for(const k in p.stats)if(!ss[k]){ss[k]=1;sk.push(k)}}));
+ // the fields almost everybody has go first and the rare ones last, so a
+ // row can stop as soon as it runs out of things to say. Most players
+ // carry none of the last twenty columns, and now they cost nothing.
+ pk.sort((a,b)=>ps[b]-ps[a]||(a<b?-1:1));
+ const trim=a=>{let n=a.length;while(n>0&&(a[n-1]===null||a[n-1]===undefined))n--;return a.slice(0,n)};
+ const num=v=>typeof v==='number'&&!Number.isInteger(v)?Math.round(v*100)/100:v;
+ const enc=p=>{
+  // nineteen attributes as one short string instead of nineteen numbers
+  const row=[p.attrs?ak.map(k=>('0'+clamp(Math.round((p.attrs[k]||0)*10),0,1295).toString(36)).slice(-2)).join(''):null,
+   p.stats?trim(sk.map(k=>{const v=p.stats[k];
+    return typeof v==='number'?Math.round(v*10)/10:(v===undefined?null:v)})):null];
+  pk.forEach(k=>row.push(p[k]===undefined?null:num(p[k])));
+  return trim(row)};
+ const clone={};for(const k in g)clone[k]=g[k];
+ clone.clubs=(g.clubs||[]).map(c=>{const d={};for(const k in c)d[k]=c[k];return d});
+ lists.forEach(([c,f])=>{const d=clone.clubs[c.i];if(d)d[f]=c[f].map(enc)});
+ return{g:clone,pk,ak,sk}}
+function unpackG(g,pk,ak,sk){
+ if(!pk)return g;
+ const dec=row=>{
+  const p={};
+  const a=row[0],s=row[1];
+  if(a){p.attrs={};
+   if(typeof a==='string')for(let i=0;i<ak.length;i++)p.attrs[ak[i]]=parseInt(a.substr(i*2,2),36)/10;
+   else for(let i=0;i<ak.length;i++)p.attrs[ak[i]]=(a[i]||0)/10}
+  if(s){p.stats={};for(let i=0;i<sk.length;i++)p.stats[sk[i]]=s[i]==null?0:s[i]}
+  for(let i=0;i<pk.length;i++){const v=row[i+2];if(v!==null&&v!==undefined)p[pk[i]]=v}
+  if(!p.form)p.form=[];
+  if(p.injury===undefined)p.injury=null;
+  return p};
+ (g.clubs||[]).forEach(c=>{
+  ['players','youth'].forEach(f=>{
+   if(Array.isArray(c[f])&&c[f].length&&Array.isArray(c[f][0]))c[f]=c[f].map(dec)})});
+ return g}
+saveBlob=function(){
+ const P=packG(G);
+ return JSON.stringify({v:4,t:Date.now(),
+  club:G.clubs[G.my].name,short:G.clubs[G.my].short,crest:G.clubs[G.my].c1,
+  season:G.season,day:G.day,date:fmtDate(G.day),pos:leaguePos(G.my),
+  div:DIV_NAMES[myDiv()],pts:(tableRows().find(r=>r.i===G.my)||{}).pts||0,
+  fans:Math.round(G.fans==null?60:G.fans),
+  pk:P.pk,ak:P.ak,sk:P.sk,G:P.g})};
+const _readSlotPack=readSlot;
+readSlot=function(slot){
+ const s=_readSlotPack(slot);
+ if(s&&s.G&&s.pk)try{s.G=unpackG(s.G,s.pk,s.ak,s.sk)}catch(e){}
+ return s};
+/* if a save still will not fit, say so plainly rather than failing silently */
+const _writeSlotPack=writeSlot;
+writeSlot=function(slot,quiet){
+ const okc=_writeSlotPack(slot,true);
+ if(!okc&&!quiet)toast('Save failed — this browser’s storage is full');
+ else if(okc&&!quiet)toast('💾 Saved to slot '+slot);
+ return okc};
+
+/*#w8_save.js#*//*#w9_intl.js#*/
+
+/* =====================================================================
+   INTERNATIONAL FOOTBALL
+   ---------------------------------------------------------------------
+   The cycle is fixed and it does not drift: a World Cup every four years
+   in the even year that leaves a remainder of two, a European Championship
+   in the even year that divides by four. The 2026 World Cup finished the
+   summer before this save opens, so the next one is 2030, and the Euros
+   fall in between in 2028 and 2032.
+
+   THE WORLD CUP is the 48-team format: twelve groups of four, the top two
+   from each plus the eight best third-placed sides into a round of 32,
+   then 16, quarters, semis, a third-place match and the final.
+   THE EUROS are 24 teams: six groups of four, the top two plus the four
+   best thirds into a round of 16.
+
+   In between, six international breaks a season. Your internationals go
+   away, play, and come back with caps, sometimes goals, always tired and
+   occasionally injured — which is the part that actually affects you.
+   ===================================================================== */
+const INT_BREAKS=[40,72,104,166,200,236];
+const NATIONS=[
+ // code, name, confederation, standing (a starting strength, 60–92)
+ ['ARG','Argentina','CONMEBOL',91],['FRA','France','UEFA',91],['ESP','Spain','UEFA',91],
+ ['ENG','England','UEFA',90],['BRA','Brazil','CONMEBOL',89],['POR','Portugal','UEFA',88],
+ ['NED','Netherlands','UEFA',87],['BEL','Belgium','UEFA',86],['ITA','Italy','UEFA',86],
+ ['GER','Germany','UEFA',86],['CRO','Croatia','UEFA',84],['MAR','Morocco','CAF',84],
+ ['URU','Uruguay','CONMEBOL',83],['COL','Colombia','CONMEBOL',83],['USA','United States','CONCACAF',80],
+ ['MEX','Mexico','CONCACAF',80],['SUI','Switzerland','UEFA',82],['DEN','Denmark','UEFA',82],
+ ['JPN','Japan','AFC',82],['SEN','Senegal','CAF',82],['IRN','Iran','AFC',79],
+ ['KOR','South Korea','AFC',79],['AUT','Austria','UEFA',81],['UKR','Ukraine','UEFA',80],
+ ['TUR','Turkey','UEFA',81],['SWE','Sweden','UEFA',79],['WAL','Wales','UEFA',78],
+ ['POL','Poland','UEFA',79],['SRB','Serbia','UEFA',79],['EGY','Egypt','CAF',79],
+ ['NGA','Nigeria','CAF',80],['ALG','Algeria','CAF',79],['CIV','Ivory Coast','CAF',79],
+ ['ECU','Ecuador','CONMEBOL',79],['CZE','Czechia','UEFA',78],['NOR','Norway','UEFA',80],
+ ['SCO','Scotland','UEFA',77],['HUN','Hungary','UEFA',77],['GRE','Greece','UEFA',77],
+ ['RSA','South Africa','CAF',75],['TUN','Tunisia','CAF',76],['CMR','Cameroon','CAF',77],
+ ['GHA','Ghana','CAF',77],['MLI','Mali','CAF',76],['AUS','Australia','AFC',76],
+ ['PER','Peru','CONMEBOL',76],['PAR','Paraguay','CONMEBOL',76],['CHI','Chile','CONMEBOL',76],
+ ['VEN','Venezuela','CONMEBOL',73],['BOL','Bolivia','CONMEBOL',70],['CAN','Canada','CONCACAF',77],
+ ['PAN','Panama','CONCACAF',73],['CRC','Costa Rica','CONCACAF',73],['JAM','Jamaica','CONCACAF',72],
+ ['HON','Honduras','CONCACAF',70],['KSA','Saudi Arabia','AFC',75],['QAT','Qatar','AFC',74],
+ ['UZB','Uzbekistan','AFC',74],['IRQ','Iraq','AFC',73],['JOR','Jordan','AFC',72],
+ ['UAE','United Arab Emirates','AFC',71],['CHN','China','AFC',68],['NZL','New Zealand','OFC',68],
+ ['SVK','Slovakia','UEFA',76],['ROU','Romania','UEFA',76],['SVN','Slovenia','UEFA',76],
+ ['IRL','Republic of Ireland','UEFA',75],['NIR','Northern Ireland','UEFA',71],
+ ['ISL','Iceland','UEFA',73],['FIN','Finland','UEFA',73],['ALB','Albania','UEFA',75],
+ ['BIH','Bosnia & Herzegovina','UEFA',75],['GEO','Georgia','UEFA',76],['MKD','North Macedonia','UEFA',72],
+ ['ISR','Israel','UEFA',73],['BUL','Bulgaria','UEFA',71],['MNE','Montenegro','UEFA',72],
+ ['KVX','Kosovo','UEFA',71],['LUX','Luxembourg','UEFA',69],['ARM','Armenia','UEFA',68],
+ ['COD','DR Congo','CAF',76],['BFA','Burkina Faso','CAF',75],['GUI','Guinea','CAF',75],
+ ['CPV','Cape Verde','CAF',74],['ZAM','Zambia','CAF',71],['ANG','Angola','CAF',71],
+ ['GAB','Gabon','CAF',72]];
+const NAT_BY={};NATIONS.forEach(n=>NAT_BY[n[0]]={code:n[0],name:n[1],conf:n[2],base:n[3]});
+function natName(c){return (NAT_BY[c]||{}).name||c}
+
+/* ---------------------------------------------------------------------
+   WHO PLAYS FOR WHOM
+   Every generated player was named from a country's own name pool, so the
+   pool tells us where he is from. The real Premier League names are read
+   off a list of the ones the game actually ships; anything left over takes
+   the nationality of the country it plays in, or one of the countries that
+   country's football is actually built on.
+   --------------------------------------------------------------------- */
+/* the squad you look at every day is worth getting exactly right */
+const NAT_EXACT={
+'Senne Lammens':'BEL','Altay Bayındır':'TUR','Karl Darlow':'ENG','Diogo Dalot':'POR',
+'Noussair Mazraoui':'MAR','Matthijs de Ligt':'NED','Leny Yoro':'FRA','Lisandro Martínez':'ARG',
+'Harry Maguire':'ENG','Ayden Heaven':'ENG','Luke Shaw':'ENG','Patrick Dorgu':'DEN',
+'Manuel Ugarte':'URU','Andrey Santos':'BRA','Youri Tielemans':'BEL','Kobbie Mainoo':'ENG',
+'Mason Mount':'ENG','Bruno Fernandes':'POR','Amad Diallo':'CIV','Bryan Mbeumo':'CMR',
+'Matheus Cunha':'BRA','Benjamin Šeško':'SVN','Joshua Zirkzee':'NED','Chido Obi':'DEN',
+'Marcus Rashford':'ENG','JJ Gabriel':'ENG',
+'Erling Haaland':'NOR','Rodri':'ESP','Phil Foden':'ENG','Gianluigi Donnarumma':'ITA',
+'Rúben Dias':'POR','Joško Gvardiol':'CRO','Jérémy Doku':'BEL','Savinho':'BRA','Oscar Bobb':'NOR',
+'Tijjani Reijnders':'NED','Rayan Cherki':'FRA','Omar Marmoush':'EGY','Rayan Aït-Nouri':'ALG',
+'Abdukodir Khusanov':'UZB','Matheus Nunes':'POR','Rico Lewis':'ENG','Elliot Anderson':'ENG',
+'Nico González':'ESP','James Trafford':'ENG',
+'Alisson':'BRA','Giorgi Mamardashvili':'GEO','Virgil van Dijk':'NED','Ibrahima Konaté':'FRA',
+'Joe Gomez':'ENG','Giovanni Leoni':'ITA','Jeremie Frimpong':'NED','Conor Bradley':'NIR',
+'Milos Kerkez':'HUN','Alexis Mac Allister':'ARG','Dominik Szoboszlai':'HUN',
+'Ryan Gravenberch':'NED','Curtis Jones':'ENG','Florian Wirtz':'GER','Cody Gakpo':'NED',
+'Alexander Isak':'SWE','Mohamed Salah':'EGY'};
+const NAT_HINT=[
+ [/(bay[ıi]nd[ıi]r|o[ğg]lu|[çc]alhano|g[üu]ler|demiral|kabak|y[ıi]ld[ıi]z|akg[üu]n|kadio)/i,'TUR'],
+ [/(lammens|castagne|onana v|vermeeren|de cuyper|theate|meunier)/i,'BEL'],
+ [/([šs]e[šs]ko|[šs]porar|oblak|jan?ža|bijol|elsnik)/i,'SVN'],
+ [/(dorgu|hjulmand|h[øo]jlund|damsgaard|obi )/i,'DEN'],
+ [/(mamardashvili|kvaratskhelia|mikautadze|kochorashvili|lochoshvili)/i,'GEO'],
+ [/(kerkez|szoboszlai|guly[áa]csi|orb[áa]n|sallai|varga|bolla)/i,'HUN'],
+ [/(khusanov|shomurodov|urunov|fayzullaev)/i,'UZB'],
+ [/(mbeumo|onana|anguissa|toko|zambo)/i,'CMR'],
+ [/(osimhen|iwobi|ndidi|aribo|chukwuemeka|onyeka|awoniyi|bassey|aina|lookman|iheanacho|madueke)/i,'NGA'],
+ [/(ndiaye|sarr|gueye|mendy|diouf|jackson|koulibaly|dia)/i,'SEN'],
+ [/(hakimi|ziyech|amrabat|mazraoui|ounahi|aguerd|bounou|en-?nesyri)/i,'MAR'],
+ [/(salah|elneny|trezeguet|hamdallah)/i,'EGY'],
+ [/(mahrez|bennacer|slimani|feghouli|brahimi|belaili|amoura)/i,'ALG'],
+ [/(partey|ayew|kudus|semenyo|amartey|djiku)/i,'GHA'],
+ [/(traor|kon[ae]|kouyate|bamba|camara|cisse|diop|kamara|sissoko|dembel|bakayoko|doumbia|keita|coulibaly|fofana|sanogo|doucour)/i,'MLI'],
+ [/(vin[ií]cius|rodrygo|richarlison|casemiro|alisson|ederson|antony|raphinha|militao|marquinhos|savinho|endrick|estev[ãa]o|bruno guimar|matheus|gabriel|martinelli|paix[ãa]o|igor)/i,'BRA'],
+ [/(messi|lautaro|alvarez|mac allister|garnacho|otamendi|dybala|paredes|romero|martinez|enzo|balerdi|vanderson|simeone|molina|foyth)/i,'ARG'],
+ [/(modri|peri[sš]i|kova[cč]i|brozovi|gvardiol|su[cč]i|baturina|sosa|juranovi|stani[sš]i|vla[sš]i|majer|petkovi|livakovi|[sš]utalo|pa[sš]ali|budimir|kramari)/i,'CRO'],
+ [/(haaland|[øo]degaard|s[øo]rloth|nusa|bobb|ryerson|thorsby|berge|aursnes|[øo]stig[åa]rd|hauge|solbakken|meling|strand)/i,'NOR'],
+ [/(schmeichel|h[øo]jlund|eriksen|kristensen|dolberg|damsgaard|skov|hjulmand|wind|dreyer|bah|maehle|christensen)/i,'DEN'],
+ [/(lindel[öo]f|isak|gy[öo]keres|elanga|svensson|larsson|olsson|bergvall)/i,'SWE'],
+ [/(kubo|mitoma|tomiyasu|endo|kamada|doan|ito|tanaka|yamada|wataru|hidemasa|takumi|kaoru|daichi|minamino)/i,'JPN'],
+ [/(son |kim min|hwang |lee kang|jung |kang |min-jae|jae-sung)/i,'KOR'],
+ [/(lewandowski|szcz[eę]sny|zieli[nń]ski|milik|bednarek|kiwior|frankowski|skorupski|zalewski|cash|piotrowski|urba[nń]ski|[sś]widerski|slisz)/i,'POL'],
+ [/(mitrovi|tadi|kosti|gudelj|[zž]ivkovi|samard[zž]i|luki|veljkovi|pavlovi|vlahovi|milinkovi|jovi|ratkov)/i,'SRB'],
+ [/(zinchenko|mudryk|yarmolenko|dovbyk|tsygankov|matviyenko|sudakov|zabarnyi|trubin|malinovskyi|yaremchuk|shevchenko|konoplya)/i,'UKR'],
+ [/(xhaka|embolo|sch[äa]r|zuber|freuler|sow|okafor|rieder|ndoye|vargas|amdouni|aebischer|stergiou|kobel|omlin|akanji)/i,'SUI'],
+ [/(alaba|sabitzer|laimer|danso|posch|w[öo]ber|grillitsch|lienhart|baumgartner|arnautovi)/i,'AUT'],
+ [/(souček|chytil|provod|schick|krejčí|douděra|hložek|coufal|barák)/i,'CZE'],
+ [/(mcginn|mctominay|robertson|gilmour|ralston|christie|hendry|dykes|adams|tierney|hickey|doak)/i,'SCO'],
+ [/(ramsey|james|wilson|moore|rodon|ampadu|johnson|davies|allen|broadhead)/i,'WAL'],
+ [/(g[üu]ler|[çc]alhano[ğg]lu|akayd[ıi]n|y[ıi]ld[ıi]z|kadio[ğg]lu|demiral|akturko[ğg]lu|kabak|akg[üu]n)/i,'TUR'],
+ [/(fortounis|bakasetas|masouras|zafeiris|douvikas|kourbelis|giannoulis|tzolakis|retsos|pelkas|mavropanos|giakoumakis)/i,'GRE'],
+ [/(szoboszlai|kerkez|dominik szo|gulacsi|orban|sallai|varga)/i,'HUN'],
+ [/(dragusin|hagi|stanciu|marin|coman|mihaila|man |radu)/i,'ROU'],
+ [/(garc[ií]a|rodr[ií]guez|mart[ií]nez|s[áa]nchez|fern[áa]ndez|l[óo]pez|p[ée]rez|ram[ií]rez|olmo|morata|asensio|carvajal|cucurella|merino|oyarzabal|zubimendi|pedri|gavi|ferran|ansu|yamal|balde|cubarsi|sancet|guruzeta|vivian|rodri|koke|isco|nacho|mikel|unai|iker|pau |marc )/i,'ESP'],
+ [/(silva|santos|costa|pereira|carvalho|oliveira|ferreira|almeida|ribeiro|gon[çc]alves|sousa|fonseca|neves|dias|guerreiro|trinc[ãa]o|le[ãa]o|f[ée]lix|ramos|cancelo|dalot|bruno|diogo|jo[ãa]o|rafael|bernardo|r[úu]ben|nuno|tiago|vitinha|semedo|palhinha|in[áa]cio)/i,'POR'],
+ [/(rossi|ricci|moretti|ferrari|esposito|romano|conti|greco|gallo|mancini|barella|donnarumma|bastoni|tonali|chiesa|scamacca|calafiori|frattesi|dimarco|retegui|locatelli|raspadori)/i,'ITA'],
+ [/(m[üu]ller|kimmich|goretzka|havertz|wirtz|f[üu]llkrug|sane|gnabry|r[üu]diger|tah|schlotterbeck|neuer|musiala|undav|kleindienst|anton|mittelst[äa]dt|schmidt|schneider|fischer|weber|wagner|becker|hoffmann|sch[äa]fer|koch|bauer|richter|klein|wolf|neumann|zimmermann|braun|kr[üu]ger|hartmann|lange|werner|krause|schulz|b[öo]hm|vogel)/i,'GER'],
+ [/(dubois|lef[èe]vre|moreau|girard|bonnet|fournier|mercier|renard|lambert|rousseau|marchand|perrin|mbapp|griezmann|dembele|upamecano|saliba|koundé|tchouameni|camavinga|thuram|barcola|zaire|maignan|konat|hernandez|rabiot|kolo)/i,'FRA'],
+ [/(de jong|van dijk|bakker|visser|smit|meijer|mulder|de boer|peters|hendriks|dekker|willems|kuipers|verhoeven|van leeuwen|bergwijn|dumfries|gakpo|weghorst|koopmeiners|frimpong|timber|simons|kluivert|schouten|veerman|malen|zirkzee|de ligt|reijnders|verbruggen|geertruida)/i,'NED'],
+ [/(peeters|janssens|maes|claes|wouters|de smet|declercq|vermeulen|van damme|lemmens|cools|michiels|goossens|lukaku|de bruyne|doku|tielemans|castagne|onana|trossard|openda|de ketelaere|saelemaekers|carrasco)/i,'BEL']];
+const NAT_POOL_BY_CC={ENG:['ENG','ENG','ENG','ENG','ENG','ENG','IRL','SCO','WAL','NIR','NGA','GHA','JAM'],
+ ESP:['ESP','ESP','ESP','ESP','ESP','ARG','BRA','URU','COL','MAR'],
+ ITA:['ITA','ITA','ITA','ITA','ARG','BRA','ALB','MAR','SEN'],
+ GER:['GER','GER','GER','GER','GER','AUT','TUR','POL','GHA'],
+ FRA:['FRA','FRA','FRA','FRA','SEN','MLI','CIV','CMR','ALG','MAR'],
+ POR:['POR','POR','POR','BRA','ARG','ANG','CPV','GUI'],
+ NED:['NED','NED','NED','NED','BEL','MAR','GHA','SUR','BRA'],
+ BEL:['BEL','BEL','BEL','BEL','COD','MAR','FRA','NED'],
+ TUR:['TUR','TUR','TUR','TUR','GER','BRA','NGA'],
+ SCO:['SCO','SCO','SCO','ENG','IRL','AUS'],
+ SUI:['SUI','SUI','SUI','KVX','ALB','CMR','NGA'],
+ AUT:['AUT','AUT','AUT','GER','BIH','SRB','TUR'],
+ GRE:['GRE','GRE','GRE','ALB','BRA','NGA'],
+ CZE:['CZE','CZE','CZE','SVK','UKR'],
+ DEN:['DEN','DEN','DEN','SWE','ISL','GHA'],
+ NOR:['NOR','NOR','NOR','SWE','ISL','NGA'],
+ POL:['POL','POL','POL','UKR','SVK'],
+ SRB:['SRB','SRB','SRB','MNE','BIH','MKD'],
+ UKR:['UKR','UKR','UKR','GEO','BRA'],
+ CRO:['CRO','CRO','CRO','BIH','SRB','MNE']};
+function natGuess(p,c){
+ if(NAT_EXACT[p.name])return NAT_EXACT[p.name];
+ const nm=' '+String(p.name||'').toLowerCase()+' ';
+ for(let i=0;i<NAT_HINT.length;i++)if(NAT_HINT[i][0].test(nm))return NAT_HINT[i][1];
+ const pool=NAT_POOL_BY_CC[(c&&c.cc)||'ENG']||['ENG'];
+ const r=mulberry(hashStr('nat|'+p.name+'|'+p.id));
+ const pick=pool[Math.floor(r()*pool.length)];
+ return NAT_BY[pick]?pick:pool[0]}
+function natOf(p){
+ if(p.nat)return p.nat;
+ p.nat=natGuess(p,G.clubs[p.club]);
+ return p.nat}
+function assignNations(){eachPlayer(p=>{if(!p.nat)natOf(p)})}
+
+/* ---------------------------------------------------------------------
+   A NATIONAL SQUAD is the best twenty-three eligible players in the world
+   who qualify for it, which is exactly how one is picked.
+   --------------------------------------------------------------------- */
+let NSQ_CACHE=null,NSQ_KEY='';
+function nationSquads(){
+ const k=G.season+'|'+Math.floor(G.day/30);
+ if(NSQ_KEY===k&&NSQ_CACHE)return NSQ_CACHE;
+ const by={};
+ eachPlayer(p=>{if(p.age>=17&&!p.youth){const n=natOf(p);(by[n]=by[n]||[]).push(p)}});
+ for(const n in by)by[n]=by[n].sort((a,b)=>b.ovr-a.ovr).slice(0,23);
+ NSQ_CACHE=by;NSQ_KEY=k;return by}
+function nationStrength(code){
+ const sq=(nationSquads()[code]||[]).slice(0,18);
+ const base=(NAT_BY[code]||{base:70}).base;
+ if(!sq.length)return base*.6;
+ const mean=sq.reduce((s,p)=>s+p.ovr,0)/sq.length;
+ // half what the players are actually worth, half the nation's standing
+ return mean*.55+base*.45}
+
+/* ---------------------------------------------------------------------
+   THE CALENDAR
+   --------------------------------------------------------------------- */
+function seasonYear(s){return 2026+(s==null?G.season:s)}
+function tourneyFor(year){
+ if(year%4===2)return{kind:'WC',name:'World Cup',teams:48,groups:12,icon:'🌍'};
+ if(year%4===0)return{kind:'EU',name:'European Championship',teams:24,groups:6,icon:'🏆'};
+ return null}
+function nextTourney(){
+ for(let s=G.season;s<G.season+5;s++){const t=tourneyFor(seasonYear(s));if(t)return{...t,year:seasonYear(s),season:s}}
+ return null}
+
+/* ---------------------------------------------------------------------
+   QUALIFYING — resolved by strength with room for an upset, and with the
+   confederation places the real thing uses
+   --------------------------------------------------------------------- */
+const WC_SLOTS={UEFA:16,CAF:9,AFC:8,CONMEBOL:6,CONCACAF:6,OFC:1};
+function qualifiers(t,year){
+ const rng=mulberry(hashStr('q'+t.kind+year));
+ const score=c=>nationStrength(c)+(rng()*9-4.5);
+ if(t.kind==='EU'){
+  return NATIONS.filter(n=>n[2]==='UEFA').map(n=>n[0])
+   .sort((a,b)=>score(b)-score(a)).slice(0,t.teams)}
+ const out=[];
+ for(const conf in WC_SLOTS){
+  const pool=NATIONS.filter(n=>n[2]===conf).map(n=>n[0]).sort((a,b)=>score(b)-score(a));
+  out.push(...pool.slice(0,WC_SLOTS[conf]))}
+ // the last two places come from the inter-confederation play-off, which
+ // Europe does not enter: one side from each of the other confederations
+ // goes into it and two of them come through
+ const po=[];
+ ['AFC','CAF','CONCACAF','CONCACAF','CONMEBOL','OFC'].forEach(conf=>{
+  const best=NATIONS.filter(n=>n[2]===conf).map(n=>n[0])
+   .filter(c=>out.indexOf(c)<0&&po.indexOf(c)<0).sort((a,b)=>score(b)-score(a))[0];
+  if(best)po.push(best)});
+ po.sort((a,b)=>score(b)-score(a));
+ while(out.length<t.teams&&po.length)out.push(po.shift());
+ return out.slice(0,t.teams)}
+
+/* ---------------------------------------------------------------------
+   PLAYING IT
+   --------------------------------------------------------------------- */
+function natMatch(A,B,rng,neutral){
+ const sA=nationStrength(A),sB=nationStrength(B);
+ const e=(sA-sB)/11;
+ const lA=clamp(1.18*Math.exp(e*.5),.18,4.2),lB=clamp(1.18*Math.exp(-e*.5),.18,4.2);
+ const P=l=>{let L=Math.exp(-l),k=0,p=1;do{k++;p*=rng()}while(p>L);return k-1};
+ let a=Math.min(7,P(lA)),b=Math.min(7,P(lB));
+ return{a,b}}
+function natScorers(code,n,rng,tag){
+ const sq=nationSquads()[code]||[];
+ const out=[];
+ for(let k=0;k<n;k++){
+  const w=sq.map(p=>({p,w:({ST:12,AMC:6,AML:6,AMR:6,MR:4,ML:4,MC:3,DM:1.2,WBL:1,DL:.8,DR:.8,DC:1,GK:.02}[p.pos]||2)*Math.pow(Math.max(1,p.ovr-45)/18,1.6)}));
+  let tot=w.reduce((s,x)=>s+x.w,0),r=rng()*tot,hit=w[0];
+  for(const x of w){r-=x.w;if(r<=0){hit=x;break}}
+  if(hit&&hit.p){out.push(hit.p);hit.p.intGoals=(hit.p.intGoals||0)+1}}
+ return out}
+function playKnockout(list,rng,label){
+ const rounds=[];let cur=list.slice();
+ while(cur.length>1){
+  const next=[],ties=[];
+  for(let i=0;i<cur.length;i+=2){
+   const A=cur[i],B=cur[i+1];
+   if(B==null){next.push(A);continue}
+   let{a,b}=natMatch(A,B,rng,true);
+   let pens=null;
+   if(a===b){const pa=rng()<.5;pens=pa?[5,4]:[4,5];if(pa)a+=.0001;else b+=.0001}
+   const w=a>b?A:B;
+   ties.push({A,B,a:Math.floor(a),b:Math.floor(b),pens,w});
+   next.push(w)}
+  rounds.push(ties);cur=next}
+ return{rounds,winner:cur[0]}}
+function runTournament(t,year){
+ const rng=mulberry(hashStr('t'+t.kind+year));
+ const teams=qualifiers(t,year);
+ // seeded into groups so the strongest are kept apart, as they are drawn
+ const seeded=teams.slice().sort((a,b)=>nationStrength(b)-nationStrength(a));
+ const G4=[];for(let g=0;g<t.groups;g++)G4.push([]);
+ for(let pot=0;pot<4;pot++){
+  const slice=shuffle(seeded.slice(pot*t.groups,(pot+1)*t.groups));
+  slice.forEach((c,ix)=>G4[ix].push(c))}
+ const table=[],results=[];
+ G4.forEach((grp,gi)=>{
+  const row={};grp.forEach(c=>row[c]={c,p:0,w:0,d:0,l:0,gf:0,ga:0,pts:0});
+  for(let i=0;i<grp.length;i++)for(let j=i+1;j<grp.length;j++){
+   const A=grp[i],B=grp[j];const{a,b}=natMatch(A,B,rng,true);
+   natScorers(A,a,rng);natScorers(B,b,rng);
+   results.push({g:gi,A,B,a,b});
+   const X=row[A],Y=row[B];
+   X.p++;Y.p++;X.gf+=a;X.ga+=b;Y.gf+=b;Y.ga+=a;
+   if(a>b){X.w++;Y.l++;X.pts+=3}else if(b>a){Y.w++;X.l++;Y.pts+=3}else{X.d++;Y.d++;X.pts++;Y.pts++}}
+  const sorted=Object.values(row).map(r=>(r.gd=r.gf-r.ga,r))
+   .sort((a,b)=>b.pts-a.pts||b.gd-a.gd||b.gf-a.gf||nationStrength(b.c)-nationStrength(a.c));
+  table.push(sorted)});
+ const firsts=table.map(g=>g[0].c),seconds=table.map(g=>g[1].c);
+ const thirds=table.map(g=>g[2]).sort((a,b)=>b.pts-a.pts||b.gd-a.gd||b.gf-a.gf)
+  .slice(0,t.kind==='WC'?8:4).map(r=>r.c);
+ const bracket=shuffle([...firsts,...seconds,...thirds]);
+ const ko=playKnockout(bracket,rng,t.name);
+ // goals in the knockout rounds belong to somebody too
+ ko.rounds.forEach(rd=>rd.forEach(x=>{natScorers(x.A,x.a,rng);natScorers(x.B,x.b,rng)}));
+ const finalTie=ko.rounds[ko.rounds.length-1][0];
+ const runner=finalTie?(finalTie.w===finalTie.A?finalTie.B:finalTie.A):null;
+ // caps and a reputation bump for everybody who went
+ const sq=nationSquads();
+ const played=new Set([...teams]);
+ played.forEach(code=>{(sq[code]||[]).forEach(p=>{
+  p.caps=(p.caps||0)+(code===ko.winner?7:code===runner?7:4);
+  p.intTourneys=(p.intTourneys||0)+1;
+  if(code===ko.winner||code===runner){p.value=Math.round(p.value*1.08/5e4)*5e4}
+  // a summer of football instead of a summer off
+  p.cond=clamp((p.cond||100)-(code===ko.winner?22:12),40,100);
+  p.sharp=clamp((p.sharp||70)+8,35,100)})});
+ return{kind:t.kind,name:t.name,icon:t.icon,year,teams,table,ko,winner:ko.winner,runner,
+  golden:(()=>{let best=null;played.forEach(c=>(sq[c]||[]).forEach(p=>{
+   if(!best||(p.intGoals||0)>(best.intGoals||0))best=p}));
+   return best?{name:best.name,nat:natOf(best),goals:best.intGoals||0}:null})()}}
+
+/* ---------------------------------------------------------------------
+   THE SUMMER — the tournament happens between two seasons
+   --------------------------------------------------------------------- */
+const _endSeasonIntl=endSeason;
+endSeason=function(){
+ const r=_endSeasonIntl.apply(this,arguments);
+ try{
+  const year=seasonYear(G.season);      // the season counter has already ticked
+  const t=tourneyFor(year);
+  if(!t)return r;
+  eachPlayer(p=>{if(p.intGoals)p.intGoals=0});
+  const res=runTournament(t,year);
+  G.tourneys=(G.tourneys||[]);
+  G.tourneys.push({kind:res.kind,name:res.name,icon:res.icon,year:res.year,
+   winner:res.winner,runner:res.runner,golden:res.golden,
+   last4:(res.ko.rounds[res.ko.rounds.length-2]||[]).map(x=>x.w)});
+  G.lastTourney=res;
+  const mine=G.clubs[G.my].players.filter(p=>(p.intTourneys||0)>0&&res.teams.indexOf(natOf(p))>=0);
+  const won=mine.filter(p=>natOf(p)===res.winner);
+  mail('news',res.icon+' '+res.year+' '+res.name,
+   '<b>'+esc(natName(res.winner))+'</b> are champions'+(res.runner?', beating <b>'+esc(natName(res.runner))+'</b> in the final':'')+'.'+
+   (res.golden?'<br><br>Golden Boot: <b>'+esc(res.golden.name)+'</b> ('+esc(natName(res.golden.nat))+') with '+res.golden.goals+'.':'')+
+   (mine.length?'<br><br><b>'+mine.length+'</b> of your players were at the tournament'+
+     (won.length?', and '+(won.length===1?'<b>'+esc(won[0].name)+'</b> comes back a world champion.':'<b>'+won.length+'</b> of them come back champions.'):
+      '. They report back short of a proper break.'):''));
+ }catch(e){}
+ return r};
+
+/* ---------------------------------------------------------------------
+   THE BREAKS — six a season, and they cost you
+   --------------------------------------------------------------------- */
+function onIntBreak(day){
+ const rel=day-(G.seasonStart||0);
+ return INT_BREAKS.indexOf(rel)>=0}
+function callUps(ci){
+ const sq=nationSquads();
+ const c=G.clubs[ci];
+ return c.players.filter(p=>{
+  if(p.youth||p.injury)return false;
+  const n=natOf(p);const s=sq[n];
+  return s&&s.indexOf(p)>=0})}
+const _dtcIntl=dailyTickCore;
+dailyTickCore=function(){
+ _dtcIntl.apply(this,arguments);
+ if(!G.clubs||G.sacked)return;
+ const rel=G.day-(G.seasonStart||0);
+ if(INT_BREAKS.indexOf(rel)<0)return;
+ if(G._intDay===G.day)return;G._intDay=G.day;
+ const t=nextTourney();
+ const away=callUps(G.my);
+ if(!away.length){
+  mail('news','🌍 International break','Nobody from the squad is away this window. A rare and useful fortnight on the training ground.');
+  return}
+ const rng=mulberry(hashStr('ib'+G.season+G.day));
+ const notes=[],hurt=[];
+ away.forEach(p=>{
+  p.caps=(p.caps||0)+(rng()<.75?2:1);
+  const scored=rng()<(p.pos==='ST'?.34:p.pos.startsWith('AM')?.22:.07)?1:0;
+  if(scored){p.intGoals=(p.intGoals||0)+scored;p.intCareerGoals=(p.intCareerGoals||0)+scored}
+  p.cond=clamp(p.cond-(12+rng()*16),35,100);
+  p.sharp=clamp(p.sharp+5,35,100);
+  if(rng()<0.055+p.injuryProneness/400){
+   p.injury={type:pick(['Hamstring strain','Ankle sprain','Knock','Calf strain','Thigh strain']),
+    days:Math.round(6+rng()*24)};
+   hurt.push(p.name+' — '+p.injury.type+', '+p.injury.days+' days')}
+  notes.push(esc(p.name)+' <span class="xs faint">'+esc(natName(natOf(p)))+'</span>'+(scored?' ⚽':''))});
+ mail(hurt.length?'injury':'news','🌍 International break — '+away.length+' away',
+  '<b>'+away.length+'</b> of your players are on international duty'+
+  (t?' with the '+t.year+' '+t.name+' on the horizon':'')+'.<br><br>'+notes.join('<br>')+
+  (hurt.length?'<br><br><b>Returning injured:</b><br>'+hurt.map(esc).join('<br>'):'<br><br>They will come back tired.'))};
+
+const _newGameIntl=newGame;
+newGame=function(i){_newGameIntl(i);assignNations();G.tourneys=[]};
+const _loadIntl=loadSlot;
+loadSlot=function(s){const ok=_loadIntl(s);if(ok)try{assignNations()}catch(e){}return ok};
+
+/*#w9_intl.js#*//*#w10_intlview.js#*/
+
+/* =====================================================================
+   THE INTERNATIONAL SCREEN — the cycle, the squads, and your own players
+   ===================================================================== */
+function vIntl(){
+ const nx=nextTourney();
+ const me=G.clubs[G.my];
+ const sq=nationSquads();
+ let h='';
+ if(nx){
+  const away=nx.season-G.season;
+  h+='<div class="sec"><div class="t">'+nx.icon+' '+nx.year+' '+esc(nx.name)+'</div><div class="ln"></div>'+
+   '<div class="sub">'+(away<=0?'this summer':away===1?'next summer':'in '+away+' seasons')+'</div></div>'+
+   '<div class="card tight"><div class="small muted" style="padding:4px 2px">'+
+   nx.teams+' nations · '+nx.groups+' groups of four · '+
+   (nx.kind==='WC'?'the top two and the eight best third-placed sides go into a round of 32'
+    :'the top two and the four best thirds go into a round of 16')+
+   '.</div></div>'}
+ /* your own internationals */
+ const mine=me.players.filter(p=>{const n=natOf(p);return sq[n]&&sq[n].indexOf(p)>=0});
+ h+='<div class="sec"><div class="t">Your internationals</div><div class="ln"></div><div class="sub">'+mine.length+' in a national squad</div></div>';
+ if(!mine.length)h+='<div class="card tight"><div class="small muted" style="padding:6px 2px">Nobody in the squad is currently good enough for their country. Develop one and the call will come.</div></div>';
+ else{
+  h+='<div class="card tight">'+mine.sort((a,b)=>b.ovr-a.ovr).map(p=>
+   '<div class="spread" data-action="profile" data-id="'+p.id+'" style="padding:6px 3px;border-bottom:1px solid var(--chalk)">'+
+   '<div class="row" style="gap:7px;min-width:0"><span>'+ccFlag(natOf(p))+'</span>'+
+   '<div style="min-width:0"><div class="small" style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(p.name)+'</div>'+
+   '<div class="xs faint">'+esc(natName(natOf(p)))+' · '+p.pos+'</div></div></div>'+
+   '<div class="xs num" style="text-align:right"><b>'+(p.caps||0)+'</b> caps'+
+   ((p.intCareerGoals||0)?'<br>'+p.intCareerGoals+' goals':'')+'</div></div>').join('')+'</div>'}
+ /* the world's strongest sides right now */
+ const rank=NATIONS.map(n=>n[0]).map(c=>({c,s:nationStrength(c)})).sort((a,b)=>b.s-a.s).slice(0,16);
+ h+='<div class="sec"><div class="t">World ranking</div><div class="ln"></div><div class="sub">by the players available</div></div>'+
+  '<div class="card tight">'+rank.map((r,ix)=>{
+   const has=(sq[r.c]||[]).filter(p=>p.club===G.my).length;
+   return '<div class="spread" style="padding:5px 3px;border-bottom:1px solid var(--chalk)">'+
+   '<div class="row" style="gap:7px"><span class="xs num faint" style="min-width:18px">'+(ix+1)+'</span>'+
+   '<span>'+ccFlag(r.c)+'</span><span class="small" style="font-weight:700">'+esc(natName(r.c))+'</span>'+
+   (has?'<span class="xs" style="color:var(--gold)">· '+has+' of yours</span>':'')+'</div>'+
+   '<span class="num xs" style="font-weight:800">'+Math.round(r.s)+'</span></div>'}).join('')+'</div>';
+ /* the roll of honour */
+ if((G.tourneys||[]).length){
+  h+='<div class="sec"><div class="t">Roll of honour</div><div class="ln"></div></div><div class="card tight">'+
+   G.tourneys.slice().reverse().map(t=>
+   '<div class="spread" style="padding:6px 3px;border-bottom:1px solid var(--chalk)">'+
+   '<div><div class="small" style="font-weight:700">'+t.icon+' '+t.year+' '+esc(t.name)+'</div>'+
+   (t.golden?'<div class="xs faint">Golden Boot: '+esc(t.golden.name)+' ('+t.golden.goals+')</div>':'')+'</div>'+
+   '<div style="text-align:right"><div class="small" style="font-weight:800">'+ccFlag(t.winner)+' '+esc(natName(t.winner))+'</div>'+
+   (t.runner?'<div class="xs faint">beat '+esc(natName(t.runner))+'</div>':'')+'</div></div>').join('')+'</div>'}
+ /* the last tournament in detail */
+ const L=G.lastTourney;
+ if(L&&L.ko&&L.ko.rounds){
+  const names=['Round of 32','Round of 16','Quarter-finals','Semi-finals','Final'];
+  const off=names.length-L.ko.rounds.length;
+  h+='<div class="sec"><div class="t">'+L.year+' knockout rounds</div><div class="ln"></div></div><div class="card tight">';
+  L.ko.rounds.forEach((rd,ix)=>{
+   const lbl=names[Math.max(0,ix+off)]||'Round '+(ix+1);
+   h+='<div class="xs faint" style="padding:6px 2px 2px;font-weight:700">'+lbl+'</div>';
+   rd.slice(0,16).forEach(x=>{
+    h+='<div class="spread" style="padding:3px 3px">'+
+    '<span class="xs" style="flex:1;text-align:right;font-weight:'+(x.w===x.A?'800':'500')+'">'+ccFlag(x.A)+' '+esc(natName(x.A))+'</span>'+
+    '<span class="num xs" style="padding:0 8px;font-weight:800">'+x.a+'–'+x.b+(x.pens?' <span class="faint">('+x.pens[0]+'–'+x.pens[1]+'p)</span>':'')+'</span>'+
+    '<span class="xs" style="flex:1;font-weight:'+(x.w===x.B?'800':'500')+'">'+ccFlag(x.B)+' '+esc(natName(x.B))+'</span></div>'})});
+  h+='</div>'}
+ return h}
+/* it lives in the Club section, next to the cups */
+if(typeof CLUB_GROUPS!=='undefined'&&!CLUB_GROUPS[0][1].some(x=>x[0]==='intl'))
+ CLUB_GROUPS[0][1].push(['intl','International']);
+const _vClubIntl=vClubFinal;
+vClubFinal=function(){
+ if(UI.clubTab!=='intl')return _vClubIntl();
+ const h='<div class="secnav">'+CLUB_GROUPS.map(g=>
+  '<div style="flex:none"><div class="xs faint" style="margin:0 0 4px 2px;font-weight:800;letter-spacing:.5px">'+g[0].toUpperCase()+'</div>'+
+  '<div class="row" style="gap:5px">'+g[1].map(x=>
+   '<button class="chip'+(UI.clubTab===x[0]?' on':'')+'" data-action="clubTab" data-v="'+x[0]+'">'+x[1]+'</button>').join('')+'</div></div>').join('')+'</div>';
+ return h+vIntl()};
+
+/*#w10_intlview.js#*//*#w11_youth.js#*/
+
+/* =====================================================================
+   THE NEXT ONES — an academy that keeps producing for fifty seasons
+   ---------------------------------------------------------------------
+   Three things were quietly going to break a very long save.
+
+   NAMES. Every player born into the world was drawn from fifty first
+   names and fifty surnames, all English. Two and a half thousand
+   combinations, shared by four hundred and eighty clubs, for as long as
+   you kept playing — so by season ten you were signing the third Jack
+   Walker. The pools below are far larger and, more importantly, they are
+   drawn from the country the player is actually coming through in.
+
+   STANDARD. A youth-team player was generated the same wherever he was:
+   Real Madrid's academy and Morecambe's produced the same boy. Now the
+   intake is pitched against the club's own standard, so the best academies
+   turn out players who can actually get into the side, and the smallest
+   ones turn out squad fillers with the occasional gem.
+
+   DECAY. Clubs the computer runs only promoted from their academy when
+   they were short of bodies, threw away anyone who turned twenty, and
+   filled the gaps with generic fifty-eight rated players. Left running for
+   fifty seasons that flattens the whole world toward the middle: no more
+   great sides, no more terrible ones. They now graduate their best every
+   summer and replace what they lose at their own level.
+   ===================================================================== */
+const Y_FN={
+ENG:('Jack Harry Oliver George Charlie Alfie Archie Freddie Louie Kai Mason Reece Tyler Callum Lewis Owen Marcus Jayden Ollie Finley Bailey Kieran Dylan Rhys Josh '+
+ 'Alfred Arthur Albie Bobby Teddy Rory Ronnie Frankie Elliot Jude Cole Hugo Rex Otis Sonny Reggie Jenson Kayden Tommy Riley Toby Isaac Jaxon Leo Noah '+
+ 'Ethan Zach Nathan Corey Brandon Aaron Declan Connor Liam Kyle Shay Jamie Luca Elias Ellis Micah Malachi Ezra Kobi Jarell Tyrese Kaeden Roman Vinnie Chester '+
+ 'Sol Zane Jonah Reuben Seth Miles Caleb Blake Kian Joel Curtis Levi Trey Devon Ashton Marley Rio Ade Femi Tunde Kwame Kofi Jaden Nile Bode').split(' '),
+ENG2:('Walker Hughes Bennett Clarke Robinson Turner Wright Foster Barnes Chapman Dawson Ellis Gibson Hardy Ingram Jennings Kerr Lowe Mercer Nash Osborne Palmer Reid Shaw Webb '+
+ 'Ashby Bramley Carrington Dunmore Eastwood Fairhurst Garside Halliwell Ibbotson Jardine Kimber Lockwood Marlowe Netherwood Ollerton Pemberton Quarrie Ravenhill Sedgwick Thornley '+
+ 'Underhill Verity Wharton Yardley Ackroyd Braithwaite Castleton Denby Endicott Fenwick Grimshaw Hollingworth Inkpen Jessop Kirkbride Langtree Mowbray Norbury Oakley Prescott '+
+ 'Radcliffe Standish Tunnicliffe Uttley Vickery Wadsworth Yorke Alderton Birtwistle Cawley Duxbury Entwistle Fothergill Gledhill Haworth Iveson Jellicoe Kenworthy Lightfoot Massey '+
+ 'Naylor Openshaw Pilkington Quill Rushworth Shackleton Thistlethwaite Umber Vine Winstanley Yates Adeyemi Boateng Chukwu Danquah Eze Frimpong Gyasi Hylton Idowu Johnson '+
+ 'Kamau Lartey Mensah Nkemelu Owusu Pryce Quansah Riddick Sackey Thompson Uduka Vaughan Wanyama Yeboah Zaki').split(' ')};
+const Y_EXTRA={
+ESP:'Aguirre Beltrán Cabrera Delgado Escudero Fuentes Gallardo Heredia Izaguirre Jiménez Lozano Maldonado Ochoa Prieto Quesada Rojas Salazar Trujillo Ureña Valverde Zamora Arrieta Bermejo Cañizares',
+ITA:'Amato Bellini Colombo De Luca Ferraro Gentile Longo Marino Neri Orlando Pagano Riva Sartori Testa Valli Zanetti Basso Caputo Damico Ferrante',
+GER:'Albrecht Böhme Dietrich Engel Frank Gerber Hein Jung Kaiser Lorenz Mayer Nagel Otto Pfeiffer Reuter Sommer Thiele Ulrich Vogt Winter',
+FRA:'Arnaud Bertrand Chevalier Deschamps Escoffier Fontaine Gauthier Herve Imbert Jourdain Laurent Marchal Noel Olivier Poirier Renaud Sauvage Thibault Vasseur Weber',
+POR:'Amorim Barros Cabral Duarte Esteves Freitas Guedes Henriques Infante Jesus Leal Macedo Nogueira Osório Paiva Quaresma Rocha Salgado Tavares Valente',
+NED:'Aalders Bruggink Cornelissen Driessen Everts Faber Geerts Hofman Ijssel Jonker Klaassen Lammers Maas Nijhuis Overmars Prins Reinders Stam Terpstra Vermeer',
+BEL:'Aerts Bogaert Coppens Deblauwe Everaert Fransen Geerinck Hermans Ivens Jacobs Keppens Loos Martens Nuyts Onkelinx Pauwels Rombouts Steenackers Thys Vanhoof',
+TUR:'Acar Balcı Coşkun Duran Erdem Fırat Güneş Hakan İnan Kara Levent Mutlu Nalbant Öztekin Pehlivan Sarı Taş Uçar Varol Yavuz',
+GRE:'Alexiou Barkas Chatzis Dimitriou Efthymiou Fotakis Galanis Hristou Iosifidis Kalogeras Lambropoulos Manolis Nikolaidis Oikonomou Petrou Rallis Stavrou Theodorou Vasileiou Zisis',
+CZE:'Bartoš Cerný Doležal Fiala Hruška Jelínek Kadlec Lukas Matějka Nedvěd Ondrák Pavlík Rezník Šimek Tichý Urban Vávra Zeman Bláha Čapek',
+DEN:'Agger Bech Dahl Eriksen Frost Gade Holm Iversen Jakobsen Krogh Lund Mathiesen Nørgaard Overgaard Petersen Riis Storm Toft Vestergaard Winther',
+NOR:'Aas Bakken Dahle Engen Fjeld Gran Hagen Iversen Jakobsen Knudsen Lie Moen Nordby Opsahl Riise Sandvik Tveit Ulven Vik Wold',
+POL:'Adamczyk Baran Chmiel Duda Eliasz Fabian Górski Hoffman Iwanicki Jasiński Kaczmarek Lis Michalak Nowicki Olszewski Pawlak Rutkowski Sikora Tomczyk Walczak',
+SRB:'Antić Bogdanović Cvetković Damjanović Erić Filipović Gajić Hadžić Ivanović Jerković Kovačević Lazarević Mihajlović Nedeljković Obradović Perić Ranković Simonović Todorović Vasić',
+UKR:'Antonenko Bilyk Chernenko Danylko Fedorenko Hrytsenko Ivanenko Kravets Lysenko Marchenko Nazarenko Ostapenko Petrenko Romanenko Savchenko Tkachuk Usenko Vasylenko Yakovenko Zhuk',
+CRO:'Antunović Blažević Cvitanović Dujmović Frankić Grgić Horvat Ivić Jurić Klarić Lovrić Marić Novak Oreški Pavić Radić Šarić Tomić Vuković Zorić',
+SCO:'Aitken Baxter Cairns Dalgleish Elphinstone Forsyth Galbraith Hunter Irvine Johnstone Kinnear Lennox Mackay Nicol Ogilvie Paterson Rennie Shankly Tulloch Wallace',
+AUT:'Aigner Brandstätter Deutsch Ecker Frank Grabner Haas Innerhofer Jäger Kraus Lechner Mayrhofer Neuhold Ortner Pucher Reiter Schwarz Trummer Unger Windisch',
+SUI:'Ammann Bühler Christen Dubois Egger Furrer Gerber Hodel Iten Jost Küng Lehmann Moser Näf Odermatt Perren Rieder Sutter Tanner Wyss'};
+function bigPool(cc){
+ const p=wNamePool(cc);
+ if(cc==='ENG')return{f:Y_FN.ENG,l:Y_FN.ENG2};
+ if(!p._big){
+  const base=(p._l||p[1].split(' '));
+  const extra=(Y_EXTRA[cc]||'').split(' ').filter(Boolean);
+  p._big={f:(p._f||p[0].split(' ')),l:base.concat(extra),
+   // Spain, Portugal, Italy and Latin America genuinely use two surnames,
+   // which is both accurate and the difference between six hundred names
+   // and fifteen thousand
+   dbl:/^(ESP|POR|ITA)$/.test(cc)?.35:0}}
+ return p._big}
+function worldName(cc,rng,avoid){
+ const P=bigPool(cc||'ENG');
+ const r=rng||Math.random;
+ const one=()=>{
+  const sur=P.l[Math.floor(r()*P.l.length)];
+  const two=(P.dbl&&r()<P.dbl)?' '+P.l[Math.floor(r()*P.l.length)]:'';
+  return P.f[Math.floor(r()*P.f.length)]+' '+sur+two};
+ for(let k=0;k<14;k++){const nm=one();if(!avoid||!avoid.has(nm))return nm}
+ return one()}
+function clubNames(c){
+ if(!c._nm){c._nm=new Set();
+  (c.players||[]).forEach(p=>c._nm.add(p.name));
+  (c.youth||[]).forEach(p=>c._nm.add(p.name))}
+ return c._nm}
+
+/* ---------------------------------------------------------------------
+   A YEAR'S INTAKE, pitched at the club that produced it
+   --------------------------------------------------------------------- */
+genYouthPlayer=function(ci,rng){
+ const c=G.clubs[ci];
+ const r=rng||Math.random;
+ const std=ovrForRep(c.rep);                 // what a first-teamer here looks like
+ const pos=pick(['GK','DL','DC','DC','DR','DM','MC','MC','AMC','AML','AMR','ST','ST']);
+ // a sixteen year old is a long way short of the first team wherever he is
+ const ovr=clamp(Math.round(std-18+r()*12),32,66);
+ // How high he might go is the real difference between academies — but it
+ // has to be measured against the club he is at, not added on top of it.
+ // A flat "plus six to twenty-two" meant a National League academy turned
+ // out players fourteen points better than anyone already in the side, and
+ // sixteen seasons of that dragged the bottom of the pyramid up by twelve.
+ const reach=4+r()*10+(c.rep/900)*(r()<.10?1.6:1);
+ const pot=clamp(Math.round(ovr+reach),ovr+3,97);
+ const used=clubNames(c);
+ const nm=worldName(c.cc||'ENG',r,used);
+ used.add(nm);
+ const p=genPlayer([nm,pos,Math.round(15+r()*2),ovr,pot],ci);
+ p.youth=true;p.wage=500;p.contract=3;
+ // only your own academy needs to remember where a player came from;
+ // stamping it on eight thousand others is a megabyte of save file
+ if(ci===G.my){p.academy=c.key;p.born=G.season||1}
+ return p};
+
+/* every club gets an academy of the right size, wherever it plays */
+const _buildAcYouth=buildAcademies;
+buildAcademies=function(){
+ _buildAcYouth();
+ G.clubs.forEach(c=>{
+  const target=c.i===G.my?16:c.tier===1?(LEAGUES[c.league]&&LEAGUES[c.league].coef>=4?9:8):7;
+  const rng=mulberry(hashStr('yth2'+c.key));
+  while((c.youth||[]).length<target)c.youth.push(genYouthPlayer(c.i,rng))})};
+
+/* ---------------------------------------------------------------------
+   WHAT THE COMPUTER'S CLUBS DO EACH SUMMER
+   They graduate their best, they let the ones who are not going to make it
+   go, and they replace what they have lost at their own level rather than
+   with whatever was cheapest.
+   --------------------------------------------------------------------- */
+function aiSquadRefresh(){
+ const rng=Math.random;
+ G.clubs.forEach(c=>{
+  if(c.i===G.my)return;
+  c.youth=c.youth||[];
+  // 1. graduate anybody good enough, not merely anybody needed
+  const bar=ovrForRep(c.rep)-14;
+  c.youth.sort((a,b)=>(b.ovr+b.pot/2)-(a.ovr+a.pot/2));
+  const up=[];
+  c.youth.forEach(p=>{
+   if(p.age<17)return;
+   if(up.length>=3)return;
+   if(p.ovr>=bar||p.pot>=ovrForRep(c.rep)+4||p.age>=19)up.push(p)});
+  up.forEach(p=>{
+   c.youth=c.youth.filter(x=>x.id!==p.id);
+   if(p.age>=19&&p.pot<bar+2)return;                 // released rather than promoted
+   p.youth=false;p.contract=irnd(2,4);
+   p.wage=Math.max(1500,Math.round(wageFor(p.ovr,c.rep)*.4/500)*500);
+   c.players.push(p)});
+  c.youth=c.youth.filter(p=>p.age<=19);
+  while(c.youth.length<(c.tier===1?8:6))c.youth.push(genYouthPlayer(c.i));
+  // an academy the game never shows you does not need twenty players in it
+  const cap=c.tier===1?12:10;
+  if(c.youth.length>cap){c.youth.sort((a,b)=>b.pot-a.pot);c.youth.length=cap}
+  // 2. keep the squad at a sensible size, at the club's own standard
+  const want=c.tier===1?21:19;
+  if(c.players.length>want+3){
+   c.players.sort((a,b)=>(b.ovr+(b.pot-b.ovr)*.4)-(a.ovr+(a.pot-a.ovr)*.4));
+   c.players.length=want+2}
+  if(c.players.length<want){
+   const std=ovrForRep(c.rep);
+   const need=want-c.players.length;
+   const used=clubNames(c);
+   const shape=['GK','DC','DR','DL','DM','MC','AMC','AMR','AML','ST','DC','MC','ST'];
+   for(let k=0;k<need;k++){
+    const pos=shape[k%shape.length];
+    const ovr=clamp(Math.round(std-8+rng()*9),32,Math.round(std+3));
+    const age=irnd(19,29);
+    const nm=worldName(c.cc||'ENG',rng,used);used.add(nm);
+    const np=genPlayer([nm,pos,age,ovr,clamp(ovr+(age<23?irnd(2,10):irnd(0,3)),ovr,95)],c.i);
+    np.contract=irnd(2,4);
+    c.players.push(np)}}
+  // 3. the elite stay elite. Left alone, the ninety-rated players retire
+  //    and nobody replaces them, and after twenty seasons the best player
+  //    in the world is an eighty-eight.
+  if(c.rep>=8800){
+   const std=ovrForRep(c.rep);
+   const stars=c.players.filter(p=>p.ovr>=std+4).length;
+   if(stars<2){
+    const used=clubNames(c);
+    const nm=worldName(c.cc||'ENG',rng,used);used.add(nm);
+    const age=irnd(22,27);
+    const ovr=clamp(Math.round(std+4+rng()*4),60,95);
+    const sp=genPlayer([nm,pick(['ST','AMC','AMR','AML','MC','DC','GK']),age,ovr,clamp(ovr+irnd(1,6),ovr,97)],c.i);
+    sp.contract=irnd(3,5);c.players.push(sp)}}
+  // 4. a squad without a goalkeeper is not a squad
+  if(!c.players.some(p=>p.pos==='GK')){
+   const std=ovrForRep(c.rep);
+   const nm=worldName(c.cc||'ENG',rng,clubNames(c));
+   c.players.push(genPlayer([nm,'GK',irnd(22,31),Math.round(std-2),Math.round(std+2)],c.i))}
+  c._nm=null})}
+/* ---------------------------------------------------------------------
+   THE LEVEL OF EACH DIVISION
+   ---------------------------------------------------------------------
+   Promotion adds three hundred to a club's reputation and relegation takes
+   two hundred and sixty away, so every swap leaks forty points into the
+   system. Over sixteen seasons that carried the National League from a
+   standard of forty-four up to fifty-six while the Premier League stayed
+   where it was, and the distance between the top and the bottom of the
+   pyramid halved. A division is now pulled gently back toward the band it
+   was built with each summer — gently enough that a well-run club still
+   climbs within it, firmly enough that the whole ladder does not drift.
+   --------------------------------------------------------------------- */
+function normaliseReps(){
+ leagueKeys().forEach(k=>{
+  const L=LEAGUES[k];
+  if(!L||L.repTop==null||L.repBot==null)return;
+  const mem=G.clubs.filter(c=>c.league===k).sort((a,b)=>b.rep-a.rep);
+  const n=mem.length;if(n<2)return;
+  mem.forEach((c,ix)=>{
+   const target=L.repTop+(L.repBot-L.repTop)*(ix/(n-1));
+   c.rep=Math.round(c.rep+(target-c.rep)*.14);
+   c.wageCap=Math.max(c.wageCap,Math.round(c.rep*(L.tier===1?(L.coef>=4?300:150):90)))})})}
+const _endSeasonYouth=endSeason;
+endSeason=function(){
+ const r=_endSeasonYouth.apply(this,arguments);
+ try{normaliseReps()}catch(e){}
+ try{aiSquadRefresh()}catch(e){}
+ /* your own academy is never allowed to run dry — graduations and the
+    over-nineteens leaving used to empty it out over a decade */
+ try{
+  const me=G.clubs[G.my];me.youth=me.youth||[];
+  const before=me.youth.length;
+  while(me.youth.length<12)me.youth.push(genYouthPlayer(G.my));
+  if(me.youth.length>before)
+   mail('scout','🎓 The academy restocks',
+    'The Head of Youth has brought <b>'+(me.youth.length-before)+'</b> more scholars into the building. '+
+    'There are <b>'+me.youth.length+'</b> in the academy going into the new season.');
+  me._nm=null}catch(e){}
+ return r};
+
+/* ---------------------------------------------------------------------
+   YOUR OWN GRADUATES, remembered
+   --------------------------------------------------------------------- */
+const _promoteYouthRec=ACTIONS.promoteYouth;
+ACTIONS.promoteYouth=el=>{
+ const p=playerById(el.dataset.id);
+ const rec=p?{id:p.id,name:p.name,pos:p.pos,season:G.season,pot:p.pot}:null;
+ _promoteYouthRec(el);
+ if(rec){G.graduates=G.graduates||[];G.graduates.push(rec)}};
+function vGraduates(){
+ const gr=(G.graduates||[]).slice().reverse();
+ if(!gr.length)return '';
+ let h='<div class="sec"><div class="t">Academy graduates</div><div class="ln"></div><div class="sub">'+gr.length+' brought through</div></div><div class="card tight">';
+ gr.slice(0,20).forEach(g=>{
+  const p=playerById(g.id);
+  h+='<div class="spread" style="padding:5px 3px;border-bottom:1px solid var(--chalk)">'+
+  '<div><div class="small" style="font-weight:700">'+esc(g.name)+'</div><div class="xs faint">'+g.pos+' · season '+g.season+'</div></div>'+
+  '<div class="xs num" style="text-align:right">'+(p?(p.club===G.my?'<b>'+p.ovr+'</b> · '+(p.stats.apps||0)+' apps':'now at '+esc((G.clubs[p.club]||{}).short||'—')):'retired')+'</div></div>'});
+ return h+'</div>'}
+
+/*#w11_youth.js#*//*#w12_tts.js#*/
+
+/* =====================================================================
+   VOICES
+   ---------------------------------------------------------------------
+   What the browser gives us is the device's own speech engine, and the
+   difference between the worst and the best voice on the same phone is
+   enormous. A modern Android has "Google UK English Male"; Windows has
+   the Microsoft "Natural" neural voices; an iPhone has Siri and the
+   Enhanced/Premium downloads. Those are genuinely good. What it was
+   picking instead was whatever came back first, which on most machines is
+   the small offline fallback — the one that sounds like a robot.
+
+   Four things are fixed here.
+
+   1. THE VOICE LIST ARRIVES LATE. getVoices() is usually empty on the
+      first call and fills in a moment later. Anything asked for before
+      then was being spoken by the default voice. It now waits, and
+      re-ranks when the list lands.
+   2. THE RANKING WAS UPSIDE DOWN. It preferred offline voices. Neural and
+      cloud voices — Natural, Neural, Online, Premium, Enhanced, Siri —
+      are what a device has that sounds like a person, and they are now
+      what gets picked, with the novelty and compact voices pushed to the
+      bottom where they belong.
+   3. IT SPOKE IN ONE FLAT BREATH. A sentence is now broken at its commas
+      and full stops and spoken as a short sequence, each clause carrying
+      its own pace and pitch — quicker in the middle, slower and lower on
+      the last few words, lifting into a question. That single change is
+      most of the difference between reading and talking.
+   4. IT READ THE PAGE, NOT THE SENTENCE. "Man Utd 2-0 up, £40m, PSG" was
+      being read literally. It now says "Manchester United, two nil up,
+      forty million pounds, P S G".
+
+   And because no two devices have the same voices, there is a picker: it
+   lists what your device actually has, best first, and you can hear each
+   one before choosing.
+   ===================================================================== */
+const TTS={ready:false,voices:[],byName:{},cast:{},warmTries:0,pref:null};
+/* the chosen voice belongs to the device, not to the save, so it lives
+   outside it — otherwise it is forgotten every time you start a career */
+try{TTS.pref=localStorage.getItem('rdmVoice')||null}catch(e){}
+
+/* ---------- 1. wait for the list ---------- */
+function ttsWarm(){
+ if(!ttsAvailable())return;
+ let list=[];
+ try{list=speechSynthesis.getVoices()||[]}catch(e){}
+ if(list.length){ttsIndex(list);return}
+ if(TTS.warmTries++>40)return;
+ try{speechSynthesis.onvoiceschanged=()=>{try{ttsIndex(speechSynthesis.getVoices()||[])}catch(e){}}}catch(e){}
+ setTimeout(ttsWarm,120)}
+function ttsIndex(list){
+ if(!list||!list.length)return;
+ TTS.voices=list.slice().sort((a,b)=>ttsScore(b)-ttsScore(a));
+ TTS.byName={};TTS.voices.forEach(v=>TTS.byName[v.name]=v);
+ TTS.ready=true;TTS.cast={};
+ A2._vb=null;A2._vbN=-1;
+ if(TTS.pending){const p=TTS.pending;TTS.pending=null;try{p()}catch(e){}}}
+
+/* ---------- 2. rank by what actually sounds like a person ---------- */
+const TTS_GOOD=/(natural|neural|online|premium|enhanced|siri|wavenet|studio|journey|polyglot)/i;
+const TTS_BAD=/(compact|eloquence|espeak|pico|novelty|bad news|good news|bells|bubbles|whisper|zarvox|trinoids|albert|jester|organ|cellos|boing|deranged|hysterical|wobble|superstar|rocko|shelley|grandma|grandpa|flo|sandy)/i;
+function ttsScore(v){
+ const n=(v.name||''),l=(v.lang||'');
+ let s=0;
+ if(TTS_GOOD.test(n))s+=60;                    // a neural voice, by any of its names
+ if(/google/i.test(n))s+=30;                   // Android's are very good
+ if(/microsoft/i.test(n))s+=14;
+ if(v.localService===false)s+=26;              // cloud voices are the better ones
+ if(/^en-GB/i.test(l))s+=30;                   // this is an English football game
+ else if(/^en-(IE|AU|NZ|ZA)/i.test(l))s+=16;
+ else if(/^en/i.test(l))s+=9;
+ if(v.default)s+=2;
+ if(TTS_BAD.test(n))s-=200;
+ return s}
+function ttsGender(v){
+ const n=(v.name||'').toLowerCase();
+ if(/(female|woman|\bf\b|libby|aria|jenny|sonia|hazel|zira|samantha|victoria|karen|moira|tessa|fiona|serena|kate|amy|emma|joanna|salli|nicole|maisie|olivia|ava|allison|susan|catherine|natasha|clara|linda|michelle|sara|elsie|lily|abbi|bella|hollie|maisy|alice)/.test(n))return 'f';
+ if(/(male|\bm\b|ryan|guy|george|thomas|brandon|daniel|alex|fred|oliver|arthur|james|liam|william|matthew|justin|joey|russell|ethan|christopher|eric|steffan|noah|elliot|connor|david|mark|richard|adam|gordon)/.test(n))return 'm';
+ return null}
+function ttsPool(gender){
+ if(!TTS.ready)ttsWarm();
+ const en=TTS.voices.filter(v=>/^en/i.test(v.lang||''));
+ const base=en.length?en:TTS.voices;
+ if(!gender)return base;
+ const g=base.filter(v=>ttsGender(v)===gender);
+ return g.length?g:base}
+/* every reporter keeps the same voice, pace and pitch for a whole career */
+function ttsCast(who,gender){
+ const key=String(who||'reporter')+'|'+(gender||'');
+ if(TTS.cast[key])return TTS.cast[key];
+ const pool=ttsPool(gender);
+ const chosen=TTS.pref&&TTS.byName[TTS.pref];
+ let v=null;
+ if(chosen&&(!gender||ttsGender(chosen)===gender||!ttsGender(chosen)))v=chosen;
+ if(!v&&pool.length){
+  const top=ttsScore(pool[0]);
+  const good=pool.filter(x=>ttsScore(x)>=top-15);
+  v=good[(hashStr(key)>>>0)%good.length]}
+ const r=mulberry(hashStr('cast'+key));
+ const c={v,pitch:clamp(1+(r()*.22-.11),.7,1.35),rate:clamp(.97+(r()*.14-.07),.8,1.2)};
+ TTS.cast[key]=c;return c}
+
+/* ---------- 4. say the words, not the characters ---------- */
+const NUMW=['nil','one','two','three','four','five','six','seven','eight','nine','ten',
+ 'eleven','twelve','thirteen','fourteen','fifteen','sixteen','seventeen','eighteen','nineteen','twenty'];
+function sayNum(n){n=+n;return (n>=0&&n<=20&&Number.isInteger(n))?NUMW[n]:String(n)}
+const SAY_MAP=[
+ [/\bMan Utd\b/g,'Manchester United'],[/\bMan City\b/g,'Manchester City'],
+ [/\bSpurs\b/g,'Tottenham'],[/\bWolves\b/g,'Wolverhampton'],[/\bNott’?m Forest\b/gi,'Nottingham Forest'],
+ [/\bWest Brom\b/g,'West Bromwich Albion'],[/\bQPR\b/g,'Q P R'],
+ [/\bPSG\b/g,'P S G'],[/\bPSV\b/g,'P S V'],[/\bAZ\b/g,'A Z'],[/\bAEK\b/g,'A E K'],
+ [/\bLASK\b/g,'L A S K'],[/\bAVS\b/g,'A V S'],[/\bGK\b/g,'goalkeeper'],
+ [/\bVAR\b/g,'V A R'],[/\bFA Cup\b/g,'F A Cup'],[/\bEFL\b/g,'E F L'],
+ [/\bUEFA\b/g,'you-ay-fa'],[/\bPSR\b/g,'P S R'],
+ [/\bvs\.?\b/gi,'versus'],[/&/g,' and '],[/\bwk\b/gi,'week'],
+ [/\bMD(\d+)\b/g,(m,a)=>'matchday '+sayNum(a)]];
+function saySpeakable(t){
+ let s=String(t||'').replace(/<[^>]*>/g,' ').replace(/[“”"]/g,'').replace(/\s+/g,' ').trim();
+ SAY_MAP.forEach(([re,to])=>{s=s.replace(re,to)});
+ // money first, so the digits inside it are not eaten by the score rule
+ s=s.replace(/£\s?([\d.]+)\s?bn?\b/gi,(m,a)=>a+' billion pounds')
+    .replace(/£\s?([\d.]+)\s?m\b/gi,(m,a)=>a+' million pounds')
+    .replace(/£\s?([\d.]+)\s?k\b/gi,(m,a)=>a+' thousand pounds')
+    .replace(/£\s?([\d,]+)/g,(m,a)=>a.replace(/,/g,'')+' pounds');
+ // scorelines: 2-0 is "two nil", 2-2 is "two all"
+ s=s.replace(/\b(\d{1,2})\s?[-–]\s?(\d{1,2})\b/g,(m,a,b)=>
+  (+a===+b?sayNum(a)+' all':sayNum(a)+' '+(+b===0?'nil':sayNum(b))));
+ s=s.replace(/(\d+)(st|nd|rd|th)\b/g,(m,a,b)=>a+b);
+ s=s.replace(/\s+([,.;:!?])/g,'$1').replace(/\s{2,}/g,' ').trim();
+ return s}
+
+/* ---------- 3. speak it in clauses, the way people talk ---------- */
+function sayClauses(t){
+ const parts=t.split(/(?<=[,;:.!?—])\s+/).filter(x=>x.trim().length);
+ const out=[];
+ parts.forEach(p=>{
+  // very long clauses get one more breath in the middle
+  if(p.length>90){const i=p.lastIndexOf(' ',Math.floor(p.length/2));
+   if(i>20){out.push(p.slice(0,i));out.push(p.slice(i+1));return}}
+  out.push(p)});
+ return out.length?out:[t]}
+ttsStop=function(){if(ttsAvailable())try{TTS.seq=null;speechSynthesis.cancel()}catch(e){}};
+ttsSay=function(text,who,opt){
+ if(!ttsAvailable()||!sfxOn()||!ttsCfg().tts)return false;
+ const raw=saySpeakable(text);
+ if(!raw)return false;
+ const o=opt||{};
+ const go=()=>{
+  try{
+   speechSynthesis.cancel();
+   const cast=ttsCast(who,o.gender||nameGender(who));
+   const clauses=sayClauses(raw);
+   const token={};TTS.seq=token;
+   let i=0;
+   const next=()=>{
+    if(TTS.seq!==token||i>=clauses.length)return;
+    const c=clauses[i];const last=i===clauses.length-1;
+    const asks=/\?$/.test(c);
+    const u=new SpeechSynthesisUtterance(c);
+    try{if(cast.v){u.voice=cast.v;if(cast.v.lang)u.lang=cast.v.lang}}catch(e){}
+    // the middle of a sentence runs on; the end of one settles
+    u.rate=clamp((o.rate||1)*cast.rate*(last?.95:1.04),.65,1.5);
+    u.pitch=clamp((o.pitch||1)*cast.pitch*(asks?1.09:last?.96:1),.5,1.7);
+    u.volume=clamp((sfxCfg().vol||.7)*(o.vol||1),0,1);
+    u.onend=()=>{i++;const gap=last?0:(/[.!?]$/.test(c)?170:70);
+     if(gap)setTimeout(next,gap);else next()};
+    u.onerror=()=>{i++;next()};
+    A2._lastVoice=cast.v?cast.v.name+' ('+cast.v.lang+')':'default';
+    speechSynthesis.speak(u)};
+   next();
+   return true}
+  catch(e){return false}};
+ if(!TTS.ready){TTS.pending=go;ttsWarm();return true}
+ return go()};
+
+/* ---------- the picker: devices differ, so let people choose ---------- */
+ACTIONS.sfxVoicePick=()=>{
+ ttsWarm();
+ const list=ttsPool(null).slice(0,14);
+ const cur=TTS.pref;
+ if(!list.length){openModal('<h3>🗣️ Voice</h3><div class="card"><div class="small muted">This device has not reported any speech voices yet. Try again in a moment — on some phones the list arrives a second or two after the page opens.</div></div><button class="btn btn-ghost btn-block" style="margin-top:8px" data-action="closeModal">Back</button>');return}
+ openModal('<h3>🗣️ Reading voice</h3>'+
+  '<div class="small muted" style="margin:4px 0 10px">Best first. The ones marked ✨ are your device’s neural voices — they are the ones that sound like a person. Tap any to hear it.</div>'+
+  '<div class="card tight" style="max-height:340px;overflow:auto">'+
+  '<div class="mail'+(cur?'':' on')+'" data-action="sfxVoiceSet" data-v=""><div class="ic">⭐</div><div style="flex:1"><div class="tt">Best available</div><div class="bd">let the game choose, and match the reporter’s voice to who is speaking</div></div></div>'+
+  list.map(v=>'<div class="mail" data-action="sfxVoiceSet" data-v="'+esc(v.name)+'">'+
+   '<div class="ic">'+(TTS_GOOD.test(v.name)||v.localService===false?'✨':'🔈')+'</div>'+
+   '<div style="flex:1"><div class="tt">'+esc(v.name)+(cur===v.name?' ✓':'')+'</div>'+
+   '<div class="bd">'+esc(v.lang||'')+(v.localService===false?' · streamed':' · on device')+'</div></div></div>').join('')+
+  '</div><button class="btn btn-ghost btn-block" style="margin-top:8px" data-action="closeModal">Done</button>')};
+ACTIONS.sfxVoiceSet=el=>{
+ const n=el.dataset.v||'';
+ TTS.pref=n||null;
+ try{if(n)localStorage.setItem('rdmVoice',n);else localStorage.removeItem('rdmVoice')}catch(e){}
+ TTS.cast={};
+ ttsSay(n?'This is the voice you will hear in the press room. Big game tomorrow, boss.'
+         :'The game will pick the best voice this device has.','preview',{});
+ toast(n?'🗣️ '+n:'🗣️ Best available')};
+
+/* the sound sheet gains the picker */
+const _sfxSheetVoice=ACTIONS.frontSound;
+ACTIONS.frontSound=()=>{
+ _sfxSheetVoice();
+ setTimeout(()=>{
+  const host=$('#sheetBody');if(!host)return;
+  const btn=host.querySelector('[data-action="closeModal"]');
+  const add=document.createElement('button');
+  add.className='btn btn-ghost btn-block';add.style.marginTop='8px';
+  add.setAttribute('data-action','sfxVoicePick');
+  add.textContent='🗣️ Choose the reading voice…';
+  if(btn&&btn.parentNode)btn.parentNode.insertBefore(add,btn);else host.appendChild(add)},0)};
+ttsWarm();
+
+/*#w12_tts.js#*//*#w13_front.js#*/
+
+/* =====================================================================
+   THE FRONT DOOR, TOLD THE TRUTH
+   The start screen still advertised eighty-four clubs in six divisions.
+   ===================================================================== */
+function worldTagline(){
+ const nC=(typeof LEAGUES==='object')?Object.keys(LEAGUES).length:28;
+ return '2026/27 · 480+ clubs · '+nC+' divisions in 20 countries · Champions League · World Cup & Euros'}
+const _frontNewTag=ACTIONS.frontNew;
+ACTIONS.frontNew=()=>{
+ _frontNewTag();
+ const t=document.querySelector('#startScreen .tag');
+ if(t)t.textContent='480+ clubs · the full English pyramid · Europe’s leagues · promotion & relegation'};
+const _showStartTag=showStart;
+showStart=function(){
+ const r=_showStartTag.apply(this,arguments);
+ const t=document.querySelector('#startScreen .tag');
+ if(t)t.textContent=worldTagline();
+ return r};
+/* the picker still lists the clubs you can take a job at; it now says which
+   of the real leagues each one actually plays in */
+const _paintStartWorld=paintStart;
+paintStart=function(){
+ const r=_paintStartWorld.apply(this,arguments);
+ try{
+  const host=$('#startBody');if(!host)return r;
+  const cards=host.querySelectorAll('.xs.muted');
+  if(cards.length&&/Continental League|undefined/.test(cards[0].textContent||'')){
+   const sel=(UI._cat||[]).find(c=>c.i===UI.startSel);
+   if(sel)cards[0].textContent=cards[0].textContent
+    .replace(/Continental League|undefined/,'Europe')}}
+ catch(e){}
+ return r};
+/* the placeholder league name is gone from the world, but the club picker
+   is built before the world exists, so it still needs something to print */
+if(typeof DIV_NAMES==='object'&&!DIV_NAMES.EU)DIV_NAMES.EU='Europe';
+
+const _frontAboutWorld=ACTIONS.frontAbout;
+ACTIONS.frontAbout=()=>{
+ openModal('<h3>📖 How it works</h3>'+
+  '<div class="card tight" style="margin:8px 0 10px"><div class="small" style="line-height:1.75;padding:2px">'+
+  '<b>The week.</b> Train, set your shape, handle the press, work the market, then play.<br><br>'+
+  '<b>The match.</b> Watch it from the dugout behind a broadcast camera, or from above in 2D. '+
+  'Shout from the touchline without opening a menu, make five changes, and change your shape mid-game.<br><br>'+
+  '<b>The squad.</b> Every player has a nationality, a personality, a familiarity for every position, '+
+  'and a squad number. Retrain him somewhere new and, given a season, he becomes a natural there.<br><br>'+
+  '<b>The pyramid.</b> The Premier League, the Championship, League One, League Two and the National League, '+
+  'all at their real sizes, with promotion and relegation between every one of them.<br><br>'+
+  '<b>Europe.</b> Twenty national leagues across nineteen countries, each with its own table and its own '+
+  'route into Europe. The Champions League is the real thing: thirty-six clubs in one table, eight games each, '+
+  'top eight straight to the last sixteen and the rest into a play-off. The Europa League and the Conference '+
+  'League run alongside it.<br><br>'+
+  '<b>The cups.</b> The FA Cup starts in November with League One, League Two and the non-league clubs; '+
+  'the Premier League and the Championship come in at the third round, exactly as they do in life. '+
+  'The League Cup starts with the EFL and adds the European clubs in the third round.<br><br>'+
+  '<b>Your country.</b> Six international breaks a season, and a World Cup or a European Championship every '+
+  'other summer on the real cycle. Your players go, and they come back tired.<br><br>'+
+  '<b>Saving.</b> The game saves itself every day and after every match. Export a file to move a career '+
+  'to another device.'+
+  '</div></div><button class="btn btn-primary btn-block" data-action="closeModal">Got it</button>')};
+
+/*#w13_front.js#*//*#w14_managers.js#*/
+
+/* =====================================================================
+   THE MEN IN THE OTHER DUGOUT
+   ---------------------------------------------------------------------
+   The Premier League and the biggest European clubs already had their
+   real managers. Everything else in Europe had a name pulled out of a
+   hat, which made every away trip anonymous. This fills in the rest of
+   the clubs you can actually be drawn against, and gives the top clubs
+   their assistant as well, because the assistant is the one who takes the
+   press conference when the manager is serving a touchline ban.
+
+   One honest caveat, written here rather than buried: MANAGERS CHANGE.
+   Half a dozen of these will be out of date within a season of you
+   reading it, and the game has no way to check. Club names, grounds and
+   competition formats do not move; dugouts do. Treat this list as the
+   state of play when the game was built, not as gospel — and once your
+   save is running, sackings and appointments inside the game take over
+   anyway.
+   ===================================================================== */
+const MGR_BY_NAME={
+ /* Spain */
+ 'Athletic Club':['Ernesto Valverde','Jon Aspiazu'],
+ 'Real Sociedad':['Sergio Francisco','Aitor Zulaika'],
+ 'Villarreal':['Marcelino','Guillermo Fernández'],
+ 'Real Betis':['Manuel Pellegrini','Rubén Cousillas'],
+ 'Sevilla':['Matías Almeyda','Diego Dabove'],
+ 'Valencia':['Carlos Corberán','Rubén Uría'],
+ 'Celta Vigo':['Claudio Giráldez','Pablo Prieto'],
+ 'Girona':['Míchel','Jordi Guerrero'],
+ 'Rayo Vallecano':['Íñigo Pérez','Alberto Fernández'],
+ 'Osasuna':['Alessio Lisci','Iñigo Idiakez'],
+ 'Getafe':['José Bordalás','Juan Antonio Mena'],
+ 'Mallorca':['Jagoba Arrasate','Alberto Aguilar'],
+ 'Deportivo Alavés':['Eduardo Coudet','Ariel Broggi'],
+ 'Espanyol':['Manolo González','Rubén Coto'],
+ 'Elche':['Eder Sarabia','Miguel Ángel Ferrer'],
+ 'Levante':['Julián Calero','Alberto Mula'],
+ 'Real Oviedo':['Luis Carrión','Toni Amor'],
+ /* Italy */
+ 'Lazio':['Maurizio Sarri','Marco Ianni'],
+ 'Fiorentina':['Paolo Vanoli','Simone Bonomi'],
+ 'Bologna':['Vincenzo Italiano','Daniel Niccolini'],
+ 'Torino':['Marco Baroni','Filippo Lorenzon'],
+ 'Udinese':['Kosta Runjaić','Marcin Kuźba'],
+ 'Como':['Cesc Fàbregas','Marcos Álvarez'],
+ 'Genoa':['Daniele De Rossi','Marco Amelia'],
+ 'Cagliari':['Fabio Pisacane','Mauro Bonomi'],
+ 'Parma':['Carlos Cuesta','Alberto Bertolini'],
+ 'Lecce':['Eusebio Di Francesco','Paolo Bianco'],
+ 'Hellas Verona':['Paolo Zanetti','Michele Serena'],
+ 'Sassuolo':['Fabio Grosso','Vincenzo Vivarini'],
+ 'Pisa':['Alberto Gilardino','Luca Bucci'],
+ 'Cremonese':['Davide Nicola','Nicola Belmonte'],
+ /* Germany */
+ 'Bayer Leverkusen':['Kasper Hjulmand','Ricardo Moniz'],
+ 'Eintracht Frankfurt':['Dino Toppmöller','Ronald Brunmayr'],
+ 'VfB Stuttgart':['Sebastian Hoeneß','Michael Wimmer'],
+ 'Borussia Mönchengladbach':['Eugen Polanski','Sandro Wagner'],
+ 'VfL Wolfsburg':['Paul Simonis','Rick Kruys'],
+ 'SC Freiburg':['Julian Schuster','Florian Bruns'],
+ 'Werder Bremen':['Horst Steffen','Marcus Steegmann'],
+ 'TSG Hoffenheim':['Christian Ilzer','Uwe Hölzl'],
+ '1. FSV Mainz 05':['Bo Henriksen','Steffen Krebs'],
+ 'FC Augsburg':['Sandro Wagner','Ronny Zimmermann'],
+ '1. FC Union Berlin':['Steffen Baumgart','René Klingbeil'],
+ '1. FC Köln':['Lukas Kwasniok','Marco Antwerpen'],
+ 'Hamburger SV':['Merlin Polzin','Loïc Favé'],
+ 'FC St. Pauli':['Alexander Blessin','Peter Nemeth'],
+ '1. FC Heidenheim':['Frank Schmidt','Bernhard Raab'],
+ /* France */
+ 'Lille OSC':['Bruno Génésio','Fabrice Grange'],
+ 'Olympique Lyonnais':['Paulo Fonseca','Jorge Maciel'],
+ 'OGC Nice':['Franck Haise','Éric Assadourian'],
+ 'RC Lens':['Pierre Sage','Benoît Cheyrou'],
+ 'Stade Rennais':['Habib Beye','Bruno Irles'],
+ 'RC Strasbourg':['Liam Rosenior','Nicolas Rabuel'],
+ 'FC Nantes':['Luís Castro','Nuno Coelho'],
+ 'Toulouse FC':['Carles Martínez Novell','Marc García'],
+ 'Stade Brestois':['Éric Roy','Grégory Lorenzi'],
+ 'AJ Auxerre':['Christophe Pélissier','Sébastien Grimaldi'],
+ 'Angers SCO':['Alexandre Dujeux','Yohan Betsch'],
+ 'Le Havre AC':['Didier Digard','Cédric Coulibaly'],
+ 'FC Metz':['Stéphane Le Mignan','Jérôme Munier'],
+ 'FC Lorient':['Olivier Pantaloni','Julien Beneteau'],
+ 'Paris FC':['Stéphane Gilli','Antonin Da Fonseca'],
+ 'Marseille':['Roberto De Zerbi','Nicola Bonacina'],
+ 'AS Monaco':['Sébastien Pocognoli','Frédéric Barilaro'],
+ /* Portugal, the Netherlands, Scotland, Belgium, Turkey and the rest */
+ 'Benfica':['José Mourinho','Rui Silva'],
+ 'SC Braga':['Carlos Vicens','Nuno Campos'],
+ 'Vitória de Guimarães':['Luís Freire','Bruno Dias'],
+ 'Ajax':['Fred Grim','Marcel Keizer'],
+ 'PSV Eindhoven':['Peter Bosz','Rob Maas'],
+ 'Feyenoord':['Robin van Persie','John Heitinga'],
+ 'AZ Alkmaar':['Maarten Martens','Bas Sibum'],
+ 'FC Twente':['John van den Brom','Sandor van der Heide'],
+ 'FC Utrecht':['Ron Jans','Michael Silberbauer'],
+ 'Celtic':['Martin O’Neill','Shaun Maloney'],
+ 'Rangers':['Danny Röhl','Steven Smith'],
+ 'Heart of Midlothian':['Derek McInnes','Paul Sheerin'],
+ 'Hibernian':['David Gray','John Rankin'],
+ 'Aberdeen':['Jimmy Thelin','Peter Leven'],
+ 'Club Brugge':['Nicky Hayen','Rik De Mil'],
+ 'Union Saint-Gilloise':['David Hubert','Cédric Fauré'],
+ 'RSC Anderlecht':['Besnik Hasi','Frédéric Frans'],
+ 'KRC Genk':['Thorsten Fink','Bernd Hollerbach'],
+ 'Galatasaray':['Okan Buruk','Levent Şahin'],
+ 'Fenerbahçe':['Domenico Tedesco','Andrea Maldera'],
+ 'Beşiktaş':['Sergen Yalçın','Serdar Topraktepe'],
+ 'Trabzonspor':['Fatih Tekke','Ersun Yanal'],
+ 'Red Bull Salzburg':['Thomas Letsch','Onur Cinel'],
+ 'Sturm Graz':['Jürgen Säumel','Michael Madl'],
+ 'BSC Young Boys':['Giorgio Contini','Marco Schällibaum'],
+ 'FC Basel':['Ludovic Magnin','Marco Walker'],
+ 'Olympiacos':['José Luis Mendilibar','Juan Bautista Ochoa'],
+ 'PAOK':['Răzvan Lucescu','Vladan Ivić'],
+ 'AEK Athens':['Marko Nikolić','Nenad Milovanović'],
+ 'Panathinaikos':['Christos Kontis','Giannis Goumas'],
+ 'Slavia Praha':['Jindřich Trpišovský','Zdeněk Houštecký'],
+ 'Sparta Praha':['Brian Priske','Jakub Podaný'],
+ 'Viktoria Plzeň':['Martin Hyský','Marek Bakoš'],
+ 'FC København':['Jacob Neestrup','Rasmus Bertelsen'],
+ 'FC Midtjylland':['Mike Tullberg','Rasmus Bech'],
+ 'Bodø/Glimt':['Kjetil Knutsen','Morten Kalvenes'],
+ 'Molde FK':['Erling Moe','Trond Strande'],
+ 'Legia Warszawa':['Edward Iordănescu','Marek Saganowski'],
+ 'Lech Poznań':['Niels Frederiksen','Mats Rits'],
+ 'Crvena zvezda':['Vladan Milojević','Nenad Sakić'],
+ 'Partizan':['Srđan Blagojević','Ivan Tomić'],
+ 'Shakhtar Donetsk':['Arda Turan','Serhiy Nagornyak'],
+ 'Dynamo Kyiv':['Oleksandr Shovkovskyi','Ihor Kostyuk'],
+ 'Dinamo Zagreb':['Mario Kovačević','Marijan Budimir'],
+ 'Hajduk Split':['Gonzalo García','Ivan Leko']};
+/* the clubs that already had a manager get an assistant to go with him */
+const ASSIST_BY_KEY={
+ MUN:'Steve Holland',MCI:'Willy Caballero',LIV:'Vicente Guaita',ARS:'Albert Stuivenberg',
+ CHE:'Sebas Parrilla',TOT:'Nicola Bonacina',NEW:'Graeme Jones',AVL:'Pako Ayestarán',
+ BHA:'Andrey Wood',EVE:'Jimmy Lumsden',NFO:'Michael Angerschmid',FUL:'Stuart Gray',
+ CRY:'Paddy McCarthy',BRE:'Justin Cochrane',BOU:'Alexander Zickler',LEE:'Edmund Riemer',
+ SUN:'Michael Proctor',WHU:'Rui Silva',WOL:'Luís Nascimento',BUR:'Craig Bellamy',
+ RMA:'Davide Ancelotti',BAR:'Marcus Sorg',BAY:'Aaron Danks',PSG:'Pablo Sanz',
+ NAP:'Cristian Stellini',MIL:'Marco Landucci',ATM:'Nelson Vivas',ROM:'Tullio Gritti',
+ ATA:'Marco Amelia',JUV:'Marco Domenichini',INT:'Massimiliano Farris',DOR:'Sebastian Kehl',
+ POR:'Tiago Fernandes',SPO:'Emanuel Ferro',RBL:'Frank Geideck'};
+/* the game already knows the manager by club key; teach it the rest by name */
+(function seedManagers(){
+ if(typeof MANAGERS!=='object')return;
+ MGR_BY_NAME._seeded=true})();
+const _managerOfWorld=managerOf;
+managerOf=function(c){
+ if(!c)return '—';
+ if(c.i===G.my)return 'You';
+ if(G.mgrOverride&&G.mgrOverride[c.key])return G.mgrOverride[c.key];
+ if(MANAGERS[c.key])return MANAGERS[c.key];
+ const m=MGR_BY_NAME[c.name];
+ if(m)return m[0];
+ return _managerOfWorld(c)};
+function assistantOf(c){
+ if(!c)return '—';
+ if(G.assistOverride&&G.assistOverride[c.key])return G.assistOverride[c.key];
+ if(c.i===G.my)return (G.staff&&G.staff.assistant)?G.staff.assistant.name:'—';
+ if(ASSIST_BY_KEY[c.key])return ASSIST_BY_KEY[c.key];
+ const m=MGR_BY_NAME[c.name];
+ if(m&&m[1])return m[1];
+ const rng=mulberry(hashStr('asst'+c.key));
+ return wName(c.cc||'ENG',rng)}
+/* a club dossier now names both men, and only invents the rest of the staff */
+const _clubStaffWorld=clubStaffHtml;
+clubStaffHtml=function(c){
+ if(c.i===G.my)return _clubStaffWorld(c);
+ const rng=mulberry(hashStr('staffW'+c.key));
+ const row=(role,name,stars)=>
+  '<div class="spread" style="padding:5px 2px;border-bottom:1px solid var(--chalk)">'+
+  '<span class="small" style="font-weight:700">'+role+'</span>'+
+  '<span class="small">'+esc(name)+' '+starHtml(stars)+'</span></div>';
+ const known=!!(MANAGERS[c.key]||MGR_BY_NAME[c.name]);
+ const top=clamp(Math.round(2+rng()*1.5+c.rep/2600),1,5);
+ let h=row('Manager',managerOf(c),top)+row('Assistant Manager',assistantOf(c),clamp(top-1,1,5));
+ ['First-team Coach','Goalkeeping Coach','Head Physio','Sports Scientist','Data Analyst','Head of Youth']
+  .forEach(r=>h+=row(r,wName(c.cc||'ENG',rng),clamp(Math.round(1+rng()*2+c.rep/3300),1,5)));
+ if(!known)h+='<div class="xs faint" style="padding:6px 2px">Backroom staff at this level are not public record — these are the club’s own appointments in your save.</div>';
+ return h};
+
+/*#w14_managers.js#*//*#w15_polish.js#*/
+
+/* =====================================================================
+   SMALL THINGS THAT WERE WRONG
+   ===================================================================== */
+
+/* 1. The unread badge counted every message ever sent, including the ones
+      trimmed off the end of the inbox — so it could read "216 new" over an
+      inbox holding thirty. It now counts what is actually in there.
+      Several places bump the counter directly rather than through mail(),
+      so the clamp goes where every one of them ends up: the redraw. */
+const _renderUnread=render;
+render=function(){
+ try{const n=(G.inbox||[]).filter(m=>!m.read).length;
+  if(G.unread>n)G.unread=n}catch(e){}
+ return _renderUnread.apply(this,arguments)};
+
+/* 2. The academy screen now shows who you have already brought through and
+      what became of them, which is the whole point of running one. */
+const _vSquadGrad=vSquad;
+vSquad=function(){
+ const h=_vSquadGrad.apply(this,arguments);
+ if((UI.squadTab||'first')!=='academy')return h;
+ try{return h+vGraduates()}catch(e){return h}};
+
+/* 3. A player's nationality is now a real thing, so the profile shows it. */
+const _profNat=openProfile;
+openProfile=function(pid){
+ _profNat(pid);
+ try{
+  const p=playerById(pid);if(!p)return;
+  const sb=$('#sheetBody');if(!sb)return;
+  const h3=sb.querySelector('h3')||sb.querySelector('.tt');
+  if(!h3||h3.dataset.nat)return;
+  h3.dataset.nat='1';
+  const n=natOf(p);
+  const tag=document.createElement('div');
+  tag.className='xs faint';tag.style.margin='2px 0 6px';
+  tag.innerHTML=ccFlag(n)+' '+esc(natName(n))+
+   ((p.caps||0)?' · <b>'+p.caps+'</b> caps'+((p.intCareerGoals||0)?', '+p.intCareerGoals+' goals':''):'')+
+   (p.academy?' · academy graduate':'');
+  h3.parentNode.insertBefore(tag,h3.nextSibling)}
+ catch(e){}};
+
+/* 4. The board's season preview said "Premier League" whatever division you
+      were in, because the hero card was written before there were others. */
+const _vHomeDiv=vHome;
+vHome=function(){
+ let h=_vHomeDiv.apply(this,arguments);
+ try{
+  const d=DIV_NAMES[myDiv()];
+  if(d&&d!=='Premier League')h=h.replace(/<div class="comp">Premier League ·/g,'<div class="comp">'+esc(d)+' ·')}
+ catch(e){}
+ return h};
+
+/*#w15_polish.js#*/
 showStart();
 </script>
 </body>
