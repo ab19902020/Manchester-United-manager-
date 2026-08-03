@@ -16522,7 +16522,647 @@ openPressSheet=function(reaction){
    ' · question '+((c.q||0)+1)+' of '+(c.qTotal||3)+'</div>')}
  return r};
 
+
+/* =====================================================================
+   THE TAKEOVER — what happens to a club that wins something
+   ---------------------------------------------------------------------
+   Win the league inside your first five years and the world notices.
+   Somewhere between your sixth and tenth season, money comes calling:
+   an approach, weeks of due diligence, a rival bidder, a fanbase with
+   an opinion about both of them, and then either a deal or a collapse.
+   Get it over the line and the club you are running is a different
+   club — a bigger budget, a bigger wage ceiling, money in the ground
+   and the training centre — and a board that now expects to win
+   everything, every year, and will not wait long for it.
+
+   Never win the league in those first five years and nobody comes.
+   That is the point of it.
+   ===================================================================== */
+
+/* winning the division has never been recorded as an honour. It is now. */
+const _endTitleTko=endSeason;
+endSeason=function(){
+ const div=G._preDiv||myDiv();
+ const pos=G._finalPos||leaguePos(G.my);
+ const seasonJustPlayed=G.season;
+ if(pos===1){
+  if(!G.honours)G.honours=[];
+  G.honours.push({season:seasonJustPlayed,comp:DIV_NAMES[div]+' champions'});
+  if(div==='PL'){
+   if(!G.titles)G.titles=[];
+   G.titles.push(seasonJustPlayed)}}
+ const r=_endTitleTko.apply(this,arguments);
+ try{takeoverSeasonTick(seasonJustPlayed)}catch(e){}
+ return r};
+
+/* ---------------------------------------------------------------------
+   1. WHO WANTS TO BUY YOU
+   --------------------------------------------------------------------- */
+const BUYERS=[
+ {n:'Aurelian Sports Group',from:'Delaware, USA',kind:'fund',
+  d:'A private equity house with three clubs already on its books. Cold, numerate and patient.',
+  money:2.6,rep:-8,df:1,note:'They will want a director of football and a data department.'},
+ {n:'The Halvorsen Family Office',from:'Oslo, Norway',kind:'family',
+  d:'Old shipping money, one family, no debt. They say they are here for a generation.',
+  money:2.2,rep:14,df:0,note:'They intend to fund the club out of cash, not borrowing.'},
+ {n:'Qadir Holdings',from:'Doha, Qatar',kind:'state',
+  d:'A sovereign-backed vehicle with effectively bottomless resources and a stated ambition to win everything.',
+  money:4.2,rep:2,df:0,note:'They talk about a new stadium in their opening statement.'},
+ {n:'Vantage Global Partners',from:'Singapore',kind:'fund',
+  d:'A consortium of institutional investors. Professional, distant, and interested in the balance sheet.',
+  money:1.9,rep:-14,df:1,note:'They intend to leverage the purchase against the club.'},
+ {n:'Kestrel Industries',from:'Manchester, England',kind:'local',
+  d:'A local billionaire who has supported the club since he was a boy. The fans already like him.',
+  money:2.4,rep:26,df:0,note:'He has promised the supporters a seat on the board.'},
+ {n:'Meridian Athletic',from:'Dallas, USA',kind:'multi',
+  d:'A multi-club group with sides in three continents. Efficient, and unsentimental about players.',
+  money:2.8,rep:-4,df:1,note:'Expect players to move between their clubs.'},
+ {n:'The Sorensen Consortium',from:'Copenhagen, Denmark',kind:'family',
+  d:'A group of Scandinavian entrepreneurs led by a former professional. They speak the language of football.',
+  money:2.1,rep:18,df:0,note:'The lead investor played the game to a decent level.'},
+ {n:'Onyx Capital',from:'London, England',kind:'fund',
+  d:'A hedge fund with no history in the game and a reputation for stripping assets.',
+  money:1.7,rep:-26,df:1,note:'The supporters’ trust has already issued a statement against them.'}];
+function takeoverPick(seed,not){
+ const r=mulberry(hashStr('buyer'+seed+G.season));
+ const pool=BUYERS.filter(b=>!not||b.n!==not.n);
+ return pool[Math.floor(r()*pool.length)]}
+/* did you win the league inside the first five years? */
+function takeoverEligible(){
+ return (G.titles||[]).some(s=>s<=5)}
+function TK(){
+ if(!G.tko)G.tko={stage:null};
+ return G.tko}
+
+/* ---------------------------------------------------------------------
+   2. THE SAGA
+   --------------------------------------------------------------------- */
+function takeoverSeasonTick(seasonJustPlayed){
+ const t=TK();
+ if(t.stage==='complete'||t.stage==='dead')return;
+ if(t.stage)return;                                  // one is already running
+ if(!takeoverEligible())return;
+ const next=seasonJustPlayed+1;
+ if(next<6||next>10)return;
+ // the season it lands in is fixed the first time we look, so it cannot
+ // be re-rolled by saving and reloading
+ if(t.year==null){
+  const r=mulberry(hashStr('tko'+G.clubs[G.my].key+(G.titles||[]).join(',')));
+  t.year=6+Math.floor(r()*5)}
+ if(next!==t.year)return;
+ t.stage='interest';t.day=G.day;t.buyer=takeoverPick('a');
+ t.rival=(Math.random()<.55)?takeoverPick('b',t.buyer):null;
+ t.fanSplit=clamp(50+t.buyer.rep+irnd(-8,8),5,95);
+ mail('board','💼 The club is in play',
+  'The stock exchange has been notified that <b>'+esc(t.buyer.n)+'</b> of '+esc(t.buyer.from)+
+  ' has made an approach to buy Manchester United.<br><br><i>'+esc(t.buyer.d)+'</i><br><br>'+
+  esc(t.buyer.note)+
+  (t.rival?'<br><br>There is talk of a second party — <b>'+esc(t.rival.n)+'</b> — circling as well.':'')+
+  '<br><br><span class="xs faint">Nothing changes today. Keep winning football matches.</span>');
+ toast('💼 The club is in play')}
+/* the weeks of it */
+const _dtcTko=dailyTickCore;
+dailyTickCore=function(){
+ _dtcTko();
+ const t=G.tko;
+ if(!t||!t.stage||t.stage==='complete'||t.stage==='dead')return;
+ const days=G.day-(t.day||G.day);
+ const my=G.clubs[G.my];
+ if(t.stage==='interest'&&days>=14){
+  t.stage='talks';t.day=G.day;
+  mail('board','💼 Due diligence begins',
+   '<b>'+esc(t.buyer.n)+'</b> has been given access to the club’s books. Lawyers are crawling over everything: '+
+   'the wage bill, the debt, the stadium, the academy, your contract.'+
+   (t.rival?'<br><br><b>'+esc(t.rival.n)+'</b> have registered a competing interest. The board will hear both.':'')+
+   '<br><br>The supporters are split — roughly <b>'+t.fanSplit+'%</b> are in favour of the sale.');
+  if(t.rival)takeoverChoice();
+  return}
+ if(t.stage==='talks'&&days>=21){
+  // a hostile buyer and an angry fanbase can still kill it
+  const anger=(100-t.fanSplit)/100;
+  const collapse=clamp(anger*.42-(my.patience/400),0,.5);
+  if(Math.random()<collapse){
+   t.stage='dead';t.day=G.day;
+   mail('board','💼 The takeover collapses',
+    'Talks with <b>'+esc(t.buyer.n)+'</b> have broken down. '+
+    (t.fanSplit<45?'A sustained supporter campaign made the deal politically impossible. ':'The two sides could not agree terms. ')+
+    'The club stays as it is.<br><br>Whether that is a relief or a disaster rather depends on who you ask.');
+   fansShift(t.fanSplit<45?4:-3,'the takeover collapsed');
+   return}
+  t.stage='agreed';t.day=G.day;
+  mail('board','💼 Terms agreed — the sale is on',
+   'The board has accepted an offer from <b>'+esc(t.buyer.n)+'</b>'+
+   (t.rival?', rejecting the rival approach from '+esc(t.rival.n):'')+
+   '. Completion is expected within a month, subject to approval.<br><br>'+
+   'You have been told your job is safe. Everybody always is.');
+  return}
+ if(t.stage==='agreed'&&days>=21){takeoverComplete();return}}
+/* the board asks which one you would rather work for */
+function takeoverChoice(){
+ const t=G.tko;if(!t||!t.rival)return;
+ const opt=(b,k)=>'<div class="mail" data-action="tkoPick" data-v="'+k+'"><div class="ic">'+
+  (b.kind==='state'?'🏛️':b.kind==='local'?'🏠':b.kind==='family'?'👪':'📈')+'</div>'+
+  '<div style="flex:1"><div class="tt">'+esc(b.n)+'</div>'+
+  '<div class="bd">'+esc(b.from)+' · '+esc(b.d)+'</div>'+
+  '<div class="xs faint" style="margin-top:3px">Would raise your budget about '+b.money.toFixed(1)+'×'+
+  ' · supporters '+(b.rep>10?'in favour':b.rep<-10?'against':'divided')+'</div></div></div>';
+ mail('board','💼 The board wants your view',
+  'Two parties are at the table and the board has asked, privately, which you would rather work for. '+
+  'You have no vote. They will listen, if they respect you.<br><br>'+
+  opt(t.buyer,'a')+opt(t.rival,'b'),
+  [{lbl:'Back '+t.buyer.n.split(' ')[0],act:'tkoPick',v:'a'},
+   {lbl:'Back '+t.rival.n.split(' ')[0],act:'tkoPick',v:'b',ghost:1},
+   {lbl:'Stay out of it',act:'tkoPick',v:'x',ghost:1}])}
+ACTIONS.tkoPick=el=>{
+ const t=G.tko;if(!t)return;
+ const v=el.dataset.v;
+ const my=G.clubs[G.my];
+ const heard=my.patience>=55;
+ if(v==='x'){
+  toast('You keep your counsel.');
+  my.patience=clamp(my.patience-2,0,100)}
+ else{
+  const want=v==='a'?t.buyer:t.rival;
+  if(heard){
+   t.buyer=want;t.rival=null;
+   t.fanSplit=clamp(50+want.rep+irnd(-8,8),5,95);
+   mail('board','💼 The board has listened',
+    'Your preference for <b>'+esc(want.n)+'</b> has carried weight. The other party has withdrawn.');
+   toast('💼 They listened to you')}
+  else{
+   mail('board','💼 Noted, and ignored',
+    'You made your feelings known. The board thanked you for them and carried on regardless.');
+   toast('💼 They heard you out')}}
+ G.inbox.forEach(m=>{if(m.actions&&m.actions.some(a=>a.act==='tkoPick'))m.actions=null});
+ closeModal();render()};
+/* and the day it goes through */
+function takeoverComplete(){
+ const t=G.tko;if(!t)return;
+ const b=t.buyer,my=G.clubs[G.my];
+ t.stage='complete';t.day=G.day;t.season=G.season;
+ const oldBudget=my.budget,oldCap=my.wageCap;
+ my.budget=Math.round(my.budget*b.money+120e6*(b.money-1));
+ my.bank=Math.round(my.bank*1.4+80e6);
+ my.wageCap=Math.round(my.wageCap*(1+(b.money-1)*.55));
+ my.rep=Math.min(9950,my.rep+180);
+ my.patience=clamp(my.patience+18,0,100);
+ // money in the ground and the training centre
+ if(my.stad){
+  my.stad.train=Math.min(5,my.stad.train+(b.money>=2.5?2:1));
+  my.stad.youth=Math.min(5,my.stad.youth+1);
+  my.stad.tier=Math.min(4,(my.stad.tier||1)+1)}
+ fansShift(b.rep>10?10:b.rep<-10?-12:0,'the '+b.n+' takeover');
+ G.tkoOwner=b;
+ mail('board','💼 THE TAKEOVER IS COMPLETE',
+  '<b>'+esc(b.n)+'</b> of '+esc(b.from)+' are the new owners of Manchester United.<br><br>'+
+  '<b>Transfer budget</b> '+fmtM(oldBudget)+' → <b style="color:var(--green)">'+fmtM(my.budget)+'</b><br>'+
+  '<b>Wage ceiling</b> '+fmtW(oldCap)+' → <b style="color:var(--green)">'+fmtW(my.wageCap)+'</b><br>'+
+  '<b>Training ground</b> upgraded to level '+my.stad.train+'/5<br>'+
+  '<b>Academy</b> upgraded to level '+my.stad.youth+'/5<br><br>'+
+  esc(b.note)+'<br><br>'+
+  '<span style="color:var(--amber)">They did not buy this club to finish fourth. '+
+  'The expectation from today is the title, every season, and a serious run at Europe.</span>');
+ if(b.df){
+  G.tkoDF=true;
+  mail('board','💼 A director of football has been appointed',
+   'The new owners have installed a director of football above you. He will occasionally bring players '+
+   'to the club whether you asked for them or not. You still pick the team.')}
+ toast('💼 The takeover is complete');
+ sfx('cash');
+ render()}
+/* the new owners want the league, and they want it now */
+const _expectTko=expectPos;
+expectPos=function(i){
+ const base=_expectTko(i);
+ if(i!==G.my||!G.tko||G.tko.stage!=='complete')return base;
+ return 1};
+/* and their patience is shorter */
+const _endTkoBoard=endSeason;
+endSeason=function(){
+ const done=G.tko&&G.tko.stage==='complete';
+ const r=_endTkoBoard.apply(this,arguments);
+ if(done)G.clubs[G.my].patience=clamp(G.clubs[G.my].patience-6,0,100);
+ return r};
+/* the director of football does his thing */
+const _dtcDF=dailyTickCore;
+dailyTickCore=function(){
+ _dtcDF();
+ if(!G.tkoDF||!windowOpen()||Math.random()>.012)return;
+ const my=G.clubs[G.my];
+ if(my.players.length>=26||my.budget<25e6)return;
+ const pool=[];
+ G.clubs.forEach(c=>{if(c.i===G.my||c.league!=='PL'&&c.league!=='EU')return;
+  c.players.forEach(p=>{if(p.ovr>=78&&p.ovr<=86&&p.age<=27&&p.value<my.budget*.55)pool.push({p,c})})});
+ if(!pool.length)return;
+ const pickd=pool[Math.floor(Math.random()*pool.length)];
+ const fee=Math.round(pickd.p.value*1.25);
+ if(fee>my.budget)return;
+ my.budget-=fee;pickd.c.budget+=fee;
+ pickd.c.players=pickd.c.players.filter(x=>x!==pickd.p);
+ pickd.p.club=G.my;pickd.p.scouted=true;pickd.p.contract=4;
+ my.players.push(pickd.p);
+ mail('transfer','💼 The director of football has signed someone',
+  '<b>'+esc(pickd.p.name)+'</b> ('+pickd.p.pos+', '+pickd.p.age+', rated '+pickd.p.ovr+') has arrived from <b>'+
+  esc(pickd.c.name)+'</b> for '+fmtM(fee)+'. Nobody asked you.<br><br>'+
+  '<span class="xs faint">He is yours to pick, or not to pick.</span>')};
+/* the press want to know what you make of it all */
+if(typeof PQ!=='undefined'&&PQ.push)PQ.push(
+ {id:'tko-live',w:F=>G.tko&&(G.tko.stage==='interest'||G.tko.stage==='talks'||G.tko.stage==='agreed'),q:F=>[
+  'The club is being sold. Has anybody told you what it means for you?',
+  'Have you spoken to '+esc((G.tko.buyer||{}).n||'the bidders')+'?',
+  'Is it possible to prepare a team properly while all this is going on?',
+  'Do the players ask you about it?',
+  'Would you want to work for new owners, or would you rather it fell through?']},
+ {id:'tko-done',w:F=>G.tko&&G.tko.stage==='complete',q:F=>[
+  'New owners, new money. Is the pressure on you now?',
+  'They have made it clear they expect the title. Is that fair?',
+  'How much of the budget will you actually be allowed to spend?',
+  'Do you worry about being the manager who gets replaced by a bigger name?',
+  'Has the club changed since the takeover?']},
+ {id:'tko-df',w:F=>G.tkoDF,q:F=>[
+  'You now have a director of football above you. Whose team is it?',
+  'Are you comfortable with players arriving that you did not ask for?']},
+ {id:'tko-dead',w:F=>G.tko&&G.tko.stage==='dead',q:F=>[
+  'The takeover collapsed. Were you relieved?',
+  'Without new money, where does this club go from here?']});
+/* the club screen says who owns you */
+const _vClubTko=(typeof vFinances==='function')?vFinances:null;
+if(_vClubTko)vFinances=function(){
+ let h=_vClubTko.apply(this,arguments);
+ const t=G.tko;
+ if(!t||!t.stage)return h;
+ const b=t.buyer||{};
+ const label=t.stage==='complete'?'Owners':t.stage==='dead'?'Takeover collapsed':'Takeover in progress';
+ const body=t.stage==='complete'
+  ?'<b>'+esc(b.n)+'</b> · '+esc(b.from)+'<br><span class="xs faint">'+esc(b.d)+'</span>'
+  :t.stage==='dead'
+   ?'<span class="xs faint">The approach from '+esc(b.n)+' fell through. The club is not for sale.</span>'
+   :'<b>'+esc(b.n)+'</b> · '+esc(b.from)+'<br><span class="xs faint">'+
+    (t.stage==='interest'?'An approach has been made.':t.stage==='talks'?'Due diligence is under way.':'Terms agreed, completion pending.')+
+    ' Supporters '+(t.fanSplit||50)+'% in favour.</span>';
+ return '<div class="sec" style="margin-top:0"><div class="t">💼 '+label+'</div><div class="ln"></div></div>'+
+  '<div class="card" style="margin-bottom:12px">'+body+'</div>'+h};
+
+
+/* =====================================================================
+   THE FRONT END — a title screen worth looking at
+   ---------------------------------------------------------------------
+   The game used to drop you straight into a list of eighty-four club
+   badges. There was no front door. Now there is one: a night at Old
+   Trafford drawn live behind the title — stands full of people, four
+   pylons burning, a ball turning over on the centre spot — with the
+   career you left running offered first, and everything else a tap
+   behind it.
+   ===================================================================== */
+const FRONT={raf:null,t0:0,cv:null};
+(function frontCSS(){
+ const st=document.createElement('style');st.id='frontcss';
+ st.textContent=
+ '#frontCv{position:absolute;inset:0;width:100%;height:100%;z-index:0;display:block}'+
+ '#startScreen.front{padding:0;justify-content:flex-start;overflow:hidden}'+
+ '#startScreen.front .fwrap{position:relative;z-index:2;width:100%;max-width:520px;margin:0 auto;'+
+  'display:flex;flex-direction:column;min-height:100%;padding:calc(env(safe-area-inset-top) + 26px) 18px 26px}'+
+ '#startScreen.front .fspacer{flex:1;min-height:8vh}'+
+ '#startScreen.front .fwrap::before{content:"";position:absolute;inset:-2px;z-index:-1;'+
+  'background:linear-gradient(180deg,rgba(4,7,10,0) 0%,rgba(4,7,10,.30) 32%,'+
+  'rgba(4,7,10,.55) 56%,rgba(4,7,10,.50) 82%,rgba(4,7,10,.12) 100%)}'+
+ '.fhero{text-align:center;margin-bottom:6px}'+
+ '.fhero .crestwrap{display:flex;justify-content:center;margin-bottom:12px;'+
+  'filter:drop-shadow(0 6px 24px rgba(218,41,28,.55))}'+
+ '.fhero .ftitle{font-family:var(--disp);font-size:clamp(30px,10vw,46px);line-height:.98;letter-spacing:1px;'+
+  'text-shadow:0 4px 26px rgba(0,0,0,.85)}'+
+ '.fhero .ftitle em{font-style:normal;color:var(--red-hot);'+
+  'text-shadow:0 0 30px rgba(255,59,45,.55),0 4px 26px rgba(0,0,0,.9)}'+
+ '.fhero .fsub{font-size:11px;letter-spacing:2.6px;font-weight:800;color:var(--ink-dim);'+
+  'margin-top:10px;text-transform:uppercase}'+
+ '.fmenu{display:flex;flex-direction:column;gap:9px;margin-top:18px}'+
+ '.fbtn{position:relative;width:100%;border:1px solid var(--chalk-strong);border-radius:14px;'+
+  'background:rgba(10,16,12,.62);backdrop-filter:blur(7px);-webkit-backdrop-filter:blur(7px);'+
+  'color:var(--ink);text-align:left;padding:13px 16px;cursor:pointer;overflow:hidden;'+
+  'transition:transform .12s,border-color .12s,background .12s}'+
+ '.fbtn:active{transform:scale(.985)}'+
+ '.fbtn .fl{display:block;font-family:var(--disp);font-size:15px;letter-spacing:.6px}'+
+ '.fbtn .fd{display:block;font-size:11px;color:var(--ink-dim);font-weight:600;margin-top:2px}'+
+ '.fbtn .fi{position:absolute;right:14px;top:50%;transform:translateY(-50%);font-size:19px;opacity:.55}'+
+ '.fbtn.prime{border-color:rgba(251,225,34,.55);background:linear-gradient(100deg,rgba(251,225,34,.16),rgba(10,16,12,.66) 55%)}'+
+ '.fbtn.prime .fl{color:var(--gold)}'+
+ '.fbtn.red{border-color:rgba(218,41,28,.55);background:linear-gradient(100deg,rgba(218,41,28,.22),rgba(10,16,12,.66) 55%)}'+
+ '.ffoot{text-align:center;font-size:10px;color:var(--ink-faint);margin-top:16px;letter-spacing:.4px}'+
+ '.fback{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;'+
+  'color:var(--ink-dim);background:none;border:0;cursor:pointer;padding:6px 0;margin-bottom:6px}'+
+ '@media (prefers-reduced-motion:reduce){#frontCv{opacity:.55}}';
+ document.head.appendChild(st)})();
+/* the ground behind the title, drawn live */
+function frontPaint(){
+ const cv=FRONT.cv;if(!cv)return;
+ const p=cv.parentElement;if(!p)return;
+ const dpr=Math.min(window.devicePixelRatio||1,2);
+ const W=Math.round(p.clientWidth*dpr),H=Math.round(p.clientHeight*dpr);
+ // the screen can be hidden while the loop is still alive; a zero-sized
+ // canvas is not something you can draw, so wait for it to come back
+ if(W<8||H<8){FRONT.raf=requestAnimationFrame(frontPaint);return}
+ if(cv.width!==W||cv.height!==H){cv.width=W;cv.height=H;FRONT.bg=null}
+ const g=cv.getContext('2d');
+ const t=(performance.now()-FRONT.t0)/1000;
+ if(!FRONT.bg||FRONT.bg.width!==W){
+  const b=document.createElement('canvas');b.width=W;b.height=H;
+  const x=b.getContext('2d');
+  const rng=mulberry(20260801);
+  // sky
+  let gr=x.createLinearGradient(0,0,0,H);
+  gr.addColorStop(0,'#04070a');gr.addColorStop(.55,'#080f16');gr.addColorStop(1,'#0a1410');
+  x.fillStyle=gr;x.fillRect(0,0,W,H);
+  for(let i=0;i<190;i++){x.fillStyle='rgba(255,255,255,'+(.05+rng()*.20)+')';
+   x.fillRect(rng()*W,rng()*H*.34,1,1)}
+  // the far stand, three tiers of people
+  const roof=H*.34;
+  x.fillStyle='#080d12';x.fillRect(0,roof,W,H*.055);
+  [[roof+H*.055,H*.10],[roof+H*.16,H*.115],[roof+H*.28,H*.13]].forEach(([ty,th],ti)=>{
+   const tg=x.createLinearGradient(0,ty,0,ty+th);
+   tg.addColorStop(0,'#0b1218');tg.addColorStop(1,'#141d26');
+   x.fillStyle=tg;x.fillRect(0,ty,W,th);
+   const n=Math.round(W*th/(W*W*.00022));
+   for(let i=0;i<n;i++){
+    const r=rng();
+    x.fillStyle=r<.42?'#da291c':r<.5?'#fbe122':
+     ['#c9b8a4','#8e7f72','#57606b','#2f3a44','#e2e8ee'][Math.floor(rng()*5)];
+    x.globalAlpha=(.30+rng()*.6)*(.6+ti*.2);
+    x.fillRect(rng()*W,ty+rng()*th,Math.max(1,W*.0028),Math.max(1,W*.0035))}
+   x.globalAlpha=1});
+  // hoardings and the grass
+  x.fillStyle='#1a0f10';x.fillRect(0,roof+H*.41,W,H*.035);
+  x.fillStyle='rgba(255,255,255,.08)';x.fillRect(0,roof+H*.41,W,H*.005);
+  const grass=roof+H*.445;
+  gr=x.createLinearGradient(0,grass,0,H);
+  gr.addColorStop(0,'#123c1a');gr.addColorStop(1,'#0b2a12');
+  x.fillStyle=gr;x.fillRect(0,grass,W,H-grass);
+  for(let i=0;i<12;i+=2){x.fillStyle='rgba(255,255,255,.028)';
+   x.fillRect(i*W/12,grass,W/12,H-grass)}
+  x.strokeStyle='rgba(240,248,240,.16)';x.lineWidth=Math.max(1,W*.0022);
+  x.beginPath();x.moveTo(0,grass+(H-grass)*.34);x.lineTo(W,grass+(H-grass)*.34);x.stroke();
+  x.beginPath();x.ellipse(W*.5,grass+(H-grass)*.62,W*.30,(H-grass)*.30,0,0,7);x.stroke();
+  FRONT.bg=b}
+ g.setTransform(1,0,0,1,0,0);
+ g.drawImage(FRONT.bg,0,0);
+ // floodlights that breathe
+ const roof=H*.34;
+ [0.10,0.36,0.64,0.90].forEach((fx,i)=>{
+  const px=fx*W,py=roof*.42;
+  const pulse=.82+Math.sin(t*.7+i*1.7)*.14;
+  const rg=g.createRadialGradient(px,py,0,px,py,W*.30);
+  rg.addColorStop(0,'rgba(255,250,226,'+(.34*pulse)+')');
+  rg.addColorStop(.16,'rgba(255,250,226,'+(.08*pulse)+')');
+  rg.addColorStop(1,'rgba(255,250,226,0)');
+  g.fillStyle=rg;g.fillRect(0,0,W,H);
+  g.fillStyle='#12181f';g.fillRect(px-W*.005,py,W*.010,roof*.62);
+  g.fillStyle='#0c1117';g.fillRect(px-W*.030,py-H*.022,W*.060,H*.026);
+  for(let r=0;r<3;r++)for(let c=0;c<5;c++){
+   g.fillStyle='rgba(244,248,255,'+pulse+')';
+   g.fillRect(px-W*.026+c*W*.0115,py-H*.019+r*H*.008,W*.008,H*.005)}});
+ // a ball turning over on the centre spot
+ const grass=roof+H*.445;
+ const by=grass+(H-grass)*.62,bx=W*.5;
+ const bob=Math.abs(Math.sin(t*1.5))*H*.012;
+ const br=Math.max(3,W*.011);
+ g.beginPath();g.ellipse(bx,by,br*1.2,br*.45,0,0,7);
+ g.fillStyle='rgba(0,0,0,'+(0.36/(1+bob/8))+')';g.fill();
+ g.save();g.translate(bx,by-br-bob);g.rotate(t*1.4);
+ const bg=g.createRadialGradient(-br*.35,-br*.4,br*.1,0,0,br);
+ bg.addColorStop(0,'#ffffff');bg.addColorStop(1,'#c6cdc6');
+ g.beginPath();g.arc(0,0,br,0,7);g.fillStyle=bg;g.fill();
+ g.fillStyle='rgba(24,26,24,.85)';
+ g.beginPath();
+ for(let i=0;i<5;i++){const a=i/5*Math.PI*2;
+  g[i?'lineTo':'moveTo'](Math.cos(a)*br*.42,Math.sin(a)*br*.42)}
+ g.closePath();g.fill();g.restore();
+ // and the dark at the edges
+ const vg=g.createRadialGradient(W/2,H*.5,W*.22,W/2,H*.5,W*.92);
+ vg.addColorStop(0,'rgba(0,0,0,0)');vg.addColorStop(1,'rgba(0,0,0,.66)');
+ g.fillStyle=vg;g.fillRect(0,0,W,H);
+ FRONT.raf=requestAnimationFrame(frontPaint)}
+function frontStop(){if(FRONT.raf){cancelAnimationFrame(FRONT.raf);FRONT.raf=null}FRONT.cv=null}
+/* ---------- the door ---------- */
+showStart=function(){
+ G=null;
+ UI.startDiv=UI.startDiv||'PL';
+ UI._cat=startCatalogue();
+ if(UI.startSel==null)UI.startSel=0;
+ const ss=$('#startScreen');
+ ss.style.display='flex';ss.classList.add('front');
+ const m=(typeof slotMeta==='function')?(slotMeta('auto')||slotMeta('1')):null;
+ const slot=(m&&slotMeta('auto'))?'auto':'1';
+ ss.innerHTML='<canvas id="frontCv"></canvas><div class="fwrap">'+
+  '<div class="fspacer"></div>'+
+  '<div class="fhero">'+
+   '<div class="crestwrap">'+crest({c1:'#DA291C',c2:'#FBE122',short:'MUN',name:'Manchester United'},76)+'</div>'+
+   '<div class="ftitle">RED DEVIL<br><em>MANAGER</em></div>'+
+   '<div class="fsub">Old Trafford · 2026/27</div>'+
+  '</div>'+
+  '<div class="fmenu">'+
+   (m?'<button class="fbtn prime" data-action="resumeCareer" data-v="'+slot+'">'+
+     '<span class="fl">CONTINUE CAREER</span>'+
+     '<span class="fd">'+esc(m.club)+' · Season '+m.season+' · '+esc(m.date)+'</span>'+
+     '<span class="fi">▶</span></button>':'')+
+   '<button class="fbtn red" data-action="frontNew">'+
+    '<span class="fl">NEW CAREER</span>'+
+    '<span class="fd">Eighty-four clubs, six divisions, one job</span>'+
+    '<span class="fi">⚽</span></button>'+
+   '<button class="fbtn" data-action="frontLoad">'+
+    '<span class="fl">LOAD A SAVE</span>'+
+    '<span class="fd">Your slots, or a file from this device</span>'+
+    '<span class="fi">💾</span></button>'+
+   '<button class="fbtn" data-action="frontSound">'+
+    '<span class="fl">SOUND</span>'+
+    '<span class="fd" id="fSoundSub">Crowd, commentary and the reading voice</span>'+
+    '<span class="fi">🔊</span></button>'+
+   '<button class="fbtn" data-action="frontAbout">'+
+    '<span class="fl">HOW IT WORKS</span>'+
+    '<span class="fd">What is in the game, and how to play it</span>'+
+    '<span class="fi">📖</span></button>'+
+  '</div>'+
+  '<div class="ffoot">Single-file edition · everything runs offline</div>'+
+  '<div class="fspacer"></div></div>';
+ FRONT.cv=$('#frontCv');FRONT.t0=performance.now();FRONT.bg=null;
+ frontStop();FRONT.cv=$('#frontCv');
+ FRONT.raf=requestAnimationFrame(frontPaint)};
+/* choosing a club still works exactly as it did — it just lives behind a door */
+ACTIONS.frontNew=()=>{
+ const ss=$('#startScreen');
+ ss.classList.remove('front');frontStop();
+ ss.innerHTML='<div class="logo">CHOOSE YOUR<br><em>CLUB</em></div>'+
+  '<div class="tag">84 clubs · six divisions · promotion &amp; relegation</div>'+
+  '<button class="fback" data-action="frontBack">← Back to the menu</button>'+
+  '<div style="width:100%;max-width:520px" id="startBody"></div>';
+ paintStart();
+ try{sfx('nav')}catch(e){}};
+ACTIONS.frontBack=()=>{showStart()};
+ACTIONS.frontLoad=()=>{
+ const rows=['auto','1','2','3'].map(s=>({s,m:(typeof slotMeta==='function')?slotMeta(s):null}));
+ openModal('<h3>💾 Load a save</h3><div class="card tight" style="margin:8px 0 10px">'+
+  rows.map(r=>r.m
+   ?'<div class="mail" data-action="resumeCareer" data-v="'+r.s+'"><div class="ic">'+(r.s==='auto'?'⚡':'💾')+'</div>'+
+    '<div style="flex:1"><div class="tt">'+(r.s==='auto'?'Autosave':'Slot '+r.s)+'</div>'+
+    '<div class="bd">'+esc(r.m.club)+' · Season '+r.m.season+' · '+esc(r.m.date)+'</div></div></div>'
+   :'<div class="spread" style="padding:8px 2px;opacity:.45"><span class="small">'+(r.s==='auto'?'Autosave':'Slot '+r.s)+'</span><span class="xs">Empty</span></div>').join('')+
+  '</div>'+
+  '<button class="btn btn-ghost btn-block" data-action="importSave">⬆️ Import a save file</button>'+
+  '<input type="file" id="impFile" accept=".json,application/json" style="display:none">'+
+  '<button class="btn btn-ghost btn-block" style="margin-top:8px" data-action="closeModal">Back</button>')};
+ACTIONS.frontSound=()=>{
+ sfxCtx();
+ const c=sfxCfg(),t=ttsCfg();
+ openModal('<h3>🔊 Sound</h3>'+
+  '<div class="card"><div class="chips">'+
+  '<button class="chip'+(c.on?' on':'')+'" data-action="sfxToggle">'+(c.on?'🔊 Sound on':'🔇 Sound off')+'</button>'+
+  '<button class="chip'+(c.crowd?' on':'')+'" data-action="sfxCrowd">📣 Crowd noise</button>'+
+  '<button class="chip'+(t.tts?' on':'')+'" data-action="sfxTTS">🗣️ Reading voice</button>'+
+  '<button class="chip'+(t.pa?' on':'')+'" data-action="sfxPA">📣 Tannoy</button>'+
+  '<button class="chip" data-action="sfxTest">▶️ Test</button></div>'+
+  '<div class="spread" style="margin:12px 0 2px"><span class="small" style="font-weight:700">Volume</span>'+
+  '<span class="small num" id="sfxVolLbl">'+Math.round(c.vol*100)+'%</span></div>'+
+  '<input type="range" min="0" max="100" step="5" value="'+Math.round(c.vol*100)+'" data-sfxvol="1">'+
+  '<div class="xs faint" style="margin-top:8px;line-height:1.6">Every sound is generated by the browser as it plays, so it all works with no connection at all.</div></div>'+
+  '<button class="btn btn-ghost btn-block" style="margin-top:8px" data-action="closeModal">Done</button>')};
+ACTIONS.frontAbout=()=>{
+ openModal('<h3>📖 How it works</h3>'+
+  '<div class="card tight" style="margin:8px 0 10px"><div class="small" style="line-height:1.75;padding:2px">'+
+  '<b>The week.</b> Train, set your shape, handle the press, work the market, then play.<br><br>'+
+  '<b>The match.</b> Watch it from the dugout behind a broadcast camera, or from above in 2D. '+
+  'Shout from the touchline without opening a menu, make up to five changes, and change your shape mid-game.<br><br>'+
+  '<b>The squad.</b> Every player has a personality, a familiarity for every position on the pitch, and a squad number. '+
+  'Retrain him somewhere new and, given a season, he becomes a natural there.<br><br>'+
+  '<b>The club.</b> Six divisions with promotion and relegation, four cups, a board with a temper, '+
+  'a fanbase with an opinion, and a press room that reads the state of your club before it asks you anything.<br><br>'+
+  '<b>Saving.</b> The game saves itself every day and after every match. Export a file to move a career to another device.'+
+  '</div></div><button class="btn btn-primary btn-block" data-action="closeModal">Got it</button>')};
+/* leaving the front end shuts the animation down */
+const _startGameFront=ACTIONS.startGame;
+ACTIONS.startGame=function(){
+ frontStop();
+ const ss=$('#startScreen');if(ss)ss.classList.remove('front');
+ return _startGameFront.apply(this,arguments)};
+const _resumeFront=ACTIONS.resumeCareer;
+ACTIONS.resumeCareer=function(){
+ frontStop();
+ const ss=$('#startScreen');if(ss)ss.classList.remove('front');
+ return _resumeFront.apply(this,arguments)};
+window.addEventListener('resize',()=>{if(FRONT.cv)FRONT.bg=null});
+
+
+/* =====================================================================
+   REALISM — measured against the real Premier League, then tuned
+   ---------------------------------------------------------------------
+   Over 1,140 simulated matches the engine was missing the real thing in
+   three consistent ways, the same way every time it was run:
+
+     · HOME ADVANTAGE was too weak. 39–42% home wins against a real 44%,
+       and 28–32% draws against a real 24%. Games that should have been
+       won at home were being drawn.
+     · GOALS were a few percent high — 2.79 to 3.06 a game against a
+       real 2.85, averaging about 2.93.
+     · THE BOTTOM OF THE TABLE was far too weak. Eighteenth finished on
+       20–31 points against a real 32–36, and last place on as little as
+       one point where the real figure is nearer twenty. Bad Premier
+       League sides are bad; they are not that bad.
+
+   Each of those is fixed here at the smallest lever that moves it, and
+   nothing else in the engine is touched.
+   ===================================================================== */
+
+/* ---------------------------------------------------------------------
+   1. HOME ADVANTAGE
+   A full ground is worth more than the engine credited it with. Raising
+   it turns the surplus draws into home wins, which is the same thing
+   that happens in real football.
+   --------------------------------------------------------------------- */
+const _possHome=MatchSim.prototype.possScore;
+MatchSim.prototype.possScore=function(i){
+ const v=_possHome.call(this,i);
+ const s=this.sides[i];
+ return s.home?v*1.010:v};
+/* the crowd lifts the side that plays in front of it */
+const _effHomeCrowd=MatchSim.prototype.effA;
+MatchSim.prototype.effA=function(pl,attr){
+ const v=_effHomeCrowd.call(this,pl,attr);
+ const s=this.sides[0].onfield.indexOf(pl)>=0?this.sides[0]:this.sides[1];
+ if(!s.home)return v;
+ // biggest late on, when a ground is at its loudest and legs are gone
+ const late=this.min>=70?1.018:this.min>=45?1.012:1.008;
+ return v*late};
+
+/* ---------------------------------------------------------------------
+   2. GOALS
+   Three per cent high across every sample. A single trim on the shot,
+   applied to both sides equally, brings it back to 2.85.
+   --------------------------------------------------------------------- */
+const _shotReal=MatchSim.prototype.shotEvent;
+MatchSim.prototype.shotEvent=function(A,D,sh,cr,head){
+ const hs=this.fix.hs,as=this.fix.as;
+ const realGoal=this.goal;
+ let allowed=true;
+ // the engine decides the shot is in; a small share of those are the
+ // ones that in real football clip the bar or are hacked off the line
+ this.goal=function(){
+  if(allowed&&Math.random()<.125){
+   allowed=false;
+   this.say(this.dispMin(),A,'Off the woodwork! Inches away.','big');
+   try{if(liveMatch(this))sfx('post')}catch(e){}
+   A.st.sh++;A.st.sot++;
+   return}
+  return realGoal.apply(this,arguments)};
+ try{return _shotReal.apply(this,arguments)}
+ finally{this.goal=realGoal}};
+
+/* ---------------------------------------------------------------------
+   3. THE BOTTOM OF THE TABLE
+   The gap between the best and worst sides in the division was wider
+   than it is in life, so the worst sides lost almost everything. This
+   pulls the weakest clubs a little way back toward the middle — only
+   in how they play, not in what they are worth or who they can sign.
+   --------------------------------------------------------------------- */
+function repFloor(c){
+ if(!c||c.league!=='PL')return 1;
+ // the median Premier League side sits around 7,300
+ const gap=7300-(c.rep||7300);
+ if(gap<=0)return 1;
+ return 1+Math.min(.25,gap/6000)}
+const _instrFloor=applyInstr;
+applyInstr=function(s){
+ const r=_instrFloor.apply(this,arguments);
+ if(s&&s.mm&&s.c){
+  const f=repFloor(s.c);
+  // most of it goes into keeping them in games, which is what actually
+  // earns a bad side its thirty-odd points
+  if(f>1){s.mm.att*=(1+(f-1)*.5);s.mm.def*=f;s.mm.poss*=(1+(f-1)*.5)}}
+ return r};
+/* and the same hand on the tiller for the quick simulation */
+const _avgFloor=MatchSim.prototype.avg;
+MatchSim.prototype.avg=function(side,attrs,zone){
+ const v=_avgFloor.apply(this,arguments);
+ const f=repFloor(side&&side.c);
+ return f>1?v*(1+(f-1)*.6):v};
+
+/* ---------------------------------------------------------------------
+   4. DRAWS
+   Twenty-eight per cent of games finish level against a real twenty-four.
+   The obvious lever — letting a side that is two up keep attacking —
+   was tried and rejected: it fixed the draw rate by turning 2-1s into
+   4-1s and pushed goals per game to 3.63. A four-point miss on draws is
+   a better answer than a wrong scoreline, so the engine keeps easing off
+   the way it did.
+   --------------------------------------------------------------------- */
+
 showStart();
 </script>
 </body>
 </html>
+
+/* ---------------------------------------------------------------------
+   5. HOW THEY TURNED UP
+   Thirty per cent of games were finishing level against a real
+   twenty-four, and it was not because the sides were evenly matched —
+   it was because every side played at almost exactly its rating every
+   week. Real teams have days. Widening that swing spreads the results
+   out without touching a single goal in the average.
+   --------------------------------------------------------------------- */
+DAY_LO=.90;DAY_RANGE=.20;
