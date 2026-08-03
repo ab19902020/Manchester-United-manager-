@@ -17099,6 +17099,15 @@ MatchSim.prototype.avg=function(side,attrs,zone){
 
 
 
+
+
+
+
+
+
+
+
+
 /*#w1_data.js#*/
 
 /* =====================================================================
@@ -18131,13 +18140,18 @@ function cupDraw(key,r,teams,seeds){
    (mine.neutral?' at '+esc(def.venue):(mine.h===G.my?' at home':' away'))+
    (two?', over two legs':'')+'. '+def.rn[r]+' · '+fmtDate(mine.day)+'.')}
  return made}
+/* somebody always goes through. If a tie somehow reaches here without a
+   shootout having been taken, the better side gets it rather than the
+   round quietly stalling with nobody in it. */
+function tieFallback(t){return G.clubs[t.h].rep>=G.clubs[t.a].rep?t.h:t.a}
 function tieWinner(legs){
- if(legs.length===1)return winnerOf(legs[0]);
+ if(!legs||!legs.length)return null;
+ if(legs.length===1){const w=winnerOf(legs[0]);return w==null?tieFallback(legs[0]):w}
  const A=legs[0],B=legs[1];
  const x=A.hs+B.as, y=A.as+B.hs;      // A.h is B.a
  if(x>y)return A.h;
  if(y>x)return A.a;
- return B.pw!=null?B.pw:A.h}
+ return B.pw!=null?B.pw:tieFallback(A)}
 function simTie(t){
  const eng=G.clubs[G.my].cc;
  const big=t.h===G.my||t.a===G.my||G.clubs[t.h].cc===eng||G.clubs[t.a].cc===eng;
@@ -18385,6 +18399,8 @@ function initCups(){
 function cupPrize(key,s){const p=CUP_DEFS[key].prize;return p[Math.min(p.length-1,s)]||0}
 function cupComplete(key,winner,runner){
  const cup=G.cups[key],def=CUP_DEFS[key];
+ if(winner==null||!G.clubs[winner])return;
+ if(runner==null||!G.clubs[runner])runner=winner;
  cup.winner=winner;
  cup.history.push({season:G.season,winner,runner});
  G.euroHolders=G.euroHolders||{};
@@ -18401,7 +18417,7 @@ function cupComplete(key,winner,runner){
    '. <b>'+fmtM(pr)+'</b> in prize money, and a night nobody at the club forgets.');
   try{sfx('cheer')}catch(e){}}
  else mail('news',def.icon+' '+def.name+' final','<b>'+esc(nm)+'</b> win the '+esc(def.name)+
-  ', beating <b>'+esc(G.clubs[runner].name)+'</b>.')}
+  (runner!==winner?', beating <b>'+esc(G.clubs[runner].name)+'</b>':'')+'.')}
 function advanceCup(key){
  const cup=G.cups[key],def=CUP_DEFS[key];
  if(!cup||cup.winner!=null)return;
@@ -18442,7 +18458,9 @@ function advanceCup(key){
    mail('match',def.icon+' Out of the '+def.name,'Beaten in the '+def.rn[s]+'. '+
     (late?'The board will not pretend that does not sting.':'Attention turns back to the league.'))}}
  if(nxt==null){
-  const f=groups[0];cupComplete(key,tieWinner(f),tieWinner(f)===f[0].h?f[0].a:f[0].h);
+  const f=groups[0];const w=tieWinner(f);
+  if(w==null||!G.clubs[w]){cup.winner=cup.teams?cup.teams[0]:0;return}
+  cupComplete(key,w,w===f[0].h?f[0].a:f[0].h);
   return}
  /* anybody entering at the next round joins the winners */
  const nextIx=def.stages.indexOf(nxt);
@@ -18689,9 +18707,14 @@ function packG(g){
  const pk=[],ak=[],sk=[],ps={},as={},ss={};
  const lists=playerLists(g);
  lists.forEach(([c,f])=>c[f].forEach(p=>{
-  for(const k in p){if(k==='attrs'||k==='stats')continue;if(!ps[k]){ps[k]=1;pk.push(k)}}
+  for(const k in p){if(k==='attrs'||k==='stats')continue;
+   if(!ps[k]){ps[k]=0;pk.push(k)}ps[k]++}
   if(p.attrs)for(const k in p.attrs)if(!as[k]){as[k]=1;ak.push(k)}
   if(p.stats)for(const k in p.stats)if(!ss[k]){ss[k]=1;sk.push(k)}}));
+ // the fields almost everybody has go first and the rare ones last, so a
+ // row can stop as soon as it runs out of things to say. Most players
+ // carry none of the last twenty columns, and now they cost nothing.
+ pk.sort((a,b)=>ps[b]-ps[a]||(a<b?-1:1));
  const trim=a=>{let n=a.length;while(n>0&&(a[n-1]===null||a[n-1]===undefined))n--;return a.slice(0,n)};
  const num=v=>typeof v==='number'&&!Number.isInteger(v)?Math.round(v*100)/100:v;
  const enc=p=>{
@@ -18743,7 +18766,905 @@ writeSlot=function(slot,quiet){
  else if(okc&&!quiet)toast('💾 Saved to slot '+slot);
  return okc};
 
-/*#w8_save.js#*/
+/*#w8_save.js#*//*#w9_intl.js#*/
+
+/* =====================================================================
+   INTERNATIONAL FOOTBALL
+   ---------------------------------------------------------------------
+   The cycle is fixed and it does not drift: a World Cup every four years
+   in the even year that leaves a remainder of two, a European Championship
+   in the even year that divides by four. The 2026 World Cup finished the
+   summer before this save opens, so the next one is 2030, and the Euros
+   fall in between in 2028 and 2032.
+
+   THE WORLD CUP is the 48-team format: twelve groups of four, the top two
+   from each plus the eight best third-placed sides into a round of 32,
+   then 16, quarters, semis, a third-place match and the final.
+   THE EUROS are 24 teams: six groups of four, the top two plus the four
+   best thirds into a round of 16.
+
+   In between, six international breaks a season. Your internationals go
+   away, play, and come back with caps, sometimes goals, always tired and
+   occasionally injured — which is the part that actually affects you.
+   ===================================================================== */
+const INT_BREAKS=[40,72,104,166,200,236];
+const NATIONS=[
+ // code, name, confederation, standing (a starting strength, 60–92)
+ ['ARG','Argentina','CONMEBOL',91],['FRA','France','UEFA',91],['ESP','Spain','UEFA',91],
+ ['ENG','England','UEFA',90],['BRA','Brazil','CONMEBOL',89],['POR','Portugal','UEFA',88],
+ ['NED','Netherlands','UEFA',87],['BEL','Belgium','UEFA',86],['ITA','Italy','UEFA',86],
+ ['GER','Germany','UEFA',86],['CRO','Croatia','UEFA',84],['MAR','Morocco','CAF',84],
+ ['URU','Uruguay','CONMEBOL',83],['COL','Colombia','CONMEBOL',83],['USA','United States','CONCACAF',80],
+ ['MEX','Mexico','CONCACAF',80],['SUI','Switzerland','UEFA',82],['DEN','Denmark','UEFA',82],
+ ['JPN','Japan','AFC',82],['SEN','Senegal','CAF',82],['IRN','Iran','AFC',79],
+ ['KOR','South Korea','AFC',79],['AUT','Austria','UEFA',81],['UKR','Ukraine','UEFA',80],
+ ['TUR','Turkey','UEFA',81],['SWE','Sweden','UEFA',79],['WAL','Wales','UEFA',78],
+ ['POL','Poland','UEFA',79],['SRB','Serbia','UEFA',79],['EGY','Egypt','CAF',79],
+ ['NGA','Nigeria','CAF',80],['ALG','Algeria','CAF',79],['CIV','Ivory Coast','CAF',79],
+ ['ECU','Ecuador','CONMEBOL',79],['CZE','Czechia','UEFA',78],['NOR','Norway','UEFA',80],
+ ['SCO','Scotland','UEFA',77],['HUN','Hungary','UEFA',77],['GRE','Greece','UEFA',77],
+ ['RSA','South Africa','CAF',75],['TUN','Tunisia','CAF',76],['CMR','Cameroon','CAF',77],
+ ['GHA','Ghana','CAF',77],['MLI','Mali','CAF',76],['AUS','Australia','AFC',76],
+ ['PER','Peru','CONMEBOL',76],['PAR','Paraguay','CONMEBOL',76],['CHI','Chile','CONMEBOL',76],
+ ['VEN','Venezuela','CONMEBOL',73],['BOL','Bolivia','CONMEBOL',70],['CAN','Canada','CONCACAF',77],
+ ['PAN','Panama','CONCACAF',73],['CRC','Costa Rica','CONCACAF',73],['JAM','Jamaica','CONCACAF',72],
+ ['HON','Honduras','CONCACAF',70],['KSA','Saudi Arabia','AFC',75],['QAT','Qatar','AFC',74],
+ ['UZB','Uzbekistan','AFC',74],['IRQ','Iraq','AFC',73],['JOR','Jordan','AFC',72],
+ ['UAE','United Arab Emirates','AFC',71],['CHN','China','AFC',68],['NZL','New Zealand','OFC',68],
+ ['SVK','Slovakia','UEFA',76],['ROU','Romania','UEFA',76],['SVN','Slovenia','UEFA',76],
+ ['IRL','Republic of Ireland','UEFA',75],['NIR','Northern Ireland','UEFA',71],
+ ['ISL','Iceland','UEFA',73],['FIN','Finland','UEFA',73],['ALB','Albania','UEFA',75],
+ ['BIH','Bosnia & Herzegovina','UEFA',75],['GEO','Georgia','UEFA',76],['MKD','North Macedonia','UEFA',72],
+ ['ISR','Israel','UEFA',73],['BUL','Bulgaria','UEFA',71],['MNE','Montenegro','UEFA',72],
+ ['KVX','Kosovo','UEFA',71],['LUX','Luxembourg','UEFA',69],['ARM','Armenia','UEFA',68],
+ ['COD','DR Congo','CAF',76],['BFA','Burkina Faso','CAF',75],['GUI','Guinea','CAF',75],
+ ['CPV','Cape Verde','CAF',74],['ZAM','Zambia','CAF',71],['ANG','Angola','CAF',71],
+ ['GAB','Gabon','CAF',72]];
+const NAT_BY={};NATIONS.forEach(n=>NAT_BY[n[0]]={code:n[0],name:n[1],conf:n[2],base:n[3]});
+function natName(c){return (NAT_BY[c]||{}).name||c}
+
+/* ---------------------------------------------------------------------
+   WHO PLAYS FOR WHOM
+   Every generated player was named from a country's own name pool, so the
+   pool tells us where he is from. The real Premier League names are read
+   off a list of the ones the game actually ships; anything left over takes
+   the nationality of the country it plays in, or one of the countries that
+   country's football is actually built on.
+   --------------------------------------------------------------------- */
+/* the squad you look at every day is worth getting exactly right */
+const NAT_EXACT={
+'Senne Lammens':'BEL','Altay Bayındır':'TUR','Karl Darlow':'ENG','Diogo Dalot':'POR',
+'Noussair Mazraoui':'MAR','Matthijs de Ligt':'NED','Leny Yoro':'FRA','Lisandro Martínez':'ARG',
+'Harry Maguire':'ENG','Ayden Heaven':'ENG','Luke Shaw':'ENG','Patrick Dorgu':'DEN',
+'Manuel Ugarte':'URU','Andrey Santos':'BRA','Youri Tielemans':'BEL','Kobbie Mainoo':'ENG',
+'Mason Mount':'ENG','Bruno Fernandes':'POR','Amad Diallo':'CIV','Bryan Mbeumo':'CMR',
+'Matheus Cunha':'BRA','Benjamin Šeško':'SVN','Joshua Zirkzee':'NED','Chido Obi':'DEN',
+'Marcus Rashford':'ENG','JJ Gabriel':'ENG',
+'Erling Haaland':'NOR','Rodri':'ESP','Phil Foden':'ENG','Gianluigi Donnarumma':'ITA',
+'Rúben Dias':'POR','Joško Gvardiol':'CRO','Jérémy Doku':'BEL','Savinho':'BRA','Oscar Bobb':'NOR',
+'Tijjani Reijnders':'NED','Rayan Cherki':'FRA','Omar Marmoush':'EGY','Rayan Aït-Nouri':'ALG',
+'Abdukodir Khusanov':'UZB','Matheus Nunes':'POR','Rico Lewis':'ENG','Elliot Anderson':'ENG',
+'Nico González':'ESP','James Trafford':'ENG',
+'Alisson':'BRA','Giorgi Mamardashvili':'GEO','Virgil van Dijk':'NED','Ibrahima Konaté':'FRA',
+'Joe Gomez':'ENG','Giovanni Leoni':'ITA','Jeremie Frimpong':'NED','Conor Bradley':'NIR',
+'Milos Kerkez':'HUN','Alexis Mac Allister':'ARG','Dominik Szoboszlai':'HUN',
+'Ryan Gravenberch':'NED','Curtis Jones':'ENG','Florian Wirtz':'GER','Cody Gakpo':'NED',
+'Alexander Isak':'SWE','Mohamed Salah':'EGY'};
+const NAT_HINT=[
+ [/(bay[ıi]nd[ıi]r|o[ğg]lu|[çc]alhano|g[üu]ler|demiral|kabak|y[ıi]ld[ıi]z|akg[üu]n|kadio)/i,'TUR'],
+ [/(lammens|castagne|onana v|vermeeren|de cuyper|theate|meunier)/i,'BEL'],
+ [/([šs]e[šs]ko|[šs]porar|oblak|jan?ža|bijol|elsnik)/i,'SVN'],
+ [/(dorgu|hjulmand|h[øo]jlund|damsgaard|obi )/i,'DEN'],
+ [/(mamardashvili|kvaratskhelia|mikautadze|kochorashvili|lochoshvili)/i,'GEO'],
+ [/(kerkez|szoboszlai|guly[áa]csi|orb[áa]n|sallai|varga|bolla)/i,'HUN'],
+ [/(khusanov|shomurodov|urunov|fayzullaev)/i,'UZB'],
+ [/(mbeumo|onana|anguissa|toko|zambo)/i,'CMR'],
+ [/(osimhen|iwobi|ndidi|aribo|chukwuemeka|onyeka|awoniyi|bassey|aina|lookman|iheanacho|madueke)/i,'NGA'],
+ [/(ndiaye|sarr|gueye|mendy|diouf|jackson|koulibaly|dia)/i,'SEN'],
+ [/(hakimi|ziyech|amrabat|mazraoui|ounahi|aguerd|bounou|en-?nesyri)/i,'MAR'],
+ [/(salah|elneny|trezeguet|hamdallah)/i,'EGY'],
+ [/(mahrez|bennacer|slimani|feghouli|brahimi|belaili|amoura)/i,'ALG'],
+ [/(partey|ayew|kudus|semenyo|amartey|djiku)/i,'GHA'],
+ [/(traor|kon[ae]|kouyate|bamba|camara|cisse|diop|kamara|sissoko|dembel|bakayoko|doumbia|keita|coulibaly|fofana|sanogo|doucour)/i,'MLI'],
+ [/(vin[ií]cius|rodrygo|richarlison|casemiro|alisson|ederson|antony|raphinha|militao|marquinhos|savinho|endrick|estev[ãa]o|bruno guimar|matheus|gabriel|martinelli|paix[ãa]o|igor)/i,'BRA'],
+ [/(messi|lautaro|alvarez|mac allister|garnacho|otamendi|dybala|paredes|romero|martinez|enzo|balerdi|vanderson|simeone|molina|foyth)/i,'ARG'],
+ [/(modri|peri[sš]i|kova[cč]i|brozovi|gvardiol|su[cč]i|baturina|sosa|juranovi|stani[sš]i|vla[sš]i|majer|petkovi|livakovi|[sš]utalo|pa[sš]ali|budimir|kramari)/i,'CRO'],
+ [/(haaland|[øo]degaard|s[øo]rloth|nusa|bobb|ryerson|thorsby|berge|aursnes|[øo]stig[åa]rd|hauge|solbakken|meling|strand)/i,'NOR'],
+ [/(schmeichel|h[øo]jlund|eriksen|kristensen|dolberg|damsgaard|skov|hjulmand|wind|dreyer|bah|maehle|christensen)/i,'DEN'],
+ [/(lindel[öo]f|isak|gy[öo]keres|elanga|svensson|larsson|olsson|bergvall)/i,'SWE'],
+ [/(kubo|mitoma|tomiyasu|endo|kamada|doan|ito|tanaka|yamada|wataru|hidemasa|takumi|kaoru|daichi|minamino)/i,'JPN'],
+ [/(son |kim min|hwang |lee kang|jung |kang |min-jae|jae-sung)/i,'KOR'],
+ [/(lewandowski|szcz[eę]sny|zieli[nń]ski|milik|bednarek|kiwior|frankowski|skorupski|zalewski|cash|piotrowski|urba[nń]ski|[sś]widerski|slisz)/i,'POL'],
+ [/(mitrovi|tadi|kosti|gudelj|[zž]ivkovi|samard[zž]i|luki|veljkovi|pavlovi|vlahovi|milinkovi|jovi|ratkov)/i,'SRB'],
+ [/(zinchenko|mudryk|yarmolenko|dovbyk|tsygankov|matviyenko|sudakov|zabarnyi|trubin|malinovskyi|yaremchuk|shevchenko|konoplya)/i,'UKR'],
+ [/(xhaka|embolo|sch[äa]r|zuber|freuler|sow|okafor|rieder|ndoye|vargas|amdouni|aebischer|stergiou|kobel|omlin|akanji)/i,'SUI'],
+ [/(alaba|sabitzer|laimer|danso|posch|w[öo]ber|grillitsch|lienhart|baumgartner|arnautovi)/i,'AUT'],
+ [/(souček|chytil|provod|schick|krejčí|douděra|hložek|coufal|barák)/i,'CZE'],
+ [/(mcginn|mctominay|robertson|gilmour|ralston|christie|hendry|dykes|adams|tierney|hickey|doak)/i,'SCO'],
+ [/(ramsey|james|wilson|moore|rodon|ampadu|johnson|davies|allen|broadhead)/i,'WAL'],
+ [/(g[üu]ler|[çc]alhano[ğg]lu|akayd[ıi]n|y[ıi]ld[ıi]z|kadio[ğg]lu|demiral|akturko[ğg]lu|kabak|akg[üu]n)/i,'TUR'],
+ [/(fortounis|bakasetas|masouras|zafeiris|douvikas|kourbelis|giannoulis|tzolakis|retsos|pelkas|mavropanos|giakoumakis)/i,'GRE'],
+ [/(szoboszlai|kerkez|dominik szo|gulacsi|orban|sallai|varga)/i,'HUN'],
+ [/(dragusin|hagi|stanciu|marin|coman|mihaila|man |radu)/i,'ROU'],
+ [/(garc[ií]a|rodr[ií]guez|mart[ií]nez|s[áa]nchez|fern[áa]ndez|l[óo]pez|p[ée]rez|ram[ií]rez|olmo|morata|asensio|carvajal|cucurella|merino|oyarzabal|zubimendi|pedri|gavi|ferran|ansu|yamal|balde|cubarsi|sancet|guruzeta|vivian|rodri|koke|isco|nacho|mikel|unai|iker|pau |marc )/i,'ESP'],
+ [/(silva|santos|costa|pereira|carvalho|oliveira|ferreira|almeida|ribeiro|gon[çc]alves|sousa|fonseca|neves|dias|guerreiro|trinc[ãa]o|le[ãa]o|f[ée]lix|ramos|cancelo|dalot|bruno|diogo|jo[ãa]o|rafael|bernardo|r[úu]ben|nuno|tiago|vitinha|semedo|palhinha|in[áa]cio)/i,'POR'],
+ [/(rossi|ricci|moretti|ferrari|esposito|romano|conti|greco|gallo|mancini|barella|donnarumma|bastoni|tonali|chiesa|scamacca|calafiori|frattesi|dimarco|retegui|locatelli|raspadori)/i,'ITA'],
+ [/(m[üu]ller|kimmich|goretzka|havertz|wirtz|f[üu]llkrug|sane|gnabry|r[üu]diger|tah|schlotterbeck|neuer|musiala|undav|kleindienst|anton|mittelst[äa]dt|schmidt|schneider|fischer|weber|wagner|becker|hoffmann|sch[äa]fer|koch|bauer|richter|klein|wolf|neumann|zimmermann|braun|kr[üu]ger|hartmann|lange|werner|krause|schulz|b[öo]hm|vogel)/i,'GER'],
+ [/(dubois|lef[èe]vre|moreau|girard|bonnet|fournier|mercier|renard|lambert|rousseau|marchand|perrin|mbapp|griezmann|dembele|upamecano|saliba|koundé|tchouameni|camavinga|thuram|barcola|zaire|maignan|konat|hernandez|rabiot|kolo)/i,'FRA'],
+ [/(de jong|van dijk|bakker|visser|smit|meijer|mulder|de boer|peters|hendriks|dekker|willems|kuipers|verhoeven|van leeuwen|bergwijn|dumfries|gakpo|weghorst|koopmeiners|frimpong|timber|simons|kluivert|schouten|veerman|malen|zirkzee|de ligt|reijnders|verbruggen|geertruida)/i,'NED'],
+ [/(peeters|janssens|maes|claes|wouters|de smet|declercq|vermeulen|van damme|lemmens|cools|michiels|goossens|lukaku|de bruyne|doku|tielemans|castagne|onana|trossard|openda|de ketelaere|saelemaekers|carrasco)/i,'BEL']];
+const NAT_POOL_BY_CC={ENG:['ENG','ENG','ENG','ENG','ENG','ENG','IRL','SCO','WAL','NIR','NGA','GHA','JAM'],
+ ESP:['ESP','ESP','ESP','ESP','ESP','ARG','BRA','URU','COL','MAR'],
+ ITA:['ITA','ITA','ITA','ITA','ARG','BRA','ALB','MAR','SEN'],
+ GER:['GER','GER','GER','GER','GER','AUT','TUR','POL','GHA'],
+ FRA:['FRA','FRA','FRA','FRA','SEN','MLI','CIV','CMR','ALG','MAR'],
+ POR:['POR','POR','POR','BRA','ARG','ANG','CPV','GUI'],
+ NED:['NED','NED','NED','NED','BEL','MAR','GHA','SUR','BRA'],
+ BEL:['BEL','BEL','BEL','BEL','COD','MAR','FRA','NED'],
+ TUR:['TUR','TUR','TUR','TUR','GER','BRA','NGA'],
+ SCO:['SCO','SCO','SCO','ENG','IRL','AUS'],
+ SUI:['SUI','SUI','SUI','KVX','ALB','CMR','NGA'],
+ AUT:['AUT','AUT','AUT','GER','BIH','SRB','TUR'],
+ GRE:['GRE','GRE','GRE','ALB','BRA','NGA'],
+ CZE:['CZE','CZE','CZE','SVK','UKR'],
+ DEN:['DEN','DEN','DEN','SWE','ISL','GHA'],
+ NOR:['NOR','NOR','NOR','SWE','ISL','NGA'],
+ POL:['POL','POL','POL','UKR','SVK'],
+ SRB:['SRB','SRB','SRB','MNE','BIH','MKD'],
+ UKR:['UKR','UKR','UKR','GEO','BRA'],
+ CRO:['CRO','CRO','CRO','BIH','SRB','MNE']};
+function natGuess(p,c){
+ if(NAT_EXACT[p.name])return NAT_EXACT[p.name];
+ const nm=' '+String(p.name||'').toLowerCase()+' ';
+ for(let i=0;i<NAT_HINT.length;i++)if(NAT_HINT[i][0].test(nm))return NAT_HINT[i][1];
+ const pool=NAT_POOL_BY_CC[(c&&c.cc)||'ENG']||['ENG'];
+ const r=mulberry(hashStr('nat|'+p.name+'|'+p.id));
+ const pick=pool[Math.floor(r()*pool.length)];
+ return NAT_BY[pick]?pick:pool[0]}
+function natOf(p){
+ if(p.nat)return p.nat;
+ p.nat=natGuess(p,G.clubs[p.club]);
+ return p.nat}
+function assignNations(){eachPlayer(p=>{if(!p.nat)natOf(p)})}
+
+/* ---------------------------------------------------------------------
+   A NATIONAL SQUAD is the best twenty-three eligible players in the world
+   who qualify for it, which is exactly how one is picked.
+   --------------------------------------------------------------------- */
+let NSQ_CACHE=null,NSQ_KEY='';
+function nationSquads(){
+ const k=G.season+'|'+Math.floor(G.day/30);
+ if(NSQ_KEY===k&&NSQ_CACHE)return NSQ_CACHE;
+ const by={};
+ eachPlayer(p=>{if(p.age>=17&&!p.youth){const n=natOf(p);(by[n]=by[n]||[]).push(p)}});
+ for(const n in by)by[n]=by[n].sort((a,b)=>b.ovr-a.ovr).slice(0,23);
+ NSQ_CACHE=by;NSQ_KEY=k;return by}
+function nationStrength(code){
+ const sq=(nationSquads()[code]||[]).slice(0,18);
+ const base=(NAT_BY[code]||{base:70}).base;
+ if(!sq.length)return base*.6;
+ const mean=sq.reduce((s,p)=>s+p.ovr,0)/sq.length;
+ // half what the players are actually worth, half the nation's standing
+ return mean*.55+base*.45}
+
+/* ---------------------------------------------------------------------
+   THE CALENDAR
+   --------------------------------------------------------------------- */
+function seasonYear(s){return 2026+(s==null?G.season:s)}
+function tourneyFor(year){
+ if(year%4===2)return{kind:'WC',name:'World Cup',teams:48,groups:12,icon:'🌍'};
+ if(year%4===0)return{kind:'EU',name:'European Championship',teams:24,groups:6,icon:'🏆'};
+ return null}
+function nextTourney(){
+ for(let s=G.season;s<G.season+5;s++){const t=tourneyFor(seasonYear(s));if(t)return{...t,year:seasonYear(s),season:s}}
+ return null}
+
+/* ---------------------------------------------------------------------
+   QUALIFYING — resolved by strength with room for an upset, and with the
+   confederation places the real thing uses
+   --------------------------------------------------------------------- */
+const WC_SLOTS={UEFA:16,CAF:9,AFC:8,CONMEBOL:6,CONCACAF:6,OFC:1};
+function qualifiers(t,year){
+ const rng=mulberry(hashStr('q'+t.kind+year));
+ const score=c=>nationStrength(c)+(rng()*9-4.5);
+ if(t.kind==='EU'){
+  return NATIONS.filter(n=>n[2]==='UEFA').map(n=>n[0])
+   .sort((a,b)=>score(b)-score(a)).slice(0,t.teams)}
+ const out=[];
+ for(const conf in WC_SLOTS){
+  const pool=NATIONS.filter(n=>n[2]===conf).map(n=>n[0]).sort((a,b)=>score(b)-score(a));
+  out.push(...pool.slice(0,WC_SLOTS[conf]))}
+ // the last two places come from the inter-confederation play-off, which
+ // Europe does not enter: one side from each of the other confederations
+ // goes into it and two of them come through
+ const po=[];
+ ['AFC','CAF','CONCACAF','CONCACAF','CONMEBOL','OFC'].forEach(conf=>{
+  const best=NATIONS.filter(n=>n[2]===conf).map(n=>n[0])
+   .filter(c=>out.indexOf(c)<0&&po.indexOf(c)<0).sort((a,b)=>score(b)-score(a))[0];
+  if(best)po.push(best)});
+ po.sort((a,b)=>score(b)-score(a));
+ while(out.length<t.teams&&po.length)out.push(po.shift());
+ return out.slice(0,t.teams)}
+
+/* ---------------------------------------------------------------------
+   PLAYING IT
+   --------------------------------------------------------------------- */
+function natMatch(A,B,rng,neutral){
+ const sA=nationStrength(A),sB=nationStrength(B);
+ const e=(sA-sB)/11;
+ const lA=clamp(1.18*Math.exp(e*.5),.18,4.2),lB=clamp(1.18*Math.exp(-e*.5),.18,4.2);
+ const P=l=>{let L=Math.exp(-l),k=0,p=1;do{k++;p*=rng()}while(p>L);return k-1};
+ let a=Math.min(7,P(lA)),b=Math.min(7,P(lB));
+ return{a,b}}
+function natScorers(code,n,rng,tag){
+ const sq=nationSquads()[code]||[];
+ const out=[];
+ for(let k=0;k<n;k++){
+  const w=sq.map(p=>({p,w:({ST:12,AMC:6,AML:6,AMR:6,MR:4,ML:4,MC:3,DM:1.2,WBL:1,DL:.8,DR:.8,DC:1,GK:.02}[p.pos]||2)*Math.pow(Math.max(1,p.ovr-45)/18,1.6)}));
+  let tot=w.reduce((s,x)=>s+x.w,0),r=rng()*tot,hit=w[0];
+  for(const x of w){r-=x.w;if(r<=0){hit=x;break}}
+  if(hit&&hit.p){out.push(hit.p);hit.p.intGoals=(hit.p.intGoals||0)+1}}
+ return out}
+function playKnockout(list,rng,label){
+ const rounds=[];let cur=list.slice();
+ while(cur.length>1){
+  const next=[],ties=[];
+  for(let i=0;i<cur.length;i+=2){
+   const A=cur[i],B=cur[i+1];
+   if(B==null){next.push(A);continue}
+   let{a,b}=natMatch(A,B,rng,true);
+   let pens=null;
+   if(a===b){const pa=rng()<.5;pens=pa?[5,4]:[4,5];if(pa)a+=.0001;else b+=.0001}
+   const w=a>b?A:B;
+   ties.push({A,B,a:Math.floor(a),b:Math.floor(b),pens,w});
+   next.push(w)}
+  rounds.push(ties);cur=next}
+ return{rounds,winner:cur[0]}}
+function runTournament(t,year){
+ const rng=mulberry(hashStr('t'+t.kind+year));
+ const teams=qualifiers(t,year);
+ // seeded into groups so the strongest are kept apart, as they are drawn
+ const seeded=teams.slice().sort((a,b)=>nationStrength(b)-nationStrength(a));
+ const G4=[];for(let g=0;g<t.groups;g++)G4.push([]);
+ for(let pot=0;pot<4;pot++){
+  const slice=shuffle(seeded.slice(pot*t.groups,(pot+1)*t.groups));
+  slice.forEach((c,ix)=>G4[ix].push(c))}
+ const table=[],results=[];
+ G4.forEach((grp,gi)=>{
+  const row={};grp.forEach(c=>row[c]={c,p:0,w:0,d:0,l:0,gf:0,ga:0,pts:0});
+  for(let i=0;i<grp.length;i++)for(let j=i+1;j<grp.length;j++){
+   const A=grp[i],B=grp[j];const{a,b}=natMatch(A,B,rng,true);
+   natScorers(A,a,rng);natScorers(B,b,rng);
+   results.push({g:gi,A,B,a,b});
+   const X=row[A],Y=row[B];
+   X.p++;Y.p++;X.gf+=a;X.ga+=b;Y.gf+=b;Y.ga+=a;
+   if(a>b){X.w++;Y.l++;X.pts+=3}else if(b>a){Y.w++;X.l++;Y.pts+=3}else{X.d++;Y.d++;X.pts++;Y.pts++}}
+  const sorted=Object.values(row).map(r=>(r.gd=r.gf-r.ga,r))
+   .sort((a,b)=>b.pts-a.pts||b.gd-a.gd||b.gf-a.gf||nationStrength(b.c)-nationStrength(a.c));
+  table.push(sorted)});
+ const firsts=table.map(g=>g[0].c),seconds=table.map(g=>g[1].c);
+ const thirds=table.map(g=>g[2]).sort((a,b)=>b.pts-a.pts||b.gd-a.gd||b.gf-a.gf)
+  .slice(0,t.kind==='WC'?8:4).map(r=>r.c);
+ const bracket=shuffle([...firsts,...seconds,...thirds]);
+ const ko=playKnockout(bracket,rng,t.name);
+ // goals in the knockout rounds belong to somebody too
+ ko.rounds.forEach(rd=>rd.forEach(x=>{natScorers(x.A,x.a,rng);natScorers(x.B,x.b,rng)}));
+ const finalTie=ko.rounds[ko.rounds.length-1][0];
+ const runner=finalTie?(finalTie.w===finalTie.A?finalTie.B:finalTie.A):null;
+ // caps and a reputation bump for everybody who went
+ const sq=nationSquads();
+ const played=new Set([...teams]);
+ played.forEach(code=>{(sq[code]||[]).forEach(p=>{
+  p.caps=(p.caps||0)+(code===ko.winner?7:code===runner?7:4);
+  p.intTourneys=(p.intTourneys||0)+1;
+  if(code===ko.winner||code===runner){p.value=Math.round(p.value*1.08/5e4)*5e4}
+  // a summer of football instead of a summer off
+  p.cond=clamp((p.cond||100)-(code===ko.winner?22:12),40,100);
+  p.sharp=clamp((p.sharp||70)+8,35,100)})});
+ return{kind:t.kind,name:t.name,icon:t.icon,year,teams,table,ko,winner:ko.winner,runner,
+  golden:(()=>{let best=null;played.forEach(c=>(sq[c]||[]).forEach(p=>{
+   if(!best||(p.intGoals||0)>(best.intGoals||0))best=p}));
+   return best?{name:best.name,nat:natOf(best),goals:best.intGoals||0}:null})()}}
+
+/* ---------------------------------------------------------------------
+   THE SUMMER — the tournament happens between two seasons
+   --------------------------------------------------------------------- */
+const _endSeasonIntl=endSeason;
+endSeason=function(){
+ const r=_endSeasonIntl.apply(this,arguments);
+ try{
+  const year=seasonYear(G.season);      // the season counter has already ticked
+  const t=tourneyFor(year);
+  if(!t)return r;
+  eachPlayer(p=>{if(p.intGoals)p.intGoals=0});
+  const res=runTournament(t,year);
+  G.tourneys=(G.tourneys||[]);
+  G.tourneys.push({kind:res.kind,name:res.name,icon:res.icon,year:res.year,
+   winner:res.winner,runner:res.runner,golden:res.golden,
+   last4:(res.ko.rounds[res.ko.rounds.length-2]||[]).map(x=>x.w)});
+  G.lastTourney=res;
+  const mine=G.clubs[G.my].players.filter(p=>(p.intTourneys||0)>0&&res.teams.indexOf(natOf(p))>=0);
+  const won=mine.filter(p=>natOf(p)===res.winner);
+  mail('news',res.icon+' '+res.year+' '+res.name,
+   '<b>'+esc(natName(res.winner))+'</b> are champions'+(res.runner?', beating <b>'+esc(natName(res.runner))+'</b> in the final':'')+'.'+
+   (res.golden?'<br><br>Golden Boot: <b>'+esc(res.golden.name)+'</b> ('+esc(natName(res.golden.nat))+') with '+res.golden.goals+'.':'')+
+   (mine.length?'<br><br><b>'+mine.length+'</b> of your players were at the tournament'+
+     (won.length?', and '+(won.length===1?'<b>'+esc(won[0].name)+'</b> comes back a world champion.':'<b>'+won.length+'</b> of them come back champions.'):
+      '. They report back short of a proper break.'):''));
+ }catch(e){}
+ return r};
+
+/* ---------------------------------------------------------------------
+   THE BREAKS — six a season, and they cost you
+   --------------------------------------------------------------------- */
+function onIntBreak(day){
+ const rel=day-(G.seasonStart||0);
+ return INT_BREAKS.indexOf(rel)>=0}
+function callUps(ci){
+ const sq=nationSquads();
+ const c=G.clubs[ci];
+ return c.players.filter(p=>{
+  if(p.youth||p.injury)return false;
+  const n=natOf(p);const s=sq[n];
+  return s&&s.indexOf(p)>=0})}
+const _dtcIntl=dailyTickCore;
+dailyTickCore=function(){
+ _dtcIntl.apply(this,arguments);
+ if(!G.clubs||G.sacked)return;
+ const rel=G.day-(G.seasonStart||0);
+ if(INT_BREAKS.indexOf(rel)<0)return;
+ if(G._intDay===G.day)return;G._intDay=G.day;
+ const t=nextTourney();
+ const away=callUps(G.my);
+ if(!away.length){
+  mail('news','🌍 International break','Nobody from the squad is away this window. A rare and useful fortnight on the training ground.');
+  return}
+ const rng=mulberry(hashStr('ib'+G.season+G.day));
+ const notes=[],hurt=[];
+ away.forEach(p=>{
+  p.caps=(p.caps||0)+(rng()<.75?2:1);
+  const scored=rng()<(p.pos==='ST'?.34:p.pos.startsWith('AM')?.22:.07)?1:0;
+  if(scored){p.intGoals=(p.intGoals||0)+scored;p.intCareerGoals=(p.intCareerGoals||0)+scored}
+  p.cond=clamp(p.cond-(12+rng()*16),35,100);
+  p.sharp=clamp(p.sharp+5,35,100);
+  if(rng()<0.055+p.injuryProneness/400){
+   p.injury={type:pick(['Hamstring strain','Ankle sprain','Knock','Calf strain','Thigh strain']),
+    days:Math.round(6+rng()*24)};
+   hurt.push(p.name+' — '+p.injury.type+', '+p.injury.days+' days')}
+  notes.push(esc(p.name)+' <span class="xs faint">'+esc(natName(natOf(p)))+'</span>'+(scored?' ⚽':''))});
+ mail(hurt.length?'injury':'news','🌍 International break — '+away.length+' away',
+  '<b>'+away.length+'</b> of your players are on international duty'+
+  (t?' with the '+t.year+' '+t.name+' on the horizon':'')+'.<br><br>'+notes.join('<br>')+
+  (hurt.length?'<br><br><b>Returning injured:</b><br>'+hurt.map(esc).join('<br>'):'<br><br>They will come back tired.'))};
+
+const _newGameIntl=newGame;
+newGame=function(i){_newGameIntl(i);assignNations();G.tourneys=[]};
+const _loadIntl=loadSlot;
+loadSlot=function(s){const ok=_loadIntl(s);if(ok)try{assignNations()}catch(e){}return ok};
+
+/*#w9_intl.js#*//*#w10_intlview.js#*/
+
+/* =====================================================================
+   THE INTERNATIONAL SCREEN — the cycle, the squads, and your own players
+   ===================================================================== */
+function vIntl(){
+ const nx=nextTourney();
+ const me=G.clubs[G.my];
+ const sq=nationSquads();
+ let h='';
+ if(nx){
+  const away=nx.season-G.season;
+  h+='<div class="sec"><div class="t">'+nx.icon+' '+nx.year+' '+esc(nx.name)+'</div><div class="ln"></div>'+
+   '<div class="sub">'+(away<=0?'this summer':away===1?'next summer':'in '+away+' seasons')+'</div></div>'+
+   '<div class="card tight"><div class="small muted" style="padding:4px 2px">'+
+   nx.teams+' nations · '+nx.groups+' groups of four · '+
+   (nx.kind==='WC'?'the top two and the eight best third-placed sides go into a round of 32'
+    :'the top two and the four best thirds go into a round of 16')+
+   '.</div></div>'}
+ /* your own internationals */
+ const mine=me.players.filter(p=>{const n=natOf(p);return sq[n]&&sq[n].indexOf(p)>=0});
+ h+='<div class="sec"><div class="t">Your internationals</div><div class="ln"></div><div class="sub">'+mine.length+' in a national squad</div></div>';
+ if(!mine.length)h+='<div class="card tight"><div class="small muted" style="padding:6px 2px">Nobody in the squad is currently good enough for their country. Develop one and the call will come.</div></div>';
+ else{
+  h+='<div class="card tight">'+mine.sort((a,b)=>b.ovr-a.ovr).map(p=>
+   '<div class="spread" data-action="playerView" data-id="'+p.id+'" style="padding:6px 3px;border-bottom:1px solid var(--chalk)">'+
+   '<div class="row" style="gap:7px;min-width:0"><span>'+ccFlag(natOf(p))+'</span>'+
+   '<div style="min-width:0"><div class="small" style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(p.name)+'</div>'+
+   '<div class="xs faint">'+esc(natName(natOf(p)))+' · '+p.pos+'</div></div></div>'+
+   '<div class="xs num" style="text-align:right"><b>'+(p.caps||0)+'</b> caps'+
+   ((p.intCareerGoals||0)?'<br>'+p.intCareerGoals+' goals':'')+'</div></div>').join('')+'</div>'}
+ /* the world's strongest sides right now */
+ const rank=NATIONS.map(n=>n[0]).map(c=>({c,s:nationStrength(c)})).sort((a,b)=>b.s-a.s).slice(0,16);
+ h+='<div class="sec"><div class="t">World ranking</div><div class="ln"></div><div class="sub">by the players available</div></div>'+
+  '<div class="card tight">'+rank.map((r,ix)=>{
+   const has=(sq[r.c]||[]).filter(p=>p.club===G.my).length;
+   return '<div class="spread" style="padding:5px 3px;border-bottom:1px solid var(--chalk)">'+
+   '<div class="row" style="gap:7px"><span class="xs num faint" style="min-width:18px">'+(ix+1)+'</span>'+
+   '<span>'+ccFlag(r.c)+'</span><span class="small" style="font-weight:700">'+esc(natName(r.c))+'</span>'+
+   (has?'<span class="xs" style="color:var(--gold)">· '+has+' of yours</span>':'')+'</div>'+
+   '<span class="num xs" style="font-weight:800">'+Math.round(r.s)+'</span></div>'}).join('')+'</div>';
+ /* the roll of honour */
+ if((G.tourneys||[]).length){
+  h+='<div class="sec"><div class="t">Roll of honour</div><div class="ln"></div></div><div class="card tight">'+
+   G.tourneys.slice().reverse().map(t=>
+   '<div class="spread" style="padding:6px 3px;border-bottom:1px solid var(--chalk)">'+
+   '<div><div class="small" style="font-weight:700">'+t.icon+' '+t.year+' '+esc(t.name)+'</div>'+
+   (t.golden?'<div class="xs faint">Golden Boot: '+esc(t.golden.name)+' ('+t.golden.goals+')</div>':'')+'</div>'+
+   '<div style="text-align:right"><div class="small" style="font-weight:800">'+ccFlag(t.winner)+' '+esc(natName(t.winner))+'</div>'+
+   (t.runner?'<div class="xs faint">beat '+esc(natName(t.runner))+'</div>':'')+'</div></div>').join('')+'</div>'}
+ /* the last tournament in detail */
+ const L=G.lastTourney;
+ if(L&&L.ko&&L.ko.rounds){
+  const names=['Round of 32','Round of 16','Quarter-finals','Semi-finals','Final'];
+  const off=names.length-L.ko.rounds.length;
+  h+='<div class="sec"><div class="t">'+L.year+' knockout rounds</div><div class="ln"></div></div><div class="card tight">';
+  L.ko.rounds.forEach((rd,ix)=>{
+   const lbl=names[Math.max(0,ix+off)]||'Round '+(ix+1);
+   h+='<div class="xs faint" style="padding:6px 2px 2px;font-weight:700">'+lbl+'</div>';
+   rd.slice(0,16).forEach(x=>{
+    h+='<div class="spread" style="padding:3px 3px">'+
+    '<span class="xs" style="flex:1;text-align:right;font-weight:'+(x.w===x.A?'800':'500')+'">'+ccFlag(x.A)+' '+esc(natName(x.A))+'</span>'+
+    '<span class="num xs" style="padding:0 8px;font-weight:800">'+x.a+'–'+x.b+(x.pens?' <span class="faint">('+x.pens[0]+'–'+x.pens[1]+'p)</span>':'')+'</span>'+
+    '<span class="xs" style="flex:1;font-weight:'+(x.w===x.B?'800':'500')+'">'+ccFlag(x.B)+' '+esc(natName(x.B))+'</span></div>'})});
+  h+='</div>'}
+ return h}
+/* it lives in the Club section, next to the cups */
+if(typeof CLUB_GROUPS!=='undefined'&&!CLUB_GROUPS[0][1].some(x=>x[0]==='intl'))
+ CLUB_GROUPS[0][1].push(['intl','International']);
+const _vClubIntl=vClubFinal;
+vClubFinal=function(){
+ if(UI.clubTab!=='intl')return _vClubIntl();
+ const h='<div class="secnav">'+CLUB_GROUPS.map(g=>
+  '<div style="flex:none"><div class="xs faint" style="margin:0 0 4px 2px;font-weight:800;letter-spacing:.5px">'+g[0].toUpperCase()+'</div>'+
+  '<div class="row" style="gap:5px">'+g[1].map(x=>
+   '<button class="chip'+(UI.clubTab===x[0]?' on':'')+'" data-action="clubTab" data-v="'+x[0]+'">'+x[1]+'</button>').join('')+'</div></div>').join('')+'</div>';
+ return h+vIntl()};
+
+/*#w10_intlview.js#*//*#w11_youth.js#*/
+
+/* =====================================================================
+   THE NEXT ONES — an academy that keeps producing for fifty seasons
+   ---------------------------------------------------------------------
+   Three things were quietly going to break a very long save.
+
+   NAMES. Every player born into the world was drawn from fifty first
+   names and fifty surnames, all English. Two and a half thousand
+   combinations, shared by four hundred and eighty clubs, for as long as
+   you kept playing — so by season ten you were signing the third Jack
+   Walker. The pools below are far larger and, more importantly, they are
+   drawn from the country the player is actually coming through in.
+
+   STANDARD. A youth-team player was generated the same wherever he was:
+   Real Madrid's academy and Morecambe's produced the same boy. Now the
+   intake is pitched against the club's own standard, so the best academies
+   turn out players who can actually get into the side, and the smallest
+   ones turn out squad fillers with the occasional gem.
+
+   DECAY. Clubs the computer runs only promoted from their academy when
+   they were short of bodies, threw away anyone who turned twenty, and
+   filled the gaps with generic fifty-eight rated players. Left running for
+   fifty seasons that flattens the whole world toward the middle: no more
+   great sides, no more terrible ones. They now graduate their best every
+   summer and replace what they lose at their own level.
+   ===================================================================== */
+const Y_FN={
+ENG:('Jack Harry Oliver George Charlie Alfie Archie Freddie Louie Kai Mason Reece Tyler Callum Lewis Owen Marcus Jayden Ollie Finley Bailey Kieran Dylan Rhys Josh '+
+ 'Alfred Arthur Albie Bobby Teddy Rory Ronnie Frankie Elliot Jude Cole Hugo Rex Otis Sonny Reggie Jenson Kayden Tommy Riley Toby Isaac Jaxon Leo Noah '+
+ 'Ethan Zach Nathan Corey Brandon Aaron Declan Connor Liam Kyle Shay Jamie Luca Elias Ellis Micah Malachi Ezra Kobi Jarell Tyrese Kaeden Roman Vinnie Chester '+
+ 'Sol Zane Jonah Reuben Seth Miles Caleb Blake Kian Joel Curtis Levi Trey Devon Ashton Marley Rio Ade Femi Tunde Kwame Kofi Jaden Nile Bode').split(' '),
+ENG2:('Walker Hughes Bennett Clarke Robinson Turner Wright Foster Barnes Chapman Dawson Ellis Gibson Hardy Ingram Jennings Kerr Lowe Mercer Nash Osborne Palmer Reid Shaw Webb '+
+ 'Ashby Bramley Carrington Dunmore Eastwood Fairhurst Garside Halliwell Ibbotson Jardine Kimber Lockwood Marlowe Netherwood Ollerton Pemberton Quarrie Ravenhill Sedgwick Thornley '+
+ 'Underhill Verity Wharton Yardley Ackroyd Braithwaite Castleton Denby Endicott Fenwick Grimshaw Hollingworth Inkpen Jessop Kirkbride Langtree Mowbray Norbury Oakley Prescott '+
+ 'Radcliffe Standish Tunnicliffe Uttley Vickery Wadsworth Yorke Alderton Birtwistle Cawley Duxbury Entwistle Fothergill Gledhill Haworth Iveson Jellicoe Kenworthy Lightfoot Massey '+
+ 'Naylor Openshaw Pilkington Quill Rushworth Shackleton Thistlethwaite Umber Vine Winstanley Yates Adeyemi Boateng Chukwu Danquah Eze Frimpong Gyasi Hylton Idowu Johnson '+
+ 'Kamau Lartey Mensah Nkemelu Owusu Pryce Quansah Riddick Sackey Thompson Uduka Vaughan Wanyama Yeboah Zaki').split(' ')};
+function bigPool(cc){
+ const p=wNamePool(cc);
+ if(cc==='ENG')return{f:Y_FN.ENG,l:Y_FN.ENG2};
+ // elsewhere: the country's own names, widened by pairing every first name
+ // with every surname the game knows for that country
+ return{f:p._f||p[0].split(' '),l:p._l||p[1].split(' ')}}
+function worldName(cc,rng,avoid){
+ const P=bigPool(cc||'ENG');
+ const r=rng||Math.random;
+ for(let k=0;k<14;k++){
+  const nm=P.f[Math.floor(r()*P.f.length)]+' '+P.l[Math.floor(r()*P.l.length)];
+  if(!avoid||!avoid.has(nm))return nm}
+ return P.f[Math.floor(r()*P.f.length)]+' '+P.l[Math.floor(r()*P.l.length)]}
+function clubNames(c){
+ if(!c._nm){c._nm=new Set();
+  (c.players||[]).forEach(p=>c._nm.add(p.name));
+  (c.youth||[]).forEach(p=>c._nm.add(p.name))}
+ return c._nm}
+
+/* ---------------------------------------------------------------------
+   A YEAR'S INTAKE, pitched at the club that produced it
+   --------------------------------------------------------------------- */
+genYouthPlayer=function(ci,rng){
+ const c=G.clubs[ci];
+ const r=rng||Math.random;
+ const std=ovrForRep(c.rep);                 // what a first-teamer here looks like
+ const pos=pick(['GK','DL','DC','DC','DR','DM','MC','MC','AMC','AML','AMR','ST','ST']);
+ // a sixteen year old is a long way short of the first team wherever he is
+ const ovr=clamp(Math.round(std-18+r()*12),32,66);
+ // and how high he might go is the real difference between academies
+ const reach=6+r()*16+(c.rep/620)*(r()<.10?1.5:1);
+ const pot=clamp(Math.round(ovr+reach),ovr+3,97);
+ const used=clubNames(c);
+ const nm=worldName(c.cc||'ENG',r,used);
+ used.add(nm);
+ const p=genPlayer([nm,pos,Math.round(15+r()*2),ovr,pot],ci);
+ p.youth=true;p.wage=500;p.contract=3;
+ // only your own academy needs to remember where a player came from;
+ // stamping it on eight thousand others is a megabyte of save file
+ if(ci===G.my){p.academy=c.key;p.born=G.season||1}
+ return p};
+
+/* every club gets an academy of the right size, wherever it plays */
+const _buildAcYouth=buildAcademies;
+buildAcademies=function(){
+ _buildAcYouth();
+ G.clubs.forEach(c=>{
+  const target=c.i===G.my?16:c.tier===1?(LEAGUES[c.league]&&LEAGUES[c.league].coef>=4?9:8):7;
+  const rng=mulberry(hashStr('yth2'+c.key));
+  while((c.youth||[]).length<target)c.youth.push(genYouthPlayer(c.i,rng))})};
+
+/* ---------------------------------------------------------------------
+   WHAT THE COMPUTER'S CLUBS DO EACH SUMMER
+   They graduate their best, they let the ones who are not going to make it
+   go, and they replace what they have lost at their own level rather than
+   with whatever was cheapest.
+   --------------------------------------------------------------------- */
+function aiSquadRefresh(){
+ const rng=Math.random;
+ G.clubs.forEach(c=>{
+  if(c.i===G.my)return;
+  c.youth=c.youth||[];
+  // 1. graduate anybody good enough, not merely anybody needed
+  const bar=ovrForRep(c.rep)-14;
+  c.youth.sort((a,b)=>(b.ovr+b.pot/2)-(a.ovr+a.pot/2));
+  const up=[];
+  c.youth.forEach(p=>{
+   if(p.age<17)return;
+   if(up.length>=3)return;
+   if(p.ovr>=bar||p.pot>=ovrForRep(c.rep)+4||p.age>=19)up.push(p)});
+  up.forEach(p=>{
+   c.youth=c.youth.filter(x=>x.id!==p.id);
+   if(p.age>=19&&p.pot<bar+2)return;                 // released rather than promoted
+   p.youth=false;p.contract=irnd(2,4);
+   p.wage=Math.max(1500,Math.round(wageFor(p.ovr,c.rep)*.4/500)*500);
+   c.players.push(p)});
+  c.youth=c.youth.filter(p=>p.age<=19);
+  // an academy the game never shows you does not need twenty players in it
+  const cap=c.tier===1?11:9;
+  if(c.youth.length>cap){c.youth.sort((a,b)=>b.pot-a.pot);c.youth.length=cap}
+  // 2. keep the squad at a sensible size, at the club's own standard
+  const want=c.tier===1?23:21;
+  if(c.players.length>want+4){
+   c.players.sort((a,b)=>(b.ovr+(b.pot-b.ovr)*.4)-(a.ovr+(a.pot-a.ovr)*.4));
+   c.players.length=want+3}
+  if(c.players.length<want){
+   const std=ovrForRep(c.rep);
+   const need=want-c.players.length;
+   const used=clubNames(c);
+   const shape=['GK','DC','DR','DL','DM','MC','AMC','AMR','AML','ST','DC','MC','ST'];
+   for(let k=0;k<need;k++){
+    const pos=shape[k%shape.length];
+    const ovr=clamp(Math.round(std-4+rng()*9),34,92);
+    const age=irnd(19,29);
+    const nm=worldName(c.cc||'ENG',rng,used);used.add(nm);
+    const np=genPlayer([nm,pos,age,ovr,clamp(ovr+(age<23?irnd(2,10):irnd(0,3)),ovr,95)],c.i);
+    np.contract=irnd(2,4);
+    c.players.push(np)}}
+  // 3. a squad without a goalkeeper is not a squad
+  if(!c.players.some(p=>p.pos==='GK')){
+   const std=ovrForRep(c.rep);
+   const nm=worldName(c.cc||'ENG',rng,clubNames(c));
+   c.players.push(genPlayer([nm,'GK',irnd(22,31),Math.round(std-2),Math.round(std+2)],c.i))}
+  c._nm=null})}
+const _endSeasonYouth=endSeason;
+endSeason=function(){
+ const r=_endSeasonYouth.apply(this,arguments);
+ try{aiSquadRefresh()}catch(e){}
+ return r};
+
+/* ---------------------------------------------------------------------
+   YOUR OWN GRADUATES, remembered
+   --------------------------------------------------------------------- */
+const _promoteYouthRec=ACTIONS.promoteYouth;
+ACTIONS.promoteYouth=el=>{
+ const p=playerById(el.dataset.id);
+ const rec=p?{id:p.id,name:p.name,pos:p.pos,season:G.season,pot:p.pot}:null;
+ _promoteYouthRec(el);
+ if(rec){G.graduates=G.graduates||[];G.graduates.push(rec)}};
+function vGraduates(){
+ const gr=(G.graduates||[]).slice().reverse();
+ if(!gr.length)return '';
+ let h='<div class="sec"><div class="t">Academy graduates</div><div class="ln"></div><div class="sub">'+gr.length+' brought through</div></div><div class="card tight">';
+ gr.slice(0,20).forEach(g=>{
+  const p=playerById(g.id);
+  h+='<div class="spread" style="padding:5px 3px;border-bottom:1px solid var(--chalk)">'+
+  '<div><div class="small" style="font-weight:700">'+esc(g.name)+'</div><div class="xs faint">'+g.pos+' · season '+g.season+'</div></div>'+
+  '<div class="xs num" style="text-align:right">'+(p?(p.club===G.my?'<b>'+p.ovr+'</b> · '+(p.stats.apps||0)+' apps':'now at '+esc((G.clubs[p.club]||{}).short||'—')):'retired')+'</div></div>'});
+ return h+'</div>'}
+
+/*#w11_youth.js#*//*#w12_tts.js#*/
+
+/* =====================================================================
+   VOICES
+   ---------------------------------------------------------------------
+   What the browser gives us is the device's own speech engine, and the
+   difference between the worst and the best voice on the same phone is
+   enormous. A modern Android has "Google UK English Male"; Windows has
+   the Microsoft "Natural" neural voices; an iPhone has Siri and the
+   Enhanced/Premium downloads. Those are genuinely good. What it was
+   picking instead was whatever came back first, which on most machines is
+   the small offline fallback — the one that sounds like a robot.
+
+   Four things are fixed here.
+
+   1. THE VOICE LIST ARRIVES LATE. getVoices() is usually empty on the
+      first call and fills in a moment later. Anything asked for before
+      then was being spoken by the default voice. It now waits, and
+      re-ranks when the list lands.
+   2. THE RANKING WAS UPSIDE DOWN. It preferred offline voices. Neural and
+      cloud voices — Natural, Neural, Online, Premium, Enhanced, Siri —
+      are what a device has that sounds like a person, and they are now
+      what gets picked, with the novelty and compact voices pushed to the
+      bottom where they belong.
+   3. IT SPOKE IN ONE FLAT BREATH. A sentence is now broken at its commas
+      and full stops and spoken as a short sequence, each clause carrying
+      its own pace and pitch — quicker in the middle, slower and lower on
+      the last few words, lifting into a question. That single change is
+      most of the difference between reading and talking.
+   4. IT READ THE PAGE, NOT THE SENTENCE. "Man Utd 2-0 up, £40m, PSG" was
+      being read literally. It now says "Manchester United, two nil up,
+      forty million pounds, P S G".
+
+   And because no two devices have the same voices, there is a picker: it
+   lists what your device actually has, best first, and you can hear each
+   one before choosing.
+   ===================================================================== */
+const TTS={ready:false,voices:[],byName:{},cast:{},warmTries:0,pref:null};
+/* the chosen voice belongs to the device, not to the save, so it lives
+   outside it — otherwise it is forgotten every time you start a career */
+try{TTS.pref=localStorage.getItem('rdmVoice')||null}catch(e){}
+
+/* ---------- 1. wait for the list ---------- */
+function ttsWarm(){
+ if(!ttsAvailable())return;
+ let list=[];
+ try{list=speechSynthesis.getVoices()||[]}catch(e){}
+ if(list.length){ttsIndex(list);return}
+ if(TTS.warmTries++>40)return;
+ try{speechSynthesis.onvoiceschanged=()=>{try{ttsIndex(speechSynthesis.getVoices()||[])}catch(e){}}}catch(e){}
+ setTimeout(ttsWarm,120)}
+function ttsIndex(list){
+ if(!list||!list.length)return;
+ TTS.voices=list.slice().sort((a,b)=>ttsScore(b)-ttsScore(a));
+ TTS.byName={};TTS.voices.forEach(v=>TTS.byName[v.name]=v);
+ TTS.ready=true;TTS.cast={};
+ A2._vb=null;A2._vbN=-1;
+ if(TTS.pending){const p=TTS.pending;TTS.pending=null;try{p()}catch(e){}}}
+
+/* ---------- 2. rank by what actually sounds like a person ---------- */
+const TTS_GOOD=/(natural|neural|online|premium|enhanced|siri|wavenet|studio|journey|polyglot)/i;
+const TTS_BAD=/(compact|eloquence|espeak|pico|novelty|bad news|good news|bells|bubbles|whisper|zarvox|trinoids|albert|jester|organ|cellos|boing|deranged|hysterical|wobble|superstar|rocko|shelley|grandma|grandpa|flo|sandy)/i;
+function ttsScore(v){
+ const n=(v.name||''),l=(v.lang||'');
+ let s=0;
+ if(TTS_GOOD.test(n))s+=60;                    // a neural voice, by any of its names
+ if(/google/i.test(n))s+=30;                   // Android's are very good
+ if(/microsoft/i.test(n))s+=14;
+ if(v.localService===false)s+=26;              // cloud voices are the better ones
+ if(/^en-GB/i.test(l))s+=30;                   // this is an English football game
+ else if(/^en-(IE|AU|NZ|ZA)/i.test(l))s+=16;
+ else if(/^en/i.test(l))s+=9;
+ if(v.default)s+=2;
+ if(TTS_BAD.test(n))s-=200;
+ return s}
+function ttsGender(v){
+ const n=(v.name||'').toLowerCase();
+ if(/(female|woman|\bf\b|libby|aria|jenny|sonia|hazel|zira|samantha|victoria|karen|moira|tessa|fiona|serena|kate|amy|emma|joanna|salli|nicole|maisie|olivia|ava|allison|susan|catherine|natasha|clara|linda|michelle|sara|elsie|lily|abbi|bella|hollie|maisy|alice)/.test(n))return 'f';
+ if(/(male|\bm\b|ryan|guy|george|thomas|brandon|daniel|alex|fred|oliver|arthur|james|liam|william|matthew|justin|joey|russell|ethan|christopher|eric|steffan|noah|elliot|connor|david|mark|richard|adam|gordon)/.test(n))return 'm';
+ return null}
+function ttsPool(gender){
+ if(!TTS.ready)ttsWarm();
+ const en=TTS.voices.filter(v=>/^en/i.test(v.lang||''));
+ const base=en.length?en:TTS.voices;
+ if(!gender)return base;
+ const g=base.filter(v=>ttsGender(v)===gender);
+ return g.length?g:base}
+/* every reporter keeps the same voice, pace and pitch for a whole career */
+function ttsCast(who,gender){
+ const key=String(who||'reporter')+'|'+(gender||'');
+ if(TTS.cast[key])return TTS.cast[key];
+ const pool=ttsPool(gender);
+ const chosen=TTS.pref&&TTS.byName[TTS.pref];
+ let v=null;
+ if(chosen&&(!gender||ttsGender(chosen)===gender||!ttsGender(chosen)))v=chosen;
+ if(!v&&pool.length){
+  const top=ttsScore(pool[0]);
+  const good=pool.filter(x=>ttsScore(x)>=top-15);
+  v=good[(hashStr(key)>>>0)%good.length]}
+ const r=mulberry(hashStr('cast'+key));
+ const c={v,pitch:clamp(1+(r()*.22-.11),.7,1.35),rate:clamp(.97+(r()*.14-.07),.8,1.2)};
+ TTS.cast[key]=c;return c}
+
+/* ---------- 4. say the words, not the characters ---------- */
+const NUMW=['nil','one','two','three','four','five','six','seven','eight','nine','ten',
+ 'eleven','twelve','thirteen','fourteen','fifteen','sixteen','seventeen','eighteen','nineteen','twenty'];
+function sayNum(n){n=+n;return (n>=0&&n<=20&&Number.isInteger(n))?NUMW[n]:String(n)}
+const SAY_MAP=[
+ [/\bMan Utd\b/g,'Manchester United'],[/\bMan City\b/g,'Manchester City'],
+ [/\bSpurs\b/g,'Tottenham'],[/\bWolves\b/g,'Wolverhampton'],[/\bNott’?m Forest\b/gi,'Nottingham Forest'],
+ [/\bWest Brom\b/g,'West Bromwich Albion'],[/\bQPR\b/g,'Q P R'],
+ [/\bPSG\b/g,'P S G'],[/\bPSV\b/g,'P S V'],[/\bAZ\b/g,'A Z'],[/\bAEK\b/g,'A E K'],
+ [/\bLASK\b/g,'L A S K'],[/\bAVS\b/g,'A V S'],[/\bGK\b/g,'goalkeeper'],
+ [/\bVAR\b/g,'V A R'],[/\bFA Cup\b/g,'F A Cup'],[/\bEFL\b/g,'E F L'],
+ [/\bUEFA\b/g,'you-ay-fa'],[/\bPSR\b/g,'P S R'],
+ [/\bvs\.?\b/gi,'versus'],[/&/g,' and '],[/\bwk\b/gi,'week'],
+ [/\bMD(\d+)\b/g,(m,a)=>'matchday '+sayNum(a)]];
+function saySpeakable(t){
+ let s=String(t||'').replace(/<[^>]*>/g,' ').replace(/[“”"]/g,'').replace(/\s+/g,' ').trim();
+ SAY_MAP.forEach(([re,to])=>{s=s.replace(re,to)});
+ // money first, so the digits inside it are not eaten by the score rule
+ s=s.replace(/£\s?([\d.]+)\s?bn?\b/gi,(m,a)=>a+' billion pounds')
+    .replace(/£\s?([\d.]+)\s?m\b/gi,(m,a)=>a+' million pounds')
+    .replace(/£\s?([\d.]+)\s?k\b/gi,(m,a)=>a+' thousand pounds')
+    .replace(/£\s?([\d,]+)/g,(m,a)=>a.replace(/,/g,'')+' pounds');
+ // scorelines: 2-0 is "two nil", 2-2 is "two all"
+ s=s.replace(/\b(\d{1,2})\s?[-–]\s?(\d{1,2})\b/g,(m,a,b)=>
+  (+a===+b?sayNum(a)+' all':sayNum(a)+' '+(+b===0?'nil':sayNum(b))));
+ s=s.replace(/(\d+)(st|nd|rd|th)\b/g,(m,a,b)=>a+b);
+ s=s.replace(/\s+([,.;:!?])/g,'$1').replace(/\s{2,}/g,' ').trim();
+ return s}
+
+/* ---------- 3. speak it in clauses, the way people talk ---------- */
+function sayClauses(t){
+ const parts=t.split(/(?<=[,;:.!?—])\s+/).filter(x=>x.trim().length);
+ const out=[];
+ parts.forEach(p=>{
+  // very long clauses get one more breath in the middle
+  if(p.length>90){const i=p.lastIndexOf(' ',Math.floor(p.length/2));
+   if(i>20){out.push(p.slice(0,i));out.push(p.slice(i+1));return}}
+  out.push(p)});
+ return out.length?out:[t]}
+ttsStop=function(){if(ttsAvailable())try{TTS.seq=null;speechSynthesis.cancel()}catch(e){}};
+ttsSay=function(text,who,opt){
+ if(!ttsAvailable()||!sfxOn()||!ttsCfg().tts)return false;
+ const raw=saySpeakable(text);
+ if(!raw)return false;
+ const o=opt||{};
+ const go=()=>{
+  try{
+   speechSynthesis.cancel();
+   const cast=ttsCast(who,o.gender||nameGender(who));
+   const clauses=sayClauses(raw);
+   const token={};TTS.seq=token;
+   let i=0;
+   const next=()=>{
+    if(TTS.seq!==token||i>=clauses.length)return;
+    const c=clauses[i];const last=i===clauses.length-1;
+    const asks=/\?$/.test(c);
+    const u=new SpeechSynthesisUtterance(c);
+    try{if(cast.v){u.voice=cast.v;if(cast.v.lang)u.lang=cast.v.lang}}catch(e){}
+    // the middle of a sentence runs on; the end of one settles
+    u.rate=clamp((o.rate||1)*cast.rate*(last?.95:1.04),.65,1.5);
+    u.pitch=clamp((o.pitch||1)*cast.pitch*(asks?1.09:last?.96:1),.5,1.7);
+    u.volume=clamp((sfxCfg().vol||.7)*(o.vol||1),0,1);
+    u.onend=()=>{i++;const gap=last?0:(/[.!?]$/.test(c)?170:70);
+     if(gap)setTimeout(next,gap);else next()};
+    u.onerror=()=>{i++;next()};
+    A2._lastVoice=cast.v?cast.v.name+' ('+cast.v.lang+')':'default';
+    speechSynthesis.speak(u)};
+   next();
+   return true}
+  catch(e){return false}};
+ if(!TTS.ready){TTS.pending=go;ttsWarm();return true}
+ return go()};
+
+/* ---------- the picker: devices differ, so let people choose ---------- */
+ACTIONS.sfxVoicePick=()=>{
+ ttsWarm();
+ const list=ttsPool(null).slice(0,14);
+ const cur=TTS.pref;
+ if(!list.length){openModal('<h3>🗣️ Voice</h3><div class="card"><div class="small muted">This device has not reported any speech voices yet. Try again in a moment — on some phones the list arrives a second or two after the page opens.</div></div><button class="btn btn-ghost btn-block" style="margin-top:8px" data-action="closeModal">Back</button>');return}
+ openModal('<h3>🗣️ Reading voice</h3>'+
+  '<div class="small muted" style="margin:4px 0 10px">Best first. The ones marked ✨ are your device’s neural voices — they are the ones that sound like a person. Tap any to hear it.</div>'+
+  '<div class="card tight" style="max-height:340px;overflow:auto">'+
+  '<div class="mail'+(cur?'':' on')+'" data-action="sfxVoiceSet" data-v=""><div class="ic">⭐</div><div style="flex:1"><div class="tt">Best available</div><div class="bd">let the game choose, and match the reporter’s voice to who is speaking</div></div></div>'+
+  list.map(v=>'<div class="mail" data-action="sfxVoiceSet" data-v="'+esc(v.name)+'">'+
+   '<div class="ic">'+(TTS_GOOD.test(v.name)||v.localService===false?'✨':'🔈')+'</div>'+
+   '<div style="flex:1"><div class="tt">'+esc(v.name)+(cur===v.name?' ✓':'')+'</div>'+
+   '<div class="bd">'+esc(v.lang||'')+(v.localService===false?' · streamed':' · on device')+'</div></div></div>').join('')+
+  '</div><button class="btn btn-ghost btn-block" style="margin-top:8px" data-action="closeModal">Done</button>')};
+ACTIONS.sfxVoiceSet=el=>{
+ const n=el.dataset.v||'';
+ TTS.pref=n||null;
+ try{if(n)localStorage.setItem('rdmVoice',n);else localStorage.removeItem('rdmVoice')}catch(e){}
+ TTS.cast={};
+ ttsSay(n?'This is the voice you will hear in the press room. Big game tomorrow, boss.'
+         :'The game will pick the best voice this device has.','preview',{});
+ toast(n?'🗣️ '+n:'🗣️ Best available')};
+
+/* the sound sheet gains the picker */
+const _sfxSheetVoice=ACTIONS.frontSound;
+ACTIONS.frontSound=()=>{
+ _sfxSheetVoice();
+ setTimeout(()=>{
+  const host=$('#sheetBody');if(!host)return;
+  const btn=host.querySelector('[data-action="closeModal"]');
+  const add=document.createElement('button');
+  add.className='btn btn-ghost btn-block';add.style.marginTop='8px';
+  add.setAttribute('data-action','sfxVoicePick');
+  add.textContent='🗣️ Choose the reading voice…';
+  if(btn&&btn.parentNode)btn.parentNode.insertBefore(add,btn);else host.appendChild(add)},0)};
+ttsWarm();
+
+/*#w12_tts.js#*//*#w13_front.js#*/
+
+/* =====================================================================
+   THE FRONT DOOR, TOLD THE TRUTH
+   The start screen still advertised eighty-four clubs in six divisions.
+   ===================================================================== */
+function worldTagline(){
+ const nC=(typeof LEAGUES==='object')?Object.keys(LEAGUES).length:28;
+ return '2026/27 · 480+ clubs · '+nC+' divisions in 20 countries · Champions League · World Cup & Euros'}
+const _frontNewTag=ACTIONS.frontNew;
+ACTIONS.frontNew=()=>{
+ _frontNewTag();
+ const t=document.querySelector('#startScreen .tag');
+ if(t)t.textContent='480+ clubs · the full English pyramid · Europe’s leagues · promotion & relegation'};
+const _showStartTag=showStart;
+showStart=function(){
+ const r=_showStartTag.apply(this,arguments);
+ const t=document.querySelector('#startScreen .tag');
+ if(t)t.textContent=worldTagline();
+ return r};
+/* the picker still lists the clubs you can take a job at; it now says which
+   of the real leagues each one actually plays in */
+const _paintStartWorld=paintStart;
+paintStart=function(){
+ const r=_paintStartWorld.apply(this,arguments);
+ try{
+  const host=$('#startBody');if(!host)return r;
+  const cards=host.querySelectorAll('.xs.muted');
+  if(cards.length&&/Continental League|undefined/.test(cards[0].textContent||'')){
+   const sel=(UI._cat||[]).find(c=>c.i===UI.startSel);
+   if(sel)cards[0].textContent=cards[0].textContent
+    .replace(/Continental League|undefined/,'Europe')}}
+ catch(e){}
+ return r};
+/* the placeholder league name is gone from the world, but the club picker
+   is built before the world exists, so it still needs something to print */
+if(typeof DIV_NAMES==='object'&&!DIV_NAMES.EU)DIV_NAMES.EU='Europe';
+
+const _frontAboutWorld=ACTIONS.frontAbout;
+ACTIONS.frontAbout=()=>{
+ openModal('<h3>📖 How it works</h3>'+
+  '<div class="card tight" style="margin:8px 0 10px"><div class="small" style="line-height:1.75;padding:2px">'+
+  '<b>The week.</b> Train, set your shape, handle the press, work the market, then play.<br><br>'+
+  '<b>The match.</b> Watch it from the dugout behind a broadcast camera, or from above in 2D. '+
+  'Shout from the touchline without opening a menu, make five changes, and change your shape mid-game.<br><br>'+
+  '<b>The squad.</b> Every player has a nationality, a personality, a familiarity for every position, '+
+  'and a squad number. Retrain him somewhere new and, given a season, he becomes a natural there.<br><br>'+
+  '<b>The pyramid.</b> The Premier League, the Championship, League One, League Two and the National League, '+
+  'all at their real sizes, with promotion and relegation between every one of them.<br><br>'+
+  '<b>Europe.</b> Twenty national leagues across nineteen countries, each with its own table and its own '+
+  'route into Europe. The Champions League is the real thing: thirty-six clubs in one table, eight games each, '+
+  'top eight straight to the last sixteen and the rest into a play-off. The Europa League and the Conference '+
+  'League run alongside it.<br><br>'+
+  '<b>The cups.</b> The FA Cup starts in November with League One, League Two and the non-league clubs; '+
+  'the Premier League and the Championship come in at the third round, exactly as they do in life. '+
+  'The League Cup starts with the EFL and adds the European clubs in the third round.<br><br>'+
+  '<b>Your country.</b> Six international breaks a season, and a World Cup or a European Championship every '+
+  'other summer on the real cycle. Your players go, and they come back tired.<br><br>'+
+  '<b>Saving.</b> The game saves itself every day and after every match. Export a file to move a career '+
+  'to another device.'+
+  '</div></div><button class="btn btn-primary btn-block" data-action="closeModal">Got it</button>')};
+
+/*#w13_front.js#*/
 showStart();
 </script>
 </body>
