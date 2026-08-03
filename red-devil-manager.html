@@ -17122,6 +17122,13 @@ MatchSim.prototype.avg=function(side,attrs,zone){
 
 
 
+
+
+
+
+
+
+
 /*#w1_data.js#*/
 
 /* =====================================================================
@@ -20059,7 +20066,398 @@ vHome=function(){
    ===================================================================== */
 DAY_LO=.90;DAY_RANGE=.20;
 
-/*#w16_stray.js#*/
+/*#w16_stray.js#*//*#w17_anyclub.js#*/
+
+/* =====================================================================
+   TAKE A JOB ANYWHERE
+   ---------------------------------------------------------------------
+   The world has four hundred and eighty-four clubs in it and you could
+   manage eighty-four of them, because the club picker was still built
+   from the raw data tables the game shipped with rather than from the
+   world it now creates. Real Madrid, Bayern, Ajax, Galatasaray, a Serie B
+   side, a club in the Ukrainian top flight — all there, all simulated
+   every week, none of them a job you could take.
+
+   Two things had to be solved.
+
+   THE PICKER RUNS BEFORE THE WORLD EXISTS. You choose a club, and only
+   then does the game build anything. So the world is built once, quietly,
+   the first time you open the picker, and the list of clubs it produces
+   is remembered — the club order is deterministic, so a club's number
+   today is its number tomorrow.
+
+   YOUR CLUB IS CHOSEN BEFORE THE WORLD IS FINISHED. The game sets up your
+   squad, your staff and your board while only the original eighty-four
+   clubs exist, so a club numbered four hundred cannot be handed to it. It
+   now starts the season at a placeholder and hands the job over the
+   moment the rest of the world is in place.
+   ===================================================================== */
+const ROSTER_KEY='rdmRoster3';
+let ROSTER=null;
+function rosterStars(c){
+ const xi=c.players.slice().sort((a,b)=>b.ovr-a.ovr).slice(0,11);
+ const m=xi.length?xi.reduce((s,p)=>s+p.ovr,0)/xi.length:52;
+ return +clamp((m-52)/8,.5,5).toFixed(2)}
+function buildRoster(){
+ if(ROSTER)return ROSTER;
+ try{const raw=localStorage.getItem(ROSTER_KEY);
+  if(raw){const j=JSON.parse(raw);if(j&&j.v===3&&j.list&&j.list.length>400){ROSTER=j.list;return ROSTER}}}
+ catch(e){}
+ // build the world once, read it, then put everything back as it was.
+ // It is a whole season's setup, so it also writes a welcome letter and a
+ // fistful of cup draws — none of which belong to a game you have not
+ // started yet, and one of which was chiming a notification at you on the
+ // club picker.
+ const keep=G,realMail=mail,realToast=(typeof toastQuiet==='function')?toastQuiet:null;
+ try{
+  mail=function(){};
+  if(realToast)toastQuiet=function(){};
+  newGame(0);
+  ROSTER=G.clubs.map(c=>({i:c.i,key:c.key,name:c.name,short:c.short,c1:c.c1,c2:c.c2,
+   rep:c.rep,budget:Math.round(c.budget/1e6),league:c.league,cc:c.cc||'ENG',
+   stadium:c.stadium,cap:c.cap,stars:rosterStars(c)}));
+  try{localStorage.setItem(ROSTER_KEY,JSON.stringify({v:3,list:ROSTER}))}catch(e){}}
+ catch(e){ROSTER=null}
+ finally{G=keep;mail=realMail;if(realToast)toastQuiet=realToast}
+ return ROSTER}
+
+/* ---------------------------------------------------------------------
+   HANDING OVER THE JOB
+   --------------------------------------------------------------------- */
+function takeOverClub(idx){
+ if(idx==null||idx===G.my||!G.clubs[idx])return;
+ const old=G.clubs[G.my];
+ if(old)old.players.forEach(p=>{p.scouted=false});
+ G.my=idx;
+ const c=G.clubs[idx];
+ c.players.forEach(p=>{p.scouted=true});
+ (c.youth||[]).forEach(p=>{p.scouted=true});
+ // the backroom, the shape and the board all belong to the new club
+ try{G.staff=defaultStaff()}catch(e){}
+ try{G.tacs.formation=(c.tacs&&c.tacs.formation)||G.tacs.formation;
+  G.tacs.xi=autoPick(idx,G.tacs.formation)}catch(e){}
+ try{if(typeof ensureClubTactics==='function')ensureClubTactics()}catch(e){}
+ try{if(typeof ensureRoles==='function')ensureRoles()}catch(e){}
+ G.inbox=[];G.unread=0;
+ mail('board','Welcome to '+c.name,
+  'The board has appointed you as the new manager of <b>'+esc(c.name)+'</b> in the <b>'+
+  esc(DIV_NAMES[c.league]||'league')+'</b>. Transfer budget: <b>'+fmtM(c.budget)+'</b>. '+
+  'Expectation this season: finish <b>'+ordinal(expectPos(idx))+'</b> or better. '+
+  'The squad reports for pre-season training today.');
+ mail('info','Transfer window open',
+  'The summer window is open until 1 September. Assign scouts, hunt for targets and strengthen the squad before the deadline.')}
+
+/* The stadium, training ground and youth facilities are handed out early,
+   while only the original eighty-four clubs exist — so every club the
+   world adds afterwards had none. Nothing noticed while those clubs were
+   only ever opponents; the moment one of them is yours, the assistant's
+   briefing asks for its training ground and finds nothing there. */
+function ensureStadiums(){
+ (G.clubs||[]).forEach(c=>{if(c.stad)return;
+  c.stad={tier:c.cap>68000?3:c.cap>42000?2:1,
+   train:c.rep>8800?4:c.rep>7000?3:c.rep>4500?2:1,
+   youth:c.rep>8800?4:c.rep>7000?3:c.rep>4500?2:1}})}
+
+/* Season one shipped thin. Real Madrid had sixteen players, Ajax fifteen,
+   Bolton fifteen — the real squads the game carries are twelve to fifteen
+   names deep, which was fine when they were only ever opponents and the
+   computer topped them up at the end of the first season anyway. It is not
+   fine when one of them is yours and you have five competitions to cover.
+   Every club in the world now starts at a proper depth, built to its own
+   standard, the same way the computer does it every summer after. */
+function seedSquadDepth(){
+ const rng=Math.random;
+ (G.clubs||[]).forEach(c=>{
+  const L=(typeof LEAGUES==='object')&&LEAGUES[c.league];
+  const want=c.tier===1?((L&&L.coef>=4)?22:21):19;
+  if(c.players.length>=want)return;
+  const std=ovrForRep(c.rep);
+  const used=clubNames(c);
+  const shape=['DC','MC','ST','DR','DL','AMC','GK','AMR','AML','DM','DC','MC','ST'];
+  // fill the holes in the shape first, then add cover
+  let k=0;
+  while(c.players.length<want&&k<40){
+   let pos=shape[k%shape.length];k++;
+   const have=c.players.filter(p=>p.pos===pos).length;
+   if(pos==='GK'&&have>=3)continue;
+   if(have>=4)continue;
+   const ovr=clamp(Math.round(std-9+rng()*9),32,Math.round(std+2));
+   const age=irnd(18,30);
+   const nm=worldName(c.cc||'ENG',rng,used);used.add(nm);
+   const p=genPlayer([nm,pos,age,ovr,clamp(ovr+(age<23?irnd(3,11):irnd(0,3)),ovr,95)],c.i);
+   p.contract=irnd(2,4);
+   c.players.push(p)}
+  c._nm=null})}
+
+let PENDING_CLUB=null;
+const _newGameAny=newGame;
+newGame=function(i){
+ // a club that does not exist yet cannot be handed the job, so the season
+ // starts at a club that does and the handover happens once the rest of
+ // the world has been built
+ const target=(typeof i==='number'&&i>=DB.length)?i:null;
+ PENDING_CLUB=target;
+ _newGameAny(target==null?i:0);
+ ensureStadiums();
+ seedSquadDepth();
+ if(target!=null&&G.clubs[target]){
+  takeOverClub(target);
+  buildAcademies();
+  G.cups=null;initCups()}
+ PENDING_CLUB=null};
+const _loadAnyClub=loadSlot;
+loadSlot=function(s){const ok=_loadAnyClub(s);if(ok)try{ensureStadiums()}catch(e){}return ok};
+
+/* Going back to the front door throws the game away, but a mail chime
+   scheduled a quarter of a second earlier still fires — and it asks the
+   inbox whether anything is urgent. There is no inbox any more. It was
+   only ever a console error, but it is an error on a path anybody who
+   restarts a career walks down. */
+const _blockingSafe=blockingMails;
+blockingMails=function(){
+ if(!G||!G.inbox)return[];
+ return _blockingSafe.apply(this,arguments)};
+const _flashSafe=flashInbox;
+flashInbox=function(){if(!G)return;try{return _flashSafe.apply(this,arguments)}catch(e){}};
+
+/* ---------------------------------------------------------------------
+   THE PICKER — every club in the world, by country and division
+   --------------------------------------------------------------------- */
+function pickerLeagues(){
+ const by={};buildRoster();
+ (ROSTER||[]).forEach(c=>{(by[c.league]=by[c.league]||[]).push(c)});
+ return by}
+const PICK_ORDER=['PL','CH','L1','L2','NL'];
+function pickerCountries(){
+ const by=pickerLeagues();const seen=[];
+ (ROSTER||[]).forEach(c=>{if(seen.indexOf(c.cc)<0)seen.push(c.cc)});
+ const rank=cc=>{
+  if(cc==='ENG')return -1;
+  const divs=Object.keys(by).filter(d=>by[d][0].cc===cc);
+  return -Math.max(...divs.map(d=>Math.max(...by[d].map(x=>x.rep))));};
+ return seen.sort((a,b)=>rank(a)-rank(b))}
+function pickerDivs(cc){
+ const by=pickerLeagues();
+ return Object.keys(by).filter(d=>by[d][0].cc===cc)
+  .sort((a,b)=>{const ia=PICK_ORDER.indexOf(a),ib=PICK_ORDER.indexOf(b);
+   if(ia>=0||ib>=0)return (ia<0?9:ia)-(ib<0?9:ib);
+   return Math.max(...by[b].map(x=>x.rep))-Math.max(...by[a].map(x=>x.rep))})}
+function divLabel(d){
+ if(typeof DIV_NAMES==='object'&&DIV_NAMES[d])return DIV_NAMES[d];
+ const L=(typeof W_LG!=='undefined')&&W_LG.filter(x=>x.k===d)[0];
+ return L?L.name:d}
+function ccLabel(cc){
+ const L=(typeof W_LG!=='undefined')&&W_LG.filter(x=>x.cc===cc)[0];
+ return L?L.country:(cc==='ENG'?'England':cc)}
+paintStart=function(){
+ buildRoster();
+ const list=ROSTER||[];
+ if(!list.length){$('#startBody').innerHTML='<div class="card"><div class="small muted">The world could not be built. Reload the page and try again.</div></div>';return}
+ if(UI.startSel==null)UI.startSel=0;
+ let sel=list.filter(c=>c.i===UI.startSel)[0]||list[0];
+ if(!UI.pickCC)UI.pickCC=sel.cc;
+ let divs=pickerDivs(UI.pickCC);
+ if(!UI.pickDiv||divs.indexOf(UI.pickDiv)<0)UI.pickDiv=divs.indexOf(sel.league)>=0?sel.league:divs[0];
+ const ccs=pickerCountries();
+ let h='';
+ if(UI.startSel!==0)h+='<button class="chip" style="margin-bottom:10px" data-action="pickClub" data-v="0">🔴 Featured save: rebuild Manchester United →</button>';
+ else h+='<div class="card tight" style="border-color:rgba(218,41,28,.5);margin-bottom:10px"><div class="small" style="font-weight:800;color:var(--gold)">🔴 FEATURED — THE UNITED REBUILD</div><div class="xs muted" style="margin-top:3px">Santos &amp; Tielemans signed, JJ Gabriel in the building, Champions League football back at Old Trafford. Bring the glory home.</div></div>';
+ h+='<div class="chips" style="margin-bottom:8px;overflow-x:auto;flex-wrap:nowrap">'+ccs.map(cc=>
+  '<button class="chip'+(UI.pickCC===cc?' on':'')+'" data-action="pickCC" data-v="'+cc+'" style="white-space:nowrap">'+
+  (typeof ccFlag==='function'?ccFlag(cc):'')+' '+esc(ccLabel(cc))+'</button>').join('')+'</div>';
+ if(divs.length>1)h+='<div class="chips" style="margin-bottom:10px;overflow-x:auto;flex-wrap:nowrap">'+divs.map(d=>
+  '<button class="chip'+(UI.pickDiv===d?' on':'')+'" data-action="pickDiv" data-v="'+d+'" style="white-space:nowrap">'+esc(divLabel(d))+'</button>').join('')+'</div>';
+ const inDiv=list.filter(c=>c.league===UI.pickDiv).sort((a,b)=>b.rep-a.rep);
+ h+='<div class="clubgrid" style="margin-bottom:12px">'+inDiv.map(c=>
+  '<div class="clubpick'+(c.i===UI.startSel?' sel':'')+'" data-action="pickClub" data-v="'+c.i+'">'+
+  crest(c,36)+'<div class="cn">'+esc(c.short)+'</div></div>').join('')+'</div>';
+ h+='<div class="card tight" style="margin-bottom:12px"><div class="row" style="gap:10px">'+crest(sel,44)+
+ '<div style="flex:1;min-width:0"><div style="font-weight:800">'+esc(sel.name)+'</div>'+
+ '<div class="xs muted">'+esc(divLabel(sel.league))+' · '+esc(sel.stadium)+' ('+sel.cap.toLocaleString()+')</div>'+
+ '<div class="xs" style="margin-top:3px">Squad '+starHtml(sel.stars)+' · Budget <b class="num">£'+sel.budget+'M</b> · '+
+ (sel.rep>9000?'<span style="color:var(--gold)">Elite — win now</span>':sel.rep>7500?'<span style="color:#7fb3ff">Contender</span>':sel.rep>4800?'Mid-table project':sel.rep>3200?'<span style="color:var(--amber)">Survival fight</span>':'<span style="color:var(--danger)">Minnow — the long climb</span>')+
+ '</div></div></div></div>';
+ h+='<button class="btn btn-primary btn-block" data-action="startGame">Take the '+esc(sel.short)+' job</button>';
+ $('#startBody').innerHTML=h};
+ACTIONS.pickCC=el=>{UI.pickCC=el.dataset.v;UI.pickDiv=null;paintStart()};
+ACTIONS.pickDiv=el=>{UI.pickDiv=el.dataset.v;paintStart()};
+ACTIONS.pickClub=el=>{
+ const i=+el.dataset.v;UI.startSel=i;
+ const c=(ROSTER||[]).filter(x=>x.i===i)[0];
+ if(c){UI.pickCC=c.cc;UI.pickDiv=c.league}
+ paintStart()};
+/* the picker tells you how big the world is, now that it is all playable */
+const _frontNewAny=ACTIONS.frontNew;
+ACTIONS.frontNew=()=>{
+ _frontNewAny();
+ buildRoster();
+ const t=document.querySelector('#startScreen .tag');
+ if(t)t.textContent=(ROSTER?ROSTER.length:484)+' clubs · '+
+  (ROSTER?new Set(ROSTER.map(c=>c.cc)).size:20)+' countries · every one of them a job you can take'};
+
+/*#w17_anyclub.js#*//*#w18_names.js#*/
+
+/* =====================================================================
+   CALLING CLUBS BY THEIR NAMES
+   ---------------------------------------------------------------------
+   The twenty Premier League clubs shipped with two names each: "Real
+   Madrid" for the header and "Man Utd" for everywhere the full name will
+   not fit — tables, results, commentary, the club picker. Every club the
+   world builds got a three-letter code in that second slot instead,
+   because that slot was also doing duty as the lettering on the badge.
+
+   So the game had been saying "RMA 2–1 BAR" and "SHK go through", and the
+   picker was a wall of three-letter tiles. The badge keeps the code; the
+   short name goes back to being a name.
+   ===================================================================== */
+const CLUB_ABBR_FIX={
+ 'Borussia Mönchengladbach':'Gladbach','Eintracht Frankfurt':'Frankfurt',
+ '1. FSV Mainz 05':'Mainz','1. FC Union Berlin':'Union Berlin','1. FC Köln':'Köln',
+ '1. FC Heidenheim':'Heidenheim','1. FC Kaiserslautern':'Kaiserslautern',
+ '1. FC Nürnberg':'Nürnberg','1. FC Magdeburg':'Magdeburg','SpVgg Greuther Fürth':'Fürth',
+ 'Eintracht Braunschweig':'Braunschweig','Preußen Münster':'Münster',
+ 'Paris Saint-Germain':'PSG','Olympique Lyonnais':'Lyon','Stade Rennais':'Rennes',
+ 'RC Strasbourg':'Strasbourg','Stade Brestois':'Brest','Le Havre AC':'Le Havre',
+ 'AS Saint-Étienne':'St-Étienne','Girondins de Bordeaux':'Bordeaux',
+ 'Montpellier HSC':'Montpellier','Stade de Reims':'Reims','ESTAC Troyes':'Troyes',
+ 'Vitória de Guimarães':'Guimarães','Estrela da Amadora':'Estrela',
+ 'Union Saint-Gilloise':'Union SG','RSC Anderlecht':'Anderlecht',
+ 'İstanbul Başakşehir':'Başakşehir','Fatih Karagümrük':'Karagümrük',
+ 'Heart of Midlothian':'Hearts','Red Bull Salzburg':'Salzburg',
+ 'BSC Young Boys':'Young Boys','Grasshopper Club':'Grasshopper',
+ 'Aris Thessaloniki':'Aris','Asteras Tripolis':'Asteras','Panserraikos':'Panserraikos',
+ 'Viktoria Plzeň':'Plzeň','Baník Ostrava':'Ostrava','Sigma Olomouc':'Olomouc',
+ 'Slovan Liberec':'Liberec','Mladá Boleslav':'Boleslav','Hradec Králové':'Hradec',
+ 'Bohemians 1905':'Bohemians','FC København':'København','FC Midtjylland':'Midtjylland',
+ 'FC Nordsjælland':'Nordsjælland','AGF Aarhus':'Aarhus','SønderjyskE':'SønderjyskE',
+ 'Legia Warszawa':'Legia','Lech Poznań':'Lech','Raków Częstochowa':'Raków',
+ 'Jagiellonia Białystok':'Jagiellonia','Pogoń Szczecin':'Pogoń','Górnik Zabrze':'Górnik',
+ 'Zagłębie Lubin':'Zagłębie','Korona Kielce':'Korona','Radomiak Radom':'Radomiak',
+ 'Piast Gliwice':'Piast','Motor Lublin':'Motor','Lechia Gdańsk':'Lechia',
+ 'Bruk-Bet Termalica':'Termalica','Crvena zvezda':'Red Star','TSC Bačka Topola':'TSC',
+ 'Radnički Niš':'Radnički','Napredak Kruševac':'Napredak','Železničar Pančevo':'Železničar',
+ 'Spartak Subotica':'Spartak','Javor Ivanjica':'Javor','Mladost Lučani':'Mladost',
+ 'Shakhtar Donetsk':'Shakhtar','Dynamo Kyiv':'Dynamo Kyiv','Polissya Zhytomyr':'Polissya',
+ 'Zorya Luhansk':'Zorya','Kryvbas Kryvyi Rih':'Kryvbas','Kolos Kovalivka':'Kolos',
+ 'Vorskla Poltava':'Vorskla','Karpaty Lviv':'Karpaty','LNZ Cherkasy':'LNZ',
+ 'Veres Rivne':'Veres','Dinamo Zagreb':'Dinamo','Hajduk Split':'Hajduk',
+ 'Lokomotiva Zagreb':'Lokomotiva','Istra 1961':'Istra','Vukovar 1991':'Vukovar',
+ 'Deportivo La Coruña':'Deportivo','Sporting Gijón':'Sporting Gijón',
+ 'Racing Santander':'Racing','UD Las Palmas':'Las Palmas','Real Valladolid':'Valladolid',
+ 'Real Zaragoza':'Zaragoza','Deportivo Alavés':'Alavés','Rayo Vallecano':'Rayo',
+ 'Virtus Entella':'Entella','Juve Stabia':'Juve Stabia','Hellas Verona':'Verona',
+ 'Go Ahead Eagles':'Go Ahead','NEC Nijmegen':'NEC','Sparta Rotterdam':'Sparta',
+ 'SC Heerenveen':'Heerenveen','FC Groningen':'Groningen','Fortuna Sittard':'Fortuna',
+ 'PEC Zwolle':'PEC Zwolle','Heracles Almelo':'Heracles','NAC Breda':'NAC',
+ 'FC Volendam':'Volendam','PSV Eindhoven':'PSV','AZ Alkmaar':'AZ',
+ 'Kristiansund BK':'Kristiansund','Sarpsborg 08':'Sarpsborg','Fredrikstad FK':'Fredrikstad',
+ 'Lillestrøm SK':'Lillestrøm','Rosenborg BK':'Rosenborg','Vålerenga':'Vålerenga',
+ 'FK Haugesund':'Haugesund','KFUM Oslo':'KFUM','Bodø/Glimt':'Bodø/Glimt'};
+function shortenClub(name){
+ if(CLUB_ABBR_FIX[name])return CLUB_ABBR_FIX[name];
+ let s=String(name||'')
+  .replace(/^(FC|AC|AS|SC|SK|SV|FK|RC|CD|UD|AD|CF|KV|KRC|KAA|RSC|OGC|AJ|US|USL|EA|BSC|VfB|VfL|TSG|TSV|MK|SS|SSC|OH|KVC|RAAL|FCV|AFC)\s+/,'')
+  .replace(/\s+(FC|CF|SC|AC|BK|IF|IL|FK|SK|United|1905|1961|1991|08|07|05|98|96|04)$/,'')
+  .trim();
+ if(s.length>15){
+  const w=s.split(' ');
+  s=w.length>1?w[0]:s.slice(0,15)}
+ return s||name}
+/* the badge keeps its three letters; everything else gets a name */
+const _crestAbbr=crest;
+crest=function(c,size){
+ if(!c)return _crestAbbr(c,size);
+ const nm=c.short;
+ try{c.short=c.abbr||c.short;return _crestAbbr(c,size)}
+ finally{c.short=nm}};
+function nameTheWorld(){
+ (G.clubs||[]).forEach(c=>{
+  if(!c.abbr){
+   // whatever was in the short slot is the badge lettering from now on
+   c.abbr=(c.short&&c.short.length<=4)?c.short.toUpperCase():
+    (c.key||c.name).replace(/\d+$/,'').slice(0,3).toUpperCase()}
+  if(!c.longShort){c.longShort=1;
+   if(c.short&&c.short.length<=4&&c.short===c.abbr)c.short=shortenClub(c.name)}})}
+const _newGameNames=newGame;
+newGame=function(i){_newGameNames(i);try{nameTheWorld()}catch(e){}};
+const _loadNames=loadSlot;
+loadSlot=function(s){const ok=_loadNames(s);if(ok)try{nameTheWorld()}catch(e){}return ok};
+/* the picker builds its own list before a game exists, so it needs them too */
+const _rosterNames=buildRoster;
+buildRoster=function(){
+ const r=_rosterNames();
+ if(r)r.forEach(c=>{
+  if(!c.abbr){c.abbr=(c.short&&c.short.length<=4)?c.short.toUpperCase():(c.key||c.name).replace(/\d+$/,'').slice(0,3).toUpperCase();
+   if(c.short&&c.short.length<=4)c.short=shortenClub(c.name)}});
+ return r};
+
+/*#w18_names.js#*//*#w19_tablefit.js#*/
+
+/* =====================================================================
+   MAKING THE TABLE FIT
+   ---------------------------------------------------------------------
+   Giving every club its real name cost the league table its points
+   column: "Real Sociedad" and "Atlético Madrid" are a lot wider than
+   "RSO" and "ATM", and on a phone the right-hand end simply ran off the
+   screen. Points are the one number nobody can do without.
+
+   So the club name now takes whatever room is left and no more, cut with
+   an ellipsis when it has to be, and the numbers are pinned to widths
+   that always add up to less than the screen.
+   ===================================================================== */
+(function tableFitCSS(){
+ try{
+  const st=document.createElement('style');st.id='wtblfit';
+  st.textContent=
+   '.tbl{table-layout:fixed;width:100%}'+
+   '.tbl th,.tbl td{padding-left:2px;padding-right:2px}'+
+   '.tbl .cl-cell{max-width:0;width:auto}'+          /* absorbs the slack */
+   '.tbl .cl-name{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'+
+   '.tbl .n-1{width:22px}.tbl .n-2{width:26px}.tbl .n-3{width:32px}'+
+   '@media(max-width:400px){.tbl .cl-name{font-size:11.5px}}';
+  document.head.appendChild(st)}
+ catch(e){}})();
+
+/* the league table, rebuilt with columns that behave */
+const _vTableFit=vTable;
+vTable=function(){
+ if(!UI.tblDiv||!LEAGUES[UI.tblDiv])UI.tblDiv=myDiv();
+ if(!UI.tblCC)UI.tblCC=LEAGUES[UI.tblDiv].cc;
+ const ccs=countries();
+ let h='<div class="chips" style="margin-bottom:8px;overflow-x:auto;flex-wrap:nowrap">'+ccs.map(cc=>
+  '<button class="chip'+(UI.tblCC===cc?' on':'')+'" data-action="tblCC" data-v="'+cc+'" style="white-space:nowrap">'+ccFlag(cc)+' '+esc(LEAGUES[leaguesOf(cc)[0]].country)+'</button>').join('')+'</div>';
+ const divs=leaguesOf(UI.tblCC);
+ if(divs.indexOf(UI.tblDiv)<0)UI.tblDiv=divs[0];
+ if(divs.length>1)h+='<div class="chips" style="margin-bottom:10px;overflow-x:auto;flex-wrap:nowrap">'+divs.map(d=>
+  '<button class="chip'+(UI.tblDiv===d?' on':'')+'" data-action="tblDiv" data-v="'+d+'" style="white-space:nowrap">'+esc(DIV_NAMES[d])+'</button>').join('')+'</div>';
+ const rows=tableRows(UI.tblDiv);
+ const L=LEAGUES[UI.tblDiv];
+ const pyr=PYRAMIDS[L.cc]||[];
+ const relRow=pyr.filter(p=>p[0]===UI.tblDiv)[0],promoRow=pyr.filter(p=>p[1]===UI.tblDiv)[0];
+ const nRel=relRow?relRow[2]:0,nPromo=promoRow?promoRow[2]:0;
+ const euro=L.tier===1&&L.euro?L.euro:null;
+ const nCL=euro?euro[0]:0,nEL=euro?euro[0]+euro[1]:0,nEC=euro?euro[0]+euro[1]+euro[2]:0;
+ h+='<div class="card tight"><table class="tbl"><thead><tr>'+
+  '<th class="c n-1">#</th><th>Club</th>'+
+  '<th class="c n-2">P</th><th class="c n-2">W</th><th class="c n-2">D</th><th class="c n-2">L</th>'+
+  '<th class="c n-3">GD</th><th class="r n-3">Pts</th></tr></thead><tbody>';
+ rows.forEach((r,ix)=>{const c=G.clubs[r.i];const my=r.i===G.my;
+  const bar=ix<nCL?'var(--gold)':ix<nEL?'#7fc1ff':ix<nEC?'#4caf50':
+   (nPromo&&ix<nPromo)?'var(--gold)':(nRel&&ix>=rows.length-nRel)?'var(--danger)':'';
+  h+='<tr data-action="clubView" data-id="'+r.i+'" style="'+(my?'background:rgba(218,41,28,.13)':'')+(bar?';box-shadow:inset 3px 0 0 '+bar:'')+'">'+
+  '<td class="c num n-1" style="font-weight:800">'+(ix+1)+'</td>'+
+  '<td class="cl-cell"><div class="row" style="gap:6px;min-width:0">'+crest(c,18)+
+   '<span class="cl-name" style="font-weight:'+(my?'800':'600')+';font-size:12px">'+esc(c.short)+'</span></div></td>'+
+  '<td class="c num n-2">'+r.p+'</td><td class="c num n-2">'+r.w+'</td><td class="c num n-2">'+r.d+'</td><td class="c num n-2">'+r.l+'</td>'+
+  '<td class="c num n-3">'+(r.gd>0?'+':'')+r.gd+'</td>'+
+  '<td class="r num n-3" style="font-weight:800">'+r.pts+'</td></tr>'});
+ h+='</tbody></table></div><div class="xs faint" style="padding:4px">'+esc(DIV_NAMES[UI.tblDiv])+
+  (euro?' · <span style="color:var(--gold)">Champions League</span> · <span style="color:#7fc1ff">Europa</span> · <span style="color:#4caf50">Conference</span>':'')+
+  (nPromo?' · <span style="color:var(--gold)">promotion</span>':'')+
+  (nRel?' · <span style="color:var(--danger)">relegation</span>':'')+'</div>';
+ return h};
+
+/*#w19_tablefit.js#*/
 showStart();
 </script>
 </body>
