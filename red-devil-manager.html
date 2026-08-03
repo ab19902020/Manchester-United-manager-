@@ -15740,6 +15740,788 @@ const _initTouch=initDots;
 initDots=function(){_initTouch();MU.lastTouch=null;MU.subBoard=null;
  MU.off3=null;DUG.shake=0;DUG.celebrate=null};
 
+
+/* =====================================================================
+   THE PRESS ROOM — a room that never asks you the same thing twice
+   ---------------------------------------------------------------------
+   TWO BUGS.
+
+   One: all three questions in a conference were identical. The chooser
+   seeded itself on the opponent, the day and the season — but not on
+   WHICH of the three questions it was asking — so it drew the same
+   number three times running and read out the same line. The reporter
+   never changed either, so one journalist asked all three.
+
+   Two: finishing a conference did not always clear the summons. The
+   inbox item was only cleared if it had already been tagged, and the
+   tagging ran on a different pass, so a conference you had genuinely
+   finished could leave the header, the dock and the inbox all still
+   insisting you had a press conference to go to. Now it is cleared by
+   what the mail DOES, not by whether something got round to labelling
+   it, and it is cleared on every exit from the room.
+
+   AND A ROOM WORTH SITTING IN.
+
+   The questions are now generated rather than picked off a short list.
+   Every one is a rule that looks at the actual state of your club —
+   the table, the run of form, who is injured, who you just sold, what
+   you promised last week, what the fans think of you, how long you
+   have been here, what the board expects, the weather, the referee,
+   the fixture pile-up, the wage bill, the academy — and only offers
+   itself when it genuinely applies. Each rule carries several ways of
+   asking, so the same situation is put to you differently on different
+   days, and the game remembers the last two hundred questions it has
+   asked you and will not repeat one until it has run out of new ones.
+   ===================================================================== */
+
+/* ---------------------------------------------------------------------
+   1. THE BUGS
+   --------------------------------------------------------------------- */
+/* a press summons is anything that offers a seat in the media room —
+   tagged or not, read or not */
+function isPressMail(m){
+ return !!(m&&m.actions&&m.actions.length&&
+  (m.press||m.actions.some(a=>a.act==='pressOpen'||a.act==='pressSkip')))}
+closePressMail=function(){
+ G.inbox.forEach(m=>{
+  if(isPressMail(m)){m.actions=null;m.press=false;
+   if(!m.read){m.read=true;G.unread=Math.max(0,(G.unread||0)-1)}}});
+ UI.mailView=null};
+/* and it is cleared on every way out of the room, not just the tidy one */
+function pressDone(){
+ G.pressCtx=null;
+ closePressMail();
+ try{renderHdr();renderDock()}catch(e){}}
+const _wrapDone=pressWrap;
+pressWrap=function(){const r=_wrapDone();pressDone();return r};
+const _skipDone=ACTIONS.pressSkip;
+ACTIONS.pressSkip=function(){const r=_skipDone.apply(this,arguments);pressDone();render();return r};
+
+/* ---------------------------------------------------------------------
+   2. WHAT THE ROOM KNOWS ABOUT YOU
+   --------------------------------------------------------------------- */
+function pqFacts(){
+ const c=G.pressCtx;if(!c)return null;
+ const my=G.clubs[G.my],opp=G.clubs[c.oppI];
+ const F={c,my,opp,post:c.kind==='post',pre:c.kind!=='post'};
+ const num=v=>typeof v==='number'&&isFinite(v);
+ try{F.pos=leaguePos(G.my)}catch(e){}
+ try{F.oppPos=(opp.league===my.league)?leaguePos(opp.i):null}catch(e){}
+ try{F.expect=expectPos(G.my)}catch(e){}
+ try{F.form=formIndex(G.my);F.streak=formStreak(G.my)}catch(e){}
+ try{F.oppStreak=formStreak(opp.i)}catch(e){}
+ try{F.absent=keyAbsences(G.my)||[]}catch(e){F.absent=[]}
+ try{F.oppAbsent=keyAbsences(opp.i)||[]}catch(e){F.oppAbsent=[]}
+ try{F.oppMgr=(typeof managerOf==='function')?managerOf(opp):null}catch(e){}
+ try{F.danger=(typeof dangerMen==='function')?(dangerMen(opp.i,2)||[]):[]}catch(e){F.danger=[]}
+ try{F.rest=(typeof daysRest==='function')?daysRest(G.my):null}catch(e){}
+ try{F.fans=(typeof fanMood==='function')?fanMood():null}catch(e){}
+ const sq=my.players.filter(p=>!p.loan);
+ F.squad=sq;
+ F.injured=sq.filter(p=>p.injury);
+ F.susp=sq.filter(p=>p.susp>0);
+ F.unhappy=sq.filter(p=>p.morale<40).sort((a,b)=>a.morale-b.morale);
+ F.expiring=sq.filter(p=>p.contract<=1&&p.ovr>=72).sort((a,b)=>b.ovr-a.ovr);
+ F.listed=sq.filter(p=>p.listed);
+ F.kids=sq.filter(p=>p.age<=20&&p.ovr>=66).sort((a,b)=>b.pot-a.pot);
+ F.olds=sq.filter(p=>p.age>=33).sort((a,b)=>b.ovr-a.ovr);
+ F.retrain=sq.filter(p=>p.retrain);
+ const played=sq.filter(p=>p.stats&&p.stats.apps>=2);
+ F.scorers=played.filter(p=>p.stats.goals>0).sort((a,b)=>b.stats.goals-a.stats.goals);
+ F.top=F.scorers[0]||null;
+ F.dry=played.filter(p=>(ATTPOS.indexOf(p.pos)>=0||p.pos==='ST')&&p.stats.goals===0&&p.stats.apps>=4)
+  .sort((a,b)=>b.ovr-a.ovr);
+ F.best=played.slice().sort((a,b)=>
+  (b.stats.rSum/Math.max(1,b.stats.apps))-(a.stats.rSum/Math.max(1,a.stats.apps)))[0]||null;
+ F.worst=played.filter(p=>p.stats.apps>=4).sort((a,b)=>
+  (a.stats.rSum/Math.max(1,a.stats.apps))-(b.stats.rSum/Math.max(1,b.stats.apps)))[0]||null;
+ F.bench=sq.filter(p=>p.ovr>=74&&p.stats&&p.stats.apps<=1).sort((a,b)=>b.ovr-a.ovr);
+ F.capt=(G.setp&&G.setp.captain)?playerById(G.setp.captain):null;
+ F.gk=sq.filter(p=>p.pos==='GK').sort((a,b)=>b.ovr-a.ovr)[0]||null;
+ F.patience=my.patience==null?60:my.patience;
+ F.budget=my.budget;F.bank=my.bank;
+ F.wage=(typeof squadWage==='function')?squadWage(my):0;
+ F.season=G.season;F.day=G.day;
+ F.tac=G.tacs||{};
+ F.form5=(my.form||[]).slice(-5);
+ try{F.nextFix=nextUserMatch()}catch(e){}
+ try{F.wx=(F.nextFix&&F.nextFix.ctx&&F.nextFix.ctx.wx)||null;
+  F.ref=(F.nextFix&&F.nextFix.ctx&&F.nextFix.ctx.ref)||null}catch(e){}
+ if(F.post){
+  const fx=MU.fix;
+  if(fx){
+   F.fix=fx;
+   F.gf=fx.h===G.my?fx.hs:fx.as;F.ga=fx.h===G.my?fx.as:fx.hs;
+   F.home=fx.h===G.my;
+   F.res=c.res||(F.gf>F.ga?'W':F.gf<F.ga?'L':'D');
+   F.sc=(fx.sc||[]).filter(s=>s.ci===G.my);
+   F.oppSc=(fx.sc||[]).filter(s=>s.ci!==G.my);
+   F.lateWinner=F.sc.length&&F.sc[F.sc.length-1].min>=85&&F.gf>F.ga;
+   F.lateLoss=F.oppSc.length&&F.oppSc[F.oppSc.length-1].min>=85&&F.gf<F.ga;
+   F.hatTrick=(()=>{const n={};F.sc.forEach(s=>n[s.name]=(n[s.name]||0)+1);
+    for(const k in n)if(n[k]>=3)return{name:k,n:n[k]};return null})();
+   F.motm=MU.m&&MU.m.motm?MU.m.motm.p:null;
+   F.reds=MU.m?(MU.m.sides[F.home?0:1].reds||0):0;
+   F.oppReds=MU.m?(MU.m.sides[F.home?1:0].reds||0):0;
+   F.cleanSheet=F.ga===0;
+   F.thrashed=F.gf-F.ga>=4;F.hammered=F.ga-F.gf>=3;
+   F.comeback=(()=>{let a=0,b=0,behind=false;
+    (fx.sc||[]).forEach(s=>{if(s.ci===G.my)a++;else b++;if(b>a)behind=true});
+    return behind&&F.gf>F.ga})();}}
+ F.claims=(G.claims||[]).filter(x=>!x.done);
+ F.titleTalk=G.titleClaim===G.season;
+ F.cup=F.nextFix&&F.nextFix.cup;
+ F.derby=['MCI','LIV','ARS','CHE','LEE'].indexOf(opp.key)>=0;
+ return F}
+
+/* ---------------------------------------------------------------------
+   3. THE QUESTIONS
+   Each rule says when it applies and offers several ways of asking.
+   --------------------------------------------------------------------- */
+const PS=x=>esc(String(x));                      // a safe string
+const PSUR=p=>esc(surname(p.name));              // his surname
+const PNM=p=>esc(p.name);                        // his full name
+const PQ=[
+ /* ---------- the match just gone ---------- */
+ {id:'win-basic',w:F=>F.post&&F.res==='W',q:F=>[
+  'Three points and a clean performance. What pleased you most out there?',
+  'You got the job done against '+PS(F.opp.short)+'. How much did that mean?',
+  'A win to talk about. Was that the reaction you asked for?',
+  'You beat '+PS(F.opp.name)+' '+F.gf+'–'+F.ga+'. Talk us through it.']},
+ {id:'loss-basic',w:F=>F.post&&F.res==='L',q:F=>[
+  'That is a hard one to take. Where did it go wrong?',
+  'Beaten '+F.gf+'–'+F.ga+' by '+PS(F.opp.short)+'. What is your explanation?',
+  'The supporters are not happy out there. What do you say to them tonight?',
+  'Was that a lack of quality or a lack of effort?']},
+ {id:'draw-basic',w:F=>F.post&&F.res==='D',q:F=>[
+  'A point. Is that two dropped or one gained?',
+  F.gf+'–'+F.ga+'. Did you have enough to win that?',
+  'Another draw. Are you happy with where that leaves you?']},
+ {id:'thrashing',w:F=>F.post&&F.thrashed,q:F=>[
+  F.gf+'–'+F.ga+'. When did you know it was going to be one of those nights?',
+  'That was a hammering. Is this the best you have seen them play?',
+  'Four goals or more. Does a night like this change what you think is possible?']},
+ {id:'hammered',w:F=>F.post&&F.hammered,q:F=>[
+  'You shipped '+F.ga+'. Is your defence good enough?',
+  'That was chastening. Do you owe the travelling support an apology?',
+  'Losing by three. Do you fear for your job after that?']},
+ {id:'clean-sheet',w:F=>F.post&&F.cleanSheet&&F.res!=='L',q:F=>[
+  'A clean sheet. How much of that is the back four and how much is '+(F.gk?PSUR(F.gk):'the keeper')+'?',
+  'They did not lay a glove on you. Is that the platform you have been after?',
+  'Nothing conceded. Is that the foundation everything else is built on?']},
+ {id:'late-winner',w:F=>F.post&&F.lateWinner,q:F=>[
+  'A winner in the last five minutes. What does that say about this group?',
+  'You have won it late. Is that character, or is it luck?',
+  'The ground went up. Where were you when it went in?']},
+ {id:'late-loss',w:F=>F.post&&F.lateLoss,q:F=>[
+  'To lose it that late is brutal. How do you pick them up from that?',
+  'You were minutes away from something. What went through your mind?',
+  'Conceding in the last five. Is that concentration or is it legs?']},
+ {id:'comeback',w:F=>F.post&&F.comeback,q:F=>[
+  'You were behind and you turned it round. Is that the best thing you have seen from them?',
+  'Coming from behind takes something. Where does that come from in this squad?',
+  'What did you say to them when you were losing?']},
+ {id:'hat-trick',w:F=>F.post&&F.hatTrick,q:F=>[
+  PS(F.hatTrick.name)+' with a hat-trick. Is he the best finisher you have worked with?',
+  'Three for '+PS(F.hatTrick.name)+'. Where does he rank right now?',
+  'Does '+PS(F.hatTrick.name)+' get the match ball and the headlines tonight?']},
+ {id:'motm',w:F=>F.post&&F.motm,q:F=>[
+  PNM(F.motm)+' was the best player on the pitch. Was he your man of the match too?',
+  'What did you make of '+PSUR(F.motm)+'’s performance?',
+  PSUR(F.motm)+' is getting a lot of praise tonight. Is he ready for that?']},
+ {id:'red-ours',w:F=>F.post&&F.reds>0,q:F=>[
+  'You finished with ten men. Was it a red card?',
+  'Down to ten. Did that decide the game?',
+  'Will you be talking to the player about that sending off?']},
+ {id:'red-theirs',w:F=>F.post&&F.oppReds>0,q:F=>[
+  'They had a man sent off. Should you have made more of that?',
+  'Against ten men for that long — is anything other than a win a bad night?']},
+ {id:'own-scorer',w:F=>F.post&&F.sc.length>=1,q:F=>[
+  PS(F.sc[0].name)+' got you going in the '+F.sc[0].min+'th minute. Was that the moment?',
+  'The goal from '+PS(F.sc[0].name)+' — was that off the training ground?']},
+ {id:'no-goals',w:F=>F.post&&F.gf===0,q:F=>[
+  'You did not score. Is there enough in that final third?',
+  'Blank again. Do you need to go and buy a goalscorer?',
+  'Is the problem creating chances, or is it taking them?']},
+
+ /* ---------- the table and the run ---------- */
+ {id:'pos-top',w:F=>F.pos&&F.pos<=2,q:F=>[
+  ordinal(F.pos)+' in the table. Are you allowed to say the word title yet?',
+  'You are '+ordinal(F.pos)+'. Does this squad believe it can stay there?',
+  'Top of the pile. Is the pressure different up here?']},
+ {id:'pos-euro',w:F=>F.pos&&F.pos>=3&&F.pos<=6,q:F=>[
+  ordinal(F.pos)+' and in the mix. Is Europe the target or the minimum?',
+  'You are '+ordinal(F.pos)+'. Is that where this club should be?',
+  'The gap at the top — is it closeable this season?']},
+ {id:'pos-mid',w:F=>F.pos&&F.pos>=7&&F.pos<=13,q:F=>[
+  ordinal(F.pos)+'. For a club of this size, is that acceptable?',
+  'Mid-table. Is this a season of transition or a season of underachievement?',
+  'You are '+ordinal(F.pos)+'. What has to change to climb?']},
+ {id:'pos-bad',w:F=>F.pos&&F.pos>=14,q:F=>[
+  ordinal(F.pos)+' in the league. How worried are you?',
+  'You are closer to the bottom than the top. Is this a relegation fight?',
+  'Down in '+ordinal(F.pos)+'. Do you still believe you are the right man?']},
+ {id:'vs-expect',w:F=>F.pos&&F.expect&&Math.abs(F.pos-F.expect)>=3,q:F=>
+  F.pos<F.expect
+   ?['The board asked for '+ordinal(F.expect)+' and you are '+ordinal(F.pos)+'. Have you exceeded your own expectations?',
+     'You are ahead of where anyone thought you would be. Is that sustainable?']
+   :['The expectation was '+ordinal(F.expect)+'. You are '+ordinal(F.pos)+'. How do you explain the gap?',
+     'You are '+(F.pos-F.expect)+' places below where the board wanted you. Is that on you?']},
+ {id:'streak-w',w:F=>F.streak&&F.streak.n>=3&&F.streak.r==='W',q:F=>[
+  F.streak.n+' wins on the spin. What has clicked?',
+  'The run you are on — is this the level, or is it a purple patch?',
+  F.streak.n+' straight. Is there a limit to what this side can do?']},
+ {id:'streak-l',w:F=>F.streak&&F.streak.n>=3&&F.streak.r==='L',q:F=>[
+  F.streak.n+' defeats in a row. Are you losing the dressing room?',
+  'A run like this at this club normally ends one way. Are you feeling it?',
+  'Where does the next win come from?']},
+ {id:'streak-d',w:F=>F.streak&&F.streak.n>=3&&F.streak.r==='D',q:F=>[
+  F.streak.n+' draws on the bounce. Is this side too cautious?',
+  'You keep drawing. Is that a lack of a killer touch or a lack of ambition?']},
+ {id:'form-poor',w:F=>F.form!=null&&F.form<.9&&(!F.streak||F.streak.n<3),q:F=>[
+  'The form has dipped. Do you know why?',
+  'One win in your last few. Is this a blip or a pattern?']},
+
+ /* ---------- the opponent ---------- */
+ {id:'opp-mgr',w:F=>F.pre&&F.oppMgr&&F.oppMgr!=='You',q:F=>[
+  PS(F.oppMgr)+' has done a job over there. What do you make of him?',
+  'How do you go about beating a '+PS(F.oppMgr)+' side?',
+  'You and '+PS(F.oppMgr)+' have history now. Is there any needle in it?']},
+ {id:'opp-form',w:F=>F.pre&&F.oppStreak&&F.oppStreak.n>=3,q:F=>
+  F.oppStreak.r==='W'
+   ?[PS(F.opp.short)+' arrive on '+F.oppStreak.n+' straight wins. Worst possible time to face them?',
+     'They are flying. Does that change your approach?']
+   :[PS(F.opp.short)+' have lost '+F.oppStreak.n+' on the spin. Do you sense blood?',
+     'A wounded animal is dangerous. Are you wary of them?']},
+ {id:'opp-danger',w:F=>F.pre&&F.danger.length&&F.danger[0].p,q:F=>[
+  PS(F.danger[0].p.name)+' is their danger. Do you man-mark someone like that?',
+  'How do you stop '+esc(surname(F.danger[0].p.name))+'?',
+  'Would you take '+esc(surname(F.danger[0].p.name))+' at your club tomorrow?']},
+ {id:'opp-pos',w:F=>F.pre&&F.oppPos&&F.pos&&Math.abs(F.oppPos-F.pos)>=8,q:F=>
+  F.oppPos>F.pos
+   ?['On paper you should beat a side in '+ordinal(F.oppPos)+'. Is anything less than three points a failure?',
+     'Do games like this frighten you more than the big ones?']
+   :['They are '+ordinal(F.oppPos)+' and you are '+ordinal(F.pos)+'. Is this a measuring stick?',
+     'Is this the sort of night that tells you where you really are?']},
+ {id:'derby',w:F=>F.pre&&F.derby,q:F=>[
+  'This one means more than three points. How do you keep them calm?',
+  'A fixture like this can define a season. Do you feel that?',
+  'What do you say to a young player before a game of this size?']},
+ {id:'cup',w:F=>F.pre&&F.cup,q:F=>[
+  'A cup tie. Will you be resting anyone?',
+  'Is silverware a serious ambition this season or a distraction?',
+  'The cup has been kind to this club. Does the history weigh on you?']},
+ {id:'opp-absent',w:F=>F.pre&&F.oppAbsent.length>=2,q:F=>[
+  'They are missing a couple of key men. Does that make this one you have to win?',
+  'Their team news is not great. Are you expecting a weakened side?']},
+
+ /* ---------- your squad ---------- */
+ {id:'injuries',w:F=>F.injured.length>=3,q:F=>[
+  'You have '+F.injured.length+' in the treatment room. Is that bad luck or something else?',
+  'The injury list keeps growing. Have you looked at how you train them?',
+  'With '+F.injured.length+' out, is this squad deep enough?']},
+ {id:'injury-key',w:F=>F.injured.some(p=>p.ovr>=78),q:F=>{
+  const p=F.injured.filter(x=>x.ovr>=78).sort((a,b)=>b.ovr-a.ovr)[0];
+  return['Losing '+PNM(p)+' is a blow. Who steps up?',
+   'How long are you without '+PSUR(p)+'?',
+   'Does '+PSUR(p)+'’s injury change what you can do in this window?']}},
+ {id:'suspensions',w:F=>F.susp.length>=1,q:F=>[
+  'You are down to the bare bones with suspensions. Is discipline a problem here?',
+  PS(F.susp[0].name)+' is banned. Is that a self-inflicted wound?']},
+ {id:'unhappy',w:F=>F.unhappy.length>=1&&F.unhappy[0].morale<32,q:F=>{
+  const p=F.unhappy[0];
+  return[PNM(p)+' looks unhappy. Is there a problem there?',
+   'There are whispers that '+PSUR(p)+' wants away. Any truth in it?',
+   'How do you handle a senior player who is not enjoying his football?']}},
+ {id:'expiring',w:F=>F.expiring.length>=1,q:F=>{
+  const p=F.expiring[0];
+  return[PNM(p)+' is into the last year of his deal. Will he still be here next season?',
+   'Contract talks with '+PSUR(p)+' — where are they?',
+   'Can this club afford to let a player like '+PSUR(p)+' walk for nothing?']}},
+ {id:'kid',w:F=>F.kids.length>=1,q:F=>{
+  const p=F.kids[0];
+  return[PNM(p)+' is '+p.age+'. Is he ready for this level?',
+   'How much do you protect a boy like '+PSUR(p)+' from all this?',
+   'People are calling '+PSUR(p)+' the next big thing. Is that fair on him?']}},
+ {id:'old',w:F=>F.olds.length>=1&&F.olds[0].ovr>=75,q:F=>{
+  const p=F.olds[0];
+  return[PNM(p)+' is '+p.age+' now. How much has he got left?',
+   'Is this '+PSUR(p)+'’s last season at this level?',
+   'What does an old head like '+PSUR(p)+' give you that a younger man does not?']}},
+ {id:'top-scorer',w:F=>F.top&&F.top.stats.goals>=5,q:F=>[
+  PS(F.top.name)+' has '+F.top.stats.goals+'. Can he reach twenty?',
+  'How much do you rely on '+esc(surname(F.top.name))+'’s goals?',
+  'If someone came in for '+esc(surname(F.top.name))+' in January, what would you say?']},
+ {id:'dry',w:F=>F.dry.length>=1,q:F=>{
+  const p=F.dry[0];
+  return[PNM(p)+' has not scored all season. Is he short of confidence?',
+   'Are you worried about '+PSUR(p)+'’s goal return?',
+   'At what point does a forward’s barren run become your problem?']}},
+ {id:'best',w:F=>F.best&&F.best.stats.apps>=4,q:F=>[
+  PS(F.best.name)+' has been your best player by some way. Is he underrated outside this club?',
+  'What is it about '+esc(surname(F.best.name))+' that the numbers do not show?']},
+ {id:'worst',w:F=>F.worst&&F.worst.stats.apps>=5&&F.worst.ovr>=72,q:F=>[
+  PNM(F.worst)+' is having a difficult season. Does he still have your backing?',
+  'Some supporters have got on '+PSUR(F.worst)+'’s back. Is that fair?']},
+ {id:'bench',w:F=>F.bench.length>=2,q:F=>[
+  'You have '+F.bench.length+' good players who barely play. Is that sustainable?',
+  PNM(F.bench[0])+' has hardly featured. Is he happy?',
+  'Do you worry about the mood of the ones who are not getting on?']},
+ {id:'captain',w:F=>F.capt,q:F=>[
+  'How much does '+PNM(F.capt)+' do for you that we do not see?',
+  'Is '+PSUR(F.capt)+' the right captain for this group?']},
+ {id:'keeper',w:F=>F.gk,q:F=>[
+  'Is '+PNM(F.gk)+' your number one for the rest of the season?',
+  'Goalkeeper is the one position you cannot get wrong. Are you settled there?']},
+ {id:'retrain',w:F=>F.retrain.length>=1,q:F=>{
+  const p=F.retrain[0];
+  return['We hear you are working with '+PNM(p)+' in a new position. What is the thinking?',
+   'Is moving '+PSUR(p)+' a long-term plan or a short-term fix?']}},
+ {id:'depth',w:F=>F.squad.filter(p=>!p.injury&&p.susp<=0).length<=15,q:F=>[
+  'You are down to the bare bones. Is that squad big enough for this schedule?',
+  'Do you need bodies in this window, or do you trust the academy?']},
+
+ /* ---------- the club ---------- */
+ {id:'board',w:F=>F.patience<=35,q:F=>[
+  'There are reports the board have discussed your position. Have they spoken to you?',
+  'Do you still have the backing upstairs?',
+  'If results do not turn, how long do you think you have?']},
+ {id:'board-good',w:F=>F.patience>=85,q:F=>[
+  'The board are clearly delighted. Has there been talk of a new deal for you?',
+  'You seem to have complete backing. Does that make the job easier or harder?']},
+ {id:'fans',w:F=>F.fans&&/Turning|Mutinous|Restless/.test(F.fans.k),q:F=>[
+  'The supporters are restless. Do you understand why?',
+  'There were banners at the last home game. Have you seen them?',
+  'What do you say to a fan who has paid to watch this?']},
+ {id:'fans-good',w:F=>F.fans&&/Adored|Behind you/.test(F.fans.k),q:F=>[
+  'They are singing your name. What does that do to you?',
+  'The relationship with the supporters looks strong. How important is that?']},
+ {id:'money',w:F=>F.budget>=40e6,q:F=>[
+  'You have money to spend. Are you close to anyone?',
+  'There is '+fmtM(F.budget)+' available. Is it burning a hole in your pocket?',
+  'Is spending big the answer, or does this squad need something else?']},
+ {id:'nomoney',w:F=>F.budget<5e6,q:F=>[
+  'There is next to nothing in the budget. Are your hands tied?',
+  'Do you feel supported in the transfer market?',
+  'Can you compete with what you have got?']},
+ {id:'wages',w:F=>F.wage&&F.my.wageCap&&F.wage>F.my.wageCap*.95,q:F=>[
+  'The wage bill is at the ceiling. Does someone have to go before anyone comes in?',
+  'Is the structure of this squad’s wages sustainable?']},
+ {id:'listed',w:F=>F.listed.length>=1,q:F=>[
+  'You have listed '+PNM(F.listed[0])+'. Has he had his last game here?',
+  'Is clearing the decks a priority for you?']},
+ {id:'academy',w:F=>F.my.stad&&F.my.stad.youth>=4,q:F=>[
+  'The academy here has a reputation. Do you feel a duty to pick from it?',
+  'When did you last look at the youth team, and did anyone catch your eye?']},
+
+ /* ---------- you ---------- */
+ {id:'you-new',w:F=>F.season===1&&F.day<80,q:F=>[
+  'You are still finding your feet here. What has surprised you most?',
+  'How is the job different from what you expected?',
+  'Have you had time to put your own stamp on this?']},
+ {id:'you-long',w:F=>F.season>=4,q:F=>[
+  'Season '+F.season+' in the job. Do you ever think about how it ends?',
+  'Four years is a long time in this game. Are you still enjoying it?',
+  'Has the job changed you?']},
+ {id:'you-claim',w:F=>F.claims.length>=1,q:F=>[
+  'You said some strong things last week. Do you stand by them?',
+  'You have given them something to pin on the dressing-room wall. Was that deliberate?']},
+ {id:'title-talk',w:F=>F.titleTalk,q:F=>[
+  'You said you would win the league. Do you regret it yet?',
+  'That title claim is on every back page. Do you feel the weight of it?']},
+ {id:'legacy',w:F=>F.season>=2&&F.pos&&F.pos<=6,q:F=>[
+  'What do you want people to say about your time here when it is over?',
+  'Are you building something, or are you managing week to week?']},
+
+ /* ---------- the game itself ---------- */
+ {id:'shape',w:F=>F.tac.formation,q:F=>[
+  'You have gone with '+PS(F.tac.formation)+' lately. Is that the shape you believe in?',
+  'Is the system more important than the players in it?',
+  'Would you change your shape to stop a good side, or make them worry about you?']},
+ {id:'mentality',w:F=>F.tac.mentality,q:F=>[
+  'Your sides play '+PS(String(F.tac.mentality).toLowerCase()).toLowerCase()+'. Is that a philosophy or a reaction to what you have got?',
+  'Do you set up to win games or to not lose them?']},
+ {id:'weather',w:F=>F.pre&&F.wx&&!/Clear|Overcast/.test(F.wx.k),q:F=>[
+  'The forecast is '+PS(String(F.wx.k).toLowerCase())+'. Does that suit you?',
+  'Conditions like that are a leveller. Are you worried?']},
+ {id:'ref',w:F=>F.pre&&F.ref&&F.ref.name,q:F=>[
+  PS(F.ref.name)+' has the whistle. Any thoughts on that?',
+  'Do you talk to your players about the referee before a game?']},
+ {id:'rest',w:F=>F.rest!=null&&F.rest<=3,q:F=>[
+  'Only '+F.rest+' days between games. Is the schedule fair on players?',
+  'Does a run of fixtures like this make rotation compulsory rather than optional?']},
+ {id:'travel',w:F=>F.pre&&F.nextFix&&F.nextFix.h!==G.my,q:F=>[
+  'Away from home again. Is this a different side on the road?',
+  'Your away form will be talked about either way. Are you comfortable with it?']},
+ {id:'home',w:F=>F.pre&&F.nextFix&&F.nextFix.h===G.my,q:F=>[
+  'Back at home. How much difference does this crowd make?',
+  'Home games carry a different expectation here. Do the players feel it?']},
+
+ /* ---------- the awkward ones ---------- */
+ {id:'awkward-job',w:F=>F.patience<=45||(F.streak&&F.streak.n>=3&&F.streak.r==='L'),q:F=>[
+  'Straight question — are you the right man for this job?',
+  'If you were us, would you be asking whether you should still be here?',
+  'Do you read what is written about you?']},
+ {id:'awkward-players',w:F=>F.post&&F.res==='L',q:F=>[
+  'Do those players care as much as the people in the stands?',
+  'Is that a group that would run through a wall for you?',
+  'Who takes responsibility for a performance like that — you or them?']},
+ {id:'awkward-money',w:F=>F.season>=2,q:F=>[
+  'This club has spent a lot of money. Where has it gone?',
+  'Are you the manager, or are you working to somebody else’s recruitment?']},
+ {id:'awkward-rival',w:F=>F.pre&&F.derby,q:F=>[
+  'They have been better than you for a while now. Does that hurt?',
+  'What is the gap between this club and them, honestly?']},
+ {id:'open-1',w:()=>true,q:F=>[
+  'What is the mood in the camp this week?',
+  'Any team news you can share with us?',
+  'How have they trained this week?',
+  'Is everyone available to you?',
+  'What is the message to the players?',
+  'Is there anything that has pleased you that we would not have seen?',
+  'Where do you think this side is heading?',
+  'What would a good week look like for you?',
+  'Is there one thing you would change about this squad right now?',
+  'How do you switch off from all this?']}];
+
+
+/* a much deeper pool of open questions — a real press room asks a lot of
+   things that do not depend on anything at all */
+PQ.push(
+ {id:'open-2',w:()=>true,q:F=>[
+  'How settled do you feel in this job now?',
+  'Is there a player here who has surprised you?',
+  'What does a good week on the training ground look like to you?',
+  'Do you watch the games back, or do you trust what you saw live?',
+  'How much of management is tactics and how much is people?',
+  'Who do you lean on when it is not going well?',
+  'Is there a game this season you would like to play again?',
+  'What is the hardest part of this job that nobody sees?',
+  'Do you set targets for individuals, or only for the team?',
+  'How do you decide when a young player is ready?']},
+ {id:'open-3',w:()=>true,q:F=>[
+  'Is there a manager you have taken things from?',
+  'Do you enjoy the transfer window or dread it?',
+  'What do you look for first when you watch an opponent?',
+  'How honest are you with a player who is not going to play?',
+  'Is loyalty a virtue in this game or a weakness?',
+  'What would you change about modern football if you could?',
+  'Do you think supporters understand what goes on behind the scenes?',
+  'Has anything about this club surprised you since you walked in?',
+  'What is the atmosphere like in the building this week?',
+  'Do you think this squad believes in what you are asking of them?']},
+ {id:'open-4',w:()=>true,q:F=>[
+  'Is there a position you would strengthen tomorrow if you could?',
+  'How do you keep a squad happy when only eleven can play?',
+  'What do you make of the standard in this division this year?',
+  'Do you look at the table, or do you avoid it?',
+  'Where do you want this side to be in twelve months?',
+  'Is there a performance this season you have held up as the standard?',
+  'How do you handle a player who disagrees with you?',
+  'Do you think you get a fair hearing in the press?',
+  'What have you learned about yourself since taking this on?',
+  'Is there a decision this season you would take differently?']},
+ {id:'open-5',w:()=>true,q:F=>[
+  'What are the training ground conversations about this week?',
+  'How much do you talk to the players about the opposition?',
+  'Do you prepare differently for a side that sits deep?',
+  'Are set pieces something you work on, or do you trust the players?',
+  'How much say do the senior players have?',
+  'Is there anyone in the building who tells you when you are wrong?',
+  'What is your relationship with the board actually like?',
+  'Do you get involved in recruitment yourself?',
+  'How do you measure whether a week has gone well?',
+  'Is there a match coming up you have already circled?']},
+ {id:'open-6',w:()=>true,q:F=>[
+  'What do you want the supporters to see from this team?',
+  'Is entertaining football a duty at a club like this?',
+  'Do you think the fans and the players are on the same page?',
+  'How much does the away following mean to your players?',
+  'Is there pressure at this club that does not exist elsewhere?',
+  'Do you think expectations here are realistic?',
+  'What is the biggest misconception about your side?',
+  'Are you a manager who plans for next season, or for Saturday?',
+  'Would you rather win ugly or lose well?',
+  'What keeps you up at night at the moment?']});
+/* and more that read the state of your club */
+PQ.push(
+ {id:'goals-for',w:F=>F.top&&F.scorers.length>=3,q:F=>[
+  'The goals are spread around this season. Is that by design?',
+  'You have '+F.scorers.length+' different scorers. Does that make you harder to plan against?']},
+ {id:'one-man',w:F=>F.top&&F.scorers.length<=2&&F.top.stats.goals>=4,q:F=>[
+  'Almost all your goals come from one man. Is that a worry?',
+  'If '+PSUR(F.top)+' gets injured, where do the goals come from?']},
+ {id:'kids-many',w:F=>F.kids.length>=3,q:F=>[
+  'There are '+F.kids.length+' teenagers pushing for a place. Is this a young side by choice?',
+  'Do you have to protect a dressing room this young?']},
+ {id:'old-squad',w:F=>F.olds.length>=4,q:F=>[
+  'This is one of the older squads in the division. Does that concern you?',
+  'Is there a rebuild coming, and if so, when?']},
+ {id:'many-listed',w:F=>F.listed.length>=3,q:F=>[
+  'You have put '+F.listed.length+' up for sale. Is this a clear-out?',
+  'Is it difficult to keep a player motivated once he knows he is for sale?']},
+ {id:'unbeaten',w:F=>F.form5.length>=4&&F.form5.every(x=>x!=='L'),q:F=>[
+  'You are unbeaten in your last few. What is holding it together?',
+  'Is this the most comfortable you have felt in the job?']},
+ {id:'winless',w:F=>F.form5.length>=4&&!F.form5.some(x=>x==='W'),q:F=>[
+  'No win in your last few. Where does the next one come from?',
+  'Is confidence the problem, or is it something you can coach?']},
+ {id:'cup-run',w:F=>F.nextFix&&F.nextFix.cup&&F.pos&&F.pos<=8,q:F=>[
+  'You are going well in the league and still in the cup. Can you do both?',
+  'Would you trade a cup run for four league points?']},
+ {id:'schedule',w:F=>F.rest!=null&&F.rest>=7,q:F=>[
+  'A clear week for once. What have you been able to work on?',
+  'Does a break like this help you, or does it break the rhythm?']},
+ {id:'gk-form',w:F=>F.gk&&F.gk.stats&&F.gk.stats.cleanSheets>=3,q:F=>[
+  PNM(F.gk)+' has kept '+F.gk.stats.cleanSheets+' clean sheets. How much is that him?',
+  'Is your goalkeeper the most improved player in this side?']},
+ {id:'motm-run',w:F=>F.best&&F.best.stats.motm>=2,q:F=>[
+  PNM(F.best)+' keeps winning man of the match. Is he in the form of his life?',
+  'Are the bigger clubs going to come sniffing around '+PSUR(F.best)+'?']},
+ {id:'discipline',w:F=>F.squad.some(p=>p.seasonYellows>=5),q:F=>{
+  const p=F.squad.filter(x=>x.seasonYellows>=5).sort((a,b)=>b.seasonYellows-a.seasonYellows)[0];
+  return[PNM(p)+' has '+p.seasonYellows+' bookings. Do you need to have a word?',
+   'Is your side too aggressive, or is that just how you want to play?']}},
+ {id:'wage-top',w:F=>F.squad.length&&F.squad.slice().sort((a,b)=>b.wage-a.wage)[0].wage>200000,q:F=>{
+  const p=F.squad.slice().sort((a,b)=>b.wage-a.wage)[0];
+  return['Is '+PNM(p)+' worth what this club pays him?',
+   'Do wages that size distort a dressing room?']}},
+ {id:'facility',w:F=>F.my.stad&&F.my.stad.train<=2,q:F=>[
+  'The training facilities here are behind your rivals. Have you raised it?',
+  'How much does infrastructure matter compared with coaching?']},
+ {id:'stadium',w:F=>F.my.cap&&F.my.cap>=60000,q:F=>[
+  'Seventy-odd thousand every week. Is that a help or a weight?',
+  'Do you notice when the ground goes quiet?']},
+ {id:'season-end',w:F=>F.day>250,q:F=>[
+  'The run-in starts here. Does anything change in how you prepare?',
+  'How do you keep legs and minds fresh in April?',
+  'Have you started thinking about next season yet?']},
+ {id:'season-start',w:F=>F.day<60,q:F=>[
+  'Early days. How much can you read into results at this stage?',
+  'Is pre-season work still showing, or is it all match fitness now?']},
+ {id:'window',w:F=>(typeof windowOpen==='function')&&windowOpen(),q:F=>[
+  'The window is open. Are you expecting business?',
+  'Will anybody be leaving before it shuts?',
+  'Is it harder to sign a player or to keep one?']});
+
+
+PQ.push(
+ {id:'open-7',w:()=>true,q:F=>[
+  'Is there a game from your own career you still think about?',
+  'What do you say to a player the night before his debut?',
+  'How much notice do you take of what pundits say?',
+  'Do you think this league rewards brave managers?',
+  'Is there a coach here who deserves more credit than he gets?',
+  'What is the first thing you look at on a Monday morning?',
+  'Do you speak to your predecessor at all?',
+  'How different is this club from the outside looking in?',
+  'Is there a rule in the game you would scrap tomorrow?',
+  'Do you think you are a better manager than you were a year ago?']},
+ {id:'open-8',w:()=>true,q:F=>[
+  'What do you demand from a player who wants to start for you?',
+  'Is there a quality you value above all the others?',
+  'How much video do you put in front of them?',
+  'Do you rotate on data or on what your eyes tell you?',
+  'When a game is drifting, what is your first instinct?',
+  'Do you trust yourself to make a change at half time?',
+  'Is there a substitution this season you got badly wrong?',
+  'What is the conversation like when you take a captain off?',
+  'Do you plan for extra time before a cup tie?',
+  'How much do you rehearse the first fifteen minutes?']},
+ {id:'open-9',w:()=>true,q:F=>[
+  'Is this a squad you built, or one you inherited?',
+  'Which of your signings has given you most?',
+  'Is there one that has not worked out?',
+  'Do you scout players yourself, or do you trust the reports?',
+  'How do you know when a player will handle this club?',
+  'Would you sign a brilliant player with a difficult reputation?',
+  'Is character worth more than ability to you?',
+  'Do you look for leaders, or do you make them?',
+  'Is there a type of player this club has always suited?',
+  'What is missing from this squad that you cannot buy?']},
+ {id:'open-10',w:()=>true,q:F=>[
+  'How much do you protect your players in here?',
+  'Would you ever criticise one of them publicly?',
+  'Do you think managers should have to do this every week?',
+  'Is there a question you are tired of being asked?',
+  'What do your family make of all this?',
+  'Do you take the job home with you?',
+  'How do you cope with a bad night?',
+  'Is there anyone in football you would call for advice?',
+  'What would you be doing if you were not managing?',
+  'Do you ever feel like you are running out of time?']},
+ {id:'open-11',w:()=>true,q:F=>[
+  'How is the fitness across the group?',
+  'Anyone back on the grass this week?',
+  'Is anyone carrying something we should know about?',
+  'What is the state of play with the treatment room?',
+  'Will you name the same side?',
+  'Have you settled on your best eleven?',
+  'Do you tell them the team the day before or on the day?',
+  'Is there a shape you have been working on behind closed doors?',
+  'How much of what you do is dictated by the opposition?',
+  'Are you happy with the balance of the side?']},
+ {id:'open-12',w:()=>true,q:F=>[
+  'Do you think this club is heading in the right direction?',
+  'What would success look like at the end of this season?',
+  'Is there a benchmark side you measure yourselves against?',
+  'How far away are you from where you want to be?',
+  'Is patience something this club has any of?',
+  'Do you feel you are being judged fairly?',
+  'What is the biggest thing you have had to fix here?',
+  'Is there anything you inherited that you would not have chosen?',
+  'How much of a plan can you really have in this job?',
+  'Do you enjoy Sundays?']},
+ {id:'open-13',w:()=>true,q:F=>[
+  'What did you make of the officials last time out?',
+  'Do you think technology has made the game fairer?',
+  'Is there too much football being played?',
+  'How do you feel about the calendar as it stands?',
+  'Do the players talk to you about the schedule?',
+  'Should managers have more say in how the game is run?',
+  'Is money ruining the sport, in your view?',
+  'What would you say to a young coach starting out?',
+  'Do you watch other leagues?',
+  'Where do you think the best football is being played right now?']},
+ {id:'open-14',w:()=>true,q:F=>[
+  'Give us something for the back page.',
+  'Anything you want to get off your chest?',
+  'Is there anything we have not asked that you wish we had?',
+  'How would you sum up your week in one sentence?',
+  'What is the one thing you want the supporters to know?',
+  'Are you looking forward to this one?',
+  'Predict the score for us.',
+  'What would you settle for right now?',
+  'Is this a big week for you?',
+  'How do you want to be judged?']},
+ {id:'assist',w:F=>F.squad.some(p=>p.stats&&p.stats.assists>=3),q:F=>{
+  const p=F.squad.filter(x=>x.stats&&x.stats.assists>=3).sort((a,b)=>b.stats.assists-a.stats.assists)[0];
+  return[PNM(p)+' has '+p.stats.assists+' assists. Is he the most important player in this side?',
+   'Do you rate a creator as highly as a scorer?']}},
+ {id:'apps',w:F=>F.squad.some(p=>p.stats&&p.stats.apps>=20),q:F=>{
+  const p=F.squad.filter(x=>x.stats&&x.stats.apps>=20).sort((a,b)=>b.stats.apps-a.stats.apps)[0];
+  return[PNM(p)+' has played nearly every minute. Are you running him into the ground?',
+   'Is there anybody you simply cannot leave out?']}},
+ {id:'homegrown',w:F=>F.squad.some(p=>p.age<=21&&p.stats&&p.stats.apps>=5),q:F=>{
+  const p=F.squad.filter(x=>x.age<=21&&x.stats&&x.stats.apps>=5)[0];
+  return['You have trusted '+PNM(p)+' with real minutes. How has he handled it?',
+   'Is giving young players a game a philosophy or a necessity here?']}},
+ {id:'nations',w:F=>F.day%60<6,q:F=>[
+  'The international break is on us. Do you dread them?',
+  'How many of yours are away with their countries?',
+  'Is a fortnight without them a help or a hindrance?']},
+ {id:'honours',w:F=>(G.honours||[]).length>=1,q:F=>[
+  'You have won something here already. Does that buy you time?',
+  'Is a trophy the only thing that counts in the end?']},
+ {id:'anniversary',w:F=>F.season>=2&&F.day<40,q:F=>[
+  'Another season starts. Is this the year?',
+  'What is different about this squad compared with twelve months ago?',
+  'Do you feel more or less pressure than you did last August?']});
+
+/* a room asks in different ways as well as about different things */
+const PRESS_FRAME=[
+ t=>t,
+ t=>'Boss — '+t.charAt(0).toLowerCase()+t.slice(1),
+ t=>'Just briefly. '+t,
+ t=>'And finally. '+t,
+ t=>'One from me. '+t,
+ t=>'If I can pick up on that. '+t,
+ t=>'A quick one for you. '+t,
+ t=>t+' Be honest with us.'];
+
+/* ---------------------------------------------------------------------
+   4. THE CHOOSER
+   Everything that applies, minus everything we have already asked.
+   --------------------------------------------------------------------- */
+function pressBank(){
+ const F=pqFacts();
+ if(!F)return[];
+ const out=[];
+ PQ.forEach(rule=>{
+  let on=false;
+  try{on=!!rule.w(F)}catch(e){on=false}
+  if(!on)return;
+  let lines=[];
+  try{lines=rule.q(F)||[]}catch(e){lines=[]}
+  lines.forEach((t,i)=>{if(t)out.push({id:rule.id+'#'+i,t})});});
+ return out}
+function pressSeen(){
+ if(!G.pressSeen)G.pressSeen=[];
+ return G.pressSeen}
+function pressRemember(id){
+ const s=pressSeen();
+ s.push(id);
+ while(s.length>220)s.shift()}
+pressQuestion=function(){
+ const c=G.pressCtx;if(!c)return '';
+ // the same question index gives the same line, so redrawing does not reroll
+ if(c._qCache&&c._qCache.i===c.q)return c._qCache.t;
+ const bank=pressBank();
+ if(!bank.length)return 'What is the mood in the camp this week?';
+ const seen=new Set(pressSeen());
+ // and never the same one twice inside one conference
+ (c._asked||[]).forEach(x=>seen.add(x));
+ const asked=new Set(c._asked||[]);
+ let pool=bank.filter(x=>!seen.has(x.id));
+ if(!pool.length){                                  // the room has run dry: forget the oldest
+  const half=new Set(pressSeen().slice(-70));
+  pool=bank.filter(x=>!half.has(x.id)&&!asked.has(x.id));
+  // whatever happens, never the same question twice in one conference
+  if(!pool.length)pool=bank.filter(x=>!asked.has(x.id));
+  if(!pool.length)pool=bank}
+ const r=mulberry(hashStr('pq'+c.oppI+'|'+G.day+'|'+G.season+'|'+c.q+'|'+c.kind));
+ const pick=pool[Math.floor(r()*pool.length)];
+ // how many times this line has come up decides how it is put to you, so a
+ // question you have heard before still arrives dressed differently
+ const heard=pressSeen().filter(x=>x===pick.id).length;
+ // the question index is in the mix too, or three in a row open the same way
+ const frame=PRESS_FRAME[(heard+hashStr(pick.id)+(c.q||0)*3)%PRESS_FRAME.length];
+ let text=pick.t;
+ try{text=frame(pick.t)}catch(e){}
+ c._asked=(c._asked||[]).concat([pick.id]);
+ c._qCache={i:c.q,t:text};
+ pressRemember(pick.id);
+ return text};
+
+/* a summons holds the calendar whether or not anything got round to
+   labelling it — the label used to be the only thing that counted */
+pressMails=function(){return G.inbox.filter(isPressMail)};
+/* a different journalist asks each one */
+const _sheetRotate=openPressSheet;
+openPressSheet=function(reaction){
+ const c=G.pressCtx;
+ if(c&&c.panel&&c.panel.length){
+  const p=c.panel[(c.q||0)%c.panel.length];
+  if(p){c.rep=p.rep;c.outlet=p.outlet}}
+ return _sheetRotate(reaction)};
+/* a bigger panel, so it is not the same three faces every week */
+const _panelWide=pressPanel;
+pressPanel=function(){
+ const n=Math.min(4,REPORTERS.length);
+ const outs=shuffle(OUTLETS.slice()).slice(0,n),reps=shuffle(REPORTERS.slice()).slice(0,n);
+ return reps.map((r,i)=>({rep:r,outlet:outs[i%outs.length]}))};
+/* four questions, not three, now there is enough to ask */
+const _mediaMore=maybeMedia;
+maybeMedia=function(){const r=_mediaMore.apply(this,arguments);
+ if(G.pressCtx)G.pressCtx.qTotal=4;return r};
+const _preMediaMore=maybePreMedia;
+maybePreMedia=function(){const r=_preMediaMore.apply(this,arguments);
+ if(G.pressCtx&&G.pressCtx.kind==='pre')G.pressCtx.qTotal=4;return r};
+/* the sheet shows who is asking, so the changing voice makes sense */
+const _sheetWho=openPressSheet;
+openPressSheet=function(reaction){
+ const r=_sheetWho(reaction);
+ const c=G.pressCtx,host=$('#sheetBody');
+ if(!c||!host)return r;
+ const q=host.querySelector('.presser-q');
+ if(q&&!host.querySelector('.press-who')){
+  q.insertAdjacentHTML('beforebegin',
+   '<div class="press-who xs faint" style="margin:2px 0 -4px 2px">'+
+   '🎙️ <b style="color:var(--ink-dim)">'+esc(c.rep||'')+'</b>'+
+   (c.outlet?' · '+esc(c.outlet):'')+
+   ' · question '+((c.q||0)+1)+' of '+(c.qTotal||3)+'</div>')}
+ return r};
+
 showStart();
 </script>
 </body>
