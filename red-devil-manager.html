@@ -20457,7 +20457,716 @@ vTable=function(){
   (nRel?' · <span style="color:var(--danger)">relegation</span>':'')+'</div>';
  return h};
 
-/*#w19_tablefit.js#*/
+/*#w19_tablefit.js#*//*#w20_roomtobreathe.js#*/
+
+/* =====================================================================
+   ROOM TO BREATHE — the squad and transfer rooms, rebuilt
+   ---------------------------------------------------------------------
+   THE BUG. Making the league table fit did it with one line:
+
+       .tbl{table-layout:fixed}
+
+   written to stop "Atlético Madrid" pushing the points column off a
+   phone. It worked. But `.tbl` is every table in the game, and fixed
+   layout means a table stops measuring its own contents and hands every
+   column that has not been given a width an equal share of the screen.
+
+   The league table had widths. Nothing else did. So the squad list —
+   seven columns on a 390px screen — gave the player's name the same 46
+   pixels it gave the age column, and the whole first team turned into
+
+       Se…  Al…  K…  L…  M…  Li…  L…  Ha…  Ay…
+
+   with the portraits crushed from 26 pixels wide to eleven: not faces
+   any more, just slivers. The transfer market went the same way, so the
+   most expensive players in the world were listed as "Kylia…", "Erlin…"
+   and "Vinic…". Every other list built on a table — the treatment room,
+   the training reports, the scouting dossier, the development log — was
+   quietly squashed by the same line.
+
+   THE FIX has two halves.
+
+   First, the line goes back to where it belongs. Fixed layout is what
+   the league table wants and nothing else does, so the league table asks
+   for it by name and every other table measures its contents again.
+
+   Second, and this is the real answer: a squad is not a spreadsheet.
+   Seven columns of numbers never fitted a phone and never will. The
+   squad and the transfer market are now built out of player rows —
+   a proper 46px portrait, the full name at a size you can read across a
+   room, and the numbers that matter arranged underneath instead of
+   beside. Vertical space is free. Horizontal space is the thing there is
+   none of. Everything the old tables showed is still here, and rather
+   more besides.
+   ===================================================================== */
+
+(function w20css(){
+ const st=document.createElement('style');st.id='w20';
+ st.textContent=[
+
+ /* ---- 1. tables measure themselves again; the league table opts in ---- */
+ '.tbl{table-layout:auto}',
+ '.tbl.fixcols{table-layout:fixed;width:100%}',
+ '.tbl th,.tbl td{padding-left:5px;padding-right:5px}',
+ '.tbl.fixcols th,.tbl.fixcols td{padding-left:2px;padding-right:2px}',
+ /* a name in a table never pushes the numbers off the screen either */
+ '.tbl td .row{min-width:0}',
+ '.tbl td:first-child{min-width:0}',
+ '.tbl td:first-child .row{min-width:0;flex-wrap:nowrap}',
+ '.tbl td:first-child .row>div{min-width:0}',
+ '.tbl thead th{background:#101a14}',
+
+ /* ---- 2. a portrait is never squeezed by the box it sits in ---- */
+ '.pfr{flex:none;flex-shrink:0}',
+ '.pfr svg{display:block}',
+
+ /* ---- 3. the front door: text stops running under the icon ---- */
+ '.fbtn{padding-right:56px}',
+ '.fbtn .fi{font-size:22px;opacity:.7}',
+
+ /* ---- 4. THE PLAYER ROW ---- */
+ '.plist{display:flex;flex-direction:column}',
+ '.prow{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:11px;align-items:center;',
+ ' padding:10px 8px;border-radius:14px;position:relative;cursor:pointer;',
+ ' border-bottom:1px solid rgba(240,245,240,.055);transition:background .13s ease}',
+ '.plist .prow:last-child{border-bottom:none}',
+ '.prow:active{background:rgba(218,41,28,.14)}',
+ '.prow.mine{box-shadow:inset 3px 0 0 var(--red)}',
+ '.prow.dim{opacity:.62}',
+
+ '.pav{position:relative;flex:none;line-height:0;align-self:flex-start;margin-top:1px}',
+ '.pav .pfr{border-radius:13px;box-shadow:0 4px 12px rgba(0,0,0,.5),',
+ ' inset 0 0 0 1.5px var(--pgc,rgba(255,255,255,.22))}',
+ '.pav .pfr svg{border-radius:13px}',
+ '.pavp{position:absolute;left:50%;bottom:-5px;transform:translateX(-50%);',
+ ' padding:1.5px 6px;border-radius:7px;font-size:8.5px;font-weight:800;letter-spacing:.5px;',
+ ' line-height:1.35;box-shadow:0 2px 7px rgba(0,0,0,.6);white-space:nowrap;',
+ ' border:1px solid rgba(0,0,0,.35)}',
+ '.pavx{position:absolute;right:-5px;top:-5px;width:17px;height:17px;border-radius:50%;',
+ ' display:flex;align-items:center;justify-content:center;font-size:9px;line-height:1;',
+ ' background:#161f19;box-shadow:0 2px 6px rgba(0,0,0,.6)}',
+
+ '.pmain{min-width:0}',
+ '.pname{font-size:14.5px;font-weight:800;letter-spacing:-.15px;line-height:1.2;',
+ ' white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+ '.pmeta{font-size:11px;color:var(--ink-dim);font-weight:600;margin-top:3px;line-height:1.3;',
+ ' white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:5px}',
+ '.pmeta .crest{flex:none}',
+ '.ptags{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px}',
+ '.ptags:empty{display:none}',
+ '.prail{display:flex;align-items:center;gap:7px;margin-top:6px;font-size:10.5px;font-weight:700}',
+ '.prail .bar{flex:1;min-width:26px;max-width:64px;height:6px}',
+ '.prail .mood{font-size:12.5px;line-height:1}',
+ '.prail .stars{font-size:10.5px;letter-spacing:.5px}',
+ '.rlbl{font-size:8.5px;font-weight:800;letter-spacing:.9px;color:var(--ink-faint);',
+ ' text-transform:uppercase;flex:none}',
+ '.xibadge{font-size:8.5px;font-weight:800;letter-spacing:.8px;color:#241f00;flex:none;',
+ ' background:linear-gradient(180deg,#ffe95c,var(--gold));padding:2px 6px;border-radius:6px;',
+ ' box-shadow:0 2px 6px rgba(251,225,34,.25)}',
+
+ '.pright{flex:none;display:flex;flex-direction:column;align-items:flex-end;gap:4px;align-self:flex-start;margin-top:2px}',
+ '.pright .ovr{min-width:40px;height:27px;font-size:13.5px;border-radius:9px}',
+ '.psub{font-size:10.5px;font-weight:800;color:var(--ink-faint);',
+ ' font-variant-numeric:tabular-nums;white-space:nowrap;letter-spacing:.2px}',
+ '.pbtns{display:flex;gap:5px;margin-top:2px}',
+ '.pbtns .btn{min-height:26px;padding:0 9px;font-size:10.5px;border-radius:8px}',
+
+ /* group divider inside a player list */
+ '.pgsec{display:flex;align-items:center;gap:9px;padding:12px 4px 7px}',
+ '.pgsec .pgt{font-family:var(--disp);font-size:10.5px;letter-spacing:1.6px;text-transform:uppercase;',
+ ' color:var(--pgc,var(--ink-dim))}',
+ '.pgsec .pgl{flex:1;height:1px;background:linear-gradient(90deg,var(--pgc,rgba(255,255,255,.2)),transparent);opacity:.45}',
+ '.pgsec .pgn{font-size:10px;font-weight:800;color:var(--ink-faint);letter-spacing:.5px}',
+
+ /* ---- 5. squad vitals ---- */
+ '.vitals{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin:2px 0 10px}',
+ '.vt{background:linear-gradient(168deg,rgba(255,255,255,.06),rgba(255,255,255,.014));',
+ ' border:1px solid rgba(240,245,240,.09);border-radius:13px;padding:8px 4px;text-align:center}',
+ '.vt .vv{font-family:var(--disp);font-size:16px;letter-spacing:-.3px;line-height:1.1}',
+ '.vt .vl{font-size:8.5px;letter-spacing:.7px;text-transform:uppercase;color:var(--ink-faint);',
+ ' font-weight:800;margin-top:3px}',
+ '.depth{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:9px}',
+ '.dcell{border-radius:11px;padding:7px 3px;text-align:center;background:rgba(0,0,0,.26);',
+ ' border:1px solid rgba(240,245,240,.07)}',
+ '.dcell .dn{font-family:var(--disp);font-size:14px;line-height:1}',
+ '.dcell .dl{font-size:8.5px;font-weight:800;letter-spacing:.8px;margin-top:3px;opacity:.8}',
+ '.dcell.thin{border-color:rgba(255,176,32,.45);background:rgba(255,176,32,.10)}',
+
+ /* ---- 6. transfer market furniture ---- */
+ '.scoutrow{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:9px;align-items:center;',
+ ' padding:8px 2px;border-bottom:1px solid var(--chalk)}',
+ '.scoutrow:last-child{border-bottom:none}',
+ '.scoutrow .si{width:30px;height:30px;border-radius:9px;display:flex;align-items:center;',
+ ' justify-content:center;font-size:15px;background:rgba(255,255,255,.05);border:1px solid var(--chalk)}',
+ '.scoutrow .sn{font-size:12.5px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+ '.scoutrow .sd{font-size:10.5px;color:var(--ink-dim);font-weight:600;margin-top:2px;',
+ ' white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+ '.scoutrow .sp{height:4px;border-radius:99px;background:rgba(255,255,255,.09);margin-top:5px;overflow:hidden}',
+ '.scoutrow .sp i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,#2bbf72,#3ddc84)}',
+ '.budgetbar{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:10px}',
+ '.bb{border-radius:14px;padding:9px 11px;border:1px solid rgba(240,245,240,.09);',
+ ' background:linear-gradient(168deg,rgba(255,255,255,.055),rgba(255,255,255,.012))}',
+ '.bb .bv{font-family:var(--disp);font-size:17px;letter-spacing:-.3px}',
+ '.bb .bl{font-size:8.5px;letter-spacing:.8px;text-transform:uppercase;color:var(--ink-faint);font-weight:800;margin-top:2px}',
+ '.intchip{font-size:9px;font-weight:800;letter-spacing:.4px;padding:2px 7px;border-radius:999px;',
+ ' text-transform:uppercase;white-space:nowrap}',
+ '.ic-ok{background:rgba(61,220,132,.15);color:#6ee7a0;border:1px solid rgba(61,220,132,.38)}',
+ '.ic-no{background:rgba(255,255,255,.05);color:var(--ink-faint);border:1px solid var(--chalk-strong)}',
+ '.ic-lock{background:rgba(255,83,72,.14);color:#ff9a90;border:1px solid rgba(255,83,72,.4)}',
+ '.star-btn{font-size:15px;line-height:1;padding:3px 2px;opacity:.45;',
+ ' transition:opacity .12s,transform .12s}',
+ '.star-btn.on{opacity:1;transform:scale(1.15)}',
+ '.star-btn:active{transform:scale(.9)}',
+ '.emptybox{text-align:center;padding:26px 16px;color:var(--ink-faint)}',
+ '.emptybox .eb-i{font-size:30px;opacity:.5;margin-bottom:8px}',
+ '.emptybox .eb-t{font-size:13px;font-weight:700;color:var(--ink-dim)}',
+ '.emptybox .eb-d{font-size:11.5px;margin-top:4px;line-height:1.5}',
+
+ /* ---- 7. faces on the tactics pitch ---- */
+ '.tslot .jersey{position:relative;overflow:visible;padding:0}',
+ '.tslot .jersey .jf{position:absolute;inset:0;border-radius:50%;overflow:hidden;line-height:0}',
+ '.tslot .jersey .jf svg{width:100%;height:100%;border-radius:50%}',
+ '.tslot .jersey .jov{position:absolute;right:-7px;bottom:-5px;min-width:20px;height:16px;',
+ ' display:flex;align-items:center;justify-content:center;border-radius:6px;font-size:9.5px;',
+ ' font-weight:800;font-variant-numeric:tabular-nums;box-shadow:0 2px 6px rgba(0,0,0,.65);',
+ ' border:1px solid rgba(0,0,0,.4)}',
+ '.tslot .nm{font-size:9.5px;margin-top:7px}',
+
+ /* ---- 8. nothing anywhere is allowed to bleed off the side ---- */
+ '#view{overflow-x:hidden}',
+ '#view .card{max-width:100%}',
+ '.subtabs,.chips{max-width:100%}',
+ /* a row of chips wrapped onto a second line is a row you can see all of.
+    The country and division pickers ask for a horizontal scroller inline,
+    and an inline style still wins, so those keep it. */
+ '.chips{flex-wrap:wrap;overflow-x:visible;row-gap:7px;padding-bottom:3px}',
+ '.subtabs{flex-wrap:wrap;overflow-x:visible;row-gap:6px}',
+ /* the rows that really are scrollers — twenty countries will never wrap
+    onto a phone — say so, with the last chip fading off the edge */
+ '.xscroll{-webkit-mask-image:linear-gradient(90deg,#000 0,#000 86%,transparent 100%);',
+ ' mask-image:linear-gradient(90deg,#000 0,#000 86%,transparent 100%)}',
+ '.xscroll.at-end{-webkit-mask-image:none;mask-image:none}',
+
+ /* ---- 9. a little more room on a bigger phone ---- */
+ '@media(min-width:420px){',
+ ' .pname{font-size:15px}.pmeta{font-size:11.5px}',
+ ' .prow{padding:11px 10px;gap:12px}}'
+ ].join('');
+ document.head.appendChild(st)})();
+
+/* the league table asks for fixed columns by name */
+const _vTableFixCols=vTable;
+vTable=function(){
+ return _vTableFixCols.apply(this,arguments)
+  .replace(/<table class="tbl">/g,'<table class="tbl fixcols">')};
+
+/* ---------------------------------------------------------------------
+   THE PLAYER ROW
+   --------------------------------------------------------------------- */
+const PG_LABEL={GK:'Goalkeepers',D:'Defenders',M:'Midfielders',A:'Forwards'};
+const PG_TINT={GK:'#ffd75e',D:'#7cc3ff',M:'#66e6a4',A:'#ff9a90'};
+const PG_ORDER=['GK','D','M','A'];
+
+function pAvatar(p,sz){
+ const g=POSGROUP(p.pos);
+ let x='';
+ if(p.injury)x='<span class="pavx" title="injured">🚑</span>';
+ else if(p.susp>0)x='<span class="pavx" title="suspended">🟥</span>';
+ else if(p.loan)x='<span class="pavx" title="on loan">🛫</span>';
+ return '<div class="pav" style="--pgc:'+PG_TINT[g]+'">'+face(p,sz||46)+
+  '<span class="pavp pg-'+g+'">'+esc(p.pos)+'</span>'+x+'</div>'}
+
+/* opt: meta, rail, sub, tags, act, cls, flag, tail */
+function pRowInner(p,opt){
+ opt=opt||{};
+ return pAvatar(p,opt.av)+
+  '<div class="pmain">'+
+   '<div class="pname">'+esc(p.name)+(opt.flag||'')+'</div>'+
+   (opt.meta?'<div class="pmeta">'+opt.meta+'</div>':'')+
+   (opt.tags?'<div class="ptags">'+opt.tags+'</div>':'')+
+   (opt.rail?'<div class="prail">'+opt.rail+'</div>':'')+
+  '</div>'+
+  '<div class="pright">'+(opt.ovr===false?'':ovrPill(p))+
+   (opt.sub?'<div class="psub">'+opt.sub+'</div>':'')+
+   (opt.btns?'<div class="pbtns">'+opt.btns+'</div>':'')+
+  '</div>'+(opt.tail||'')}
+function pRow(p,opt){
+ opt=opt||{};
+ return '<div class="prow'+(opt.cls?' '+opt.cls:'')+'" data-action="'+(opt.act||'profile')+
+  '" data-id="'+p.id+'">'+pRowInner(p,opt)+'</div>'}
+
+function pgHeader(g,n){
+ return '<div class="pgsec" style="--pgc:'+PG_TINT[g]+'"><div class="pgt">'+PG_LABEL[g]+
+  '</div><div class="pgl"></div><div class="pgn">'+n+'</div></div>'}
+
+function emptyBox(icon,title,detail){
+ return '<div class="emptybox"><div class="eb-i">'+icon+'</div><div class="eb-t">'+title+
+  '</div><div class="eb-d">'+detail+'</div></div>'}
+
+/* ---------------------------------------------------------------------
+   SQUAD — vitals, then the first team as readable rows
+   --------------------------------------------------------------------- */
+function xiRating(){
+ try{
+  const slots=FORMATIONS[G.tacs.formation];
+  let s=0,n=0;
+  G.tacs.xi.forEach((id,ix)=>{const p=playerById(id);
+   if(p&&slots[ix]){s+=calcEff(p,slots[ix][0]);n++}});
+  return n?Math.round(s/n):0}
+ catch(e){return 0}}
+
+function vSquadVitals(){
+ const c=G.clubs[G.my];
+ const ps=c.players.filter(p=>!p.loan);
+ const avail=ps.filter(p=>!p.injury&&p.susp<=0);
+ const out=ps.length-avail.length;
+ const age=ps.length?(ps.reduce((s,p)=>s+p.age,0)/ps.length).toFixed(1):'—';
+ const w=squadWage(c),cap=c.wageCap||1;
+ const pct=clamp(w/cap*100,0,120);
+ const xi=xiRating();
+ const counts={GK:0,D:0,M:0,A:0};
+ ps.forEach(p=>counts[POSGROUP(p.pos)]++);
+ const need={GK:2,D:6,M:5,A:4};
+ let h='<div class="card" style="padding:12px 12px 13px">'+
+  '<div class="vitals">'+
+  '<div class="vt"><div class="vv" style="color:var(--gold)">'+(xi||'—')+'</div><div class="vl">Best XI</div></div>'+
+  '<div class="vt"><div class="vv">'+ps.length+'</div><div class="vl">Players</div></div>'+
+  '<div class="vt"><div class="vv">'+age+'</div><div class="vl">Avg age</div></div>'+
+  '<div class="vt"><div class="vv" style="color:'+(out?'var(--danger)':'var(--green)')+'">'+out+
+   '</div><div class="vl">Unavail</div></div></div>';
+ h+='<div class="depth">'+PG_ORDER.map(g=>{
+  const n=counts[g],thin=n<need[g];
+  return '<div class="dcell'+(thin?' thin':'')+'"><div class="dn" style="color:'+PG_TINT[g]+'">'+n+
+   '</div><div class="dl" style="color:'+PG_TINT[g]+'">'+(g==='D'?'DEF':g==='M'?'MID':g==='A'?'ATT':'GK')+
+   '</div></div>'}).join('')+'</div>';
+ const thinNames=PG_ORDER.filter(g=>counts[g]<need[g]).map(g=>PG_LABEL[g].toLowerCase());
+ if(thinNames.length)h+='<div class="xs" style="color:var(--amber);font-weight:700;margin-top:8px">'+
+  '⚠ Thin at '+thinNames.join(' and ')+' — one injury and you are picking out of position.</div>';
+ h+='<div class="spread" style="margin-top:11px"><span class="xs faint" style="letter-spacing:.8px;font-weight:800">WAGE BILL</span>'+
+  '<span class="xs num" style="font-weight:800;color:'+(pct>100?'var(--danger)':pct>92?'var(--amber)':'var(--ink)')+'">'+
+  fmtW(w)+' <span class="faint">of '+fmtW(cap)+'</span></span></div>'+
+  '<div class="bar '+(pct>100?'b-red':pct>92?'b-amber':'b-green')+'" style="margin-top:5px;height:6px">'+
+  '<i style="width:'+clamp(pct,0,100)+'%"></i></div>';
+ return h+'</div>'}
+
+function squadRow(p){
+ const fa=formAvg(p);
+ const fr=fa?fa.toFixed(1):'—';
+ const frCol=fa>=7?'var(--green)':fa&&fa<6.2?'var(--danger)':'var(--ink-dim)';
+ const inXI=G.tacs&&G.tacs.xi&&G.tacs.xi.indexOf(p.id)>=0;
+ const meta=p.age+' · '+fmtW(p.wage)+' · '+p.contract+'y contract'+
+  (p.contract<=1?' <span style="color:var(--amber);font-weight:800">expiring</span>':'');
+ const rail=bar(p.cond)+
+  '<span class="num faint" title="match fitness">'+Math.round(p.cond)+'%</span>'+
+  '<span class="mood" title="morale">'+moodFace(p.morale)+'</span>'+
+  (fa?'<span class="rlbl">FORM</span><span class="num" style="color:'+frCol+
+    '" title="average match rating">'+fr+'</span>':'')+
+  (inXI?'<span class="xibadge">XI</span>':'');
+ return pRow(p,{
+  meta:meta,
+  rail:rail,
+  tags:playerTags(p).trim(),
+  sub:fmtM(p.value),
+  cls:(p.injury||p.susp>0)?'dim':''})}
+
+function vSquadFirst(){
+ const c=G.clubs[G.my];
+ const ps=c.players.filter(p=>!p.loan);
+ const s=UI.squadSort||'pos';
+ const loans=c.players.filter(p=>p.loan);
+ let h=vSquadVitals();
+ h+='<div class="chips" style="margin-bottom:10px">'+
+  [['pos','Position'],['ovr','Ability'],['age','Age'],['val','Value'],['cond','Fitness'],['form','Form']].map(x=>
+  '<button class="chip'+(s===x[0]?' on':'')+'" data-action="squadSort" data-v="'+x[0]+'">'+x[1]+'</button>').join('')+
+  '</div>';
+ const sorted=[...ps].sort((a,b)=>
+  s==='ovr'?b.ovr-a.ovr:
+  s==='age'?a.age-b.age:
+  s==='val'?b.value-a.value:
+  s==='cond'?b.cond-a.cond:
+  s==='form'?formAvg(b)-formAvg(a):
+  POS_ORDER[a.pos]-POS_ORDER[b.pos]||b.ovr-a.ovr);
+ h+='<div class="card tight" style="padding:4px 8px">';
+ if(!sorted.length)h+=emptyBox('👥','No senior players','Every one of them is out on loan.');
+ else if(s==='pos'){
+  PG_ORDER.forEach(g=>{
+   const grp=sorted.filter(p=>POSGROUP(p.pos)===g);
+   if(!grp.length)return;
+   h+=pgHeader(g,grp.length)+'<div class="plist">'+grp.map(squadRow).join('')+'</div>'})}
+ else h+='<div class="plist">'+sorted.map(squadRow).join('')+'</div>';
+ h+='</div>';
+ h+='<div class="xs faint" style="padding:2px 4px 0;text-align:center">'+sorted.length+' senior players'+
+  (loans.length?' · '+loans.length+' out on loan':'')+' · tap anyone for their profile</div>';
+ return h}
+
+function academyRow(p){
+ const gap=p.pot-p.ovr;
+ const ceiling=p.pot>=86?['first-team quality','var(--gold)']:
+  p.pot>=78?['a squad player at this level','var(--green)']:
+  p.pot>=68?['a level or two below','var(--ink-dim)']:
+  ['unlikely to make the grade','var(--ink-faint)'];
+ return pRow(p,{
+  meta:p.age+' · <span style="color:'+ceiling[1]+';font-weight:700">'+ceiling[0]+'</span>',
+  rail:'<span class="rlbl">CEILING</span>'+starHtml(starsOf(p.pot))+
+   '<span class="num faint">now '+p.ovr+'</span>',
+  sub:'+'+gap+' to come',
+  tags:(p.pot>=88?'<span class="tag-pill" style="background:rgba(251,225,34,.16);color:var(--gold)">🌟 Generational</span>':'')+
+   (p.age<=16&&p.pot>=80?'<span class="tag-pill" style="background:rgba(88,166,255,.13);color:var(--blue)">Ahead of his age</span>':'')})}
+
+function vSquadAcademy(){
+ const c=G.clubs[G.my];
+ const ys=[...(c.youth||[])].sort((a,b)=>b.pot-a.pot);
+ let h='<div class="card tight" style="padding:4px 8px">';
+ if(!ys.length)h+=emptyBox('🌱','The academy is empty',
+  'The spring intake arrives every March and fills it with new blood.');
+ else h+='<div class="plist">'+ys.map(academyRow).join('')+'</div>';
+ h+='</div>';
+ h+='<div class="xs faint" style="padding:4px;line-height:1.5">Youth intake arrives every March. '+
+  'Prospects graduate to the first team at 19 — or promote your wonderkids early from their profile.</div>';
+ return h}
+
+function vSquadLoans(){
+ const c=G.clubs[G.my];
+ const loans=c.players.filter(p=>p.loan);
+ let h='<div class="card tight" style="padding:4px 8px">';
+ if(!loans.length)h+=emptyBox('🛫','Nobody out on loan',
+  'Fringe players of 23 and under develop faster with regular football elsewhere. '+
+  'The option is on their profile.');
+ else h+='<div class="plist">'+loans.map(p=>{
+  const d=G.clubs[p.loan.club]||{name:'—',short:'—'};
+  return pRow(p,{
+   meta:(typeof crest==='function'?crest(d,14):'')+' '+esc(d.name)+' · '+p.age,
+   rail:p.ovr<p.pot?
+    '<span class="faint" style="font-weight:800;letter-spacing:.5px">CEILING</span>'+starHtml(starsOf(p.pot)):
+    '<span class="faint">Developed</span>',
+   sub:fmtW(p.wage)})}).join('')+'</div>';
+ return h+'</div>'}
+
+vSquad=function(){
+ const t=UI.squadTab||'first';
+ let body;
+ if(t==='treat')body=vTreatment();
+ else if(t==='academy'){body=vSquadAcademy();
+  try{body+=vGraduates()}catch(e){}}
+ else if(t==='loans')body=vSquadLoans();
+ else body=vSquadFirst();
+ return vSquadTabs()+body};
+
+/* ---------------------------------------------------------------------
+   TRANSFERS — a market you can actually read
+   --------------------------------------------------------------------- */
+function shortlist(){if(!G.shortlist)G.shortlist=[];return G.shortlist}
+function isShort(p){return shortlist().indexOf(p.id)>=0}
+ACTIONS.trStar=el=>{
+ const id=+el.dataset.id,sl=shortlist(),ix=sl.indexOf(id);
+ const p=playerById(id);
+ if(ix>=0){sl.splice(ix,1);if(p)toast(p.name+' removed from your shortlist')}
+ else{sl.push(id);if(p)toast('⭐ '+p.name+' added to your shortlist')}
+ const r=$('#trResults');if(r)r.innerHTML=trResultsHtml();else render()};
+ACTIONS.trSort=el=>{UI.trSort=el.dataset.v;const r=$('#trResults');
+ if(r)r.innerHTML=trResultsHtml();else render()};
+ACTIONS.trShortOnly=()=>{UI.trShort=!UI.trShort;const r=$('#trResults');
+ if(r)r.innerHTML=trResultsHtml();else render()};
+ACTIONS.trReset=()=>{UI.trPos='Any';UI.trAge='40';UI.trQ='';UI.trListed=false;UI.trShort=false;render()};
+
+function vScouts(){
+ let h='<div class="card tight"><div class="chip-lbl" style="margin-top:2px">Scouting team</div>';
+ (G.scouts||[]).forEach(s=>{
+  const p=s.job?playerById(s.job.pid):null;
+  const pct=p?clamp((21-s.job.days)/21*100,3,100):0;
+  h+='<div class="scoutrow"><div class="si">🔭</div><div style="min-width:0">'+
+   '<div class="sn">'+esc(s.name)+'</div>'+
+   (p?'<div class="sd">Watching <b style="color:var(--ink)">'+esc(p.name)+'</b> · '+
+      s.job.days+' day'+(s.job.days===1?'':'s')+' left</div><div class="sp"><i style="width:'+pct.toFixed(0)+'%"></i></div>'
+     :'<div class="sd">Available for assignment</div>')+
+   '</div>'+
+   (p?'<span class="intchip ic-ok">On job</span>':'<span class="intchip ic-no">Free</span>')+'</div>'});
+ h+='<div class="xs faint" style="padding:6px 2px 2px">A full report takes three weeks and reveals a '+
+  'player’s true ability, potential and personality. Assign one from any profile.</div>';
+ return h+'</div>'}
+
+function vTransferBudget(){
+ const my=G.clubs[G.my];
+ const w=squadWage(my),room=Math.max(0,my.wageCap*1.18-w);
+ return '<div class="budgetbar">'+
+  '<div class="bb"><div class="bv" style="color:var(--gold)">'+fmtM(my.budget)+'</div>'+
+   '<div class="bl">Transfer budget</div></div>'+
+  '<div class="bb"><div class="bv" style="color:'+(room>0?'var(--green)':'var(--danger)')+'">'+fmtW(room)+'</div>'+
+   '<div class="bl">Wage room left</div></div></div>'}
+
+function vTrFilters(){
+ const active=(UI.trPos!=='Any')||(UI.trAge!=='40')||UI.trQ||UI.trListed||UI.trShort;
+ let h='<div class="card tight">'+
+ '<div class="grid2" style="margin-bottom:10px">'+
+ '<div class="field" style="margin-bottom:0"><label>Position</label><select data-live="trPos">'+
+  '<option'+(UI.trPos==='Any'?' selected':'')+'>Any</option>'+
+  POSN.map(p=>'<option'+(UI.trPos===p?' selected':'')+'>'+p+'</option>').join('')+'</select></div>'+
+ '<div class="field" style="margin-bottom:0"><label>Max age</label><select data-live="trAge">'+
+  ['40','33','29','26','23','21'].map(a=>'<option'+(UI.trAge===a?' selected':'')+' value="'+a+'">'+
+  (a==='40'?'Any':a+' & under')+'</option>').join('')+'</select></div></div>'+
+ '<div class="field" style="margin-bottom:10px"><label>Name search</label>'+
+  '<input type="text" data-live="trQ" placeholder="e.g. Haaland" value="'+esc(UI.trQ)+'"></div>'+
+ '<div class="chips">'+
+  '<button class="chip'+(UI.trListed?' on':'')+'" data-action="trToggleListed">💷 Transfer-listed</button>'+
+  '<button class="chip'+(UI.trShort?' on':'')+'" data-action="trShortOnly">⭐ Shortlist ('+shortlist().length+')</button>'+
+  (active?'<button class="chip" data-action="trReset">✕ Clear filters</button>':'')+
+ '</div>'+
+ '<div class="chip-lbl">Sort by</div><div class="chips">'+
+  [['ovr','Ability'],['val','Value'],['age','Youngest'],['pot','Potential'],['wage','Wage']].map(x=>
+  '<button class="chip'+((UI.trSort||'ovr')===x[0]?' on':'')+'" data-action="trSort" data-v="'+x[0]+'">'+
+  x[1]+'</button>').join('')+'</div>';
+ return h+'</div>'}
+
+function trInterest(p){
+ try{
+  const k=interestCheck(p);
+  if(k==='lock')return '<span class="intchip ic-lock">Blocked</span>';
+  if(k==='moved')return '<span class="intchip ic-no">Just moved</span>';
+  if(k==='ok')return '<span class="intchip ic-ok">Reachable</span>';
+  return '<span class="intchip ic-no">Out of reach</span>'}
+ catch(e){return ''}}
+
+function trRow(p){
+ const c=G.clubs[p.club]||{name:'Free agent',short:'FA'};
+ const my=G.clubs[G.my];
+ const ask=(typeof askPrice==='function')?askPrice(p):p.value;
+ const afford=ask<=my.budget;
+ const gap=(p.pot||p.ovr)-p.ovr;
+ const meta=(typeof crest==='function'?crest(c,15):'')+' '+esc(c.short||c.name)+' · '+p.age+
+  (p.scouted?'':' · <span style="color:var(--blue)">unscouted</span>');
+ const rail=trInterest(p)+
+  '<span class="num" style="color:'+(afford?'var(--green)':'var(--ink-faint)')+';font-weight:800">'+
+   (afford?'✓ ':'')+fmtM(ask)+' ask</span>'+
+  (gap>=6&&p.age<=23?'<span class="xs" style="color:var(--gold);font-weight:800">↗ '+gap+'</span>':'');
+ return pRow(p,{
+  meta:meta,
+  rail:rail,
+  sub:fmtW(p.wage),
+  tags:(p.listed?'<span class="tag-pill tp-list">Listed</span>':'')+
+   (p.injury?'<span class="tag-pill tp-inj">🚑 '+humanDays(p.injury.days)+'</span>':'')+
+   (p.loan&&G.clubs[p.loan.club]?'<span class="tag-pill" style="background:rgba(59,130,246,.16);color:#7fb3ff">🛫 On loan at '+
+    esc(G.clubs[p.loan.club].short)+'</span>':''),
+  btns:'<button class="star-btn'+(isShort(p)?' on':'')+'" data-action="trStar" data-id="'+p.id+
+   '" title="Add to shortlist">'+(isShort(p)?'⭐':'☆')+'</button>'})}
+
+trResultsHtml=function(){
+ const q=(UI.trQ||'').trim().toLowerCase();
+ const sl=shortlist();
+ let list=[];
+ G.clubs.forEach(c=>{if(c.i===G.my)return;c.players.forEach(p=>{
+  if(UI.trShort&&sl.indexOf(p.id)<0)return;
+  if(UI.trPos!=='Any'&&p.pos!==UI.trPos)return;
+  if(p.age>+UI.trAge)return;
+  if(UI.trListed&&!p.listed)return;
+  if(q&&!p.name.toLowerCase().includes(q))return;
+  list.push(p)})});
+ const s=UI.trSort||'ovr';
+ list.sort((a,b)=>
+  s==='val'?b.value-a.value:
+  s==='age'?a.age-b.age||b.ovr-a.ovr:
+  s==='pot'?(b.pot||b.ovr)-(a.pot||a.ovr)||b.ovr-a.ovr:
+  s==='wage'?a.wage-b.wage||b.ovr-a.ovr:
+  b.ovr-a.ovr);
+ const shown=list.slice(0,40);
+ let h='<div class="sec"><div class="t">Market</div><div class="ln"></div>'+
+  '<div class="sub">'+list.length+' match'+(list.length===1?'':'es')+'</div></div>'+
+  '<div class="card tight" style="padding:4px 8px">';
+ if(!shown.length)h+=emptyBox('🔍','Nobody matches those filters',
+  UI.trShort?'Star a player from the market to build a shortlist.':
+  'Widen the age range, change the position, or clear the name search.');
+ else h+='<div class="plist">'+shown.map(trRow).join('')+'</div>';
+ h+='</div>';
+ if(list.length>40)h+='<div class="xs faint" style="padding:6px 4px;text-align:center">Showing the top 40 of '+
+  list.length+' — tighten the filters to see further down the list.</div>';
+ return h};
+
+vTransfers=function(){
+ let h=vTransferBudget()+vScouts()+vTrFilters();
+ h+='<div id="trResults">'+trResultsHtml()+'</div>';
+ try{h+=vFreeAgents()}catch(e){}
+ return h};
+
+/* ---------------------------------------------------------------------
+   FACES ON THE PITCH — the XI stops being eleven numbered circles
+   --------------------------------------------------------------------- */
+const _paintPitchFaces=paintTacticsPitch;
+paintTacticsPitch=function(){
+ _paintPitchFaces.apply(this,arguments);
+ try{
+  const box=$('#tacPitch');if(!box||!G||!G.tacs)return;
+  const c=G.clubs[G.my];
+  const slots=FORMATIONS[G.tacs.formation]||[];
+  box.querySelectorAll('.tslot').forEach(el=>{
+   const ix=+el.dataset.v;
+   const j=el.querySelector('.jersey');
+   if(!j||j.dataset.faced)return;
+   const p=playerById(G.tacs.xi[ix]);
+   if(!p){j.dataset.faced='1';return}
+   const eff=Math.round(calcEff(p,slots[ix]?slots[ix][0]:p.pos));
+   const tint=eff>=84?'#1f4d15':eff>=77?'#3d4d15':eff>=69?'#4d3a15':'#33231d';
+   const ink=eff>=84?'#8dffa0':eff>=77?'#e4ff8d':eff>=69?'#ffd98d':'#c9a091';
+   j.dataset.faced='1';
+   j.innerHTML='<span class="jf">'+face(p,38)+'</span>'+
+    '<span class="jov" style="background:'+tint+';color:'+ink+'">'+eff+'</span>';
+   j.style.background='linear-gradient(160deg,'+c.c1+','+c.c2+')'});
+  paintBenchRows()}
+ catch(e){}};
+
+/* The bench list under a selected shirt is rewritten in place rather than
+   spliced out of a string of HTML: the tactics screen is assembled by six
+   different layers and cutting a hole in the middle of it by index is how
+   you break the five that come after. */
+function paintBenchRows(){
+ try{
+  const slot=(UI.selSlot!=null)&&FORMATIONS[G.tacs.formation][UI.selSlot];
+  if(!slot)return;
+  document.querySelectorAll('#view [data-action="benchPick"]').forEach(el=>{
+   if(el.dataset.rowed)return;
+   const p=playerById(el.dataset.id);
+   if(!p)return;
+   const eff=Math.round(calcEff(p,slot[0]));
+   const oop=posPenalty(p,slot[0])>0;
+   el.dataset.rowed='1';
+   el.className='prow';
+   el.innerHTML=pRowInner(p,{
+    meta:p.age+' · cond '+Math.round(p.cond)+'% · sharpness '+Math.round(p.sharp||0)+'%',
+    rail:'<span class="num" style="font-weight:800;color:'+
+     (eff>=80?'var(--green)':eff>=72?'var(--ink)':'var(--ink-faint)')+'">'+eff+' in this role</span>'+
+     (oop?'<span class="xs" style="color:var(--amber);font-weight:800">⚠ natural '+esc(p.pos)+'</span>':''),
+    sub:fmtW(p.wage)})})}
+ catch(e){}}
+
+/* ---------------------------------------------------------------------
+   THE TREATMENT ROOM AND THE PROSPECT LISTS, on the same rows
+   --------------------------------------------------------------------- */
+const _vTreatRows=vTreatment;
+vTreatment=function(){
+ const c=G.clubs[G.my];
+ const inj=c.players.filter(p=>p.injury).sort((a,b)=>a.injury.days-b.injury.days);
+ const sus=c.players.filter(p=>p.susp>0);
+ const tired=c.players.filter(p=>!p.injury&&!p.loan&&p.cond<70).sort((a,b)=>a.cond-b.cond);
+ let h='<div class="grid3" style="margin-bottom:12px">'+
+  '<div class="kpi"><div class="v" style="color:'+(inj.length?'var(--danger)':'var(--green)')+'">'+
+   inj.length+'</div><div class="l">Injured</div></div>'+
+  '<div class="kpi"><div class="v" style="color:'+(sus.length?'var(--amber)':'var(--green)')+'">'+
+   sus.length+'</div><div class="l">Suspended</div></div>'+
+  '<div class="kpi"><div class="v">'+((G.staff&&G.staff.physio.stars)||2)+'★</div><div class="l">Physio</div></div></div>';
+ h+='<div class="chip-lbl">Treatment room</div><div class="card tight" style="padding:4px 8px">';
+ if(!inj.length)h+=emptyBox('💚','Nobody in the treatment room','Long may it last.');
+ else h+='<div class="plist">'+inj.map(p=>pRow(p,{
+  meta:esc(p.injury.name),
+  rail:'<span style="color:var(--danger);font-weight:800">Back in '+humanDays(p.injury.days)+'</span>',
+  sub:'cond '+Math.round(p.cond)+'%'})).join('')+'</div>';
+ h+='</div>';
+ if(sus.length){
+  h+='<div class="chip-lbl">Suspended</div><div class="card tight" style="padding:4px 8px"><div class="plist">'+
+   sus.map(p=>pRow(p,{meta:'Serving a ban',
+    rail:'<span style="color:var(--amber);font-weight:800">'+p.susp+' match'+(p.susp>1?'es':'')+' remaining</span>'
+   })).join('')+'</div></div>'}
+ h+='<div class="chip-lbl">Heavy legs</div><div class="card tight" style="padding:4px 8px">';
+ if(!tired.length)h+=emptyBox('⚡','The whole squad is fresh','Nobody is carrying tired legs into the weekend.');
+ else h+='<div class="plist">'+tired.slice(0,12).map(p=>pRow(p,{
+  meta:p.age+' · sharpness '+Math.round(p.sharp||0)+'%',
+  rail:bar(p.cond)+'<span class="num" style="font-weight:800">'+Math.round(p.cond)+'%</span>',
+  sub:'rest him'})).join('')+'</div>';
+ return h+'</div>'};
+
+/* the free agents get the same rows as everybody else */
+const _vFAOld=vFreeAgents;
+vFreeAgents=function(){
+ try{
+  if(!G.freeAgents||!G.freeAgents.length)buildFreeAgents();
+  const list=[...G.freeAgents].sort((a,b)=>b.ovr-a.ovr);
+  const my=G.clubs[G.my];
+  const room=Math.max(0,my.wageCap*1.18-squadWage(my));
+  let h='<div class="sec"><div class="t">🆓 Free agents</div><div class="ln"></div>'+
+   '<div class="sub">'+list.length+' available</div></div>'+
+   '<div class="xs faint" style="padding:0 4px 8px;line-height:1.5">No fee and no selling club — '+
+   'just wages. Rivals are circling, so move quickly on the big names.</div>'+
+   '<div class="card tight" style="padding:4px 8px">';
+  if(!list.length)h+=emptyBox('🕵️','No free agents right now',
+   'Contracts expire in the summer — check back when the window opens.');
+  else h+='<div class="plist">'+list.map(p=>{
+   const keen=(typeof dreamMove==='function')&&dreamMove(p);
+   const fits=p.wage<=room;
+   return pRow(p,{
+    meta:p.age+' · '+(typeof persInfo==='function'?esc(persInfo(p).lbl):'free agent'),
+    rail:'<span class="num" style="font-weight:800;color:'+(fits?'var(--green)':'var(--danger)')+'">'+
+     (fits?'✓ ':'⚠ ')+'wants '+fmtW(p.wage)+'</span>'+
+     (keen?'<span class="intchip ic-ok">Keen on you</span>':''),
+    act:'faOpen',
+    flag:(p.real?' <span style="color:var(--gold)">★</span>':''),
+    sub:'no fee'})}).join('')+'</div>';
+  return h+'</div>'}
+ catch(e){return _vFAOld.apply(this,arguments)}};
+
+/* ---------------------------------------------------------------------
+   A SCROLLER THAT LOOKS LIKE ONE
+   ---------------------------------------------------------------------
+   Twenty countries and twelve club-screen sections are never going to
+   wrap onto a phone, so those rows stay horizontal scrollers. The
+   trouble is that a chip sliced off by the edge of the screen looks
+   exactly like the bug this whole pass is about. They now fade out at
+   the right-hand edge — which reads as "there is more this way" rather
+   than "this is broken" — and the fade lifts once you reach the end.
+   --------------------------------------------------------------------- */
+function paintScrollHints(){
+ try{
+  document.querySelectorAll('#view .chips,#view .subtabs,#view .secnav,#startBody .chips').forEach(el=>{
+   const scrolls=el.scrollWidth>el.clientWidth+4;
+   el.classList.toggle('xscroll',scrolls);
+   if(!scrolls){el.classList.remove('at-end');return}
+   const atEnd=el.scrollLeft+el.clientWidth>=el.scrollWidth-6;
+   el.classList.toggle('at-end',atEnd);
+   if(el.dataset.hinted)return;
+   el.dataset.hinted='1';
+   el.addEventListener('scroll',()=>{
+    el.classList.toggle('at-end',el.scrollLeft+el.clientWidth>=el.scrollWidth-6)},{passive:true})})}
+ catch(e){}}
+const _renderHints=render;
+render=function(){
+ const r=_renderHints.apply(this,arguments);
+ paintScrollHints();
+ return r};
+const _paintStartHints=paintStart;
+paintStart=function(){const r=_paintStartHints.apply(this,arguments);paintScrollHints();return r};
+window.addEventListener('resize',paintScrollHints);
+
+/* ---------------------------------------------------------------------
+   SMALL THINGS
+   --------------------------------------------------------------------- */
+
+/* The assistant's briefing read "they've taken 0 wins from their last 0"
+   before a ball had been kicked, because it described a run of form that
+   did not exist yet. */
+const _homeFormLine=vHome;
+vHome=function(){
+ let h=_homeFormLine.apply(this,arguments);
+ try{h=h.replace(/they['’]ve taken 0 wins from their last 0/g,
+  'no form to go on yet — this is their opener too')}
+ catch(e){}
+ return h};
+
+/* A shortlist has to survive a save file and an old one has to gain one. */
+const _loadShortlist=loadSlot;
+loadSlot=function(s){const ok=_loadShortlist.apply(this,arguments);
+ if(ok&&G&&!G.shortlist)G.shortlist=[];return ok};
+const _newGameShortlist=newGame;
+newGame=function(i){_newGameShortlist.apply(this,arguments);if(G)G.shortlist=[]};
+
+/* A shortlisted player who has since retired, signed for you or left the
+   game entirely should not sit in the list forever. Finding a player by id
+   is a walk over every squad in the world, so this runs once a week rather
+   than on every single day you click through. */
+const _advShortlist=ACTIONS.advance;
+ACTIONS.advance=function(){
+ try{
+  if(G&&G.shortlist&&G.shortlist.length&&G.day%7===0)
+   G.shortlist=G.shortlist.filter(id=>{const p=playerById(id);return p&&p.club!==G.my})}
+ catch(e){}
+ return _advShortlist.apply(this,arguments)};
+
+/*#w20_roomtobreathe.js#*/
 showStart();
 </script>
 </body>
