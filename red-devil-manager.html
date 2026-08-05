@@ -25721,6 +25721,270 @@ if(typeof renderStats==='function'){
 
 /*#w41_chances.js#*/
 
+
+/*#w41_chances.js#*//*#w42_press.js#*/
+
+/* =====================================================================
+   A PRESS ROOM THAT KNOWS WHAT MONTH IT IS
+   ---------------------------------------------------------------------
+   "Twentieth in the league. How worried are you?"
+
+   Asked in August. Before a ball had been kicked. The question bank was
+   already large and well built, but the rule that fires it reads
+
+       {id:'pos-bad', w:F=>F.pos&&F.pos>=14}
+
+   and league position exists from day one, when the table is thirty-eight
+   games of nothing sorted by reputation. Every table question in the bank
+   had the same hole, so the first press conference of every season was a
+   reporter demanding you account for a position nobody had earned yet.
+
+   Two things are done about it.
+
+   FIRST, no question about the table until there is a table. Every
+   position and form rule now needs games actually played behind it —
+   six of them before anybody asks you to justify where you are, three
+   before anyone mentions form.
+
+   SECOND, the calendar is a fact now. A press conference in July is not
+   a press conference in April, and the room knows the difference:
+
+     PRE-SEASON     the summer, the window, the tour, what this season is
+                    supposed to be
+     OPENING WEEKS  first impressions, whether it is too early to judge
+     TITLE RACE     gated on being genuinely close to the top, not merely
+                    high up
+     RELEGATION     the same, from the other end, and only when the gap
+                    is small enough to be frightening
+     THE RUN-IN     the last six matches, when everything is decided
+     CUP FINAL      and semi-final, which deserve their own week
+     THE DERBY      because it is never just another game
+     THE WINDOW     open, and shutting, and shut
+
+   A title race is not "you are second". It is "you are second and four
+   points off with nine to play", and the question sounds different
+   because the situation is different.
+   ===================================================================== */
+
+/* ---------------------------------------------------------------------
+   1. THE FACTS THE ROOM WAS MISSING
+   --------------------------------------------------------------------- */
+const _pqFactsCal=pqFacts;
+pqFacts=function(){
+ const F=_pqFactsCal.apply(this,arguments);
+ if(!F)return F;
+ try{
+  const my=F.my;
+  const rows=tableRows(my.league)||[];
+  const me=rows.find(r=>r.i===G.my)||{p:0,pts:0};
+  F.played=me.p||0;
+  F.pts=me.pts||0;
+  F.rows=rows;
+  F.games=rows.length?(rows.length-1)*2:38;
+  F.left=Math.max(0,F.games-F.played);
+
+  /* how far off the top, and how far above the drop */
+  const top=rows[0]||me;
+  F.gapTop=Math.max(0,(top.pts||0)-F.pts);
+  const dropIx=Math.max(0,rows.length-3);
+  const safe=rows[dropIx-1]||rows[rows.length-1]||me;
+  F.gapDrop=(F.pos&&F.pos>=dropIx+1)?Math.max(0,(safe.pts||0)-F.pts):
+   Math.max(0,F.pts-((rows[dropIx]||{}).pts||0));
+
+  /* a race is proximity plus time, not a league position */
+  /* a race is proximity measured against the time left to close it, not
+     a fixed number of points — twelve behind with eighteen to play is not
+     a title race, and four behind with six to play very much is */
+  F.inTitleRace=F.played>=12&&F.pos<=4&&F.gapTop<=Math.max(4,Math.round(F.left*.45));
+  F.inDropFight=F.played>=12&&F.pos>=rows.length-5&&F.gapDrop<=Math.max(4,Math.round(F.left*.45));
+  F.runIn=F.played>=10&&F.left<=6&&F.left>0;
+
+  /* the calendar */
+  F.preSeason=F.played===0&&G.day<34;
+  F.opening=F.played>0&&F.played<=4;
+  F.midSeason=F.played>=5;
+  F.window=(typeof windowOpen==='function')?!!windowOpen():false;
+
+  /* the next match, in context */
+  const nf=F.nextFix;
+  F.cupTie=!!(nf&&nf.cup);
+  F.cupRound=nf&&nf.cup&&CUP_DEFS[nf.cup]&&nf.r!=null?
+   (CUP_DEFS[nf.cup].rn||[])[nf.r]:null;
+  F.isFinal=!!(F.cupRound&&/final/i.test(F.cupRound)&&!/semi/i.test(F.cupRound));
+  F.isSemi=!!(F.cupRound&&/semi/i.test(F.cupRound));
+  /* a derby is a near neighbour of comparable size in the same division */
+  F.derby=!!(F.opp&&F.opp.league===my.league&&Math.abs((F.opp.rep||0)-(my.rep||0))<900&&
+   F.oppPos&&Math.abs(F.oppPos-(F.pos||10))<=6);
+
+  /* the summer's business, for the pre-season room */
+  F.signings=(my.players||[]).filter(p=>p.movedWindow!=null&&
+   (typeof windowId!=='function'||p.movedWindow===windowId()))
+   .sort((a,b)=>b.ovr-a.ovr).slice(0,3);
+  F.tour=(G.tour&&G.tour.booked)?G.tour.booked:null;
+ }catch(e){}
+ return F};
+
+/* ---------------------------------------------------------------------
+   2. NOBODY ASKS ABOUT A TABLE THAT DOES NOT EXIST YET
+   ---------------------------------------------------------------------
+   The rules are already written and already good. Rather than rewrite
+   them, the ones that lean on the table or on form have their gate
+   tightened in place — a wrapper on w() that adds the missing condition.
+   --------------------------------------------------------------------- */
+(function gatePress(){
+ const NEEDS_TABLE=['pos-top','pos-euro','pos-mid','pos-bad','expect','legacy',
+  'title-talk','cup-run','vs-pos','gap','table','rivals'];
+ const NEEDS_FORM=['form','streak','slump','winning','unbeaten','wobble','crisis'];
+ try{
+  PQ.forEach(rule=>{
+   const id=String(rule.id||'');
+   const table=NEEDS_TABLE.some(k=>id.indexOf(k)>=0);
+   const form=NEEDS_FORM.some(k=>id.indexOf(k)>=0);
+   if(!table&&!form)return;
+   const w0=rule.w;
+   rule.w=F=>{
+    if(table&&(!F||(F.played||0)<6))return false;
+    if(form&&(!F||(F.played||0)<3))return false;
+    try{return !!w0(F)}catch(e){return false}};
+  });
+ }catch(e){}
+})();
+
+/* ---------------------------------------------------------------------
+   3. AND THE ROOM GETS THE QUESTIONS IT SHOULD HAVE HAD
+   --------------------------------------------------------------------- */
+const PNM2=(p)=>p?p.name:'him';
+PQ.push(
+ /* ---- pre-season ---- */
+ {id:'pre-summer',w:F=>F.preSeason,q:F=>[
+  'A new season. What is this one supposed to be?',
+  'What did you want from the summer, and did you get it?',
+  'Is this squad stronger than the one that finished last season?',
+  'Where do you think you will finish? Be brave.',
+  'What is the one thing that has to be better this year?',
+  'Have you changed anything about how you want to play?',
+  'Is there a position you are still short in?',
+  'How much of pre-season is fitness and how much is ideas?']},
+ {id:'pre-signings',w:F=>F.preSeason&&F.signings.length,q:F=>[
+  'You have brought in '+PNM2(F.signings[0])+'. What does he give you?',
+  'Are the new ones ready to start, or will they need time?',
+  F.signings.length>1?'Two or three new faces. How quickly can they settle?'
+   :'One significant addition. Is that enough?']},
+ {id:'pre-nosignings',w:F=>F.preSeason&&!F.signings.length,q:F=>[
+  'A quiet summer. Is that by choice?',
+  'The supporters expected additions and there have been none. What do you say to them?',
+  'Is the money there if you find the right player?']},
+ {id:'pre-tour',w:F=>F.preSeason&&F.tour,q:F=>[
+  'How did the tour go?',
+  'Does travelling that far in July help or hurt you in August?',
+  'What did you learn about the group while you were away?']},
+ {id:'pre-young',w:F=>F.preSeason&&F.kids&&F.kids.length,q:F=>[
+  PNM2(F.kids[0])+' has trained with you all summer. Is he ready?',
+  'Will any of the academy get a real chance this season?']},
+
+ /* ---- the opening weeks ---- */
+ {id:'opening-early',w:F=>F.opening,q:F=>[
+  'Only '+F.played+' game'+(F.played===1?'':'s')+' in. Is it too early to read anything into it?',
+  'What have you learned about this side so far?',
+  'Do the first few weeks set the tone for a season, in your experience?',
+  'Is the table worth looking at yet?']},
+
+ /* ---- a title race, properly defined ---- */
+ {id:'race-title',w:F=>F.inTitleRace,q:F=>[
+  F.gapTop===0?'You are top of the league with '+F.left+' to play. Can you hold on?'
+   :F.gapTop+' points off the top with '+F.left+' to play. Is this a title race?',
+  'Have you spoken to the players about what is in front of them?',
+  'Does a squad like this know how to win a league?',
+  'Who do you fear most between now and May?',
+  'Do you watch the other results?']},
+ {id:'race-drop',w:F=>F.inDropFight,q:F=>[
+  'You are '+ordinal(F.pos)+' with '+F.left+' to play. Are you in a relegation fight?',
+  'Do the players believe they can get out of this?',
+  'What is the plan for the next six weeks?',
+  'Have you been in a fight like this before?',
+  'Is there a game you have circled as the one that has to be won?']},
+ {id:'runin',w:F=>F.runIn&&!F.inTitleRace&&!F.inDropFight,q:F=>[
+  'Six games or fewer left. What are you playing for now?',
+  'Is there anything still to be decided for you this season?',
+  'Have you started thinking about the summer already?']},
+
+ /* ---- cup weeks ---- */
+ {id:'cup-final',w:F=>F.isFinal,q:F=>[
+  'A final. How do you prepare a squad for a week like this?',
+  'Does a trophy change how this season is remembered?',
+  'Do you tell them it is just another game, or do you tell them the truth?',
+  'Have you thought about what you will say to them beforehand?',
+  'What would winning this mean to you personally?']},
+ {id:'cup-semi',w:F=>F.isSemi,q:F=>[
+  'Ninety minutes from a final. How are the nerves?',
+  'Is a semi-final the worst game in football to lose?',
+  'Will you go with your strongest side?']},
+
+ /* ---- the derby ---- */
+ {id:'derby',w:F=>F.derby&&F.played>=3,q:F=>[
+  'It is the derby. Does the week feel different?',
+  'How much do you lean on what this fixture means to the supporters?',
+  'Do you change anything for a game like this?',
+  'What happens in this city if you lose it?']},
+
+ /* ---- the window ---- */
+ {id:'window-open',w:F=>F.window&&!F.preSeason,q:F=>[
+  'The window is open. Are you expecting business?',
+  'Is anybody going to be allowed to leave?',
+  'Would you say the squad needs strengthening, or settling?']},
+ {id:'window-expiring',w:F=>F.window&&F.expiring&&F.expiring.length,q:F=>[
+  PNM2(F.expiring[0])+' has a year left. Where are you with that?',
+  'Are you comfortable letting a player run down a contract?']}
+);
+
+/* ---------------------------------------------------------------------
+   4. AND THE OPENING LINE MATCHES THE OCCASION
+   The room's first words set the tone; a cup final should not open with
+   "so, another Saturday".
+   --------------------------------------------------------------------- */
+if(typeof pressIntro==='function'){
+ const _pressIntro=pressIntro;
+ pressIntro=function(){
+  try{
+   const F=pqFacts();
+   if(F){
+    if(F.isFinal)return 'Cup final week. The room is fuller than usual.';
+    if(F.isSemi)return 'A semi-final to talk about. Everybody is here.';
+    if(F.preSeason)return 'First press conference of the season. A new campaign to sell.';
+    if(F.derby)return 'Derby week. They have come for a headline.';
+    if(F.inDropFight)return 'The mood in the room is not warm.';
+    if(F.inTitleRace)return 'They want to talk about the title, whether you do or not.';
+   }
+  }catch(e){}
+  return _pressIntro.apply(this,arguments)}}
+
+
+/* ---------------------------------------------------------------------
+   5. AND THEY ACTUALLY GET ASKED
+   ---------------------------------------------------------------------
+   The bank runs to several hundred lines, so a contextual question drawn
+   uniformly against all of them is a contextual question nobody ever
+   hears — the first test of this had a pre-season room that correctly
+   refused to mention the table and then asked about technology in
+   refereeing. Occasion questions are weighted so the room leads with the
+   thing that is actually happening, without ever becoming the only thing
+   it can talk about.
+   --------------------------------------------------------------------- */
+const PRESS_OCCASION=['pre-summer','pre-signings','pre-nosignings','pre-tour','pre-young',
+ 'opening-early','race-title','race-drop','runin','cup-final','cup-semi','derby',
+ 'window-open','window-expiring'];
+const _pressBankW=pressBank;
+pressBank=function(){
+ const bank=_pressBankW.apply(this,arguments)||[];
+ const out=bank.slice();
+ bank.forEach(q=>{
+  const rid=String(q.id||'').split('#')[0];
+  if(PRESS_OCCASION.indexOf(rid)>=0)for(let i=0;i<7;i++)out.push(q);
+ });
+ return out};
+
+/*#w42_press.js#*/
+
 showStart();
 </script>
 </body>
