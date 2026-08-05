@@ -8552,7 +8552,7 @@ openProfile=function(pid){
  const c=G.clubs[p.club]||{c1:'#333',name:'Free agent',short:'FA'};
  const fr=formAvg(p);
  const pers=(typeof persInfo==='function')?persInfo(p):null;
- const card='<div style="position:relative;border-radius:18px;overflow:hidden;margin-bottom:12px;'+
+ const card='<div class="profhero" style="position:relative;border-radius:18px;overflow:hidden;margin-bottom:12px;'+
   'background:linear-gradient(135deg,'+c.c1+'2e,rgba(10,18,13,.9) 62%);border:1px solid rgba(240,245,240,.12);padding:13px 14px">'+
   '<div style="position:absolute;inset:0;background:radial-gradient(70% 90% at 88% 0%,'+c.c1+'22,transparent 62%)"></div>'+
   '<div class="row" style="gap:12px;position:relative">'+
@@ -21293,7 +21293,649 @@ vTable=function(){
    'your save from Save &amp; load and importing it again will rebuild the tables.</div>'+
    '<div class="xs faint" style="margin-top:6px">('+esc(String(e&&e.message||e))+')</div></div>'}};
 
-/*#w21_worldtables.js#*/
+/*#w21_worldtables.js#*//*#w22_desktop.js#*/
+
+/* =====================================================================
+   A DESKTOP GAME, NOT A PHONE GAME IN A COLUMN
+   ---------------------------------------------------------------------
+   Everything here was built for a phone held in one hand: a 520px
+   column, a nav bar along the bottom edge, and rows of chips that run
+   off the side of the screen because a thumb can flick them back.
+
+   On a desktop that column sits marooned in the middle of a 1920px
+   screen with black either side, and the chip rows are not merely ugly
+   — they are a wall. A mouse has no horizontal flick. Open the league
+   table on a laptop and the country row ends at Austria: Croatia,
+   Serbia, Ukraine and the rest are on the screen but unreachable, with
+   no scrollbar and nothing to drag. Whole countries of the game were
+   shut off to anybody not on a touchscreen.
+
+   So the layout now has two shapes, chosen by the screen rather than by
+   sniffing at the browser:
+
+   PHONE (under 1024px) is untouched. Same column, same bottom nav, same
+   flick-scrolling chip rows, which is right for a thumb.
+
+   DESKTOP (1024px and up) is a different animal. The app becomes a grid
+   — a permanent left sidebar carrying the badge, the five sections and
+   the continue button, and a content area that takes the whole of the
+   rest of the window and scrolls on its own. Nothing floats over
+   anything. Every chip row wraps, so everything on screen can be
+   reached with a mouse. Lists that are one long column on a phone run
+   in two on a wide screen, so a squad is one look rather than a scroll.
+   Sheets that slide up from the bottom edge of a phone open as centred
+   dialogs. And the pointer gets what a pointer expects: hover states, a
+   real scrollbar, focus rings you can tab around, and number keys for
+   the five sections.
+   ===================================================================== */
+
+(function w22css(){
+ const st=document.createElement('style');st.id='w22';
+ st.textContent=[
+
+ /* ==================================================================
+    1. POINTER AFFORDANCES — anything with a mouse, at any width
+    ================================================================== */
+ '@media (hover:hover) and (pointer:fine){',
+ ' .prow{transition:background .13s ease,transform .13s ease}',
+ ' .prow:hover{background:rgba(255,255,255,.055)}',
+ ' .btn:hover{filter:brightness(1.09)}',
+ ' .chip:hover{background:rgba(255,255,255,.10);border-color:rgba(240,245,240,.26)}',
+ ' .chip.on:hover{filter:brightness(1.1)}',
+ ' .nav button:hover{color:var(--ink);background:rgba(255,255,255,.05)}',
+ ' .tbl tbody tr{transition:background .12s}',
+ ' .tbl tbody tr:hover{background:rgba(255,255,255,.05)}',
+ ' .mail:hover{background:rgba(255,255,255,.05)}',
+ ' .kpi,.ptile,.vt,.bb{transition:transform .14s ease,box-shadow .14s ease}',
+ ' [data-action].ptile:hover,[data-action].kpi:hover{transform:translateY(-2px);',
+ '  box-shadow:0 10px 26px rgba(0,0,0,.45)}',
+ ' .clubpick:hover{border-color:rgba(218,41,28,.6);background:rgba(255,255,255,.06)}',
+ ' .fbtn:hover{border-color:rgba(240,245,240,.34);background:rgba(16,26,19,.8)}',
+ ' .star-btn:hover{opacity:1}',
+ ' .scoutrow:hover{background:rgba(255,255,255,.03)}',
+ '}',
+ /* keyboard users get to see where they are */
+ ':focus-visible{outline:2px solid var(--gold);outline-offset:2px;border-radius:8px}',
+ 'button:focus:not(:focus-visible){outline:none}',
+
+ /* ==================================================================
+    2. THE DESKTOP SHELL
+    ================================================================== */
+ '@media (min-width:1024px){',
+ ' :root{--side-w:270px;--dock-h:92px}',
+ ' html,body{height:100%;overflow:hidden}',
+ ' body{background:radial-gradient(120% 90% at 50% -10%,#12241a 0%,#0a120d 42%,#060a07 100%) fixed}',
+ ' #app{max-width:none;width:100%;height:100dvh;min-height:0;display:grid;',
+ '  grid-template-columns:var(--side-w) minmax(0,1fr);',
+ '  grid-template-rows:auto minmax(0,1fr);',
+ '  grid-template-areas:"side hdr" "side view";background:none;overflow:hidden}',
+
+ /* --- sidebar --- */
+ ' .nav{grid-area:side;position:static;inset:auto;z-index:5;display:block;',
+ '  border-top:none;border-right:1px solid rgba(240,245,240,.09);',
+ '  background:linear-gradient(180deg,rgba(12,20,15,.96),rgba(7,12,9,.99));',
+ '  backdrop-filter:blur(14px);overflow:hidden}',
+ ' .nav-inner{flex-direction:column;max-width:none;width:100%;height:100%;',
+ '  padding:16px 12px calc(var(--dock-h) + 8px);gap:4px;overflow-y:auto}',
+ ' .nav button{flex:none;width:100%;height:48px;flex-direction:row;justify-content:flex-start;',
+ '  gap:13px;padding:0 14px;border-radius:12px;font-size:13.5px;letter-spacing:.2px;',
+ '  font-weight:700;position:relative}',
+ ' .nav button svg{width:20px;height:20px;flex:none}',
+ ' .nav button .dot{display:none}',
+ ' .nav button.on{background:linear-gradient(100deg,rgba(218,41,28,.32),rgba(218,41,28,.06));',
+ '  box-shadow:inset 0 0 0 1px rgba(218,41,28,.45)}',
+ ' .nav button.on::after{content:"";position:absolute;left:-12px;top:50%;transform:translateY(-50%);',
+ '  width:3px;height:26px;border-radius:0 3px 3px 0;background:var(--red-hot);',
+ '  box-shadow:0 0 12px rgba(255,59,45,.8)}',
+ /* the badge block at the top of the rail */
+ ' .navbrand{display:flex!important;align-items:center;gap:11px;padding:6px 8px 16px;',
+ '  margin-bottom:8px;border-bottom:1px solid rgba(240,245,240,.08)}',
+ ' .navbrand .nb-t{min-width:0}',
+ ' .navbrand .nb-n{font-family:var(--disp);font-size:13px;letter-spacing:.3px;line-height:1.2;',
+ '  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+ ' .navbrand .nb-d{font-size:10px;color:var(--ink-faint);font-weight:700;margin-top:3px;',
+ '  letter-spacing:.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+ ' .navsec{font-size:9px;letter-spacing:1.4px;text-transform:uppercase;color:var(--ink-faint);',
+ '  font-weight:800;padding:12px 14px 6px}',
+
+ /* --- header strip --- */
+ ' .hdr{grid-area:hdr;position:static;height:auto;min-height:60px;padding:10px 26px;',
+ '  border-bottom:1px solid rgba(240,245,240,.09);gap:16px}',
+ ' .hdr .crest{display:none}',
+ ' .hdr .hclub .n{font-size:16px}',
+ ' .hdr .hclub .d{font-size:11.5px}',
+ ' .hdr .bank .v{font-size:17px}',
+
+ /* --- the content area is the only thing that scrolls --- */
+ /* NB: the line width is capped on the children, not with percentage
+    padding on #view itself. A percentage padding on a grid item whose
+    track is minmax(0,1fr) is a circular dependency — the track wants to
+    know the content width, the padding wants to know the track — and
+    Chrome resolves it by making the column a million pixels wide. */
+ /* min-width:0 is not optional. A grid item defaults to min-width:auto,
+    which refuses to shrink below its content's min-content width — and a
+    fixed-layout table sizing itself against a container that is not yet
+    definite reports a min-content width of exactly one million pixels.
+    Without this the league table drags the whole column out to 1000092px
+    and the numbers end up somewhere past the horizon. */
+ /* margin:0 undoes an older landscape rule — "@media (orientation:landscape)
+    and (min-width:820px){#view{max-width:1040px;margin:0 auto}}" — which was
+    written to stop a phone held sideways stretching a line of text to the
+    full screen. On a desktop it pinned the content to a 1040px island in
+    the middle of the window and left the league table hanging off the end
+    of it. Same selector, same specificity, so only the later rule wins, and
+    it has to name every property the old one set. */
+ ' #view{grid-area:view;overflow-y:auto;overflow-x:hidden;max-width:none;margin:0;',
+ '  min-height:0;min-width:0;padding:22px 34px 56px}',
+ ' #view>*{max-width:1500px;margin-left:auto;margin-right:auto}',
+ ' .nav,.hdr{min-width:0}',
+ ' .tbl{max-width:100%}',
+
+ /* --- continue button lives at the foot of the rail --- */
+ ' .continue-dock{position:fixed;left:0;bottom:0;width:var(--side-w);right:auto;',
+ '  padding:0 12px 14px;z-index:6;display:block;',
+ '  background:linear-gradient(180deg,transparent,rgba(7,12,9,.98) 38%)}',
+ ' .continue-dock .btn{min-width:0;width:100%;min-height:60px;font-size:14px;',
+ '  letter-spacing:1px;flex-direction:column;gap:2px;padding:0 12px}',
+ ' .continue-dock .btn .cd-sub{font-size:9.5px;letter-spacing:.3px;white-space:nowrap;',
+ '  overflow:hidden;text-overflow:ellipsis;max-width:100%}',
+
+ /* --- every chip row wraps: a mouse cannot flick --- */
+ ' .chips,.subtabs,.secnav{flex-wrap:wrap!important;overflow-x:visible!important;',
+ '  row-gap:7px}',
+ ' .xscroll{-webkit-mask-image:none!important;mask-image:none!important}',
+ ' .secnav{gap:22px;align-items:flex-start}',
+
+ /* --- a real scrollbar, because a desktop expects one --- */
+ ' #view::-webkit-scrollbar,.nav-inner::-webkit-scrollbar,.sheet::-webkit-scrollbar,',
+ ' .mbody::-webkit-scrollbar{width:10px;height:10px}',
+ ' #view::-webkit-scrollbar-thumb,.nav-inner::-webkit-scrollbar-thumb,',
+ ' .sheet::-webkit-scrollbar-thumb,.mbody::-webkit-scrollbar-thumb{',
+ '  background:rgba(240,245,240,.16);border-radius:99px;border:3px solid transparent;',
+ '  background-clip:content-box}',
+ ' #view::-webkit-scrollbar-thumb:hover,.sheet::-webkit-scrollbar-thumb:hover{',
+ '  background:rgba(240,245,240,.3);background-clip:content-box}',
+ ' #view{scrollbar-width:thin;scrollbar-color:rgba(240,245,240,.2) transparent}',
+
+ /* --- sheets become centred dialogs --- */
+ ' .sheet{left:50%;right:auto;top:50%;bottom:auto;transform:translate(-50%,-50%);',
+ '  width:min(600px,92vw);max-width:none;max-height:86vh;border-radius:20px;',
+ '  border:1px solid rgba(240,245,240,.14);margin:0;',
+ '  padding:20px 22px 24px;animation:dlgIn .18s ease}',
+ ' .sheet .grab{display:none}',
+ ' @keyframes dlgIn{from{opacity:0;transform:translate(-50%,-46%) scale(.97)}',
+ '  to{opacity:1;transform:translate(-50%,-50%) scale(1)}}',
+
+ /* --- match day gets the width it deserves --- */
+ ' #matchScreen{max-width:min(1180px,96vw);top:2vh;bottom:2vh;left:0;right:0;',
+ '  border-radius:20px;border:1px solid rgba(240,245,240,.12);overflow:hidden;',
+ '  box-shadow:0 30px 90px rgba(0,0,0,.7)}',
+ ' #matchScreen .mbody{padding:16px 26px}',
+ ' #matchScreen .msb{padding:16px 26px 12px}',
+ ' #matchScreen .mctl{padding:12px 26px 16px}',
+ ' #matchScreen .mtabs{padding:10px 26px}',
+ ' canvas#pitchCanvas{max-height:52vh;object-fit:contain}',
+
+ /* --- toast clears the rail --- */
+ ' #toast{left:calc(var(--side-w) + (100vw - var(--side-w))/2);bottom:34px}',
+
+ /* --- front door and picker fill the window --- */
+ ' #startScreen{padding:48px 24px 64px;justify-content:flex-start}',
+ ' #startScreen #startBody{max-width:min(1120px,92vw)!important}',
+ ' #startScreen .clubgrid{grid-template-columns:repeat(6,1fr);gap:13px}',
+ ' #startScreen .clubpick{padding:15px 8px;gap:9px}',
+ ' #startScreen .clubpick .cn{font-size:11px}',
+ ' #startScreen .logo{font-size:46px}',
+ '}',
+
+ /* ==================================================================
+    3. WIDE DESKTOP — two columns of players instead of one long one
+    ================================================================== */
+ '@media (min-width:1300px){',
+ ' .plist{display:grid;grid-template-columns:1fr 1fr;gap:0 22px;align-items:start}',
+ ' .plist .prow{border-bottom:1px solid rgba(240,245,240,.055)}',
+ ' .vitals{grid-template-columns:repeat(8,1fr)}',
+ ' .depth{grid-template-columns:repeat(4,1fr);margin-top:0}',
+ ' .budgetbar{grid-template-columns:repeat(4,1fr)}',
+ ' .grid2{grid-template-columns:repeat(4,1fr)}',
+ ' .subtabs .chip,.chips .chip{font-size:12.5px}',
+ '}',
+ '@media (min-width:1700px){',
+ ' #startScreen .clubgrid{grid-template-columns:repeat(8,1fr)}',
+ '}',
+
+ /* ==================================================================
+    4. TABLET — stop the column looking lost between the two shapes
+    ================================================================== */
+ '@media (min-width:700px) and (max-width:1023px){',
+ ' #app{max-width:720px}',
+ ' .chips,.subtabs{flex-wrap:wrap;overflow-x:visible}',
+ ' .grid2{grid-template-columns:repeat(2,1fr)}',
+ '}'
+ ].join('');
+ document.head.appendChild(st)})();
+
+/* ---------------------------------------------------------------------
+   THE BADGE AND THE SECTION LABELS IN THE RAIL
+   ---------------------------------------------------------------------
+   Both are markup the phone layout has no room for, so they are drawn
+   always and hidden by CSS below 1024px rather than being conjured up
+   by a resize listener that can be wrong.
+   --------------------------------------------------------------------- */
+(function railCSS(){
+ const st=document.createElement('style');st.id='w22b';
+ st.textContent='.navbrand,.navsec{display:none}';
+ document.head.appendChild(st)})();
+
+const _renderNavRail=renderNav;
+renderNav=function(){
+ _renderNavRail.apply(this,arguments);
+ try{
+  const box=$('#navInner');if(!box||!G)return;
+  const c=G.clubs[G.my];if(!c)return;
+  const brand='<div class="navbrand">'+crest(c,34)+
+   '<div class="nb-t"><div class="nb-n">'+esc(c.short||c.name)+'</div>'+
+   '<div class="nb-d">'+esc((typeof DIV_NAMES==='object'&&DIV_NAMES[c.league])||'')+'</div></div></div>';
+  box.insertAdjacentHTML('afterbegin',brand);
+ }catch(e){}};
+
+/* ---------------------------------------------------------------------
+   NUMBER KEYS FOR THE FIVE SECTIONS, SPACE TO CONTINUE
+   ---------------------------------------------------------------------
+   Only when there is a keyboard worth using and you are not typing into
+   something — a name search must be able to contain the digit 4.
+   --------------------------------------------------------------------- */
+document.addEventListener('keydown',e=>{
+ try{
+  if(e.metaKey||e.ctrlKey||e.altKey)return;
+  const t=e.target;
+  if(t&&(/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)||t.isContentEditable))return;
+  if(!G||document.getElementById('startScreen').style.display==='flex')return;
+  if(document.querySelector('#matchScreen.open'))return;
+  const open=document.querySelector('#modalHost.open');
+  if(e.key==='Escape'&&open){closeModal();e.preventDefault();return}
+  if(open)return;
+  const ix=['1','2','3','4','5'].indexOf(e.key);
+  if(ix>=0&&NAV[ix]){UI.view=NAV[ix][0];UI.selSlot=null;render();
+   const v=$('#view');if(v)v.scrollTop=0;e.preventDefault();return}
+  if(e.key===' '||e.key==='Enter'){
+   const d=document.querySelector('#continueDock button');
+   if(d){d.click();e.preventDefault()}}
+ }catch(err){}});
+
+/*#w22_desktop.js#*//*#w23_deskrooms.js#*/
+
+/* =====================================================================
+   ROOMS BUILT FOR A WIDE SCREEN, NOT STRETCHED INTO ONE
+   ---------------------------------------------------------------------
+   Giving the app a sidebar and the full width of the window is only
+   half of it. A phone screen stretched to 1560px is not a desktop
+   layout — it is a phone screen with the middle pulled out. The squad
+   vitals became four tiles the size of paving slabs. The transfer
+   filters became a search box a metre wide. The tactics pitch, whose
+   height is calculated as 1.26 times its own width, became one
+   thousand eight hundred and ninety pixels tall: a single centre
+   forward, and you scrolled to find the rest of the team.
+
+   So the four rooms that carry the game get a second shape. Each is one
+   wrapper and a media query — the markup is identical on a phone, and
+   the phone layout is untouched.
+
+     HOME      a dashboard. The fixture spans the top, everything else
+               falls into two columns.
+     SQUAD     vitals, depth and the wage bill sit in one band across
+               the top instead of three stacked rows.
+     TRANSFERS budget, scouts and filters go into a column down the left
+               that stays put while the market scrolls beside it.
+     TACTICS   the pitch is capped at the size of a pitch.
+   ===================================================================== */
+
+(function w23css(){
+ const st=document.createElement('style');st.id='w23';
+ st.textContent=[
+
+ /* ---- the pitch is a pitch, not a runway ----
+    Both of these have to out-specify "#view>*{max-width:1500px}" from the
+    shell, and an id beats a class however late it is written — so they are
+    scoped through #view rather than named on their own. Without it the
+    pitch is 1500px wide and paintTacticsPitch, which sets the height to
+    1.26 times the width, makes it 1890px tall: one centre forward on
+    screen and the other ten below the fold. */
+ '@media (min-width:1024px){',
+ ' #view .pitchbox{max-width:560px;margin-left:auto;margin-right:auto}',
+ ' #view .tbl-card{max-width:1080px}',
+ '}',
+
+ /* ---- home becomes a dashboard ---- */
+ '@media (min-width:1300px){',
+ ' #view[data-view="home"]{display:grid;grid-template-columns:1.25fr 1fr;',
+ '  gap:14px 22px;align-content:start}',
+ ' #view[data-view="home"]>*{max-width:none;margin:0;min-width:0}',
+ ' #view[data-view="home"]>.fixture-hero{grid-column:1/-1}',
+ ' #view[data-view="home"]>.sec{grid-column:1/-1}',
+ ' #view[data-view="home"] .portal{grid-template-columns:repeat(3,1fr)}',
+ ' #view[data-view="home"] .quickrow{grid-template-columns:repeat(4,1fr)}',
+
+ /* ---- tactics: instructions scroll, the pitch stays where you can see it ---- */
+ ' #view[data-view="tactics"]{display:grid;grid-template-columns:minmax(0,1fr) 560px;',
+ '  gap:0 28px;align-content:start}',
+ ' #view[data-view="tactics"]>*{grid-column:1;max-width:none;margin:0 0 10px;min-width:0}',
+ ' #view[data-view="tactics"]>.pitchbox{grid-column:2;grid-row:1/span 200;',
+ '  position:sticky;top:0;align-self:start;margin:0;max-width:560px}',
+
+ /* ---- squad vitals in one band ---- */
+ ' .vitalcard{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr) minmax(0,1.1fr);',
+ '  gap:20px;align-items:center}',
+ ' .vitalcard .vitals{margin:0}',
+ ' .vitalcard .depth{margin:0}',
+ ' .vitalcard .wagewrap{min-width:0}',
+
+ /* ---- transfers: controls left, market right ---- */
+ ' .tr-wrap{display:grid;grid-template-columns:352px minmax(0,1fr);gap:22px;align-items:start}',
+ ' .tr-side{position:sticky;top:0}',
+ ' .tr-side .budgetbar{grid-template-columns:1fr 1fr}',
+ ' .tr-side .grid2{grid-template-columns:1fr 1fr}',
+ ' .tr-main{min-width:0}',
+ ' .tr-main .plist{grid-template-columns:1fr}',
+ '}',
+ '@media (min-width:1650px){',
+ ' .tr-main .plist{grid-template-columns:1fr 1fr}',
+ '}'
+ ].join('');
+ document.head.appendChild(st)})();
+
+/* the stylesheet needs to know which room it is looking at */
+const _renderViewAttr=render;
+render=function(){
+ const r=_renderViewAttr.apply(this,arguments);
+ try{const v=$('#view');if(v)v.setAttribute('data-view',UI.view||'home')}catch(e){}
+ return r};
+
+/* ---------------------------------------------------------------------
+   SQUAD VITALS — same three groups, in a row when there is room
+   --------------------------------------------------------------------- */
+vSquadVitals=function(){
+ const c=G.clubs[G.my];
+ const ps=c.players.filter(p=>!p.loan);
+ const avail=ps.filter(p=>!p.injury&&p.susp<=0);
+ const out=ps.length-avail.length;
+ const age=ps.length?(ps.reduce((s,p)=>s+p.age,0)/ps.length).toFixed(1):'—';
+ const w=squadWage(c),cap=c.wageCap||1;
+ const pct=clamp(w/cap*100,0,120);
+ const xi=xiRating();
+ const counts={GK:0,D:0,M:0,A:0};
+ ps.forEach(p=>counts[POSGROUP(p.pos)]++);
+ const need={GK:2,D:6,M:5,A:4};
+ let h='<div class="card vitalcard" style="padding:13px 14px">'+
+  '<div class="vitals" style="margin:0">'+
+  '<div class="vt"><div class="vv" style="color:var(--gold)">'+(xi||'—')+'</div><div class="vl">Best XI</div></div>'+
+  '<div class="vt"><div class="vv">'+ps.length+'</div><div class="vl">Players</div></div>'+
+  '<div class="vt"><div class="vv">'+age+'</div><div class="vl">Avg age</div></div>'+
+  '<div class="vt"><div class="vv" style="color:'+(out?'var(--danger)':'var(--green)')+'">'+out+
+   '</div><div class="vl">Unavail</div></div></div>';
+ h+='<div class="depth">'+PG_ORDER.map(g=>{
+  const n=counts[g],thin=n<need[g];
+  return '<div class="dcell'+(thin?' thin':'')+'"><div class="dn" style="color:'+PG_TINT[g]+'">'+n+
+   '</div><div class="dl" style="color:'+PG_TINT[g]+'">'+(g==='D'?'DEF':g==='M'?'MID':g==='A'?'ATT':'GK')+
+   '</div></div>'}).join('')+'</div>';
+ h+='<div class="wagewrap">';
+ const thinNames=PG_ORDER.filter(g=>counts[g]<need[g]).map(g=>PG_LABEL[g].toLowerCase());
+ if(thinNames.length)h+='<div class="xs" style="color:var(--amber);font-weight:700;margin-bottom:8px;line-height:1.4">'+
+  '⚠ Thin at '+thinNames.join(' and ')+' — one injury and you are picking out of position.</div>';
+ h+='<div class="spread"><span class="xs faint" style="letter-spacing:.8px;font-weight:800">WAGE BILL</span>'+
+  '<span class="xs num" style="font-weight:800;color:'+(pct>100?'var(--danger)':pct>92?'var(--amber)':'var(--ink)')+'">'+
+  fmtW(w)+' <span class="faint">of '+fmtW(cap)+'</span></span></div>'+
+  '<div class="bar '+(pct>100?'b-red':pct>92?'b-amber':'b-green')+'" style="margin-top:5px;height:6px">'+
+  '<i style="width:'+clamp(pct,0,100)+'%"></i></div></div>';
+ return h+'</div>'};
+
+/* ---------------------------------------------------------------------
+   TRANSFERS — the controls stop being a mile-wide form
+   --------------------------------------------------------------------- */
+vTransfers=function(){
+ let h='<div class="tr-wrap">'+
+  '<div class="tr-side">'+vTransferBudget()+vScouts()+vTrFilters()+'</div>'+
+  '<div class="tr-main"><div id="trResults">'+trResultsHtml()+'</div>';
+ try{h+=vFreeAgents()}catch(e){}
+ return h+'</div></div>'};
+
+/* ---------------------------------------------------------------------
+   THE LEAGUE TABLE CARD, so it can be capped without capping the chips
+   --------------------------------------------------------------------- */
+const _vTableCard=vTable;
+vTable=function(){
+ return _vTableCard.apply(this,arguments)
+  .replace('<div class="card tight"><table class="tbl fixcols">',
+           '<div class="card tight tbl-card"><table class="tbl fixcols">')};
+
+/*#w23_deskrooms.js#*//*#w24_intro.js#*/
+
+/* =====================================================================
+   THE WAY IN, AND A COAT OF PAINT ON EVERYTHING ELSE
+   ---------------------------------------------------------------------
+   The game opened straight onto a menu. Every game worth releasing
+   opens on something — the floodlights coming on, a badge, a name — so
+   that by the time the menu arrives you already know where you are.
+
+   The sequence is four seconds long and every one of them is skippable:
+   click, tap, or any key, at any point. It respects the reduced-motion
+   setting, in which case it is a half-second fade and nothing moves. It
+   never blocks — the front door is being built behind it the whole
+   time, so skipping is instant rather than a wait for a load.
+
+   Everything after the intro in this layer is the polish pass: light
+   falling from the top of every card, a live vignette behind the whole
+   app, section rules that fade instead of stopping dead, a selection
+   colour that belongs to the club, and rooms that cross-fade rather
+   than snapping from one to the next.
+   ===================================================================== */
+
+(function w24css(){
+ const st=document.createElement('style');st.id='w24';
+ st.textContent=[
+
+ /* ---------- the intro ---------- */
+ '#introScreen{position:fixed;inset:0;z-index:200;display:flex;align-items:center;',
+ ' justify-content:center;background:#040605;overflow:hidden;cursor:pointer;',
+ ' -webkit-tap-highlight-color:transparent}',
+ '#introScreen.out{animation:introOut .55s ease forwards;pointer-events:none}',
+ '@keyframes introOut{to{opacity:0;transform:scale(1.04)}}',
+ '#introScreen .in-sky{position:absolute;inset:0;background:',
+ ' radial-gradient(120% 70% at 50% 112%,rgba(218,41,28,.34) 0%,rgba(120,18,12,.14) 40%,transparent 68%),',
+ ' radial-gradient(80% 46% at 50% -8%,rgba(251,225,34,.05),transparent 60%),',
+ ' linear-gradient(180deg,#040605 0%,#0a0605 56%,#130806 100%);opacity:0;',
+ ' animation:inSky 1.5s ease .1s forwards}',
+ '@keyframes inSky{to{opacity:1}}',
+ '#introScreen .in-beams{position:absolute;inset:0;pointer-events:none;opacity:0;',
+ ' animation:inBeams 1.9s ease .25s forwards}',
+ '@keyframes inBeams{0%{opacity:0}55%{opacity:.85}100%{opacity:.5}}',
+ '#introScreen .in-beam{position:absolute;top:-8%;width:19vmax;height:96%;',
+ ' background:linear-gradient(180deg,rgba(255,246,220,.20),rgba(255,246,220,.045) 44%,transparent 74%);',
+ ' filter:blur(16px);transform-origin:top center}',
+ '#introScreen .in-fore{position:relative;z-index:3;display:flex;flex-direction:column;',
+ ' align-items:center;text-align:center;padding:0 22px}',
+ '#introScreen .in-crest{opacity:0;transform:scale(.62) translateY(16px);',
+ ' filter:drop-shadow(0 18px 52px rgba(218,41,28,.62));',
+ ' animation:inCrest 1.15s cubic-bezier(.18,.9,.28,1) .35s forwards}',
+ '@keyframes inCrest{to{opacity:1;transform:scale(1) translateY(0)}}',
+ '#introScreen .in-t1,#introScreen .in-t2{font-family:"Archivo Black",sans-serif;line-height:1;',
+ ' opacity:0;filter:blur(9px);transform:translateY(12px)}',
+ '#introScreen .in-t1{font-size:clamp(34px,7.4vw,74px);letter-spacing:.02em;margin-top:26px;',
+ ' background:linear-gradient(180deg,#fff 26%,#ffd9d4 62%,#d94a3d 100%);',
+ ' -webkit-background-clip:text;background-clip:text;color:transparent;',
+ ' animation:inWord .8s cubic-bezier(.2,.8,.3,1) 1.05s forwards}',
+ '#introScreen .in-t2{font-size:clamp(30px,6.6vw,66px);letter-spacing:.22em;margin-top:6px;',
+ ' background:linear-gradient(180deg,#fff6cf 18%,#fbe122 62%,#a8870a 100%);',
+ ' -webkit-background-clip:text;background-clip:text;color:transparent;',
+ ' animation:inWord .8s cubic-bezier(.2,.8,.3,1) 1.42s forwards}',
+ '@keyframes inWord{to{opacity:1;filter:blur(0);transform:translateY(0)}}',
+ '#introScreen .in-sub{margin-top:22px;font-size:11.5px;letter-spacing:.42em;font-weight:800;',
+ ' text-transform:uppercase;color:rgba(240,236,230,.5);opacity:0;',
+ ' animation:inFade .8s ease 1.95s forwards}',
+ '#introScreen .in-rule{width:0;height:1px;margin-top:20px;',
+ ' background:linear-gradient(90deg,transparent,rgba(218,41,28,.9),transparent);',
+ ' animation:inRule 1.5s cubic-bezier(.2,.8,.3,1) 1.7s forwards}',
+ '@keyframes inRule{to{width:min(420px,72vw)}}',
+ '#introScreen .in-skip{position:absolute;bottom:26px;left:0;right:0;text-align:center;',
+ ' font-size:10.5px;letter-spacing:.24em;text-transform:uppercase;font-weight:800;',
+ ' color:rgba(240,236,230,.26);opacity:0;animation:inFade .7s ease 1.5s forwards}',
+ '@keyframes inFade{to{opacity:1}}',
+ '@media (prefers-reduced-motion:reduce){',
+ ' #introScreen *{animation-duration:.01s!important;animation-delay:0s!important}',
+ ' #introScreen .in-rule{width:min(420px,72vw)}}',
+
+ /* ---------- ambient depth behind the whole app ---------- */
+ '#app::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;',
+ ' background:radial-gradient(130% 88% at 50% -12%,rgba(24,52,34,.5),transparent 62%),',
+ ' radial-gradient(80% 60% at 100% 100%,rgba(218,41,28,.06),transparent 60%)}',
+ '#app>*{position:relative;z-index:1}',
+
+ /* ---------- light falls from the top of every surface ---------- */
+ '.card,.kpi,.ptile,.vt,.bb,.dcell{position:relative}',
+ '.card::after{content:"";position:absolute;left:14px;right:14px;top:0;height:1px;',
+ ' background:linear-gradient(90deg,transparent,rgba(255,255,255,.16),transparent);',
+ ' pointer-events:none;border-radius:2px}',
+ '.btn-primary,.btn-gold{position:relative;overflow:hidden}',
+ '.btn-primary::after,.btn-gold::after{content:"";position:absolute;inset:0;',
+ ' background:linear-gradient(180deg,rgba(255,255,255,.18),transparent 46%);pointer-events:none}',
+
+ /* ---------- section rules fade out instead of stopping dead ---------- */
+ '.sec .ln{background:linear-gradient(90deg,rgba(240,245,240,.22),rgba(240,245,240,.02))}',
+ '.sec .ln::after{opacity:.5}',
+
+ /* ---------- the club owns the selection colour ---------- */
+ '::selection{background:rgba(218,41,28,.42);color:#fff}',
+
+ /* ---------- rooms cross-fade instead of snapping ---------- */
+ '@keyframes viewIn{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:none}}',
+ '#view>*{animation:viewIn .26s cubic-bezier(.2,.8,.3,1) both}',
+
+ /* ---------- a player profile said his name twice ----------
+    An earlier visual pass prepended a summary card to the top of every
+    profile — portrait, name, club, age, position, rating — above a header
+    that already carried all of it, plus his nationality, his potential and
+    his attributes. On a phone the two were far enough apart to read as a
+    header and a body. Opened as a dialog on a desktop they sit one on top
+    of the other and the sheet plainly says "Bruno Fernandes" twice, with
+    two rows of tiles repeating fitness, form and contract between them.
+    The canonical header is the one that carries more and the one every
+    later layer appends to, so it is the one that stays — and it inherits
+    the club-coloured hero the summary card was bringing. */
+ '.profhero{display:none}',
+ '.sheet{position:relative}',
+ '.sheet>h3:first-of-type{margin-top:2px}',
+ '.sheet::before{content:"";position:absolute;left:0;right:0;top:0;height:132px;',
+ ' background:linear-gradient(180deg,var(--heroClub,rgba(218,41,28,.20)),transparent 78%);',
+ ' pointer-events:none;border-radius:22px 22px 0 0}',
+
+ /* ---------- the header reads as a toolbar on a wide screen ---------- */
+ '@media (min-width:1024px){',
+ ' .hdr{background:linear-gradient(180deg,rgba(11,18,13,.96),rgba(9,15,11,.86))}',
+ ' .hdr .bank{padding-left:18px;border-left:1px solid rgba(240,245,240,.09)}',
+ ' .nav button.on{font-weight:800}',
+ '}'
+ ].join('');
+ document.head.appendChild(st)})();
+
+/* ---------------------------------------------------------------------
+   PUTTING THE PROFILE BACK IN ORDER
+   ---------------------------------------------------------------------
+   Six layers append to a player profile and two of them prepended. The
+   sheet opened on a summary card, a row of stat tiles, a personality
+   chip and a button — and only then, below the drag handle, the actual
+   header with his name, flag, club, age, potential and attributes. On a
+   phone the two were far enough apart to pass as a header and a body. As
+   a centred dialog on a desktop the sheet plainly said "Bruno Fernandes"
+   twice, with fitness, form and contract repeated between them.
+
+   Everything prepended is now moved below the header it was sitting on
+   top of, in the order it was added. The summary card and the duplicate
+   tile row go — every number on them appears in the header underneath,
+   and the club colour they carried is kept as a wash behind the top of
+   the sheet. Nothing else is touched, so the layers that append to the
+   bottom carry on appending to the bottom.
+   --------------------------------------------------------------------- */
+const _profHeroTint=openProfile;
+openProfile=function(pid){
+ _profHeroTint.apply(this,arguments);
+ try{
+  const p=playerById(pid);const sb=$('#sheetBody');if(!sb)return;
+  const c=(p&&G.clubs[p.club])||null;
+  sb.style.setProperty('--heroClub',c?(c.c1+'33'):'rgba(218,41,28,.20)');
+
+  const grab=sb.querySelector('.grab');
+  if(!grab)return;
+  const pre=[];
+  for(let n=sb.firstElementChild;n&&n!==grab;n=n.nextElementSibling)pre.push(n);
+  if(!pre.length)return;
+  // the header is the two rows straight after the handle: who he is, then
+  // what he is. Anything prepended belongs after those.
+  let ref=grab.nextElementSibling;
+  if(ref&&ref.nextElementSibling)ref=ref.nextElementSibling;
+  if(!ref)return;
+  pre.forEach(el=>{
+   const t=(el.textContent||'');
+   if(el.classList.contains('profhero')){el.remove();return}
+   if(/Fitness/i.test(t)&&/Morale/i.test(t)&&/Contract/i.test(t)){el.remove();return}
+   ref.after(el);ref=el});
+ }
+ catch(e){}};
+/* every other sheet gets the club's own colour rather than a player's */
+const _modalHeroTint=openModal;
+openModal=function(){
+ const r=_modalHeroTint.apply(this,arguments);
+ try{const sb=$('#sheetBody');const c=G&&G.clubs[G.my];
+  if(sb&&c)sb.style.setProperty('--heroClub',c.c1+'26')}catch(e){}
+ return r};
+
+/* ---------------------------------------------------------------------
+   THE SEQUENCE
+   --------------------------------------------------------------------- */
+(function intro(){
+ try{
+  if(document.getElementById('introScreen'))return;
+  const el=document.createElement('div');
+  el.id='introScreen';
+  const beams=[18,38,62,82].map((x,i)=>
+   '<div class="in-beam" style="left:'+x+'%;margin-left:-9.5vmax;'+
+   'animation:none;opacity:'+(0.5+(i%2)*0.3)+'"></div>').join('');
+  el.innerHTML=
+   '<div class="in-sky"></div>'+
+   '<div class="in-beams">'+beams+'</div>'+
+   '<div class="in-fore">'+
+    '<div class="in-crest">'+
+     crest({i:'intro',c1:'#DA291C',c2:'#FBE122',short:'MUN',name:'Manchester United'},112)+
+    '</div>'+
+    '<div class="in-t1">RED DEVIL</div>'+
+    '<div class="in-t2">MANAGER</div>'+
+    '<div class="in-rule"></div>'+
+    '<div class="in-sub">Old Trafford · 2026/27</div>'+
+   '</div>'+
+   '<div class="in-skip">Click to skip</div>';
+  document.body.appendChild(el);
+
+  let gone=false;
+  const finish=()=>{
+   if(gone)return;gone=true;
+   el.classList.add('out');
+   setTimeout(()=>{try{el.remove()}catch(e){}},600);
+   document.removeEventListener('keydown',onKey,true);
+  };
+  const onKey=()=>finish();
+  el.addEventListener('click',finish);
+  el.addEventListener('touchstart',finish,{passive:true});
+  document.addEventListener('keydown',onKey,true);
+
+  const reduced=window.matchMedia&&window.matchMedia('(prefers-reduced-motion:reduce)').matches;
+  setTimeout(finish,reduced?600:4000);
+ }catch(e){
+  // an intro that throws must never be the reason the game will not open
+  const el=document.getElementById('introScreen');
+  if(el)try{el.remove()}catch(err){}
+ }
+})();
+
+/*#w24_intro.js#*/
 showStart();
 </script>
 </body>
