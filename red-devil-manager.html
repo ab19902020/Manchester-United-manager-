@@ -21656,11 +21656,16 @@ document.addEventListener('keydown',e=>{
 
  /* ---- home becomes a dashboard ---- */
  '@media (min-width:1300px){',
- ' #view[data-view="home"]{display:grid;grid-template-columns:1.25fr 1fr;',
- '  gap:14px 22px;align-content:start}',
+ ' #view[data-view="home"]{display:grid;grid-template-columns:1.15fr 1fr;',
+ '  gap:0 22px;align-items:start}',
  ' #view[data-view="home"]>*{max-width:none;margin:0;min-width:0}',
- ' #view[data-view="home"]>.fixture-hero{grid-column:1/-1}',
- ' #view[data-view="home"]>.sec{grid-column:1/-1}',
+ ' #view[data-view="home"]>.fixture-hero{grid-column:1/-1;margin-bottom:14px}',
+ ' #view[data-view="home"]>.home-hero{grid-column:1/-1;min-width:0;margin-bottom:14px}',
+ ' #view[data-view="home"]>.home-hero>.fixture-hero{margin:0}',
+ ' #view[data-view="home"]>.home-col{grid-column:auto;min-width:0;display:block}',
+ ' #view[data-view="home"]>.home-col>*{margin-bottom:14px;max-width:none}',
+ ' #view[data-view="home"]>.home-col>.sec{margin:18px 2px 10px}',
+ ' #view[data-view="home"]>.home-col>.sec:first-child{margin-top:0}',
  ' #view[data-view="home"] .portal{grid-template-columns:repeat(3,1fr)}',
  ' #view[data-view="home"] .quickrow{grid-template-columns:repeat(4,1fr)}',
 
@@ -22635,7 +22640,687 @@ faceSpec=function(p){
  ].join('');
  document.head.appendChild(st)})();
 
-/*#w28_faces.js#*/
+/*#w28_faces.js#*//*#w29_var.js#*/
+
+/* =====================================================================
+   VAR
+   ---------------------------------------------------------------------
+   Football has had a video referee since 2018 and this game had never
+   heard of one. Every goal stood, every penalty was given, and nobody
+   ever stood with their hands on their head waiting for a screen at the
+   side of the pitch.
+
+   WHERE IT IS. Not everywhere — that is the point of it. The Premier
+   League has VAR; League Two does not, and neither does the National
+   League. It is used in the top division of the major European
+   countries, in the Champions and Europa Cups, and from the fifth round
+   of the domestic cup onwards. Play a Tuesday night in League One and
+   nobody is checking anything, which is exactly how it is.
+
+   WHAT IT DOES. Every goal is checked, and about one in sixteen is
+   ruled out — offside, a foul in the build-up, a hand. Penalties are
+   reviewed and about one in eight is overturned. Roughly one match in
+   thirty, the referee is sent to the monitor for something he missed
+   and gives a penalty that was not originally awarded. A hard tackle
+   that drew a yellow is occasionally upgraded to red.
+
+   The numbers are close to the real competition's own published rates
+   rather than invented: about 0.3 overturns a match, and a shade over
+   half of all overturns concerning goals.
+   ===================================================================== */
+
+/* ---------------------------------------------------------------------
+   1. DOES THIS MATCH HAVE IT?
+   --------------------------------------------------------------------- */
+const VAR_CC=['ENG','ESP','ITA','GER','FRA','POR','NED','TUR','BEL'];
+function varInUse(fix){
+ try{
+  if(G.sfx&&G.sfx.noVar)return false;
+  if(!fix)return false;
+  // continental nights and the latter rounds of the cup
+  if(fix.cup){
+   const k=String(fix.cup);
+   if(k==='CL'||k==='EL'||k==='ECL')return true;
+   return (fix.r==null)?true:(fix.r>=4)}
+  const div=fix.div||(G.clubs[fix.h]&&G.clubs[fix.h].league);
+  const L=(typeof LEAGUES==='object')&&LEAGUES[div];
+  if(!L)return div==='PL';
+  return L.tier===1&&VAR_CC.indexOf(L.cc)>=0}
+ catch(e){return false}}
+
+/* a line in the feed that looks like a check, not like commentary */
+function varSay(m,side,text,cls){
+ try{m.say(m.dispMin(),side,'📺 <b>VAR</b> — '+text,'var '+(cls||''))}catch(e){}}
+
+/* ---------------------------------------------------------------------
+   2. GOALS GET CHECKED
+   --------------------------------------------------------------------- */
+const VAR_OUT=[
+ ['offside','the scorer was offside by the width of a boot'],
+ ['offside','the forward has strayed a fraction beyond the last man'],
+ ['foul','there was a foul in the build-up'],
+ ['handball','it came off an arm on its way through'],
+ ['foul','the goalkeeper was caught as the ball came in']];
+
+const _goalVAR=MatchSim.prototype.goal;
+MatchSim.prototype.goal=function(A,D,shooter,creator,assister,pen){
+ try{
+  if(varInUse(this.fix)&&!pen&&!this._varOff){
+   const r=Math.random();
+   if(r<.062){
+    // ruled out. The scoreboard never moves, so nothing else has to be undone.
+    const why=pick(VAR_OUT);
+    this.say(this.dispMin(),A,'The ball is in the net — but the flag is up and it is going to the screen…','big');
+    varSay(this,A,'<b>NO GOAL.</b> '+why[1]+'. The goal is disallowed.','varno');
+    this.mom[A===this.sides[0]?0:1]=Math.max(0,(this.mom[A===this.sides[0]?0:1]||0)-2);
+    try{shooter.rating-=.15}catch(e){}
+    try{sfx('ooh')}catch(e){}
+    try{varFlash('NO GOAL','#ff5348')}catch(e){}
+    return}
+   if(r<.20){
+    // checked and given: the pause before the roar
+    setTimeout(()=>{try{varFlash('GOAL CONFIRMED','#3ddc84')}catch(e){}},520);
+    this._varConfirm=true}}
+ }catch(e){}
+ const out=_goalVAR.apply(this,arguments);
+ try{
+  if(this._varConfirm){this._varConfirm=false;
+   varSay(this,A,'checked for offside — <b>the goal stands.</b>','varok')}}
+ catch(e){}
+ return out};
+
+/* ---------------------------------------------------------------------
+   3. PENALTIES GET REVIEWED — AND SOMETIMES GIVEN
+   --------------------------------------------------------------------- */
+const _penVAR=MatchSim.prototype.penaltyEvent;
+MatchSim.prototype.penaltyEvent=function(A,D,dp){
+ try{
+  if(varInUse(this.fix)&&Math.random()<.125){
+   this.say(this.dispMin(),A,'The referee points to the spot — but he is being sent to the monitor…','big');
+   varSay(this,A,'<b>NO PENALTY.</b> There was minimal contact. The decision is overturned and the game restarts with a drop ball.','varno');
+   try{sfx('ooh')}catch(e){}
+   try{varFlash('NO PENALTY','#ff5348')}catch(e){}
+   return}}
+ catch(e){}
+ return _penVAR.apply(this,arguments)};
+
+/* now and then the monitor finds one nobody saw */
+const _tickVAR=MatchSim.prototype.tickOnce;
+MatchSim.prototype.tickOnce=function(){
+ const out=_tickVAR.apply(this,arguments);
+ try{
+  if(!varInUse(this.fix)||this.done)return out;
+  if(this._varPenDone)return out;
+  if(this.min<6||this.min>92)return out;
+  if(Math.random()<.00042){
+   this._varPenDone=true;
+   const A=this.sides[Math.random()<.5?0:1],D=this.sides[A===this.sides[0]?1:0];
+   this.say(this.dispMin(),A,'Play has been pulled back. The referee is walking to the screen…','big');
+   varSay(this,A,'<b>PENALTY.</b> A shirt was pulled in the box and the referee has been sent to look at it.','varok');
+   try{varFlash('PENALTY','#fbe122')}catch(e){}
+   this._varOff=true;
+   try{this.penaltyEvent(A,D,pick(this.pool(D,'def')))}finally{this._varOff=false}}}
+ catch(e){}
+ return out};
+
+/* ---------------------------------------------------------------------
+   4. THE BANNER ON THE MATCH SCREEN
+   --------------------------------------------------------------------- */
+function varFlash(text,colour){
+ try{
+  const host=document.getElementById('matchScreen');
+  if(!host||!host.classList.contains('open'))return;
+  let el=document.getElementById('varFlash');
+  if(el)el.remove();
+  el=document.createElement('div');
+  el.id='varFlash';
+  el.innerHTML='<div class="vf-box" style="--vc:'+(colour||'#fff')+'">'+
+   '<div class="vf-top">📺 Video Assistant Referee</div>'+
+   '<div class="vf-main">'+esc(text)+'</div>'+
+   '<div class="vf-bar"><i></i></div></div>';
+  host.appendChild(el);
+  setTimeout(()=>{try{el.classList.add('out')}catch(e){}},2100);
+  setTimeout(()=>{try{el.remove()}catch(e){}},2600);
+ }catch(e){}}
+
+(function varCSS(){
+ const st=document.createElement('style');st.id='w29';
+ st.textContent=[
+  '#varFlash{position:absolute;left:0;right:0;top:0;bottom:0;z-index:40;display:flex;',
+  ' align-items:center;justify-content:center;pointer-events:none;',
+  ' background:rgba(3,6,4,.42);backdrop-filter:blur(2px);animation:vfIn .22s ease}',
+  '#varFlash.out{animation:vfOut .45s ease forwards}',
+  '@keyframes vfIn{from{opacity:0}to{opacity:1}}',
+  '@keyframes vfOut{to{opacity:0}}',
+  '.vf-box{min-width:min(340px,84vw);padding:16px 22px 14px;border-radius:16px;text-align:center;',
+  ' background:linear-gradient(180deg,rgba(18,26,20,.98),rgba(9,14,10,.98));',
+  ' border:1px solid var(--vc);box-shadow:0 18px 50px rgba(0,0,0,.7),0 0 34px -8px var(--vc);',
+  ' animation:vfPop .3s cubic-bezier(.2,1.1,.3,1)}',
+  '@keyframes vfPop{from{transform:scale(.9) translateY(8px)}to{transform:none}}',
+  '.vf-top{font-size:9.5px;letter-spacing:.24em;text-transform:uppercase;font-weight:800;',
+  ' color:var(--ink-faint)}',
+  '.vf-main{font-family:var(--disp);font-size:24px;letter-spacing:1.5px;margin-top:7px;color:var(--vc)}',
+  '.vf-bar{height:3px;border-radius:2px;background:rgba(255,255,255,.1);margin-top:12px;overflow:hidden}',
+  '.vf-bar i{display:block;height:100%;background:var(--vc);width:0;animation:vfBar 2.1s linear forwards}',
+  '@keyframes vfBar{to{width:100%}}',
+  /* the feed line */
+  '.cline.var .tx{color:#9fd0ff}',
+  '.cline.varno .tx{color:#ff9a90}',
+  '.cline.varok .tx{color:#8dffa0}',
+  '.cline.var{background:linear-gradient(90deg,rgba(88,166,255,.12),transparent);border-radius:8px}'
+ ].join('');
+ document.head.appendChild(st)})();
+
+/* ---------------------------------------------------------------------
+   5. AND YOU CAN TURN IT OFF, BECAUSE PEOPLE WOULD
+   --------------------------------------------------------------------- */
+const _frontSoundVar=ACTIONS.frontSound;
+if(typeof _frontSoundVar==='function')ACTIONS.frontSound=function(){
+ const r=_frontSoundVar.apply(this,arguments);
+ try{
+  const sb=$('#sheetBody');if(!sb)return r;
+  const on=!(G&&G.sfx&&G.sfx.noVar);
+  const d=document.createElement('div');
+  d.innerHTML='<div class="chip-lbl">Video assistant referee</div>'+
+   '<button class="chip'+(on?' on':'')+'" data-action="varToggle">📺 VAR '+(on?'on':'off')+'</button>'+
+   '<div class="xs faint" style="margin-top:6px;line-height:1.5">Used in the top divisions of the major countries, in Europe, and from the fifth round of the cup — the same places it is used in real life.</div>';
+  sb.appendChild(d)}
+ catch(e){}
+ return r};
+ACTIONS.varToggle=()=>{
+ try{
+  if(!G)G={};if(!G.sfx)G.sfx={};
+  G.sfx.noVar=!G.sfx.noVar;
+  toast(G.sfx.noVar?'📺 VAR turned off':'📺 VAR turned on');
+  if(typeof ACTIONS.frontSound==='function')ACTIONS.frontSound();}
+ catch(e){}};
+
+/*#w29_var.js#*//*#w30_careers.js#*/
+
+/* =====================================================================
+   MANAGERS WHO HAVE CAREERS
+   ---------------------------------------------------------------------
+   Players aged, declined and retired. Some of them came back as
+   coaches. Managers did none of it: every club's manager was a fixed
+   string, so Pep Guardiola was still at City in season twenty, aged
+   seventy-four, having never once been sacked, and the men who retired
+   at thirty-six and were reported as "taking his first job" were doing
+   so into a world where no job ever came free.
+
+   Managers now have an age, a start date and a reputation, and a season
+   does to them what a season does:
+
+   THEY GET OLD. Everybody ages a year. From sixty-three the chance of
+   retiring climbs, and by seventy-two it is certain. Long service and a
+   good reputation keep a man in his chair a little longer.
+
+   THEY GET SACKED. A club that finishes well below where its wage bill
+   says it should, two seasons running, changes manager — hard at the
+   top, more forgiving at the bottom where survival is the job. Winning
+   something buys a year of grace whatever the league table says.
+
+   SOMEBODY REPLACES THEM. In order: a former player of real standing
+   who has just hung up his boots, then the best out-of-work manager,
+   then a club's own assistant promoted from within, and only if none of
+   those exist does the world invent a name. Big clubs get first pick.
+
+   THE PAPERS NOTICE. Sackings, appointments and retirements arrive in
+   your inbox the way they arrive in real life — mostly about other
+   people, occasionally about somebody you were about to play.
+   ===================================================================== */
+
+function mgrSeed(){
+ if(!G.mgrCareers)G.mgrCareers={};
+ if(!G.mgrFree)G.mgrFree=[];
+ return G.mgrCareers}
+
+/* the man in the chair today, described in full */
+function mgrOf(c){
+ if(!c)return null;
+ const M=mgrSeed();
+ if(M[c.key])return M[c.key];
+ // first time we look at this club, take whatever name the world already
+ // uses for it and give him a plausible age and a few years of service
+ let nm='';
+ try{nm=(G.mgrOverride&&G.mgrOverride[c.key])||
+   (typeof MANAGERS==='object'&&MANAGERS[c.key])||
+   ((typeof MGR_BY_NAME==='object'&&MGR_BY_NAME[c.name])||[])[0]||''}
+ catch(e){}
+ const rng=mulberry(hashStr('mgr9'+c.key));
+ if(!nm)nm=wName(c.cc||'ENG',rng);
+ M[c.key]={name:nm,age:Math.round(40+rng()*22),since:G.season-Math.floor(rng()*4),
+  rep:clamp(Math.round((c.rep||6000)/1400+rng()*3),1,10),honours:0};
+ return M[c.key]}
+
+const _managerOfCareer=managerOf;
+managerOf=function(c){
+ if(!c)return '—';
+ if(c.i===G.my)return 'You';
+ try{const m=mgrOf(c);if(m&&m.name)return m.name}catch(e){}
+ return _managerOfCareer.apply(this,arguments)};
+
+/* ---------------------------------------------------------------------
+   WHO IS AVAILABLE
+   --------------------------------------------------------------------- */
+function mgrCandidate(club){
+ const rng=Math.random;
+ // 1. a great who has just finished playing
+ if(G.coachPool&&G.coachPool.length){
+  const ix=G.coachPool.findIndex(x=>x.stars>=4&&x.ovr>=(club.rep>8200?82:74));
+  if(ix>=0&&rng()<.55){
+   const c=G.coachPool.splice(ix,1)[0];
+   return {name:c.name,age:Math.round(36+rng()*4),rep:clamp(c.stars+2,3,9),from:'boots'}}}
+ // 2. the best man currently out of work
+ if(G.mgrFree&&G.mgrFree.length){
+  G.mgrFree.sort((a,b)=>b.rep-a.rep);
+  const want=club.rep>8200?6:club.rep>6500?4:0;
+  const ix=G.mgrFree.findIndex(m=>m.rep>=want);
+  if(ix>=0){const m=G.mgrFree.splice(ix,1)[0];m.from='free';return m}}
+ // 3. promote the assistant
+ if(rng()<.34){
+  let a='';try{a=assistantOf(club)}catch(e){}
+  if(a&&a!=='—')return {name:a,age:Math.round(41+rng()*14),
+   rep:clamp(Math.round((club.rep||6000)/1800),1,6),from:'within'}}
+ // 4. a name the world has not used yet
+ const r=mulberry(hashStr('newmgr'+club.key+G.season+Math.floor(rng()*1e6)));
+ return {name:wName(club.cc||'ENG',r),age:Math.round(38+r()*18),
+  rep:clamp(Math.round(2+r()*4),1,7),from:'new'}}
+
+/* ---------------------------------------------------------------------
+   THE SEASON DOES ITS WORK
+   --------------------------------------------------------------------- */
+function mgrSeasonRound(){
+ try{
+  const M=mgrSeed();
+  const news=[],gone=[];
+  // only the clubs the player can actually encounter are worth simulating
+  const clubs=(G.clubs||[]).filter(c=>c.i!==G.my&&(c.tier===1||c.league==='PL'||c.league==='CH'));
+  clubs.forEach(c=>{
+   const m=mgrOf(c);if(!m)return;
+   m.age++;
+   let out=null;
+   // retirement
+   const rc=m.age>=72?1:m.age>=63?clamp((m.age-62)*.14-(m.rep>=7?.05:0),0,.9):0;
+   if(Math.random()<rc)out='retired';
+   // the sack.
+   // expectPos() is a club's rank by reputation plus one, so it is already
+   // a forgiving number — a side that finishes exactly where its wage bill
+   // says it should comes out at minus one, not zero. Judging "under" by
+   // more than two against that let nobody in the world be sacked in ten
+   // seasons. Two places below a generous target is a bad season, and two
+   // bad seasons is a P45, which is roughly how it goes.
+   if(!out){
+    let pos=0,exp=0;
+    try{pos=leaguePos(c.i);exp=expectPos(c.i)}catch(e){}
+    if(pos&&exp){
+     const under=pos-exp;
+     m.bad=(under>=1)?((m.bad||0)+1):0;
+     const grace=(G.season-m.since)<1||m.honours>0;
+     if(!grace&&m.bad>=2&&under>=1&&Math.random()<.55)out='sacked';
+     else if(!grace&&under>=4&&Math.random()<.6)out='sacked'}}
+   // and the rest of the churn: a better job elsewhere, or an agreement to
+   // part company that nobody calls a sacking. Roughly a quarter of clubs
+   // change manager in a real season and almost none of that is retirement,
+   // so this is where most of the movement has to come from.
+   if(!out&&(G.season-m.since)>=2&&Math.random()<.11)out='parted';
+   if(!out)return;
+   gone.push({c,m,out});
+   // pick the successor BEFORE the outgoing man joins the out-of-work list,
+   // or the best available candidate is the one who has just left and the
+   // club re-appoints him on the spot
+   const nx=mgrCandidate(c);
+   if(out!=='retired'&&m.age<66)G.mgrFree.push({name:m.name,age:m.age,
+    rep:clamp(m.rep-(out==='sacked'?1:0),1,9)});
+   M[c.key]={name:nx.name,age:nx.age,since:G.season,rep:nx.rep,honours:0,bad:0};
+   // the older name lists must stop insisting on the old man
+   try{if(G.mgrOverride)delete G.mgrOverride[c.key]}catch(e){}
+   try{if(typeof MANAGERS==='object')delete MANAGERS[c.key]}catch(e){}
+   news.push({c,old:m,nw:M[c.key],out,from:nx.from});
+  });
+  if(G.mgrFree.length>26)G.mgrFree.length=26;
+  if(news.length){
+   const line=n=>'<b>'+esc(n.c.name)+'</b> — '+
+    (n.out==='retired'?esc(n.old.name)+' retires at '+n.old.age:
+     n.out==='parted'?esc(n.old.name)+' leaves by mutual consent':
+     esc(n.old.name)+' sacked')+
+    '. <b>'+esc(n.nw.name)+'</b> ('+n.nw.age+') takes over'+
+    (n.from==='boots'?', straight from the dressing room':
+     n.from==='within'?', promoted from assistant':
+     n.from==='free'?', back in work':'')+'.';
+   mail('news','🎩 The managerial merry-go-round',
+    news.slice(0,8).map(line).join('<br><br>')+
+    (news.length>8?'<br><br><i>…and '+(news.length-8)+' more changes across the divisions.</i>':''));
+  }
+ }catch(e){}}
+
+/* winning something is remembered when the board next counts the league
+   table, which is why a cup run saves a manager's job */
+const _endSeasonMgr=endSeason;
+endSeason=function(){
+ const r=_endSeasonMgr.apply(this,arguments);
+ try{
+  const M=mgrSeed();
+  for(const k in (G.cups||{})){
+   const w=G.cups[k]&&G.cups[k].winner;
+   if(w==null||!G.clubs[w])continue;
+   const m=M[G.clubs[w].key];if(m)m.honours=(m.honours||0)+1}
+  mgrSeasonRound()}
+ catch(e){}
+ return r};
+
+/* ---------------------------------------------------------------------
+   AND A RETIRED PLAYER CAN BE MORE THAN A COACH
+   ---------------------------------------------------------------------
+   The pool only ever held men who could coach a first team. A retiring
+   goalkeeper is a goalkeeping coach; a defender with a low ceiling and
+   a good head is a scout; anybody who spent their career in the
+   treatment room knows the way round it. They go into their own pools,
+   and the staff market reads from them.
+   --------------------------------------------------------------------- */
+const _retireRecordRoles=retirePlayerRecord;
+retirePlayerRecord=function(p){
+ const out=_retireRecordRoles.apply(this,arguments);
+ try{
+  if(!G.staffPool)G.staffPool={physio:[],scout:[]};
+  const a=p.attrs||{};
+  const lead=(a.leadership||10)+(a.decisions||10);
+  const stars=clamp(Math.round(1+(p.ovr-64)/7+(lead-20)/7),1,5);
+  const wage=Math.round((3+stars*stars*2.8)*1000);
+  const add=(k,s)=>{const L=G.staffPool[k];if(!L)return;
+   L.unshift({name:p.name,stars:clamp(s,1,5),wage,was:p.pos,ovr:p.ovr});
+   if(L.length>18)L.length=18};
+  if((a.decisions||10)>=13||(a.vision||10)>=13)add('scout',stars);
+  // a long career of knocks is its own qualification
+  if((p.stats&&p.stats.apps||0)>=0)add('physio',clamp(stars-1,1,4));
+ }catch(e){}
+ return out};
+
+/* the staff market shows them where they belong */
+const _staffMarketRoles=ACTIONS.staffMarket;
+if(typeof _staffMarketRoles==='function')ACTIONS.staffMarket=function(el){
+ try{
+  const k=el&&el.dataset&&el.dataset.v;
+  const map={physio:'physio',sports:'physio',analyst:'scout'};
+  const key=map[k];
+  const pool=key&&G.staffPool&&G.staffPool[key];
+  if(pool&&pool.length&&typeof STAFF_ROLES==='object'&&STAFF_ROLES[k]){
+   const r=STAFF_ROLES[k];
+   const cands=pool.slice(0,3);
+   openModal('<h3>'+r.icon+' Hire: '+r.lbl+'</h3>'+
+    '<div class="small muted" style="margin:4px 0 12px">Former players who have taken their badges in this side of the game.</div>'+
+    '<div class="card tight">'+cands.map(c2=>
+     '<div class="mail" data-action="staffHire" data-v="'+k+'" data-n="'+esc(c2.name)+
+     '" data-s="'+c2.stars+'" data-w="'+c2.wage+'"><div class="ic">🎓</div><div style="flex:1">'+
+     '<div class="tt">'+esc(c2.name)+'</div><div class="bd">'+starHtml(c2.stars)+
+     ' · former '+esc(c2.was)+' · wants '+fmtW(c2.wage)+'</div></div></div>').join('')+'</div>'+
+    '<button class="btn btn-ghost btn-block" style="margin-top:8px" data-action="staffMarketNew" data-v="'+k+'">See other candidates</button>');
+   return}}
+ catch(e){}
+ return _staffMarketRoles.apply(this,arguments)};
+
+const _staffMarketNewRoles=ACTIONS.staffMarketNew;
+if(typeof _staffMarketNewRoles==='function')ACTIONS.staffMarketNew=function(el){
+ try{const k=el&&el.dataset&&el.dataset.v;
+  if(G.staffPool&&G.staffPool[k])G.staffPool[k]=[]}catch(e){}
+ return _staffMarketNewRoles.apply(this,arguments)};
+
+/* ---------------------------------------------------------------------
+   A MANAGER IS WORTH LOOKING AT
+   --------------------------------------------------------------------- */
+const _clubStaffCareer=clubStaffHtml;
+clubStaffHtml=function(c){
+ let h=_clubStaffCareer.apply(this,arguments);
+ try{
+  if(c.i===G.my)return h;
+  const m=mgrOf(c);if(!m)return h;
+  h='<div class="card tight" style="margin-bottom:9px;padding:9px 11px">'+
+   '<div class="spread"><span class="xs faint" style="letter-spacing:.8px;font-weight:800">IN THE DUGOUT</span>'+
+   starHtml(clamp(Math.round(m.rep/2),1,5))+'</div>'+
+   '<div style="font-weight:800;font-size:14px;margin-top:3px">'+esc(m.name)+'</div>'+
+   '<div class="xs muted" style="margin-top:2px">'+m.age+' years old · '+
+   ((G.season-m.since)<1?'appointed this summer':'in charge since season '+m.since)+
+   (m.honours?' · '+m.honours+' trophy'+(m.honours>1?'ies':''):'')+'</div></div>'+h}
+ catch(e){}
+ return h};
+
+/*#w30_careers.js#*//*#w31_fill.js#*/
+
+/* =====================================================================
+   FILLING THE ROOM
+   ---------------------------------------------------------------------
+   The desktop layout gave the game the whole window and then had
+   nothing much to put in it. On a phone the home screen is a full
+   column you scroll; on a 1920 screen the same content is two short
+   columns and half a screen of black underneath. The answer is not
+   bigger type — it is more of the things a manager actually wants on a
+   Monday morning, which the game already knows and was not showing:
+
+     THE RUN     the next five fixtures, home or away, with each
+                 opponent's league position and current form
+     THE SCORERS who is actually scoring and creating for you, ranked,
+                 with minutes behind the numbers
+     THE ROOM    the dressing room read at a glance — who is flying,
+                 who is sulking, who is in the treatment room
+
+   All three are built from data the save already holds, all three
+   appear on a phone as well, and on a wide screen they are what turns
+   a half-empty dashboard into a briefing.
+   ===================================================================== */
+
+function homeRun(){
+ try{
+  const c=G.clubs[G.my];
+  const fx=[];
+  (G.fixtures||[]).forEach(f=>{if(!f.played&&(f.h===G.my||f.a===G.my)&&f.day>=G.day)fx.push(f)});
+  for(const k in (G.cups||{}))(G.cups[k].ties||[]).forEach(t=>{
+   if(!t.played&&(t.h===G.my||t.a===G.my)&&t.day>=G.day)fx.push(t)});
+  fx.sort((a,b)=>a.day-b.day);
+  const five=fx.slice(0,5);
+  if(!five.length)return '';
+  let h='<div class="sec"><div class="t">The run</div><div class="ln"></div>'+
+   '<div class="sub">next '+five.length+'</div></div><div class="card tight" style="padding:4px 8px">'+
+   '<div class="plist">';
+  five.forEach(f=>{
+   const home=f.h===G.my,opp=G.clubs[home?f.a:f.h];
+   if(!opp)return;
+   let pos='';try{const p=leaguePos(opp.i);if(p)pos=ordinal(p)}catch(e){}
+   const dd=f.day-G.day;
+   h+='<div class="prow" data-action="clubView" data-id="'+opp.i+'">'+
+    '<div class="pav" style="--pgc:'+(home?'#66e6a4':'#7cc3ff')+'">'+crest(opp,42)+
+     '<span class="pavp" style="background:'+(home?'#0e3320':'#0d2b45')+';color:'+(home?'#66e6a4':'#7cc3ff')+'">'+
+     (home?'H':'A')+'</span></div>'+
+    '<div class="pmain"><div class="pname">'+esc(opp.name)+'</div>'+
+    '<div class="pmeta">'+(f.comp?esc(f.comp):(DIV_NAMES[f.div||myDiv()]||'League'))+
+     (pos?' · '+pos:'')+'</div>'+
+    '<div class="prail">'+pips(opp.i)+'</div></div>'+
+    '<div class="pright"><div class="psub" style="font-size:11.5px;color:var(--ink)">'+
+     (dd===0?'Today':dd===1?'Tomorrow':'in '+dd+'d')+'</div>'+
+     '<div class="psub">'+fmtDateShort(f.day)+'</div></div></div>'});
+  return h+'</div></div>'}
+ catch(e){return ''}}
+
+function homeScorers(){
+ try{
+  const c=G.clubs[G.my];
+  const ps=(c.players||[]).filter(p=>!p.loan&&((p.stats&&p.stats.goals)||(p.stats&&p.stats.assists)));
+  if(!ps.length)return '';
+  ps.sort((a,b)=>((b.stats.goals||0)*2+(b.stats.assists||0))-((a.stats.goals||0)*2+(a.stats.assists||0)));
+  const top=ps.slice(0,5);
+  let h='<div class="sec"><div class="t">Scorers</div><div class="ln"></div>'+
+   '<div class="sub">this season</div></div><div class="card tight" style="padding:4px 8px">'+
+   '<div class="plist">';
+  top.forEach(p=>{
+   const g=p.stats.goals||0,a=p.stats.assists||0,ap=p.stats.apps||0;
+   h+=pRow(p,{
+    meta:p.pos+' · '+ap+' appearance'+(ap===1?'':'s'),
+    rail:'<span class="rlbl">GOALS</span><span class="num" style="color:var(--gold);font-weight:800">'+g+'</span>'+
+     '<span class="rlbl">ASSISTS</span><span class="num" style="font-weight:800">'+a+'</span>',
+    sub:(ap?((g+a)/ap).toFixed(2)+' per game':'')})});
+  return h+'</div></div>'}
+ catch(e){return ''}}
+
+function homeRoom(){
+ try{
+  const c=G.clubs[G.my];
+  const ps=(c.players||[]).filter(p=>!p.loan);
+  if(!ps.length)return '';
+  const happy=ps.filter(p=>p.morale>=78).length;
+  const unhappy=ps.filter(p=>p.morale<42);
+  const injured=ps.filter(p=>p.injury);
+  const tired=ps.filter(p=>!p.injury&&p.cond<72).length;
+  const expiring=ps.filter(p=>p.contract<=1).length;
+  const avgM=Math.round(ps.reduce((s,p)=>s+p.morale,0)/ps.length);
+  let h='<div class="sec"><div class="t">The dressing room</div><div class="ln"></div>'+
+   '<div class="sub">'+moodFace(avgM)+' '+avgM+'%</div></div>'+
+   '<div class="card" style="padding:12px 13px">'+
+   '<div class="grid2" style="gap:8px">'+
+   '<div class="kpi"><div class="v" style="color:var(--green)">'+happy+'</div><div class="l">Flying</div></div>'+
+   '<div class="kpi"><div class="v" style="color:'+(unhappy.length?'var(--danger)':'var(--ink)')+'">'+
+    unhappy.length+'</div><div class="l">Unhappy</div></div>'+
+   '<div class="kpi"><div class="v" style="color:'+(injured.length?'var(--danger)':'var(--ink)')+'">'+
+    injured.length+'</div><div class="l">Injured</div></div>'+
+   '<div class="kpi"><div class="v" style="color:'+(tired?'var(--amber)':'var(--ink)')+'">'+
+    tired+'</div><div class="l">Heavy legs</div></div></div>';
+  if(unhappy.length)h+='<div class="xs" style="margin-top:10px;line-height:1.5;color:var(--ink-dim)">'+
+   '<b style="color:var(--amber)">Needs a word:</b> '+
+   unhappy.slice(0,4).map(p=>esc(p.name)).join(', ')+
+   (unhappy.length>4?' and '+(unhappy.length-4)+' more':'')+'.</div>';
+  if(expiring)h+='<div class="xs" style="margin-top:7px;line-height:1.5;color:var(--ink-dim)">'+
+   '<b style="color:var(--blue)">Out of contract in the summer:</b> '+expiring+
+   ' player'+(expiring===1?'':'s')+'.</div>';
+  if(!unhappy.length&&!expiring)h+='<div class="xs faint" style="margin-top:10px;line-height:1.5">'+
+   'Nobody is knocking on the door. Long may it last.</div>';
+  return h+'</div>'}
+ catch(e){return ''}}
+
+const _vHomeFill=vHome;
+vHome=function(){
+ let h=_vHomeFill.apply(this,arguments);
+ try{
+  if(G.sacked)return h;
+  h+=homeRun()+homeScorers()+homeRoom()}
+ catch(e){}
+ return h};
+
+/* ---------------------------------------------------------------------
+   TWO REAL COLUMNS, NOT A GRID PRETENDING
+   ---------------------------------------------------------------------
+   The dashboard was a two-column CSS grid with the cards auto-placed
+   into it. That couples the two columns: every row is as tall as the
+   taller of the pair, and — worse — a card whose overflow is not
+   visible contributes a minimum height of zero, so it is handed
+   whatever its shorter neighbour happens to need. Measured on the home
+   screen: the fixture hero wanted 163px and got 97, the mini table
+   wanted 110 and got 96, and the new five-fixture run wanted 247 and
+   got 75. Three panels quietly sliced off, for the same reason the
+   substitutes' bench was twenty pixels tall.
+
+   So the cards go into two actual columns, each a plain block that lays
+   itself out normally and cannot be squashed by the other. Section
+   headings stay glued to the panel they introduce, the fixture hero
+   keeps the full width across the top, and the columns are filled by
+   whichever is currently shorter so the two ends finish level.
+   --------------------------------------------------------------------- */
+function wrapHomeColumns(){
+ try{
+  if(UI.view!=='home')return;
+  if(!window.matchMedia||!window.matchMedia('(min-width:1300px)').matches)return;
+  const view=$('#view');
+  if(!view||view.querySelector(':scope > .home-col'))return;
+  const kids=[...view.children];
+  if(kids.length<4)return;
+
+  // the fixture hero belongs across the top
+  const hero=kids.find(n=>n.classList.contains('fixture-hero'))||null;
+
+  // a section heading and the panel under it are one block
+  const blocks=[];
+  for(let i=0;i<kids.length;i++){
+   const n=kids[i];
+   if(n===hero)continue;
+   if(n.classList.contains('sec')&&kids[i+1]&&kids[i+1]!==hero){blocks.push([n,kids[++i]]);continue}
+   blocks.push([n]);
+  }
+  const colA=document.createElement('div');colA.className='home-col';
+  const colB=document.createElement('div');colB.className='home-col';
+  // fill whichever column is shorter, so both sides finish at about the
+  // same place instead of one running far past the other
+  let a=0,bH=0;
+  blocks.forEach(bl=>{
+   const est=bl.reduce((s,n)=>s+(n.getBoundingClientRect().height||90),0)+14;
+   if(a<=bH){bl.forEach(n=>colA.appendChild(n));a+=est}
+   else{bl.forEach(n=>colB.appendChild(n));bH+=est}});
+  // the hero has overflow:hidden for its sheen, which means it too reports a
+  // minimum height of zero to the grid and overflows a collapsed row. It goes
+  // in a plain wrapper for the same reason the columns exist.
+  if(hero){
+   const hw=document.createElement('div');hw.className='home-hero';
+   hw.appendChild(hero);view.appendChild(hw)}
+  view.appendChild(colA);
+  view.appendChild(colB);
+ }catch(e){}}
+
+const _renderHomeCols=render;
+render=function(){
+ const r=_renderHomeCols.apply(this,arguments);
+ wrapHomeColumns();
+ return r};
+window.addEventListener('resize',()=>{try{if(UI.view==='home')render()}catch(e){}});
+
+/* ---------------------------------------------------------------------
+   THE CLUB SCREEN HAD FIVE ROWS AND A LOT OF NOTHING
+   --------------------------------------------------------------------- */
+const _vStaffFill=(typeof vStaff==='function')?vStaff:null;
+if(_vStaffFill)vStaff=function(){
+ let h=_vStaffFill.apply(this,arguments);
+ try{
+  const c=G.clubs[G.my];
+  const w=(G.staff)?Object.keys(G.staff).reduce((s,k)=>s+((G.staff[k]&&G.staff[k].wage)||0),0):0;
+  const stars=(G.staff)?Object.keys(G.staff).reduce((s,k)=>s+((G.staff[k]&&G.staff[k].stars)||0),0):0;
+  const n=(G.staff)?Object.keys(G.staff).length:0;
+  const avg=n?(stars/n).toFixed(1):'—';
+  const honours=(G.honours||[]).length;
+  h='<div class="card" style="padding:13px 14px;margin-bottom:11px">'+
+   '<div class="spread"><span class="xs faint" style="letter-spacing:.8px;font-weight:800">YOUR RECORD</span>'+
+   '<span class="xs faint">Season '+G.season+'</span></div>'+
+   '<div class="grid2" style="gap:8px;margin-top:9px">'+
+   '<div class="kpi"><div class="v">'+ordinal(leaguePos(G.my))+'</div><div class="l">'+
+    esc((DIV_NAMES[myDiv()]||'League').replace('Continental League','Europe'))+'</div></div>'+
+   '<div class="kpi"><div class="v" style="color:var(--gold)">'+honours+'</div><div class="l">Honours</div></div>'+
+   '<div class="kpi"><div class="v">'+avg+'★</div><div class="l">Backroom</div></div>'+
+   '<div class="kpi"><div class="v num">'+fmtW(w)+'</div><div class="l">Staff wages</div></div>'+
+   '</div>'+
+   '<div class="xs faint" style="margin-top:10px;line-height:1.5">Better staff mean faster development, '+
+   'quicker recoveries, sharper scouting and stronger academy intakes. They are the cheapest upgrade in football.</div>'+
+   '</div>'+h;
+ }catch(e){}
+ return h};
+
+/* ---------------------------------------------------------------------
+   AND A LITTLE MORE AIR AND LIGHT THROUGHOUT
+   --------------------------------------------------------------------- */
+(function fillCSS(){
+ const st=document.createElement('style');st.id='w31';
+ st.textContent=[
+  /* the new home panels join the dashboard properly */
+  '@media (min-width:1300px){',
+  ' #view[data-view="home"]>.card,#view[data-view="home"]>.sec{min-width:0}',
+  '}',
+  /* the fixture pips sit nicely on a run row */
+  '.prow .fx-side-form{gap:3px}',
+  '.prow .formpip{width:15px;height:15px;font-size:9px}',
+  /* crests inside a player row keep their shape */
+  '.pav .crest{border-radius:11px;display:block}',
+  /* section headings get a touch more room now there are more of them */
+  '.sec{margin:22px 2px 10px}',
+  '#view>.sec:first-child{margin-top:4px}',
+  /* kpi tiles read better at the sizes the dashboard now uses */
+  '.kpi .v{font-size:17px}',
+  '@media (min-width:1300px){.kpi .v{font-size:19px}}'
+ ].join('');
+ document.head.appendChild(st)})();
+
+/*#w31_fill.js#*/
 showStart();
 </script>
 </body>
