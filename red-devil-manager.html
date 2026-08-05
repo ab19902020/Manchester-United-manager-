@@ -24892,6 +24892,618 @@ openProfile=function(pid){
 
 /*#w38_analytics.js#*/
 
+
+/*#w38_analytics.js#*//*#w39_market.js#*/
+
+/* =====================================================================
+   A MARKET WITH SOME ROOM IN IT
+   ---------------------------------------------------------------------
+   Two things were missing.
+
+   THE BUDGET WAS A NUMBER, NOT A DECISION. The board handed over a
+   transfer budget and a wage ceiling and that was the end of it. Every
+   real manager in this situation does the same arithmetic: I do not need
+   all of that fee money, but I cannot pay this man what he wants — so
+   move some across. It goes both ways. Selling your wage room buys
+   transfer money.
+
+   The exchange rate is not invented. A wage ceiling is per week and a
+   transfer budget is a lump, so a year is the honest bridge: give up
+   £100k a week of headroom and you free £5.2M to spend. That is the
+   number the board would run, so it is the number the game runs.
+
+   Guard rails, because a budget you can wreck in one tap is not a
+   decision either: you cannot push the wage ceiling below what you are
+   already paying, you cannot take the transfer budget below zero, and
+   you cannot move more than forty per cent of what the board originally
+   allocated in either direction. The board did set a plan.
+
+   THE SEARCH COULD FIND A NAME AND NOT MUCH ELSE. Position, an age
+   ceiling, a name box and two toggles. You could not ask for a left-
+   footed centre-half with a year left on his deal, or everybody under
+   twenty-three with crossing above fifteen, or the unhappy ones at clubs
+   who have stopped picking them — which is the entire job.
+   ===================================================================== */
+
+/* ---------------------------------------------------------------------
+   1. MOVING MONEY BETWEEN THE TWO POTS
+   --------------------------------------------------------------------- */
+const WEEKS_IN_YEAR=52;
+function budOrigin(c){
+ if(!c._bud0)c._bud0={budget:c.budget,wageCap:c.wageCap};
+ return c._bud0}
+
+/* how far the shift can go before the board objects */
+function budLimits(c){
+ const o=budOrigin(c);
+ return {feeLo:Math.round(o.budget*.6),feeHi:Math.round(o.budget*1.4),
+         wageLo:Math.round(o.wageCap*.6),wageHi:Math.round(o.wageCap*1.4)}}
+
+/* fee -> wages: spend a lump to raise the weekly ceiling for a year */
+ACTIONS.budToWage=el=>{
+ const c=G.clubs[G.my],amt=+el.dataset.v;
+ const L=budLimits(c),perWk=Math.round(amt/WEEKS_IN_YEAR);
+ if(c.budget-amt<0)return toast('Not enough transfer budget left.');
+ if(c.budget-amt<L.feeLo)return toast('The board will not thin the transfer budget any further.');
+ if(c.wageCap+perWk>L.wageHi)return toast('The board will not raise the wage ceiling any further.');
+ c.budget-=amt;c.wageCap+=perWk;
+ try{sfx('tap')}catch(e){}
+ toast('💷 '+fmtM(amt)+' moved to wages (+'+fmtW(perWk)+' room)');
+ render()};
+
+/* wages -> fee: sell a year of headroom for a lump */
+ACTIONS.budToFee=el=>{
+ const c=G.clubs[G.my],amt=+el.dataset.v;
+ const L=budLimits(c),perWk=Math.round(amt/WEEKS_IN_YEAR);
+ const bill=squadWage(c);
+ if(c.wageCap-perWk<L.wageLo)return toast('The board will not cut the wage ceiling any further.');
+ if(c.wageCap-perWk<bill)return toast('That would put the ceiling below the wages you already pay.');
+ if(c.budget+amt>L.feeHi)return toast('The board will not inflate the transfer budget any further.');
+ c.wageCap-=perWk;c.budget+=amt;
+ try{sfx('tap')}catch(e){}
+ toast('💷 '+fmtW(perWk)+' of wage room sold for '+fmtM(amt));
+ render()};
+
+ACTIONS.budReset=()=>{
+ const c=G.clubs[G.my],o=budOrigin(c);
+ c.budget=o.budget;c.wageCap=o.wageCap;
+ toast('Budget restored to the board’s allocation');render()};
+
+vTransferBudget=function(){
+ const my=G.clubs[G.my];
+ const o=budOrigin(my);
+ const bill=squadWage(my),room=Math.max(0,my.wageCap*1.18-bill);
+ const moved=my.budget-o.budget;
+ const steps=[5e6,10e6,25e6].filter(a=>a<=Math.max(5e6,o.budget*.4));
+ let h='<div class="budgetbar">'+
+  '<div class="bb"><div class="bv" style="color:var(--gold)">'+fmtM(my.budget)+'</div>'+
+   '<div class="bl">Transfer budget</div></div>'+
+  '<div class="bb"><div class="bv" style="color:'+(room>0?'var(--green)':'var(--danger)')+'">'+fmtW(room)+'</div>'+
+   '<div class="bl">Wage room left</div></div></div>';
+ h+='<div class="card tight" style="padding:10px 11px">'+
+  '<div class="spread" style="margin-bottom:8px">'+
+  '<span class="chip-lbl" style="margin:0">Rebalance the budget</span>'+
+  (moved?'<button class="chip" data-action="budReset">↺ Reset</button>':'')+'</div>'+
+  '<div class="xs faint" style="line-height:1.6;margin-bottom:9px">'+
+  'A wage ceiling is weekly and a fee is a lump, so a year is the bridge: '+
+  '<b>'+fmtM(WEEKS_IN_YEAR*1e5)+'</b> of transfer money is worth '+
+  '<b>'+fmtW(1e5)+'</b> of weekly headroom. Paying '+fmtW(bill)+' now, ceiling '+fmtW(my.wageCap)+'.</div>'+
+  '<div class="chip-lbl">Fee → wages</div><div class="chips" style="margin-bottom:8px">'+
+  steps.map(a=>'<button class="chip" data-action="budToWage" data-v="'+a+'">'+
+   fmtM(a)+' → +'+fmtW(Math.round(a/WEEKS_IN_YEAR))+'</button>').join('')+'</div>'+
+  '<div class="chip-lbl">Wages → fee</div><div class="chips">'+
+  steps.map(a=>'<button class="chip" data-action="budToFee" data-v="'+a+'">'+
+   '−'+fmtW(Math.round(a/WEEKS_IN_YEAR))+' → '+fmtM(a)+'</button>').join('')+'</div>';
+ if(moved)h+='<div class="xs" style="margin-top:8px;color:'+(moved>0?'var(--green)':'var(--gold)')+
+   '">Shifted '+(moved>0?'+':'')+fmtM(moved)+' against the board’s original split.</div>';
+ h+='</div>';
+ return h};
+
+/* ---------------------------------------------------------------------
+   2. A SEARCH THAT CAN BE ASKED A REAL QUESTION
+   --------------------------------------------------------------------- */
+const TR_DEF={trOvr:'0',trPot:'0',trFee:'0',trWage:'0',trCon:'any',trMood:'any',
+ trFit:'any',trAttr:'',trAttrMin:'14',trNat:'any',trRole:'any'};
+function trGet(k){const v=UI[k];return (v==null||v==='')?TR_DEF[k]:v}
+function trAnyActive(){
+ return Object.keys(TR_DEF).some(k=>String(trGet(k))!==String(TR_DEF[k]))||
+  (UI.trPos!=='Any')||(UI.trAge!=='40')||UI.trQ||UI.trListed||UI.trShort}
+
+const _trResetDeep=ACTIONS.trReset;
+ACTIONS.trReset=()=>{Object.keys(TR_DEF).forEach(k=>UI[k]=TR_DEF[k]);_trResetDeep()};
+ACTIONS.trMore=()=>{UI.trMore=!UI.trMore;render()};
+
+/* which nationalities actually exist out there, so the list is not 160 long */
+function trNations(){
+ const seen={};
+ G.clubs.forEach(c=>{if(c.i===G.my)return;c.players.forEach(p=>{
+  if(p.ovr>=68){const n=natOf(p);seen[n]=(seen[n]||0)+1}})});
+ return Object.keys(seen).sort((a,b)=>seen[b]-seen[a]).slice(0,40)}
+
+/* is this man his club's first choice in his position? */
+function trStarter(p){
+ try{const c=G.clubs[p.club];if(!c)return true;
+  return squadBestAt(c,POSGROUP(p.pos))===p}
+ catch(e){return true}}
+
+vTrFilters=function(){
+ const active=trAnyActive();
+ const more=!!UI.trMore;
+ const allAttrs=[].concat(TECH,MENT,PHYS);
+ let h='<div class="card tight">'+
+ '<div class="grid2" style="margin-bottom:10px">'+
+ '<div class="field" style="margin-bottom:0"><label>Position</label><select data-live="trPos">'+
+  '<option'+(UI.trPos==='Any'?' selected':'')+'>Any</option>'+
+  POSN.map(p=>'<option'+(UI.trPos===p?' selected':'')+'>'+p+'</option>').join('')+'</select></div>'+
+ '<div class="field" style="margin-bottom:0"><label>Max age</label><select data-live="trAge">'+
+  ['40','33','29','26','23','21','19'].map(a=>'<option'+(UI.trAge===a?' selected':'')+' value="'+a+'">'+
+  (a==='40'?'Any':a+' & under')+'</option>').join('')+'</select></div></div>'+
+ '<div class="field" style="margin-bottom:10px"><label>Name search</label>'+
+  '<input type="text" data-live="trQ" placeholder="e.g. Haaland" value="'+esc(UI.trQ||'')+'"></div>';
+
+ /* the money, always visible — it is the first question anybody asks */
+ h+='<div class="grid2" style="margin-bottom:10px">'+
+ '<div class="field" style="margin-bottom:0"><label>Max fee</label><select data-live="trFee">'+
+  [['0','Any'],['5000000','£5M'],['15000000','£15M'],['30000000','£30M'],['50000000','£50M'],
+   ['80000000','£80M'],['120000000','£120M']].map(x=>'<option'+(String(trGet('trFee'))===x[0]?' selected':'')+
+   ' value="'+x[0]+'">'+x[1]+'</option>').join('')+'</select></div>'+
+ '<div class="field" style="margin-bottom:0"><label>Max wage</label><select data-live="trWage">'+
+  [['0','Any'],['25000','£25k/w'],['60000','£60k/w'],['100000','£100k/w'],['150000','£150k/w'],
+   ['250000','£250k/w'],['400000','£400k/w']].map(x=>'<option'+(String(trGet('trWage'))===x[0]?' selected':'')+
+   ' value="'+x[0]+'">'+x[1]+'</option>').join('')+'</select></div></div>';
+
+ h+='<button class="chip'+(more?' on':'')+'" data-action="trMore" style="margin-bottom:'+(more?'10px':'2px')+'">'+
+  (more?'▴ Fewer filters':'▾ More filters')+'</button>';
+
+ if(more){
+  h+='<div class="grid2" style="margin-bottom:10px">'+
+  '<div class="field" style="margin-bottom:0"><label>Min ability</label><select data-live="trOvr">'+
+   ['0','65','70','75','78','80','83','85','88'].map(a=>'<option'+(String(trGet('trOvr'))===a?' selected':'')+
+   ' value="'+a+'">'+(a==='0'?'Any':a+'+')+'</option>').join('')+'</select></div>'+
+  '<div class="field" style="margin-bottom:0"><label>Min potential</label><select data-live="trPot">'+
+   ['0','75','80','84','87','90','93'].map(a=>'<option'+(String(trGet('trPot'))===a?' selected':'')+
+   ' value="'+a+'">'+(a==='0'?'Any':a+'+')+'</option>').join('')+'</select></div></div>';
+
+  h+='<div class="grid2" style="margin-bottom:10px">'+
+  '<div class="field" style="margin-bottom:0"><label>Contract</label><select data-live="trCon">'+
+   [['any','Any'],['1','A year or less left'],['2','Two years or less'],['0','Out of contract']]
+   .map(x=>'<option'+(String(trGet('trCon'))===x[0]?' selected':'')+' value="'+x[0]+'">'+x[1]+'</option>').join('')+
+   '</select></div>'+
+  '<div class="field" style="margin-bottom:0"><label>Mood</label><select data-live="trMood">'+
+   [['any','Any'],['unhappy','Unsettled or worse'],['angry','Deeply unhappy']]
+   .map(x=>'<option'+(String(trGet('trMood'))===x[0]?' selected':'')+' value="'+x[0]+'">'+x[1]+'</option>').join('')+
+   '</select></div></div>';
+
+  h+='<div class="grid2" style="margin-bottom:10px">'+
+  '<div class="field" style="margin-bottom:0"><label>Fitness</label><select data-live="trFit">'+
+   [['any','Any'],['fit','Fit only'],['inj','Injured only']]
+   .map(x=>'<option'+(String(trGet('trFit'))===x[0]?' selected':'')+' value="'+x[0]+'">'+x[1]+'</option>').join('')+
+   '</select></div>'+
+  '<div class="field" style="margin-bottom:0"><label>Role at his club</label><select data-live="trRole">'+
+   [['any','Any'],['bench','Not first choice'],['star','First choice']]
+   .map(x=>'<option'+(String(trGet('trRole'))===x[0]?' selected':'')+' value="'+x[0]+'">'+x[1]+'</option>').join('')+
+   '</select></div></div>';
+
+  h+='<div class="grid2" style="margin-bottom:10px">'+
+  '<div class="field" style="margin-bottom:0"><label>Attribute</label><select data-live="trAttr">'+
+   '<option value=""'+(!trGet('trAttr')?' selected':'')+'>Any</option>'+
+   allAttrs.map(a=>'<option value="'+a+'"'+(trGet('trAttr')===a?' selected':'')+'>'+
+    (ATTR_LABEL[a]||a)+'</option>').join('')+'</select></div>'+
+  '<div class="field" style="margin-bottom:0"><label>At least</label><select data-live="trAttrMin">'+
+   ['10','12','14','15','16','17','18'].map(a=>'<option'+(String(trGet('trAttrMin'))===a?' selected':'')+
+   ' value="'+a+'">'+a+'</option>').join('')+'</select></div></div>';
+
+  h+='<div class="field" style="margin-bottom:10px"><label>Nationality</label><select data-live="trNat">'+
+   '<option value="any"'+(trGet('trNat')==='any'?' selected':'')+'>Any</option>'+
+   trNations().map(n=>'<option value="'+n+'"'+(trGet('trNat')===n?' selected':'')+'>'+
+    ccFlag(n)+' '+esc(natName(n))+'</option>').join('')+'</select></div>';
+ }
+
+ h+='<div class="chips">'+
+  '<button class="chip'+(UI.trListed?' on':'')+'" data-action="trToggleListed">💷 Transfer-listed</button>'+
+  '<button class="chip'+(UI.trShort?' on':'')+'" data-action="trShortOnly">⭐ Shortlist ('+shortlist().length+')</button>'+
+  (active?'<button class="chip" data-action="trReset">✕ Clear filters</button>':'')+
+ '</div>'+
+ '<div class="chip-lbl">Sort by</div><div class="chips">'+
+  [['ovr','Ability'],['val','Value'],['age','Youngest'],['pot','Potential'],['wage','Wage'],['ask','Cheapest']]
+  .map(x=>'<button class="chip'+((UI.trSort||'ovr')===x[0]?' on':'')+'" data-action="trSort" data-v="'+x[0]+'">'+
+  x[1]+'</button>').join('')+'</div>';
+ return h+'</div>'};
+
+trResultsHtml=function(){
+ const q=(UI.trQ||'').trim().toLowerCase();
+ const sl=shortlist();
+ const fOvr=+trGet('trOvr'),fPot=+trGet('trPot'),fFee=+trGet('trFee'),fWage=+trGet('trWage');
+ const fCon=trGet('trCon'),fMood=trGet('trMood'),fFit=trGet('trFit'),fRole=trGet('trRole');
+ const fAttr=trGet('trAttr'),fAttrMin=+trGet('trAttrMin'),fNat=trGet('trNat');
+ const askOf=p=>(typeof askPrice==='function')?askPrice(p):p.value;
+ let list=[];
+ G.clubs.forEach(c=>{if(c.i===G.my)return;c.players.forEach(p=>{
+  if(UI.trShort&&sl.indexOf(p.id)<0)return;
+  if(UI.trPos!=='Any'&&p.pos!==UI.trPos)return;
+  if(p.age>+(UI.trAge||'40'))return;
+  if(UI.trListed&&!p.listed)return;
+  if(q&&!p.name.toLowerCase().includes(q))return;
+  if(fOvr&&p.ovr<fOvr)return;
+  if(fPot&&(p.pot||p.ovr)<fPot)return;
+  if(fWage&&p.wage>fWage)return;
+  if(fCon!=='any'){const cc=p.contract==null?3:p.contract;
+   if(fCon==='0'&&cc>0)return;
+   if(fCon==='1'&&cc>1)return;
+   if(fCon==='2'&&cc>2)return}
+  if(fMood!=='any'){const m=p.morale==null?60:p.morale;
+   if(fMood==='unhappy'&&m>=45)return;
+   if(fMood==='angry'&&m>=32)return}
+  if(fFit==='fit'&&p.injury)return;
+  if(fFit==='inj'&&!p.injury)return;
+  if(fRole==='bench'&&trStarter(p))return;
+  if(fRole==='star'&&!trStarter(p))return;
+  if(fNat!=='any'&&natOf(p)!==fNat)return;
+  if(fAttr&&((p.attrs&&p.attrs[fAttr])||0)<fAttrMin)return;
+  if(fFee&&askOf(p)>fFee)return;
+  list.push(p)})});
+ const s=UI.trSort||'ovr';
+ list.sort((a,b)=>
+  s==='val'?b.value-a.value:
+  s==='age'?a.age-b.age||b.ovr-a.ovr:
+  s==='pot'?(b.pot||b.ovr)-(a.pot||a.ovr)||b.ovr-a.ovr:
+  s==='wage'?a.wage-b.wage||b.ovr-a.ovr:
+  s==='ask'?askOf(a)-askOf(b)||b.ovr-a.ovr:
+  b.ovr-a.ovr);
+ const shown=list.slice(0,40);
+ /* say what was actually asked for, so an empty result explains itself */
+ const bits=[];
+ if(UI.trPos!=='Any')bits.push(UI.trPos);
+ if(UI.trAge!=='40')bits.push(UI.trAge+' & under');
+ if(fOvr)bits.push(fOvr+'+ ability');
+ if(fPot)bits.push(fPot+'+ potential');
+ if(fFee)bits.push('under '+fmtM(fFee));
+ if(fWage)bits.push('under '+fmtW(fWage));
+ if(fCon==='0')bits.push('out of contract');else if(fCon!=='any')bits.push(fCon+'y or less left');
+ if(fMood==='unhappy')bits.push('unsettled');else if(fMood==='angry')bits.push('deeply unhappy');
+ if(fFit==='fit')bits.push('fit');else if(fFit==='inj')bits.push('injured');
+ if(fRole==='bench')bits.push('not first choice');else if(fRole==='star')bits.push('first choice');
+ if(fNat!=='any')bits.push(natName(fNat));
+ if(fAttr)bits.push((ATTR_LABEL[fAttr]||fAttr)+' '+fAttrMin+'+');
+
+ let h='<div class="sec"><div class="t">Market</div><div class="ln"></div>'+
+  '<div class="sub">'+list.length+' match'+(list.length===1?'':'es')+'</div></div>';
+ if(bits.length)h+='<div class="xs faint" style="padding:0 4px 7px;line-height:1.6">Looking for: '+
+  esc(bits.join(' · '))+'</div>';
+ h+='<div class="card tight" style="padding:4px 8px">';
+ if(!shown.length)h+=emptyBox('🔍','Nobody matches those filters',
+  UI.trShort?'Star a player from the market to build a shortlist.':
+  'Loosen one of them — the fee ceiling and the minimum ability are usually the two doing the work.');
+ else h+='<div class="plist">'+shown.map(trRow).join('')+'</div>';
+ h+='</div>';
+ if(list.length>40)h+='<div class="xs faint" style="padding:6px 4px;text-align:center">Showing the top 40 of '+
+  list.length+' — tighten the filters to see further down the list.</div>';
+ return h};
+
+/*#w39_market.js#*/
+
+
+/*#w39_market.js#*//*#w40_saga.js#*/
+
+/* =====================================================================
+   THE TRANSFER CENTRE — DEALS YOU CAN WATCH, AND STEAL
+   ---------------------------------------------------------------------
+   The game already gossiped. A journalist would post that somebody was
+   linked with somebody, and then nothing ever came of it, because the
+   rumour had no connection to the machinery that actually moved players
+   between clubs. Two separate systems: one that talked and one that did.
+
+   They are one system now. A saga is a real negotiation with a real
+   outcome — it starts as a link, becomes talks, reaches personal terms,
+   and completes — and at every stage before it completes, you can walk
+   into the middle of it.
+
+   HIJACKING IS THE POINT. This is the part of a window that a manager
+   actually lives in: somebody else has agreed a fee, the player has not
+   signed, and you have forty-eight hours to change his mind. You have
+   three things to offer and they cost different currencies —
+
+     the fee        goes to the selling club, out of your budget
+     the wages      go to the player, out of your wage room
+     the promise    costs nothing now and everything later
+
+   — and the player weighs them the way a person would: money matters,
+   but so does whether he will play, and so does whether the club he is
+   joining is going somewhere. A twenty-year-old will take less to be
+   first choice. A twenty-nine-year-old on his last big contract will
+   not.
+
+   The promise is entered in the game's ledger, not thrown away. Tell a
+   man he is your first choice and then leave him on the bench and his
+   morale goes with it.
+   ===================================================================== */
+
+const SAGA_STAGES=['linked','talks','terms','done'];
+const SAGA_LBL={linked:'Linked',talks:'In talks',terms:'Personal terms agreed',done:'Completed'};
+function sagas(){if(!G.sagas)G.sagas=[];return G.sagas}
+
+/* ---------------------------------------------------------------------
+   1. STARTING ONE
+   Built from the same heat the rumour mill already computes, so the
+   deals the game talks about are the deals the game is actually doing.
+   --------------------------------------------------------------------- */
+function sagaStart(){
+ try{
+  const r=rumourMill();if(!r)return;
+  const {p,from,to}=r;
+  if(to.i===G.my||from.i===G.my)return;          // your own business is not a saga
+  if(sagas().some(s=>s.pid===p.id))return;
+  if(p.loan||p.injury)return;
+  const fee=Math.round(askPrice(p)*(.92+Math.random()*.2)/1e5)*1e5;
+  if(fee>to.budget*1.15)return;
+  const wage=Math.round(wageFor(p.ovr,to.rep)*(1.02+Math.random()*.22));
+  sagas().unshift({id:'sg'+Math.random().toString(36).slice(2),
+   pid:p.id,from:from.i,to:to.i,fee,wage,stage:0,day:G.day,next:G.day+irnd(3,6),
+   hijacked:false,dead:false});
+  if(sagas().length>14)sagas().length=14;
+ }catch(e){}}
+
+/* ---------------------------------------------------------------------
+   2. MOVING ONE ALONG
+   --------------------------------------------------------------------- */
+function sagaTick(){
+ try{
+  const live=sagas();
+  for(let i=live.length-1;i>=0;i--){
+   const s=live[i];
+   if(s.dead){if(G.day-s.day>25)live.splice(i,1);continue}
+   const p=playerById(s.pid);
+   const buyer=G.clubs[s.to],seller=G.clubs[s.from];
+   if(!p||!buyer||!seller||p.club!==s.from){s.dead=true;continue}
+   if(G.day<s.next)continue;
+   /* a deal can also simply collapse, which is most of them */
+   if(Math.random()<.16){
+    s.dead=true;s.collapsed=true;
+    mail('news','📰 Off: '+buyer.short+' walk away from '+p.name,
+     '<b>'+esc(buyer.name)+'</b> have ended their interest in <b>'+esc(p.name)+'</b>. '+
+     esc(seller.name)+'’s valuation is understood to have been the sticking point.');
+    continue}
+   s.stage++;s.next=G.day+irnd(3,6);
+   if(s.stage>=3){sagaComplete(s);continue}
+   const head=s.stage===1?'📰 '+buyer.short+' open talks for '+p.name
+                         :'📰 '+p.name+' agrees personal terms with '+buyer.short;
+   mail('news',head,
+    '<b>'+esc(buyer.name)+'</b> '+(s.stage===1?'have opened formal talks with <b>'+esc(seller.name)+
+      '</b> over <b>'+esc(p.name)+'</b>':'have agreed personal terms with <b>'+esc(p.name)+'</b>')+
+    '. The fee on the table is <b>'+fmtM(s.fee)+'</b>'+
+    (s.stage===2?' and he is understood to have been offered <b>'+fmtW(s.wage)+'</b>':'')+'.'+
+    '<br><br><span style="color:var(--gold)">You can still step in — the Transfer Centre is on the Transfers screen.</span>');
+  }
+ }catch(e){}}
+
+function sagaComplete(s){
+ const p=playerById(s.pid),buyer=G.clubs[s.to],seller=G.clubs[s.from];
+ if(!p||!buyer||!seller){s.dead=true;return}
+ seller.players=seller.players.filter(x=>x.id!==p.id);
+ p.club=buyer.i;p.listed=false;p.morale=clamp(p.morale+10,1,100);
+ p.contract=irnd(3,5);p.wage=s.wage;
+ if(typeof windowId==='function')p.movedWindow=windowId();
+ buyer.players.push(p);
+ buyer.budget-=s.fee;seller.budget+=Math.round(s.fee*.7);seller.bank+=s.fee;
+ s.stage=3;s.dead=true;s.done=true;
+ if(!G.gossip)G.gossip=[];
+ G.gossip.unshift({d:G.day,fee:s.fee,ovr:p.ovr,nm:p.name,pos:p.pos,age:p.age,
+  to:buyer.short,from:seller.short,big:s.fee>=9e7||p.ovr>=88});
+ mail('news','✅ DONE DEAL: '+p.name+' to '+buyer.short,
+  '<b>'+esc(buyer.name)+'</b> have completed the signing of <b>'+esc(p.name)+'</b> from '+
+  esc(seller.name)+' for <b>'+fmtM(s.fee)+'</b>. You did not move.')}
+
+/* ---------------------------------------------------------------------
+   3. WALKING INTO THE MIDDLE OF IT
+   ---------------------------------------------------------------------
+   Three levers, three currencies, one number that comes out of them.
+   --------------------------------------------------------------------- */
+const PROMISES=[
+ {k:'none', lbl:'No promises',            pull:0,   note:'He takes the club as he finds it.'},
+ {k:'play', lbl:'First-choice football',  pull:9,   note:'He expects to start. Bench him and he will remember.'},
+ {k:'euro', lbl:'European football',      pull:6,   note:'You are promising to qualify. Miss out and he will be unsettled.'},
+ {k:'build',lbl:'Build the team round him',pull:12, note:'The heaviest promise there is. Break it and you may lose him.'}];
+function promiseBy(k){return PROMISES.find(x=>x.k===k)||PROMISES[0]}
+
+/* how likely he is to choose you over them */
+function hijackOdds(s,fee,wage,promise){
+ const p=playerById(s.pid);
+ const me=G.clubs[G.my],riv=G.clubs[s.to];
+ if(!p||!riv)return 0;
+ /* reputation is the ground everything else is built on */
+ let score=(me.rep-riv.rep)/55;
+ /* money he will be paid, which he understands perfectly. Capped,
+    because there is a point past which more money stops being the
+    question and he is simply deciding who he wants to play for. */
+ score+=clamp((wage-s.wage)/Math.max(1,s.wage)*30,-35,20);
+ /* money his club will be paid, which decides whether they let him talk */
+ score+=clamp((fee-s.fee)/Math.max(1,s.fee)*22,-40,12);
+ /* the promise, weighed by what a man his age is actually chasing */
+ const pr=promiseBy(promise);
+ const ageW=p.age<=22?1.35:p.age<=26?1.05:p.age<=29?.75:.5;
+ score+=pr.pull*ageW;
+ /* how far along it already is — terms agreed is nearly signed */
+ score-=[0,10,24][Math.min(2,s.stage)];
+ /* ambition: a big club turning up late still turns heads */
+ if(me.rep>riv.rep+900)score+=7;
+ return clamp(50+score,3,93)}
+
+ACTIONS.hijackSheet=el=>{
+ const s=sagas().find(x=>x.id===el.dataset.id);
+ if(!s)return;
+ UI.hjFee=UI.hjFee||Math.round(s.fee*1.1);
+ UI.hjWage=UI.hjWage||Math.round(s.wage*1.15);
+ UI.hjProm=UI.hjProm||'none';
+ openHijack(s.id)};
+ACTIONS.hjSet=el=>{UI[el.dataset.k]=+el.dataset.v||el.dataset.v;openHijack(el.dataset.id)};
+ACTIONS.hjProm=el=>{UI.hjProm=el.dataset.v;openHijack(el.dataset.id)};
+
+function openHijack(sid){
+ const s=sagas().find(x=>x.id===sid);if(!s)return;
+ const p=playerById(s.pid);if(!p)return;
+ const me=G.clubs[G.my],riv=G.clubs[s.to],from=G.clubs[s.from];
+ const fee=UI.hjFee,wage=UI.hjWage,prom=UI.hjProm||'none';
+ const odds=hijackOdds(s,fee,wage,prom);
+ const room=me.wageCap*1.18-squadWage(me);
+ const canFee=fee<=me.budget, canWage=wage<=room;
+ let h='<div class="row" style="gap:10px;margin-bottom:8px">'+face(p,48)+
+  '<div style="flex:1;min-width:0"><h3 style="margin:0">'+esc(p.name)+'</h3>'+
+  '<div class="small muted">'+esc(from.name)+' · '+p.age+' · '+ccFlag(natOf(p))+' '+esc(natName(natOf(p)))+
+  '</div></div>'+ovrPill(p)+'</div>';
+ h+='<div class="card tight" style="padding:9px 11px;margin-bottom:10px">'+
+  '<div class="xs faint" style="line-height:1.6">'+esc(riv.name)+' are at <b style="color:var(--ink)">'+
+  SAGA_LBL[SAGA_STAGES[s.stage]].toLowerCase()+'</b>, offering <b style="color:var(--ink)">'+fmtM(s.fee)+
+  '</b> and <b style="color:var(--ink)">'+fmtW(s.wage)+'</b>.</div></div>';
+
+ const feeOpts=[Math.round(s.fee*.95),Math.round(s.fee*1.1),Math.round(s.fee*1.25),Math.round(s.fee*1.45)];
+ const wageOpts=[Math.round(s.wage*1.0),Math.round(s.wage*1.15),Math.round(s.wage*1.35),Math.round(s.wage*1.6)];
+ h+='<div class="chip-lbl">Your fee</div><div class="chips" style="margin-bottom:9px">'+
+  feeOpts.map(v=>'<button class="chip'+(fee===v?' on':'')+(v>me.budget?' ':'')+
+   '" data-action="hjSet" data-k="hjFee" data-v="'+v+'" data-id="'+s.id+'"'+
+   (v>me.budget?' style="opacity:.42"':'')+'>'+fmtM(v)+'</button>').join('')+'</div>';
+ h+='<div class="chip-lbl">Your wage offer</div><div class="chips" style="margin-bottom:9px">'+
+  wageOpts.map(v=>'<button class="chip'+(wage===v?' on':'')+
+   '" data-action="hjSet" data-k="hjWage" data-v="'+v+'" data-id="'+s.id+'"'+
+   (v>room?' style="opacity:.42"':'')+'>'+fmtW(v)+'</button>').join('')+'</div>';
+ h+='<div class="chip-lbl">What you promise him</div><div class="chips" style="margin-bottom:6px">'+
+  PROMISES.map(x=>'<button class="chip'+(prom===x.k?' on':'')+
+   '" data-action="hjProm" data-v="'+x.k+'" data-id="'+s.id+'">'+x.lbl+'</button>').join('')+'</div>'+
+  '<div class="xs faint" style="line-height:1.6;margin-bottom:11px">'+esc(promiseBy(prom).note)+'</div>';
+
+ const col=odds>=66?'var(--green)':odds>=40?'var(--gold)':'var(--danger)';
+ h+='<div class="card tight" style="padding:11px;margin-bottom:10px">'+
+  '<div class="spread"><span class="small">He chooses you</span>'+
+  '<b class="num" style="font-size:20px;color:'+col+'">'+Math.round(odds)+'%</b></div>'+
+  '<div style="height:7px;border-radius:4px;background:rgba(255,255,255,.08);margin-top:8px;overflow:hidden">'+
+  '<i style="display:block;height:100%;width:'+Math.round(odds)+'%;background:'+col+'"></i></div></div>';
+ if(!canFee)h+='<div class="xs" style="color:var(--danger);margin-bottom:8px">That fee is beyond your transfer budget ('+fmtM(me.budget)+').</div>';
+ if(!canWage)h+='<div class="xs" style="color:var(--danger);margin-bottom:8px">That wage is beyond your wage room ('+fmtW(Math.max(0,room))+').</div>';
+ h+='<button class="btn btn-primary btn-block"'+((canFee&&canWage)?'':' disabled')+
+  ' data-action="hjGo" data-id="'+s.id+'">Hijack the deal</button>'+
+  '<div class="xs faint" style="text-align:center;margin-top:7px">One attempt. If he turns you down, he signs for them.</div>';
+ openModal(h)}
+
+ACTIONS.hjGo=el=>{
+ const s=sagas().find(x=>x.id===el.dataset.id);if(!s||s.dead)return;
+ const p=playerById(s.pid);if(!p)return;
+ const me=G.clubs[G.my],riv=G.clubs[s.to],from=G.clubs[s.from];
+ const fee=UI.hjFee,wage=UI.hjWage,prom=UI.hjProm||'none';
+ if(fee>me.budget)return toast('Not enough transfer budget.');
+ const odds=hijackOdds(s,fee,wage,prom);
+ s.hijacked=true;
+ closeModal();
+ if(Math.random()*100<odds){
+  from.players=from.players.filter(x=>x.id!==p.id);
+  p.club=G.my;p.listed=false;p.contract=irnd(3,5);p.wage=wage;
+  p.morale=clamp(p.morale+14,1,100);
+  if(typeof windowId==='function')p.movedWindow=windowId();
+  if(prom!=='none'){if(!G.promises)G.promises=[];
+   G.promises.push({pid:p.id,k:prom,made:G.day,season:G.season})}
+  me.players.push(p);me.budget-=fee;from.budget+=Math.round(fee*.7);from.bank+=fee;
+  s.dead=true;s.done=true;s.won=true;
+  try{sfx('cheer')}catch(e){}
+  toast('🔥 Hijacked — '+p.name+' is yours');
+  mail('transfer','🔥 HIJACKED: '+p.name+' signs for us',
+   '<b>'+esc(p.name)+'</b> has turned down <b>'+esc(riv.name)+'</b> to join us for <b>'+fmtM(fee)+'</b> on '+
+   fmtW(wage)+'.'+(prom!=='none'?'<br><br>You promised him <b>'+esc(promiseBy(prom).lbl.toLowerCase())+
+   '</b>. He will hold you to it.':''));
+ }else{
+  s.dead=true;
+  try{sfx('miss')}catch(e){}
+  toast(p.name+' chose '+riv.short);
+  mail('news','📰 '+p.name+' snubs us for '+riv.short,
+   'We went in for <b>'+esc(p.name)+'</b> and were turned down. He has signed for <b>'+esc(riv.name)+
+   '</b> for '+fmtM(s.fee)+'.');
+  sagaComplete({pid:s.pid,to:s.to,from:s.from,fee:s.fee,wage:s.wage,stage:2,dead:false});
+ }
+ render()};
+
+/* ---------------------------------------------------------------------
+   4. THE FEED
+   --------------------------------------------------------------------- */
+function vTransferCentre(){
+ const live=sagas().filter(s=>!s.dead);
+ let h='<div class="sec"><div class="t">📰 Transfer centre</div><div class="ln"></div>'+
+  '<div class="sub">'+live.length+' live</div></div>';
+ if(!live.length)return h+'<div class="card tight" style="padding:12px">'+
+  '<div class="xs faint" style="line-height:1.6">Nothing moving right now. '+
+  'Deals between other clubs appear here as they develop — and you can step in before they sign.</div></div>';
+ h+='<div class="card tight" style="padding:5px 9px">';
+ live.forEach(s=>{
+  const p=playerById(s.pid);if(!p)return;
+  const from=G.clubs[s.from],to=G.clubs[s.to];
+  if(!from||!to)return;
+  const st=SAGA_STAGES[Math.min(3,s.stage)];
+  const pcol=s.stage>=2?'var(--danger)':s.stage===1?'var(--gold)':'var(--ink-faint)';
+  h+='<div style="padding:9px 2px;border-bottom:1px solid var(--chalk)">'+
+   '<div class="row" style="gap:9px;margin-bottom:6px">'+face(p,32)+
+   '<div style="flex:1;min-width:0">'+
+   '<div class="small" style="font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+
+   esc(p.name)+' <span class="xs faint">'+p.pos+' · '+p.age+' · '+p.ovr+'</span></div>'+
+   '<div class="xs faint">'+esc(from.short)+' → <b style="color:var(--ink)">'+esc(to.short)+'</b> · '+
+   fmtM(s.fee)+(s.stage>=2?' · '+fmtW(s.wage):'')+'</div></div>'+
+   '<span class="intchip" style="color:'+pcol+'">'+SAGA_LBL[st]+'</span></div>'+
+   '<div style="height:4px;border-radius:3px;background:rgba(255,255,255,.07);overflow:hidden;margin-bottom:7px">'+
+   '<i style="display:block;height:100%;width:'+((s.stage+1)/4*100).toFixed(0)+'%;background:'+pcol+'"></i></div>'+
+   '<button class="btn btn-ghost btn-sm btn-block" data-action="hijackSheet" data-id="'+s.id+'">'+
+   '🔥 Step in'+(s.stage>=2?' — he is close to signing':'')+'</button></div>'});
+ return h+'</div>'}
+
+const _vTransSaga=vTransfers;
+vTransfers=function(){
+ let h='';
+ try{h=vTransferCentre()}catch(e){h=''}
+ return _vTransSaga.apply(this,arguments)+h};
+
+/* ---------------------------------------------------------------------
+   5. RUNNING IT
+   --------------------------------------------------------------------- */
+const _dtcSaga=dailyTickCore;
+dailyTickCore=function(){
+ _dtcSaga.apply(this,arguments);
+ try{
+  sagaTick();
+  const w=(typeof windowOpen==='function')&&windowOpen();
+  if(w&&G.day%4===1&&sagas().filter(s=>!s.dead).length<6)sagaStart();
+ }catch(e){}};
+
+/* ---------------------------------------------------------------------
+   6. A PROMISE IS A DEBT
+   ---------------------------------------------------------------------
+   Told a man he would be first choice? The game checks, every month.
+   --------------------------------------------------------------------- */
+function promiseCheck(){
+ try{
+  if(!G.promises||!G.promises.length)return;
+  const me=G.clubs[G.my];
+  G.promises=G.promises.filter(pr=>{
+   const p=playerById(pr.pid);
+   if(!p||p.club!==G.my)return false;
+   if(G.day-pr.made<40)return true;
+   if(pr.k==='play'){
+    const apps=(p.stats&&p.stats.apps)||0;
+    const played=G.day>60?apps:99;
+    if(played<4){
+     p.morale=clamp(p.morale-14,1,100);
+     mail('contract','Broken promise: '+p.name,
+      '<b>'+esc(p.name)+'</b> was promised first-choice football and has started '+apps+
+      ' matches. He is not happy, and he is not wrong.');
+     return false}}
+   if(pr.k==='build'&&G.day-pr.made>150){
+    const rank=[...me.players].sort((a,b)=>b.ovr-a.ovr).indexOf(p);
+    if(rank>4){p.morale=clamp(p.morale-16,1,100);
+     mail('contract','Broken promise: '+p.name,
+      'You told <b>'+esc(p.name)+'</b> the team would be built around him. It has not been.');
+     return false}}
+   return true});
+ }catch(e){}}
+const _dtcPromise=dailyTickCore;
+dailyTickCore=function(){
+ _dtcPromise.apply(this,arguments);
+ if(G.day%30===7)promiseCheck()};
+
+/*#w40_saga.js#*/
+
 showStart();
 </script>
 </body>
