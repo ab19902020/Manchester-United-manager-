@@ -24140,6 +24140,500 @@ openBidSheet=function(pid){
 const _trRowAsk=(typeof trRow==='function')?trRow:null;
 
 /*#w35_prices.js#*/
+
+/*#w35_prices.js#*//*#w36_nations.js#*/
+
+/* =====================================================================
+   WHERE EVERY PLAYER IS ACTUALLY FROM
+   ---------------------------------------------------------------------
+   Jude Bellingham was Colombian.
+
+   Not because anybody typed that. The game shipped an exact-nationality
+   table covering three clubs — United, City and Liverpool — and everybody
+   else fell through to a surname regex and then, failing that, to a
+   weighted random pool keyed on the country their club plays in. Real
+   Madrid's pool is five parts Spain and one part each of Argentina,
+   Brazil, Uruguay, Colombia and Morocco. Bellingham's name hashed onto
+   Colombia and stayed there, deterministically, in every save.
+
+   Harry Kane came out of Bayern's pool, Olise out of the same one, Cole
+   Palmer out of Chelsea's. Any player the regexes did not happen to name
+   was a coin toss.
+
+   There are nine hundred real players in this game's data. All nine
+   hundred are now named explicitly below. The regexes and the pool are
+   still there and still do useful work — they are what a newly generated
+   sixteen-year-old goes through — but no real footballer reaches them.
+   ===================================================================== */
+
+/* a few countries the original list did not have anybody from */
+[['GAM','Gambia','CAF',68],['GNB','Guinea-Bissau','CAF',68],
+ ['ZIM','Zimbabwe','CAF',68],['MOZ','Mozambique','CAF',67],
+ ['BER','Bermuda','CONCACAF',60],['RCA','Central African Republic','CAF',62],
+ ['RUS','Russia','UEFA',77],['SUR','Suriname','CONMEBOL',66],
+ ['CUW','Curaçao','CONCACAF',66],['HAI','Haiti','CONCACAF',66],
+ ['BEN','Benin','CAF',68],['TOG','Togo','CAF',67],['COM','Comoros','CAF',66],
+ ['SYR','Syria','AFC',68],['PLE','Palestine','AFC',66],['THA','Thailand','AFC',67],
+ ['VIE','Vietnam','AFC',67],['IDN','Indonesia','AFC',65],['IND','India','AFC',63],
+ ['LUX','Luxembourg','UEFA',69],['CYP','Cyprus','UEFA',66],['MDA','Moldova','UEFA',65],
+ ['BLR','Belarus','UEFA',68],['LVA','Latvia','UEFA',65],['LTU','Lithuania','UEFA',64],
+ ['EST','Estonia','UEFA',64],['AZE','Azerbaijan','UEFA',66],['KAZ','Kazakhstan','UEFA',67],
+ ['MTN','Mauritania','CAF',66],['LBY','Libya','CAF',66],['SDN','Sudan','CAF',65],
+ ['UGA','Uganda','CAF',67],['KEN','Kenya','CAF',66],['TAN','Tanzania','CAF',65],
+ ['MWI','Malawi','CAF',63],['NAM','Namibia','CAF',64],['BOT','Botswana','CAF',62],
+ ['SLE','Sierra Leone','CAF',64],['LBR','Liberia','CAF',63],['NIG','Niger','CAF',64],
+ ['CHA','Chad','CAF',60],['CGO','Congo','CAF',66],['EQG','Equatorial Guinea','CAF',68],
+ ['TRI','Trinidad & Tobago','CONCACAF',66],['GUA','Guatemala','CONCACAF',66],
+ ['SLV','El Salvador','CONCACAF',65],['NCA','Nicaragua','CONCACAF',60],
+ ['GUY','Guyana','CONMEBOL',60],['FIJ','Fiji','OFC',58],['PNG','Papua New Guinea','OFC',56],
+ ['SOL','Solomon Islands','OFC',57],['TAH','Tahiti','OFC',58],['VAN','Vanuatu','OFC',55],
+ ['NCL','New Caledonia','OFC',57],['SAM','Samoa','OFC',52],['TGA','Tonga','OFC',50],
+ ['MAS','Malaysia','AFC',64],['SGP','Singapore','AFC',62],['PHI','Philippines','AFC',63],
+ ['MYA','Myanmar','AFC',58],['HKG','Hong Kong','AFC',61],['TPE','Chinese Taipei','AFC',56],
+ ['BHR','Bahrain','AFC',70],['OMA','Oman','AFC',71],['KUW','Kuwait','AFC',68],
+ ['LBN','Palestine ','AFC',66],['TJK','Tajikistan','AFC',69],['TKM','Turkmenistan','AFC',65],
+ ['KGZ','Kyrgyzstan','AFC',67],['AFG','Afghanistan','AFC',58],['NEP','Nepal','AFC',57],
+ ['BAN','Bangladesh','AFC',56],['MDV','Maldives','AFC',57],['SRI','Sri Lanka','AFC',53]
+].forEach(n=>{if(!NAT_BY[n[0]]){NATIONS.push(n);NAT_BY[n[0]]={code:n[0],name:n[1],conf:n[2],base:n[3]}}});
+
+/* ---------------------------------------------------------------------
+   THE NINE HUNDRED
+   Written out club by club, in the order the game's own data lists them.
+   --------------------------------------------------------------------- */
+const NAT_REAL={
+/* Manchester United */
+'Senne Lammens':'BEL','Altay Bayındır':'TUR','Karl Darlow':'ENG','Diogo Dalot':'POR',
+'Noussair Mazraoui':'MAR','Matthijs de Ligt':'NED','Leny Yoro':'FRA','Lisandro Martínez':'ARG',
+'Harry Maguire':'ENG','Ayden Heaven':'ENG','Luke Shaw':'ENG','Manuel Ugarte':'URU',
+'Andrey Santos':'BRA','Youri Tielemans':'BEL','Kobbie Mainoo':'ENG','Mason Mount':'ENG',
+'Bruno Fernandes':'POR','Amad Diallo':'CIV','Bryan Mbeumo':'CMR','Matheus Cunha':'BRA',
+'Benjamin Šeško':'SVN','Joshua Zirkzee':'NED','Chido Obi':'DEN','Marcus Rashford':'ENG',
+'JJ Gabriel':'ENG','Patrick Dorgu':'DEN',
+/* Manchester City */
+'Gianluigi Donnarumma':'ITA','James Trafford':'ENG','Rúben Dias':'POR','Joško Gvardiol':'CRO',
+'Abdukodir Khusanov':'UZB','Rayan Aït-Nouri':'ALG','Matheus Nunes':'POR','Rico Lewis':'ENG',
+'Elliot Anderson':'ENG','Rodri':'ESP','Phil Foden':'ENG','Tijjani Reijnders':'NED',
+'Nico González':'ESP','Rayan Cherki':'FRA','Erling Haaland':'NOR','Omar Marmoush':'EGY',
+'Jérémy Doku':'BEL','Savinho':'BRA','Oscar Bobb':'NOR',
+/* Liverpool */
+'Alisson':'BRA','Giorgi Mamardashvili':'GEO','Virgil van Dijk':'NED','Ibrahima Konaté':'FRA',
+'Joe Gomez':'ENG','Giovanni Leoni':'ITA','Jeremy Jacquet':'FRA','Milos Kerkez':'HUN',
+'Jeremie Frimpong':'NED','Conor Bradley':'NIR','Alexis Mac Allister':'ARG',
+'Dominik Szoboszlai':'HUN','Ryan Gravenberch':'NED','Curtis Jones':'ENG','Florian Wirtz':'GER',
+'Cody Gakpo':'NED','Alexander Isak':'SWE','Hugo Ekitiké':'FRA','Federico Chiesa':'ITA',
+/* Arsenal */
+'David Raya':'ESP','Kepa Arrizabalaga':'ESP','William Saliba':'FRA','Gabriel Magalhães':'BRA',
+'Jurriën Timber':'NED','Riccardo Calafiori':'ITA','Ben White':'ENG','Myles Lewis-Skelly':'ENG',
+'Cristhian Mosquera':'ESP','Piero Hincapié':'ECU','Declan Rice':'ENG','Martín Zubimendi':'ESP',
+'Martin Ødegaard':'NOR','Mikel Merino':'ESP','Christian Nørgaard':'DEN','Eberechi Eze':'ENG',
+'Bukayo Saka':'ENG','Gabriel Martinelli':'BRA','Noni Madueke':'ENG','Viktor Gyökeres':'SWE',
+'Kai Havertz':'GER',
+/* Chelsea */
+'Robert Sánchez':'ESP','Filip Jörgensen':'SWE','Morgan Rogers':'ENG','Levi Colwill':'ENG',
+'Trevoh Chalobah':'ENG','Wesley Fofana':'FRA','Benoît Badiashile':'FRA','Malo Gusto':'FRA',
+'Reece James':'ENG','Jorrel Hato':'NED','Josh Acheampong':'ENG','Moisés Caicedo':'ECU',
+'Enzo Fernández':'ARG','Roméo Lavia':'BEL','Cole Palmer':'ENG','Pedro Neto':'POR',
+'Jamie Gittens':'ENG','Estêvão':'BRA','Geovany Quenda':'POR','João Pedro':'BRA',
+'Liam Delap':'ENG',
+/* Tottenham */
+'Guglielmo Vicario':'ITA','Antonín Kinský':'CZE','Cristian Romero':'ARG','Micky van de Ven':'NED',
+'Jan Paul van Hecke':'NED','Mateus Fernandes':'POR','Kevin Danso':'AUT','Pedro Porro':'ESP',
+'Destiny Udogie':'ITA','Djed Spence':'ENG','Ben Davies':'WAL','João Palhinha':'POR',
+'Rodrigo Bentancur':'URU','Pape Matar Sarr':'SEN','Lucas Bergvall':'SWE','Archie Gray':'ENG',
+'Xavi Simons':'NED','Mohammed Kudus':'GHA','Brennan Johnson':'WAL','Wilson Odobert':'FRA',
+'Dominic Solanke':'ENG','Richarlison':'BRA','Randal Kolo Muani':'FRA','Mathys Tel':'FRA',
+/* Newcastle */
+'Nick Pope':'ENG','Aaron Ramsdale':'ENG','Kieran Trippier':'ENG','Tino Livramento':'ENG',
+'Lewis Hall':'ENG','Dan Burn':'ENG','Fabian Schär':'SUI','Sven Botman':'NED',
+'Malick Thiaw':'GER','Sandro Tonali':'ITA','Bruno Guimarães':'BRA','Joelinton':'BRA',
+'Lewis Miley':'ENG','Jacob Ramsey':'ENG','Anthony Elanga':'SWE','Jacob Murphy':'ENG',
+'Harvey Barnes':'ENG','Nick Woltemade':'GER','Yoane Wissa':'COD','William Osula':'DEN',
+/* Aston Villa */
+'Emiliano Martínez':'ARG','Marco Bizot':'NED','Matty Cash':'POL','Ezri Konsa':'ENG',
+'Pau Torres':'ESP','Tyrone Mings':'ENG','Lucas Digne':'FRA','Ian Maatsen':'NED',
+'Victor Lindelöf':'SWE','Boubacar Kamara':'FRA','Amadou Onana':'BEL','João Gomes':'BRA',
+'Johan Manzambi':'SUI','John McGinn':'SCO','Emiliano Buendía':'ARG','Harvey Elliott':'ENG',
+'Alejandro Garnacho':'ARG','Donyell Malen':'NED','Evann Guessand':'CIV','Ollie Watkins':'ENG',
+/* Brighton */
+'Bart Verbruggen':'NED','Jason Steele':'ENG','Luka Vušković':'CRO','Lewis Dunk':'ENG',
+'Adam Webster':'ENG','Joël Veltman':'NED','Ferdi Kadıoğlu':'TUR','Maxim De Cuyper':'BEL',
+'Diego Coppola':'ITA','Olivier Boscagli':'FRA','Carlos Baleba':'CMR','Jack Hinshelwood':'ENG',
+'Yasin Ayari':'SWE','Mats Wieffer':'NED','Kaoru Mitoma':'JPN','Yankuba Minteh':'GAM',
+'Brajan Gruda':'GER','Georginio Rutter':'FRA','Danny Welbeck':'ENG',
+'Charalampos Kostoulas':'GRE','Stefanos Tzimas':'GRE',
+/* West Ham */
+'Alphonse Areola':'FRA','Mads Hermansen':'DEN','Aaron Wan-Bissaka':'COD','Max Kilman':'UKR',
+'Konstantinos Mavropanos':'GRE','Jean-Clair Todibo':'FRA','El Hadji Malick Diouf':'SEN',
+'Oliver Scarles':'ENG','Kyle Walker-Peters':'ENG','Tomáš Souček':'CZE',
+'James Ward-Prowse':'ENG','Soungoutou Magassa':'FRA','Freddie Potts':'ENG',
+'Lucas Paquetá':'BRA','Jarrod Bowen':'ENG','Crysencio Summerville':'NED',
+'Niclas Füllkrug':'GER','Callum Wilson':'ENG',
+/* Everton */
+'Jordan Pickford':'ENG','Mark Travers':'IRL','James Tarkowski':'ENG','Jarrad Branthwaite':'ENG',
+'Michael Keane':'ENG','Vitalii Mykolenko':'UKR','Nathan Patterson':'SCO','Séamus Coleman':'IRL',
+'Idrissa Gueye':'SEN','James Garner':'ENG','Tim Iroegbunam':'ENG','Kiernan Dewsbury-Hall':'ENG',
+'Carlos Alcaraz':'ARG','Merlin Röhl':'GER','Iliman Ndiaye':'SEN','Jack Grealish':'ENG',
+'Dwight McNeil':'ENG','Tyler Dibling':'ENG','Beto':'GNB','Thierno Barry':'FRA',
+/* Fulham */
+'Bernd Leno':'GER','Benjamin Lecomte':'FRA','Kenny Tete':'NED','Calvin Bassey':'NGA',
+'Joachim Andersen':'DEN','Jorge Cuenca':'ESP','Antonee Robinson':'USA','Timothy Castagne':'BEL',
+'Issa Diop':'FRA','Ryan Sessegnon':'ENG','Sander Berge':'NOR','Saša Lukić':'SRB',
+'Tom Cairney':'SCO','Josh King':'NOR','Andreas Pereira':'BRA','Alex Iwobi':'NGA',
+'Emile Smith Rowe':'ENG','Kevin':'BRA','Harry Wilson':'WAL','Raúl Jiménez':'MEX',
+'Rodrigo Muniz':'BRA',
+/* Brentford */
+'Caoimhín Kelleher':'IRL','Hákon Valdimarsson':'ISL','Kristoffer Ajer':'NOR',
+'Nathan Collins':'IRL','Ethan Pinnock':'JAM','Sepp van den Berg':'NED','Michael Kayode':'ITA',
+'Keane Lewis-Potter':'ENG','Aaron Hickey':'SCO','Rico Henry':'ENG','Vitaly Janelt':'GER',
+'Yehor Yarmoliuk':'UKR','Jordan Henderson':'ENG','Antoni Milambo':'NED','Mathias Jensen':'DEN',
+'Frank Onyeka':'NGA','Mikkel Damsgaard':'DEN','Kevin Schade':'GER','Dango Ouattara':'BFA',
+'Reiss Nelson':'ENG','Igor Thiago':'BRA',
+/* Crystal Palace */
+'Dean Henderson':'ENG','Walter Benítez':'ARG','Marc Guéhi':'ENG','Maxence Lacroix':'FRA',
+'Chris Richards':'USA','Jaydee Canvot':'FRA','Tyrick Mitchell':'ENG','Daniel Muñoz':'COL',
+'Nathaniel Clyne':'ENG','Borna Sosa':'CRO','Adam Wharton':'ENG','Will Hughes':'ENG',
+'Cheick Doucouré':'MLI','Daichi Kamada':'JPN','Jefferson Lerma':'COL','Ismaïla Sarr':'SEN',
+'Yeremy Pino':'ESP','Christantus Uche':'NGA','Eddie Nketiah':'ENG','Jean-Philippe Mateta':'FRA',
+/* Nottingham Forest */
+'Matz Sels':'BEL','John Victor':'BRA','Ola Aina':'NGA','Nikola Milenković':'SRB',
+'Murillo':'BRA','Neco Williams':'WAL','Nicolò Savona':'ITA','Morato':'BRA','Jair Cunha':'BRA',
+'Ibrahim Sangaré':'CIV','Douglas Luiz':'BRA','Ryan Yates':'ENG','James McAtee':'ENG',
+'Morgan Gibbs-White':'ENG','Callum Hudson-Odoi':'ENG','Dan Ndoye':'SUI',
+'Omari Hutchinson':'ENG','Dilane Bakwa':'FRA','Chris Wood':'NZL','Igor Jesus':'BRA',
+'Taiwo Awoniyi':'NGA',
+/* Bournemouth */
+'Đorđe Petrović':'SRB','Will Dennis':'ENG','Marcos Senesi':'ARG','Bafodé Diakité':'FRA',
+'James Hill':'ENG','Adrien Truffert':'FRA','Álex Jiménez':'ESP','Julián Araujo':'MEX',
+'Veljko Milosavljević':'SRB','Tyler Adams':'USA','Alex Scott':'ENG','Ryan Christie':'SCO',
+'David Brooks':'WAL','Marcus Tavernier':'ENG','Antoine Semenyo':'GHA','Justin Kluivert':'NED',
+'Amine Adli':'MAR','Ben Gannon-Doak':'SCO','Evanilson':'BRA','Eli Junior Kroupi':'FRA',
+/* Wolves */
+'José Sá':'POR','Sam Johnstone':'ENG','Emmanuel Agbadou':'CIV','Toti Gomes':'POR',
+'Ladislav Krejčí':'CZE','Matt Doherty':'IRL','Ki-Jana Hoever':'NED','Hugo Bueno':'ESP',
+'David Møller Wolfe':'NOR','Yerson Mosquera':'COL','André':'BRA',
+'Jean-Ricner Bellegarde':'FRA','Marshall Munetsi':'ZIM','Jhon Arias':'COL',
+'Rodrigo Gomes':'POR','Hwang Hee-chan':'KOR','Fer López':'ESP','Jørgen Strand Larsen':'NOR',
+'Tolu Arokodare':'NGA',
+/* Burnley */
+'Martin Dúbravka':'SVK','Max Weiß':'GER','Kyle Walker':'ENG','Maxime Estève':'FRA',
+'Axel Tuanzebe':'ENG','Quilindschy Hartman':'NED','Bashir Humphreys':'ENG','Joe Worrall':'ENG',
+'Oliver Sonne':'PER','Josh Cullen':'IRL','Lesley Ugochukwu':'FRA','Florentino Luís':'POR',
+'Josh Laurent':'ENG','Hannibal Mejbri':'TUN','Jaidon Anthony':'ENG',
+'Jacob Bruun Larsen':'DEN','Loum Tchaouna':'FRA','Marcus Edwards':'ENG','Lyle Foster':'RSA',
+'Zian Flemming':'NED','Armando Broja':'ALB',
+/* Leeds */
+'Lucas Perri':'BRA','Jayden Bogle':'ENG','Joe Rodon':'WAL','Pascal Struijk':'NED',
+'Jaka Bijol':'SVN','Gabriel Gudmundsson':'SWE','James Justin':'ENG','Sebastiaan Bornauw':'BEL',
+'Ethan Ampadu':'WAL','Ao Tanaka':'JPN','Anton Stach':'GER','Ilia Gruev':'BUL',
+'Sean Longstaff':'ENG','Daniel James':'WAL','Wilfried Gnonto':'ITA','Brenden Aaronson':'USA',
+'Jack Harrison':'ENG','Noah Okafor':'SUI','Dominic Calvert-Lewin':'ENG','Joël Piroe':'NED',
+'Lukas Nmecha':'GER',
+/* Sunderland */
+'Robin Roefs':'NED','Anthony Patterson':'ENG','Trai Hume':'NIR','Daniel Ballard':'NIR',
+'Nordi Mukiele':'FRA','Omar Alderete':'PAR','Arthur Masuaku':'COD','Lutsharel Geertruida':'NED',
+'Reinildo Mandava':'MOZ','Granit Xhaka':'SUI','Noah Sadiki':'COD','Chris Rigg':'ENG',
+'Enzo Le Fée':'FRA','Habib Diarra':'SEN','Simon Adingra':'CIV','Chemsdine Talbi':'MAR',
+'Patrick Roberts':'ENG','Wilson Isidor':'FRA','Brian Brobbey':'NED','Eliezer Mayenda':'ESP',
+/* Real Madrid */
+'Thibaut Courtois':'BEL','Trent Alexander-Arnold':'ENG','Éder Militão':'BRA',
+'Antonio Rüdiger':'GER','Dean Huijsen':'ESP','Álvaro Carreras':'ESP','Marc Cucurella':'ESP',
+'Aurélien Tchouaméni':'FRA','Eduardo Camavinga':'FRA','Federico Valverde':'URU',
+'Jude Bellingham':'ENG','Arda Güler':'TUR','Rodrygo':'BRA','Vinícius Júnior':'BRA',
+'Kylian Mbappé':'FRA','Gonzalo García':'ESP',
+/* Barcelona */
+'Joan García':'ESP','Marc-André ter Stegen':'GER','Jules Koundé':'FRA','Pau Cubarsí':'ESP',
+'Ronald Araújo':'URU','Alejandro Balde':'ESP','Frenkie de Jong':'NED','Pedri':'ESP',
+'Gavi':'ESP','Dani Olmo':'ESP','Fermín López':'ESP','Lamine Yamal':'ESP','Raphinha':'BRA',
+'Robert Lewandowski':'POL','Ferran Torres':'ESP','Anthony Gordon':'ENG',
+/* Atlético Madrid */
+'Jan Oblak':'SVN','Marcos Llorente':'ESP','José María Giménez':'URU','Robin Le Normand':'ESP',
+'Dávid Hancko':'SVK','Matteo Ruggeri':'ITA','Pablo Barrios':'ESP','Conor Gallagher':'ENG',
+'Koke':'ESP','Thiago Almada':'ARG','Álex Baena':'ESP','Giuliano Simeone':'ARG',
+'Antoine Griezmann':'FRA','Julián Álvarez':'ARG','Alexander Sørloth':'NOR',
+/* Bayern */
+'Manuel Neuer':'GER','Jonas Urbig':'GER','Sacha Boey':'FRA','Dayot Upamecano':'FRA',
+'Jonathan Tah':'GER','Min-jae Kim':'KOR','Raphaël Guerreiro':'POR','Josip Stanišić':'CRO',
+'Joshua Kimmich':'GER','Aleksandar Pavlović':'GER','Jamal Musiala':'GER','Michael Olise':'FRA',
+'Luis Díaz':'COL','Serge Gnabry':'GER','Harry Kane':'ENG',
+/* Leverkusen */
+'Mark Flekken':'NED','Jarell Quansah':'ENG','Edmond Tapsoba':'BFA','Arthur':'BRA',
+'Robert Andrich':'GER','Exequiel Palacios':'ARG','Aleix García':'ESP','Malik Tillman':'USA',
+'Ibrahim Maza':'ALG','Ernest Poku':'NED','Nathan Tella':'NGA','Patrik Schick':'CZE',
+'Christian Kofane':'CMR',
+/* Dortmund */
+'Gregor Kobel':'SUI','Julian Ryerson':'NOR','Nico Schlotterbeck':'GER','Waldemar Anton':'GER',
+'Ramy Bensebaini':'ALG','Daniel Svensson':'SWE','Marcel Sabitzer':'AUT','Felix Nmecha':'GER',
+'Pascal Groß':'GER','Julian Brandt':'GER','Karim Adeyemi':'GER','Jobe Bellingham':'ENG',
+'Julien Duranville':'BEL','Serhou Guirassy':'GUI','Maximilian Beier':'GER',
+/* PSG */
+'Lucas Chevalier':'FRA','Achraf Hakimi':'MAR','Marquinhos':'BRA','Willian Pacho':'ECU',
+'Illia Zabarnyi':'UKR','Nuno Mendes':'POR','Vitinha':'POR','João Neves':'POR',
+'Warren Zaïre-Emery':'FRA','Fabián Ruiz':'ESP','Ousmane Dembélé':'FRA',
+'Khvicha Kvaratskhelia':'GEO','Désiré Doué':'FRA','Bradley Barcola':'FRA',
+'Gonçalo Ramos':'POR','Senny Mayulu':'FRA',
+/* Inter */
+'Yann Sommer':'SUI','Manuel Akanji':'SUI','Alessandro Bastoni':'ITA','Francesco Acerbi':'ITA',
+'Hakan Çalhanoğlu':'TUR','Nicolò Barella':'ITA','Petar Sučić':'CRO',
+'Henrikh Mkhitaryan':'ARM','Davide Frattesi':'ITA','Luis Henrique':'BRA',
+'Lautaro Martínez':'ARG','Marcus Thuram':'FRA','Ange-Yoan Bonny':'FRA',
+/* Milan */
+'Mike Maignan':'FRA','Fikayo Tomori':'ENG','Strahinja Pavlović':'SRB','Matteo Gabbia':'ITA',
+'Pervis Estupiñán':'ECU','Youssouf Fofana':'FRA','Adrien Rabiot':'FRA',
+'Ruben Loftus-Cheek':'ENG','Samuele Ricci':'ITA','Christian Pulisic':'USA',
+'Rafael Leão':'POR','Christopher Nkunku':'FRA','Santiago Giménez':'MEX',
+/* Juventus */
+'Michele Di Gregorio':'ITA','Gleison Bremer':'BRA','Federico Gatti':'ITA','Pierre Kalulu':'FRA',
+'Andrea Cambiaso':'ITA','Juan Cabal':'COL','Manuel Locatelli':'ITA','Khéphren Thuram':'FRA',
+'Teun Koopmeiners':'NED','Weston McKennie':'USA','Kenan Yıldız':'TUR',
+'Francisco Conceição':'POR','Edon Zhegrova':'KVX','Jonathan David':'CAN','Loïs Openda':'BEL',
+/* Napoli */
+'Alex Meret':'ITA','Giovanni Di Lorenzo':'ITA','Amir Rrahmani':'KVX',
+'Alessandro Buongiorno':'ITA','Sam Beukema':'NED','Mathías Olivera':'URU',
+'Stanislav Lobotka':'SVK','André-Frank Zambo Anguissa':'CMR','Scott McTominay':'SCO',
+'Kevin De Bruyne':'BEL','Matteo Politano':'ITA','David Neres':'BRA','Noa Lang':'NED',
+'Romelu Lukaku':'BEL','Rasmus Højlund':'DEN','Lorenzo Lucca':'ITA',
+/* Benfica */
+'Anatoliy Trubin':'UKR','Nicolás Otamendi':'ARG','António Silva':'POR','Alexander Bah':'DEN',
+'Samuel Dahl':'SWE','Fredrik Aursnes':'NOR','Orkun Kökçü':'TUR','Enzo Barrenechea':'ARG',
+'Richard Ríos':'COL','Georgiy Sudakov':'UKR','Kerem Aktürkoğlu':'TUR',
+'Franjo Ivanović':'CRO','Vangelis Pavlidis':'GRE','Andreas Schjelderup':'NOR',
+'Dodi Lukébakio':'BEL',
+/* Leicester / Southampton / Ipswich / Sheffield Utd / West Brom / Coventry etc. */
+'Jakub Stolarczyk':'POL','Wout Faes':'BEL','Jannik Vestergaard':'DEN','Conor Coady':'ENG',
+'Luke Thomas':'ENG','Wilfred Ndidi':'NGA','Harry Winks':'ENG','Boubakary Soumaré':'FRA',
+'Kasey McAteer':'IRL','Abdul Fatawu':'GHA','Stephy Mavididi':'ENG','Patson Daka':'ZAM',
+'Jordan Ayew':'GHA','Alex McCarthy':'ENG','James Bree':'ENG','Taylor Harwood-Bellis':'ENG',
+'Jan Bednarek':'POL','Ryan Manning':'IRL','Flynn Downes':'ENG','Joe Aribo':'NGA',
+'Finn Azaz':'IRL','Lewis Dobbin':'ENG','Ryan Fraser':'SCO','Ross Stewart':'SCO',
+'Adam Armstrong':'ENG','Kamari Doyle':'ENG','Christian Walton':'ENG','Leif Davis':'ENG',
+'Luke Woolfenden':'ENG','Dara O’Shea':'IRL','Cameron Burgess':'AUS','Harry Clarke':'ENG',
+'Massimo Luongo':'AUS','Jack Taylor':'IRL','Sammie Szmodics':'IRL','Conor Chaplin':'ENG',
+'Jack Clarke':'ENG','Wes Burns':'WAL','George Hirst':'ENG','Ali Al-Hamadi':'IRQ',
+'Michael Cooper':'ENG','Femi Seriki':'ENG','Anel Ahmedhodžić':'BIH','Jack Robinson':'ENG',
+'Rhys Norrington-Davies':'WAL','Vinicius Souza':'BRA','Gustavo Hamer':'NED',
+'Andre Brooks':'ENG','Callum O’Hare':'ENG','Romelle Donovan':'ENG','Jesurun Rak-Sakyi':'ENG',
+'Tyrese Campbell':'ENG','Kieffer Moore':'WAL','Louie Barry':'ENG','Josh Griffiths':'WAL',
+'Darnell Furlong':'ENG','Cedric Kipré':'CIV','Kyle Bartley':'ENG','Conor Townsend':'ENG',
+'Alex Mowatt':'ENG','Jayson Molumby':'IRL','Ousmane Diakité':'MLI','Tom Fellows':'ENG',
+'Mikey Johnston':'SCO','Grady Diangana':'COD','Josh Maja':'NGA','Aune Heggebo':'NOR',
+'Isaac Price':'NIR','George Long':'ENG','Kellen Fisher':'ENG','Shane Duffy':'IRL',
+'Callum Doyle':'ENG','Jose Córdoba':'PAN','Kenny McLean':'SCO','Jacob Wright':'ENG',
+'Marcelino Núñez':'CHI','Oscar Schwartau':'DEN','Amankwah Forson':'GHA','Ante Crnac':'CRO',
+'Josh Sargent':'USA','Kaide Gordon':'ENG','Angus Gunn':'SCO','Seny Dieng':'SEN',
+'Darragh Lenihan':'IRL','George Edmundson':'ENG','Rav van den Berg':'NED','Neto Borges':'BRA',
+'Luke Ayling':'ENG','Hayden Hackney':'ENG','Aidan Morris':'USA','Riley McGree':'AUS',
+'Morgan Whittaker':'ENG','Jeremy Sarmiento':'ECU','Delano Burgzorg':'NED',
+'Tommy Conway':'SCO','Emmanuel Dennis':'NGA','Oliver Dovin':'SWE','Milan van Ewijk':'NED',
+'Liam Kitching':'ENG','Bobby Thomas':'ENG','Jay Dasilva':'ENG','Ben Sheaf':'ENG',
+'Victor Torp':'DEN','Josh Eccles':'ENG','Ogochukwu Onyeka':'NGA','Tatsuhiro Sakamoto':'JPN',
+'Ephron Mason-Clark':'ENG','Haji Wright':'USA','Brandon Thomas-Asante':'GHA',
+'Norman Bassette':'BEL','Egil Selvik':'NOR','Jeremy Ngakia':'ENG','Ryan Porteous':'SCO',
+'Francisco Sierralta':'CHI','Mattie Pollock':'ENG','James Morris':'ENG','Edo Kayembe':'COD',
+'Imrân Louza':'MAR','Giorgi Chakvetadze':'GEO','Othmane Maamma':'MAR','Kwadwo Baah':'ENG',
+'Vakoun Bayo':'CIV','Mileta Rajović':'DEN','Tom Dele-Bashiru':'NGA','Viktor Johansson':'SWE',
+'Junior Tchamadeu':'ENG','Ben Wilmot':'ENG','Ashley Phillips':'ENG','Ben Gibson':'ENG',
+'Enda Stevens':'IRL','Wouter Burger':'NED','Bae Jun-ho':'KOR','Andrew Moran':'IRL',
+'Million Manhoef':'NED','Sorba Thomas':'WAL','Lewis Baker':'ENG','Tom Cannon':'IRL',
+'Robert Boženík':'SVK','Ivor Pandur':'CRO','Lewie Coyle':'ENG','Alfie Jones':'ENG',
+'John Egan':'IRL','Sean McLoughlin':'IRL','Charlie Hughes':'ENG','Ryan Giles':'ENG',
+'Regan Slater':'ENG','Matt Crooks':'ENG','Amir Hadžiahmetović':'BIH','Kasey Palmer':'ENG',
+'Mohamed Belloumi':'ALG','Abu Kamara':'ENG','Joe Gelhardt':'ENG','Oli McBurnie':'SCO',
+'Max O’Leary':'IRL','Ross McCrorie':'SCO','Zak Vyner':'ENG','Rob Dickie':'ENG',
+'George Tanner':'ENG','Cameron Pring':'ENG','Jason Knight':'IRL','Max Bird':'ENG',
+'Joe Williams':'ENG','Scott Twine':'ENG','Anis Mehmeti':'ALB','Yu Hirakawa':'JPN',
+'Nahki Wells':'BER','Sinclair Armstrong':'IRL','Emil Riis':'DEN','Kai Rooney':'ENG',
+'Jariyah Shah':'ENG','Jayden Ngwashi':'ENG','Dante Plunkett':'ENG','James Bailey':'ENG',
+'Jay McEvoy':'ENG','Louie Bradbury':'ENG','Noah Ajayi':'ENG','Rafe McCormack':'ENG',
+'Douka Abdoulaye':'MLI','Nathaniel-Junior Brown':'ENG','Bendito Mantato':'ENG',
+/* Sporting CP */
+'Rui Silva':'POR','Gonçalo Inácio':'POR','Ousmane Diomande':'CIV','Iván Fresneda':'ESP',
+'Morten Hjulmand':'DEN','João Simões':'POR','Pedro Gonçalves':'POR',
+'Francisco Trincão':'POR','Geny Catamo':'MOZ','Luis Suárez':'COL','Fotis Ioannidis':'GRE',
+/* Porto */
+'Diogo Costa':'POR','Nehuén Pérez':'ARG','Zé Pedro':'POR','Martim Fernandes':'POR',
+'Francisco Moura':'POR','Alan Varela':'ARG','Victor Froholdt':'DEN','Gabri Veiga':'ESP',
+'Rodrigo Mora':'POR','Pepê':'BRA','William Gomes':'BRA','Samu Aghehowa':'ESP',
+'Deniz Gül':'TUR',
+/* Ajax */
+'Vitezslav Jaros':'CZE','Josip Šutalo':'CRO','Youri Baas':'NED','Anton Gaaei':'DEN',
+'Owen Wijndal':'NED','Kenneth Taylor':'NED','Davy Klaassen':'NED','Kian Fitz-Jim':'NED',
+'Oscar Gloukh':'ISR','Mika Godts':'BEL','Steven Berghuis':'NED','Kasper Dolberg':'DEN',
+'Don-Angelo Konadu':'GER',
+/* Celtic */
+'Kasper Schmeichel':'DEN','Cameron Carter-Vickers':'USA','Liam Scales':'IRL',
+'Alistair Johnston':'CAN','Kieran Tierney':'SCO','Callum McGregor':'SCO','Reo Hatate':'JPN',
+'Arne Engels':'BEL','Benjamin Nygren':'SWE','Daizen Maeda':'JPN','James Forrest':'SCO',
+'Johnny Kenny':'IRL','Shin Yamada':'JPN',
+/* Rangers */
+'Jack Butland':'ENG','James Tavernier':'ENG','John Souttar':'SCO','Nasser Djiga':'BFA',
+'Jefté':'BRA','Nicolas Raskin':'BEL','Mohamed Diomande':'CIV','Joe Rothwell':'ENG',
+'Djeidi Gassama':'FRA','Oliver Antman':'FIN','Findlay Curtis':'SCO','Cyriel Dessers':'NGA',
+'Danilo':'BRA',
+/* Marseille */
+'Gerónimo Rulli':'ARG','Leonardo Balerdi':'ARG','Nayef Aguerd':'MAR','CJ Egan-Riley':'ENG',
+'Amir Murillo':'PAN','Ulisses Garcia':'SUI','Geoffrey Kondogbia':'RCA',
+'Pierre-Emile Højbjerg':'DEN','Angel Gomes':'ENG','Matt O’Riley':'DEN',
+'Mason Greenwood':'ENG','Igor Paixão':'BRA','Timothy Weah':'USA','Amine Gouiri':'ALG',
+'Pierre-Emerick Aubameyang':'GAB',
+/* Monaco */
+'Philipp Köhn':'SUI','Thilo Kehrer':'GER','Christian Mawissa':'FRA','Eric Dier':'ENG',
+'Vanderson':'BRA','Caio Henrique':'BRA','Denis Zakaria':'SUI','Lamine Camara':'SEN',
+'Paul Pogba':'FRA','Maghnes Akliouche':'FRA','Aleksandr Golovin':'RUS',
+'Takumi Minamino':'JPN','Ansu Fati':'ESP','Folarin Balogun':'USA','Mika Biereth':'DEN',
+/* Atalanta */
+'Marco Carnesecchi':'ITA','Isak Hien':'SWE','Odilon Kossounou':'CIV','Berat Djimsiti':'ALB',
+'Raoul Bellanova':'ITA','Davide Zappacosta':'ITA','Ederson':'BRA','Marten de Roon':'NED',
+'Mario Pašalić':'CRO','Charles De Ketelaere':'BEL','Ademola Lookman':'NGA',
+'Kamaldeen Sulemana':'GHA','Gianluca Scamacca':'ITA','Nikola Krstović':'MNE',
+'Matt Targett':'ENG','Hidemasa Morita':'JPN','Xaver Schlager':'AUT','Dušan Vlahović':'SRB',
+/* free agents and veterans */
+'Jadon Sancho':'ENG','Bernardo Silva':'POR','Mohamed Salah':'EGY','John Stones':'ENG',
+'Dani Carvajal':'ESP','Nathan Aké':'NED','Leon Goretzka':'GER','Casemiro':'BRA',
+'Andrew Robertson':'SCO','Thomas Partey':'GHA','Riyad Mahrez':'ALG','Raheem Sterling':'ENG',
+'Stefan Ortega':'GER','Mauro Icardi':'ARG','Luka Modrić':'CRO','Wilfried Zaha':'CIV',
+'Adama Traoré':'MLI','Anthony Martial':'FRA','James Rodríguez':'COL'};
+
+/* fold it into the table the game already consults, real names winning */
+for(const k in NAT_REAL)NAT_EXACT[k]=NAT_REAL[k];
+
+/* =====================================================================
+   AND ANY SAVE THAT ALREADY HAS BELLINGHAM DOWN AS COLOMBIAN
+   ---------------------------------------------------------------------
+   natOf() caches onto the player object and the object is serialised into
+   the save, so a career already in progress carries the wrong answer
+   forever. Every real name is re-stamped on load and on a new game.
+   ===================================================================== */
+function restampNations(){
+ try{let n=0;
+  const hit=p=>{const t=NAT_REAL[p.name];if(t&&p.nat!==t){p.nat=t;n++}};
+  /* eachPlayer only walks senior squads — the academy and the free agents
+     hold real names too, and a released veteran is exactly where you would
+     notice the wrong flag */
+  (G.clubs||[]).forEach(c=>{(c.players||[]).forEach(hit);(c.youth||[]).forEach(hit)});
+  (G.freeAgents||[]).forEach(hit);
+  NSQ_CACHE=null;NSQ_KEY='';
+  return n}
+ catch(e){return 0}}
+(function(){
+ const _ngNat=newGame;
+ newGame=function(){const r=_ngNat.apply(this,arguments);restampNations();return r};
+ const _lsNat=loadSlot;
+ loadSlot=function(){const ok=_lsNat.apply(this,arguments);if(ok)restampNations();return ok};
+})();
+
+/*#w36_nations.js#*/
+
+
+/*#w36_nations.js#*//*#w37_dock.js#*/
+
+/* =====================================================================
+   THE CONTINUE BUTTON THAT FLOATED
+   ---------------------------------------------------------------------
+   It sat marooned in the middle of nowhere: overlapping the list above
+   it, with a band of empty black between it and the navigation bar.
+
+   The stylesheet asks for exactly the right thing —
+
+       .continue-dock{position:fixed;bottom:calc(var(--nav-h) + 10px)}
+
+   — and never got it. A later polish pass of mine added
+
+       #app>*{position:relative;z-index:1}
+
+   to give every direct child of the app its own stacking context. That
+   is an ID selector, so it outranks a class selector no matter which
+   order they are written in, and it quietly turned both the Continue
+   dock AND the bottom navigation bar from fixed into relative.
+
+   A relatively positioned box with bottom:72px does not move to
+   seventy-two pixels off the bottom of the screen. It stays exactly
+   where the layout put it and is then painted seventy-two pixels higher,
+   leaving its original space empty. That is the overlap above the button
+   and the gap below it, in one line of CSS.
+
+   The same rule caught #app itself never having a real height — only a
+   min-height — so #view grew to its content instead of scrolling inside
+   it, and the whole page scrolled with the navigation attached to the
+   bottom of the document rather than the bottom of the window.
+
+   Both are fixed here, and the button now sits directly on top of Home
+   / Squad / Tactics, which is where a thumb already is.
+   ===================================================================== */
+(function dockCSS(){
+ const st=document.createElement('style');st.id='w37';
+ st.textContent=[
+  /* ID-level specificity, because that is what it takes to win */
+  '@media (max-width:1023px){',
+  /* a real height, so #view scrolls inside the app instead of the page
+     scrolling underneath a navigation bar that came along for the ride */
+  ' #app{height:100dvh;min-height:0}',
+  ' #app>#view{flex:1 1 0;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch}',
+  /* the navigation belongs to the window */
+  ' #app>.nav{position:fixed;left:0;right:0;bottom:0;z-index:40;',
+  '  margin:0 auto;max-width:520px}',
+  /* and Continue sits on top of it, not adrift above it */
+  ' #app>.continue-dock{position:fixed;left:0;right:0;z-index:39;',
+  '  bottom:calc(var(--nav-h) + env(safe-area-inset-bottom) + 6px);',
+  '  margin:0 auto;max-width:520px;',
+  /* a short fade so the list runs under it rather than colliding */
+  '  background:linear-gradient(180deg,rgba(8,12,9,0),rgba(8,12,9,.82) 42%,rgba(8,12,9,.94));',
+  '  padding:14px 0 6px}',
+  /* room at the end of every scroller for the dock to sit over */
+  ' #app>#view{padding-bottom:calc(var(--nav-h) + 96px)}',
+  '}'
+ ].join('');
+ document.head.appendChild(st)})();
+
+/* =====================================================================
+   AND CONTINUE TAKES YOU HOME
+   ---------------------------------------------------------------------
+   You press Continue to move the game on, and the game moves on — but
+   it left you wherever you happened to be standing, which after a look
+   at somebody else's squad is a screen with nothing on it about your
+   own club. Continue now returns to the home screen, which is where the
+   news, the fixture and the decisions are.
+
+   Off by a toggle in Settings for anybody who liked it the old way.
+   ===================================================================== */
+function optCfg(){
+ if(!G)return{homeOnContinue:true};
+ if(!G.opt)G.opt={};
+ if(G.opt.homeOnContinue==null)G.opt.homeOnContinue=true;
+ return G.opt}
+
+const _advHome=ACTIONS.advance;
+ACTIONS.advance=function(){
+ const r=_advHome.apply(this,arguments);
+ try{
+  if(!optCfg().homeOnContinue)return r;
+  /* not while a decision is holding the day, and not on the way into a
+     match — both of those put you exactly where you need to be already */
+  if(typeof blockingMails==='function'&&blockingMails().length)return r;
+  const ms=document.getElementById('matchScreen');
+  if(ms&&ms.classList.contains('open'))return r;
+  if(UI.view!=='home'){UI.view='home';if(typeof render==='function')render()}
+ }catch(e){}
+ return r};
+
+ACTIONS.optHome=()=>{const o=optCfg();o.homeOnContinue=!o.homeOnContinue;
+ try{sfx('tap')}catch(e){}
+ if(typeof render==='function')render()};
+
+/* the toggle, in with the rest of the switches */
+const _vSaveOpt=vSave;
+vSave=function(){
+ const o=optCfg();
+ const h='<div class="sec" style="margin-top:0"><div class="t">🎮 Game</div><div class="ln"></div>'+
+  '<div class="sub">'+(o.homeOnContinue?'returns home':'stays put')+'</div></div>'+
+  '<div class="card"><div class="chips">'+
+  '<button class="chip'+(o.homeOnContinue?' on':'')+'" data-action="optHome">🏠 Continue returns to home</button>'+
+  '</div><div class="xs faint" style="margin-top:8px;line-height:1.6">'+
+  'With this on, pressing Continue always brings you back to the home screen. '+
+  'Turn it off to stay on whatever screen you were reading.</div></div>';
+ return h+_vSaveOpt.apply(this,arguments)};
+
+/*#w37_dock.js#*/
+
 showStart();
 </script>
 </body>
