@@ -15159,7 +15159,7 @@ drawDugout=function(){
   for(let i=0;i<130;i++)MU.fx.push({x:Math.random()*W,y:-Math.random()*H*.5,
    vx:(Math.random()-.5)*W*.005,vy:H*.004+Math.random()*H*.007,
    c:Math.random()<.62?cc.c1:(Math.random()<.5?'#ffffff':cc.c2||'#fbe122'),
-   r:Math.max(2,W*.0055*Math.random()),rot:Math.random()*7})}
+   r:Math.max(2,W*.0028*Math.random()),rot:Math.random()*7})}
  if(MU.goalFlash>0){
   MU.goalFlash--;
   MU.fx.forEach(f=>{f.x+=f.vx;f.y+=f.vy;f.rot+=.16;
@@ -25503,6 +25503,223 @@ dailyTickCore=function(){
  if(G.day%30===7)promiseCheck()};
 
 /*#w40_saga.js#*/
+
+
+/*#w40_saga.js#*//*#w41_chances.js#*/
+
+/* =====================================================================
+   THE CHANCE IS NOW A KIND OF CHANCE
+   ---------------------------------------------------------------------
+   The engine was never a coin flip. It already ran three attribute duels
+   before anybody shot, and finishing already mattered enormously —
+   measured over two hundred thousand shots against a keeper rated 13:
+
+       shooting 10 → scores  4.0%
+       shooting 14 → scores 24.2%
+       shooting 18 → scores 54.9%
+       shooting 20 → scores 69.4%
+
+   What was missing is that every chance was the same chance. A cross, a
+   ball played through the middle, a cutback and a hopeful drive from
+   twenty-five yards all resolved through one identical sum, so a
+   brilliant crosser and a brilliant dribbler were interchangeable, and a
+   centre forward who wins everything in the air was worth no more
+   against a small defence than a tall one.
+
+   A chance now has a type, and the type decides which attributes are
+   asked the question:
+
+     CROSS      the crosser's crossing, then the striker's heading and
+                strength against what the defence has in the air
+     THROUGH    the passer's vision, then the runner's acceleration
+                against the defensive line's pace and positioning
+     CUTBACK    the wide man's dribbling against the full-back, then the
+                arriving player's first touch and composure
+     LONG SHOT  shooting and strength, from range, and mostly a bad idea
+     SOLO       one man's dribbling against the whole defence
+
+   HOW IT IS APPLIED, AND WHY NOT THE OBVIOUS WAY. The obvious way is to
+   work out a quality for the chance and multiply the shot by it. That
+   was the first attempt and it was a disaster, in a way worth writing
+   down: this engine decides a goal by comparing the strike against the
+   save with a hard threshold, and around the operating point that
+   comparison is savagely sharp. Multipliers averaging 1.06 took the
+   league from 3.59 goals a game to 7.69. Re-centred to average exactly
+   1.00 — verified at 0.998 over eight thousand chances — it went the
+   other way to 1.39, because a spread that helps weak defences and hurts
+   strong ones does not cancel when the response is that steep. Forcing
+   the multiplier to a flat 1 returned 3.57, which proved the wiring was
+   sound and the lever was wrong.
+
+   So the lever changed. Nothing multiplies the shot. Instead the chance
+   type decides WHICH ATTRIBUTE is read as the second half of the
+   shooter's finishing — the engine already averages his shooting with
+   one other quality, and it is composure by default and heading from a
+   corner. Every substitute is another attribute on the same one-to-
+   twenty scale, so the arithmetic stays in exactly the range it was
+   already in, the scoreline does not move, and a tall striker really is
+   better on a cross while a quick one really is better through the
+   middle. Which was the whole point.
+   ===================================================================== */
+
+const WIDE_SLOTS=['AML','AMR','ML','MR','WBL','WBR','DL','DR'];
+const CHANCE_LBL={cross:'from the cross',through:'through the middle',
+ cutback:'from the cutback',long:'from distance',solo:'on his own',
+ header:'from the set piece'};
+
+/* ---------------------------------------------------------------------
+   1. WHICH KIND OF CHANCE THIS IS
+   Decided by who is involved and what they are good at, which is how a
+   real chance decides what kind it is.
+   --------------------------------------------------------------------- */
+function chanceKind(m,A,D,shooter,creator,fromCorner){
+ if(fromCorner)return 'header';
+ const eff=(x,a)=>{try{return m.effA(x,a)}catch(e){return 10}};
+ const wide=!!(creator&&WIDE_SLOTS.includes(creator.slot));
+ const w={};
+ w.cross   = wide?(eff(creator,'crossing')*.62+eff(shooter,'heading')*.50):2;
+ w.through = (eff(creator||shooter,'vision')*.55+eff(shooter,'acceleration')*.45)*
+             (A.tac&&A.tac.passStyle==='Direct'?1.3:1);
+ w.cutback = wide?(eff(creator,'dribbling')*.60+eff(shooter,'firstTouch')*.45):2.5;
+ w.long    = (eff(shooter,'shooting')*.32+eff(shooter,'strength')*.22)*
+             (['MC','DM','AMC'].includes(shooter.slot)?1.5:.7);
+ w.solo    = eff(shooter,'dribbling')*.50*
+             (['AML','AMR','ST','AMC'].includes(shooter.slot)?1.2:.55);
+ /* a short-passing side makes cutbacks; a direct one slings crosses in */
+ if(A.tac&&A.tac.passStyle==='Short'){w.cutback*=1.35;w.cross*=.78;w.long*=.70}
+ let tot=0;const ks=Object.keys(w);ks.forEach(k=>{w[k]=Math.max(.4,w[k]);tot+=w[k]});
+ let r=Math.random()*tot;
+ for(let i=0;i<ks.length;i++){r-=w[ks[i]];if(r<=0)return ks[i]}
+ return 'through'}
+
+/* ---------------------------------------------------------------------
+   2. WHAT THE SHOOTER IS ACTUALLY BEING JUDGED ON
+   ---------------------------------------------------------------------
+   Returns the replacement for the second half of the shooter's finishing
+   — the term the engine fills with composure, or heading from a corner.
+   Everything returned is on the same 1–20 scale as the thing it replaces,
+   which is what keeps the scoreline still.
+
+   The opposed part — his aerial ability against theirs, his pace against
+   their line — is folded in as a bounded nudge of at most a couple of
+   points, because a couple of points is already worth roughly seven
+   percentage points of conversion in this engine.
+   --------------------------------------------------------------------- */
+function shotBasis(m,D,shooter,creator,kind){
+ const eff=(x,a)=>{try{return m.effA(x,a)}catch(e){return 10}};
+ const davg=(l)=>{try{return m.avg(D,l,'def')}catch(e){return 11}};
+ const nudge=(v,lo,hi)=>Math.max(lo,Math.min(hi,v));
+ let base,edge=0;
+ if(kind==='cross'||kind==='header'){
+  base=eff(shooter,'heading')*.62+eff(shooter,'strength')*.38;
+  /* he has to beat somebody to it */
+  edge=nudge((base-davg(['heading','strength','positioning']))*.22,-2.0,2.0);
+  /* and somebody has to put it on his head */
+  if(creator)edge+=nudge((eff(creator,'crossing')-12)*.12,-1.2,1.2);
+ }else if(kind==='through'){
+  base=eff(shooter,'composure')*.55+eff(shooter,'acceleration')*.45;
+  edge=nudge((eff(shooter,'acceleration')*.6+eff(shooter,'pace')*.4
+             -davg(['pace','positioning','decisions']))*.20,-2.0,2.0);
+  if(creator)edge+=nudge((eff(creator,'vision')-12)*.11,-1.1,1.1);
+ }else if(kind==='cutback'){
+  base=eff(shooter,'firstTouch')*.5+eff(shooter,'composure')*.5;
+  if(creator)edge=nudge((eff(creator,'dribbling')
+             -davg(['tackling','pace','positioning']))*.20,-1.8,1.8);
+ }else if(kind==='long'){
+  /* range punishes everybody, and rewards the one who can really hit it */
+  base=eff(shooter,'shooting')*.5+eff(shooter,'strength')*.5;
+  edge=-2.4;
+ }else{ /* solo */
+  base=eff(shooter,'dribbling')*.42+eff(shooter,'composure')*.58;
+  edge=nudge((eff(shooter,'dribbling')
+             -davg(['tackling','positioning','aggression']))*.18,-1.8,1.8);
+ }
+ return Math.max(1,Math.min(20,base+edge))}
+
+/* ---------------------------------------------------------------------
+   3. WIRING IT IN
+   ---------------------------------------------------------------------
+   effA is intercepted for the duration of the shot only, and only for
+   the shooter, and only for the one attribute the engine is about to
+   read as his second finishing quality. Everything else in there —
+   the keeper, the traits, the home advantage — is untouched.
+   --------------------------------------------------------------------- */
+const _shotKind=MatchSim.prototype.shotEvent;
+MatchSim.prototype.shotEvent=function(A,D,shooter,creator,fromCorner){
+ let restore=null;
+ try{
+  const kind=chanceKind(this,A,D,shooter,creator,fromCorner);
+  this._kind=kind;
+  if(!A.st.kinds)A.st.kinds={};
+  A.st.kinds[kind]=(A.st.kinds[kind]||0)+1;
+  const basis=shotBasis(this,D,shooter,creator,kind);
+  const own=Object.prototype.hasOwnProperty.call(this,'effA');
+  const prev=this.effA;
+  const want=fromCorner?'heading':'composure';
+  let used=false;
+  this.effA=function(x,a){
+   if(!used&&x===shooter&&a===want){used=true;return basis}
+   return prev.apply(this,arguments)};
+  restore=()=>{if(own)this.effA=prev;else delete this.effA};
+ }catch(e){}
+ try{return _shotKind.apply(this,arguments)}
+ finally{try{if(restore)restore()}catch(e){}}};
+
+/* ---------------------------------------------------------------------
+   4. SAYING WHAT HAPPENED
+   A mechanism you cannot see is a mechanism nobody believes in.
+   --------------------------------------------------------------------- */
+const _goalKind=MatchSim.prototype.goal;
+MatchSim.prototype.goal=function(A,D,scorer,creator){
+ const r=_goalKind.apply(this,arguments);
+ try{
+  const k=this._kind;
+  if(!k||!this.feed||!this.feed.length)return r;
+  const last=this.feed[this.feed.length-1];
+  if(!last||last.cls!=='goal')return r;
+  const cn=creator&&creator.p?creator.p.name:null;
+  const extra={
+   cross:cn?'A '+cn+' cross, and he attacked it.':'Headed in from the flank.',
+   header:'Rises above the marker from the set piece.',
+   through:cn?cn+' split them open and he was away.':'Straight through the middle.',
+   cutback:cn?cn+' got to the byline and pulled it back.':'Cut back from the byline.',
+   long:'From fully twenty-five yards.',
+   solo:'He beat two men and finished it himself.'}[k];
+  if(extra)last.text=String(last.text||'')+' '+extra;
+ }catch(e){}
+ return r};
+
+/* ---------------------------------------------------------------------
+   5. AND SHOWING IT IN THE STATS
+   --------------------------------------------------------------------- */
+function kindsLine(st){
+ const k=(st&&st.kinds)||{};
+ const order=[['cross','Crosses'],['through','Through balls'],['cutback','Cutbacks'],
+  ['solo','Solo runs'],['long','Long shots'],['header','Set-piece headers']];
+ const rows=order.filter(x=>k[x[0]]);
+ return rows.length?rows.map(x=>x[1]+' '+k[x[0]]).join(' · '):''}
+
+if(typeof renderStats==='function'){
+ const _renderStatsKinds=renderStats;
+ renderStats=function(){
+  const r=_renderStatsKinds.apply(this,arguments);
+  try{
+   const m=MU&&MU.m;if(!m)return r;
+   const box=$('#statList')||$('#mBody');if(!box)return r;
+   if(box.querySelector('.kindrow'))return r;
+   const a=kindsLine(m.sides[0].st),b=kindsLine(m.sides[1].st);
+   if(!a&&!b)return r;
+   const d=document.createElement('div');
+   d.className='kindrow';
+   d.innerHTML='<div class="chip-lbl" style="margin-top:10px">How the chances came</div>'+
+    '<div class="card tight" style="padding:9px 11px">'+
+    '<div class="xs" style="line-height:1.7"><b>'+esc(m.sides[0].c.short)+'</b> '+(a||'nothing yet')+'</div>'+
+    '<div class="xs" style="line-height:1.7"><b>'+esc(m.sides[1].c.short)+'</b> '+(b||'nothing yet')+'</div></div>';
+   box.appendChild(d);
+  }catch(e){}
+  return r}}
+
+/*#w41_chances.js#*/
 
 showStart();
 </script>
