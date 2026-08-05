@@ -1678,7 +1678,7 @@ ACTIONS.resume2h=()=>{MU.m.tickOnce();MU.speed=1;renderMCtl();renderTop()};
 function startLoop(){stopLoop();MU.timer=setInterval(()=>{
  const m=MU.m;if(!m)return;
  if(m.done){onFT();return}
- if(m.stage==='HT'){renderMCtl();return}
+ if(m.stage==='HT'){if(!MU._htPainted){MU._htPainted=true;renderMCtl()}return}
  if(MU.speed===0||MU.speed===9)return;
  const before=m.stage;
  for(let i=0;i<MU.speed&&!m.done&&m.stage!=='HT';i++)trackedTick();
@@ -1686,7 +1686,7 @@ function startLoop(){stopLoop();MU.timer=setInterval(()=>{
  if(MU.tab==='comm')fillFeed($('#commList'),200);
  if(MU.tab==='pitch')fillFeed($('#miniFeed'),4);
  if(MU.tab==='stats')renderStats();
- if(m.stage==='HT'&&before!=='HT'){MU.speed=0;renderMCtl();toast('Half time')}
+ if(m.stage==='HT'&&before!=='HT'){MU.speed=0;MU._htPainted=true;renderMCtl();toast('Half time')}
  if(m.done)onFT();
 },300)}
 function stopLoop(){if(MU.timer){clearInterval(MU.timer);MU.timer=null}}
@@ -2958,7 +2958,7 @@ function renderMCtl(){
 function startLoop(){stopLoop();MU.timer=setInterval(()=>{
  const m=MU.m;if(!m)return;
  if(m.done){onFT();return}
- if(m.stage==='HT'){renderMCtl();return}
+ if(m.stage==='HT'){if(!MU._htPainted){MU._htPainted=true;renderMCtl()}return}
  if(MU.speed===0||MU.speed===9)return;
  const before=m.stage;
  let n=MU.speed===6?(MU.hlHold>0?1:7):MU.speed;
@@ -2973,7 +2973,7 @@ function startLoop(){stopLoop();MU.timer=setInterval(()=>{
  if(MU.tab==='comm')fillFeed($('#commList'),200);
  if(MU.tab==='m3d'||MU.tab==='dugout'||MU.tab==='pitch')fillFeed($('#miniFeed'),4);
  if(MU.tab==='stats')renderStats();
- if(m.stage==='HT'&&before!=='HT'){MU.speed=0;renderMCtl();toast('Half time')}
+ if(m.stage==='HT'&&before!=='HT'){MU.speed=0;MU._htPainted=true;renderMCtl();toast('Half time')}
  if(m.done)onFT();
 },300)}
 /* pre-match with team talk */
@@ -10249,7 +10249,7 @@ startLoop=function(){
   const m=MU.m;if(!m)return;
   if(m.done){onFT();return}
   const now=performance.now(),dt=Math.min(500,now-MU.last);MU.last=now;
-  if(m.stage==='HT'){renderMCtl();return}
+  if(m.stage==='HT'){if(!MU._htPainted){MU._htPainted=true;renderMCtl()}return}
   if(MU.speed===0)return;
   if(MU.speed===9){skipHalf();return}
   if(MU.hlHold>now)return;                       // holding on a highlight
@@ -10269,7 +10269,7 @@ startLoop=function(){
    if(MU.tab==='comm')fillFeed($('#commList'),200);
    else if(MU.tab==='pitch'||MU.tab==='dugout')fillFeed($('#miniFeed'),4);
    else if(MU.tab==='stats')renderStats()}
-  if(m.stage==='HT'&&before!=='HT'){MU.speed=0;MU.acc=0;renderMCtl();renderTop();toast('Half time')}
+  if(m.stage==='HT'&&before!=='HT'){MU.speed=0;MU.acc=0;MU._htPainted=true;renderMCtl();renderTop();toast('Half time')}
   if(m.done)onFT();
  },90)};
 function skipHalf(){
@@ -22493,6 +22493,9 @@ document.addEventListener('keydown',e=>{
   ' .sheet-x:hover{background:rgba(255,83,72,.18);border-color:rgba(255,83,72,.45);color:#ffb4ad}',
   '}',
   '.sheet-back:active,.sheet-x:active{transform:scale(.94)}',
+  /* a sheet is 600px wide whatever the screen is, so the two-column player
+     list belongs to the page, not to a dialog inside it */
+  '.sheet .plist{display:flex!important;flex-direction:column!important}',
   /* the drag handle and the chrome should not both claim the top of a phone sheet */
   '@media (max-width:1023px){.sheet .grab{margin-top:0;margin-bottom:8px}}'
  ].join('');
@@ -23320,7 +23323,823 @@ if(_vStaffFill)vStaff=function(){
  ].join('');
  document.head.appendChild(st)})();
 
-/*#w31_fill.js#*/
+/*#w31_fill.js#*//*#w32_preseason.js#*/
+
+/* =====================================================================
+   PRE-SEASON — WHERE ARE WE GOING THIS SUMMER?
+   ---------------------------------------------------------------------
+   A fortnight sat between the first day of August and the opening
+   fixture and nothing happened in it. In the real game that fortnight
+   is a decision worth millions and it is a genuine trade-off, because
+   the two things a pre-season is for pull against each other.
+
+   MONEY comes from being a long way from home. A club will pay a
+   fortune to put you in front of eighty thousand people in New Jersey
+   or Kuala Lumpur, and nothing at all to watch you in Cork.
+
+   FITNESS comes from staying still. Twenty hours in the air, five time
+   zones and a fortnight of hotel beds is the worst possible
+   preparation, whatever it does for the commercial department. A warm
+   -weather camp in Portugal is the best.
+
+   So the six options run from one end of that to the other:
+
+     Training ground   nothing earned, everything gained physically,
+                       but nobody is match sharp on the opening day
+     Ireland & Scotland a little money, short hops, a fit squad
+     Iberian camp      modest money, the best conditioning work
+     Scandinavia       real money, and the legs hold up
+     North America     a lot of money, and it costs you your legs
+     Far East          the most money there is, and it costs you more
+
+   The fee is scaled to what a club is actually worth — nobody is paying
+   a League Two side eleven million to fly to Texas — and clubs of real
+   standing get invited to a four-team invitational on top, with prize
+   money and a trophy that counts.
+
+   The friendlies are real fixtures. You pick the team, you play them or
+   simulate them, and they do not touch the league table.
+   ===================================================================== */
+
+const TOURS=[
+ {id:'base',name:'Stay at the training ground',where:'Carrington',flag:'🏠',
+  fee:[0,0],fit:10,sharp:2,games:2,
+  blurb:'No flights, no hotels and not a penny earned — but nobody gets on a plane and everybody gets a fortnight on the grass.'},
+ {id:'ire',name:'Ireland &amp; Scotland tour',where:'Dublin, Cork, Glasgow',flag:'🇮🇪',
+  fee:[500e3,1.3e6],fit:8,sharp:6,games:3,
+  blurb:'Short hops, friendly crowds and a squad that comes back fit. The commercial department will not thank you.'},
+ {id:'iber',name:'Iberian training camp',where:'Algarve &amp; Marbella',flag:'🇵🇹',
+  fee:[1.2e6,2.4e6],fit:9,sharp:5,games:3,
+  blurb:'Heat, altitude work and two behind-closed-doors games. The best conditioning fortnight money can buy.'},
+ {id:'scan',name:'Scandinavian tour',where:'Oslo, Stockholm, Copenhagen',flag:'🇳🇴',
+  fee:[2.4e6,4.6e6],fit:5,sharp:7,games:3,
+  blurb:'Proper money, full houses and short enough flights that the legs hold up. The sensible compromise.'},
+ {id:'usa',name:'North American tour',where:'New York, Chicago, Los Angeles',flag:'🇺🇸',
+  fee:[6.5e6,13e6],fit:-9,sharp:9,games:4,
+  blurb:'Enormous money and enormous crowds. Also five time zones, four internal flights and a squad that arrives at the opening day on empty.'},
+ {id:'asia',name:'Far East tour',where:'Tokyo, Seoul, Singapore',flag:'🇯🇵',
+  fee:[8.5e6,17e6],fit:-12,sharp:9,games:4,
+  blurb:'The biggest cheque in football and the worst preparation in it. Humidity, jet lag and a fortnight you never quite recover from.'}
+];
+
+function tourFee(t){
+ const c=G.clubs[G.my];
+ const scale=clamp((c.rep||6000)/9000,.10,1.2);
+ const r=mulberry(hashStr('tour'+t.id+G.season+(c.key||'')));
+ const raw=t.fee[0]+(t.fee[1]-t.fee[0])*r();
+ return Math.round(raw*scale/1e5)*1e5}
+
+/* a club of standing gets asked to a four-team invitational as well */
+function tourInvite(){
+ const c=G.clubs[G.my];
+ if((c.rep||0)<7600)return null;
+ const r=mulberry(hashStr('inv'+G.season+(c.key||'')));
+ if(r()<.34)return null;
+ const names=['The Continental Cup','The Summer Series','The Founders Trophy','The Emirates Invitational','The Alpine Cup'];
+ return {name:names[Math.floor(r()*names.length)],
+  prize:Math.round((1.6e6+r()*3.4e6)*clamp(c.rep/9000,.2,1.2)/1e5)*1e5}}
+
+function preseasonWindow(){
+ const s=G.seasonStart||0;
+ return {from:s+2,to:s+12,open:G.day<=s+11}}
+
+/* ---------------------------------------------------------------------
+   BOOKING ONE
+   --------------------------------------------------------------------- */
+function tourOpponents(t,n){
+ const me=G.clubs[G.my];
+ const ccBy={ire:['ENG','SCO'],iber:['ESP','POR'],scan:['NOR','DEN','SWE'],
+  usa:['ESP','ITA','GER'],asia:['ESP','ITA','FRA'],base:['ENG']};
+ const want=ccBy[t.id]||['ENG'];
+ let pool=G.clubs.filter(c=>c.i!==G.my&&want.indexOf(c.cc)>=0);
+ if(pool.length<n)pool=G.clubs.filter(c=>c.i!==G.my);
+ // somebody roughly worth playing, not a walkover and not a final
+ pool.sort((a,b)=>Math.abs(a.rep-me.rep*.82)-Math.abs(b.rep-me.rep*.82));
+ const top=pool.slice(0,Math.max(n*4,8));
+ const out=[];const r=mulberry(hashStr('opp'+t.id+G.season+(me.key||'')));
+ while(out.length<n&&top.length){
+  const ix=Math.floor(r()*top.length);
+  out.push(top.splice(ix,1)[0])}
+ return out}
+
+ACTIONS.tourOpen=()=>{
+ const w=preseasonWindow();
+ if(G.tour&&G.tour.booked){openModal(tourBookedHtml());return}
+ if(!w.open){openModal('<h3>✈️ Pre-season</h3><div class="small muted" style="margin:8px 0 14px">'+
+  'The season is already under way. Your pre-season plans come round again next summer.</div>'+
+  '<button class="btn btn-ghost btn-block" data-action="closeModal">Close</button>');return}
+ const inv=tourInvite();
+ let h='<h3>✈️ Pre-season plans</h3>'+
+  '<div class="small muted" style="margin:6px 0 12px;line-height:1.5">Where the squad spends the next fortnight. '+
+  'The further you fly, the more they pay you — and the less of a squad you have on the opening day.</div>';
+ if(inv)h+='<div class="card tight" style="border-color:rgba(251,225,34,.45);margin-bottom:10px">'+
+  '<div class="small" style="font-weight:800;color:var(--gold)">🏆 INVITATION — '+esc(inv.name)+'</div>'+
+  '<div class="xs muted" style="margin-top:3px;line-height:1.5">A four-team invitational. '+
+  '<b>'+fmtM(inv.prize)+'</b> to the winner and a trophy for the cabinet. Comes attached to whichever tour you choose.</div></div>';
+ h+='<div class="plist">';
+ TOURS.forEach(t=>{
+  const fee=tourFee(t);
+  const fitCol=t.fit>=8?'var(--green)':t.fit>=4?'var(--amber)':'var(--danger)';
+  h+='<div class="prow" data-action="tourPick" data-v="'+t.id+'">'+
+   '<div class="pav" style="--pgc:'+fitCol+';font-size:26px;line-height:44px;width:44px;text-align:center">'+t.flag+'</div>'+
+   '<div class="pmain"><div class="pname">'+t.name+'</div>'+
+   '<div class="pmeta">'+t.where+' · '+t.games+' matches</div>'+
+   '<div class="prail"><span class="rlbl">FITNESS</span>'+
+    '<span class="num" style="color:'+fitCol+';font-weight:800">'+(t.fit>0?'+':'')+t.fit+'</span>'+
+    '<span class="rlbl">SHARPNESS</span><span class="num" style="font-weight:800">+'+t.sharp+'</span></div></div>'+
+   '<div class="pright"><div class="psub" style="font-size:13px;color:'+(fee?'var(--gold)':'var(--ink-faint)')+
+    ';font-weight:800">'+(fee?fmtM(fee):'no fee')+'</div></div></div>'});
+ h+='</div><div class="xs faint" style="margin-top:10px;line-height:1.5">'+
+  'Fitness is how much condition the squad carries into the first game. Sharpness is how ready they are to play one.</div>'+
+  '<button class="btn btn-ghost btn-block" style="margin-top:10px" data-action="closeModal">Decide later</button>';
+ openModal(h)};
+
+ACTIONS.tourPick=el=>{
+ const t=TOURS.find(x=>x.id===el.dataset.v);if(!t)return;
+ const fee=tourFee(t),inv=tourInvite();
+ openModal('<h3>'+t.flag+' '+t.name+'</h3>'+
+  '<div class="small muted" style="margin:6px 0 12px;line-height:1.55">'+t.blurb+'</div>'+
+  '<div class="grid3" style="margin-bottom:12px">'+
+  '<div class="kpi"><div class="v num" style="color:var(--gold)">'+(fee?fmtM(fee):'—')+'</div><div class="l">Fee</div></div>'+
+  '<div class="kpi"><div class="v" style="color:'+(t.fit>=4?'var(--green)':'var(--danger)')+'">'+(t.fit>0?'+':'')+t.fit+'</div><div class="l">Fitness</div></div>'+
+  '<div class="kpi"><div class="v">+'+t.sharp+'</div><div class="l">Sharpness</div></div></div>'+
+  (inv?'<div class="card tight" style="border-color:rgba(251,225,34,.4);margin-bottom:10px"><div class="xs" style="color:var(--gold);font-weight:800">🏆 '+esc(inv.name)+' — '+fmtM(inv.prize)+' to the winner</div></div>':'')+
+  '<button class="btn btn-primary btn-block" data-action="tourBook" data-v="'+t.id+'">Book it</button>'+
+  '<button class="btn btn-ghost btn-block" style="margin-top:8px" data-action="tourOpen">← Other options</button>')};
+
+ACTIONS.tourBook=el=>{
+ const t=TOURS.find(x=>x.id===el.dataset.v);if(!t)return;
+ const w=preseasonWindow();
+ if(!w.open){toast('Too late — the season has started.');return}
+ const fee=tourFee(t),inv=tourInvite();
+ const opps=tourOpponents(t,t.games);
+ const days=[];
+ for(let i=0;i<t.games;i++)days.push(w.from+Math.round(i*(w.to-w.from)/Math.max(1,t.games-1)));
+ // clear anything booked before, then lay the friendlies on
+ G.fixtures=(G.fixtures||[]).filter(f=>!f.friendly);
+ opps.forEach((o,i)=>{
+  const home=(t.id==='base'||t.id==='ire')&&i%2===0;
+  G.fixtures.push({h:home?G.my:o.i,a:home?o.i:G.my,day:days[i]||w.from,
+   r:0,div:'FRIENDLY',friendly:true,
+   comp:(inv&&i===t.games-1)?esc(inv.name):'Pre-season friendly · '+t.where.replace(/&amp;/g,'&'),
+   played:false,hs:0,as:0,sc:[]})});
+ G.tour={id:t.id,name:t.name,fee,inv:inv||null,booked:true,applied:false,season:G.season};
+ // the question has been answered, so the letter stops asking it
+ try{(G.inbox||[]).forEach(m=>{if(/where are we going/.test(m.title||''))m.actions=null})}catch(e){}
+ const c=G.clubs[G.my];
+ c.bank=(c.bank||0)+fee;
+ mail('board','✈️ Pre-season: '+t.name.replace(/&amp;/g,'&'),
+  (fee?'The commercial department have banked <b>'+fmtM(fee)+'</b> from the trip. ':'')+
+  'The squad play <b>'+t.games+'</b> friendlies before the opening fixture'+
+  (inv?', finishing with the <b>'+esc(inv.name)+'</b>':'')+'. '+
+  (t.fit<0?'Be warned — the travel will leave legs heavy for the first month.':
+   t.fit>=8?'They will come back in the best shape they could be in.':
+   'It is a fair balance of money and preparation.'));
+ closeModal();toast('✈️ '+t.name.replace(/&amp;/g,'&')+' booked');render()};
+
+function tourBookedHtml(){
+ const t=TOURS.find(x=>x.id===G.tour.id)||{name:G.tour.name,flag:'✈️',blurb:''};
+ const left=(G.fixtures||[]).filter(f=>f.friendly&&!f.played).length;
+ return '<h3>'+(t.flag||'✈️')+' '+(t.name||G.tour.name)+'</h3>'+
+  '<div class="small muted" style="margin:6px 0 12px;line-height:1.55">'+(t.blurb||'')+'</div>'+
+  '<div class="grid2" style="margin-bottom:12px">'+
+  '<div class="kpi"><div class="v num" style="color:var(--gold)">'+fmtM(G.tour.fee||0)+'</div><div class="l">Banked</div></div>'+
+  '<div class="kpi"><div class="v">'+left+'</div><div class="l">Games left</div></div></div>'+
+  (G.tour.inv?'<div class="card tight" style="border-color:rgba(251,225,34,.4);margin-bottom:10px"><div class="xs" style="color:var(--gold);font-weight:800">🏆 '+esc(G.tour.inv.name)+' — '+fmtM(G.tour.inv.prize)+' to the winner</div></div>':'')+
+  '<div class="xs faint" style="line-height:1.5">The tour is booked. Fitness and sharpness are applied when the last friendly has been played.</div>'+
+  '<button class="btn btn-ghost btn-block" style="margin-top:10px" data-action="closeModal">Close</button>'}
+
+/* ---------------------------------------------------------------------
+   WHAT THE FORTNIGHT DID TO THEM
+   --------------------------------------------------------------------- */
+function tourSettle(){
+ try{
+  if(!G.tour||!G.tour.booked||G.tour.applied)return;
+  const s=G.seasonStart||0;
+  const left=(G.fixtures||[]).filter(f=>f.friendly&&!f.played).length;
+  if(left>0&&G.day<s+13)return;
+  const t=TOURS.find(x=>x.id===G.tour.id);if(!t){G.tour.applied=true;return}
+  const c=G.clubs[G.my];
+  c.players.forEach(p=>{
+   if(p.loan)return;
+   p.cond=clamp((p.cond||100)+t.fit,25,100);
+   p.sharp=clamp((p.sharp||60)+t.sharp*2.4,10,100)});
+  // the invitational, if there was one
+  let prize=0;
+  if(G.tour.inv){
+   const fin=(G.fixtures||[]).filter(f=>f.friendly&&f.played&&/[A-Za-z]/.test(f.comp||'')&&f.comp===G.tour.inv.name)[0];
+   const won=fin?((fin.h===G.my?fin.hs>fin.as:fin.as>fin.hs)):false;
+   if(won){prize=G.tour.inv.prize;c.bank+=prize;
+    G.honours=G.honours||[];G.honours.push({season:G.season,comp:G.tour.inv.name})}}
+  G.tour.applied=true;
+  mail('board','Pre-season over',
+   'The squad are back. '+
+   (t.fit>=8?'They report in excellent condition — a proper fortnight of work.':
+    t.fit>=4?'Condition is good and the legs are fresh enough.':
+    'The travel has taken its toll: condition is down and it will show early on.')+
+   ' Match sharpness is <b>'+(t.sharp>=8?'high':t.sharp>=5?'reasonable':'low')+'</b> going into the opener.'+
+   (prize?'<br><br>🏆 And you won the <b>'+esc(G.tour.inv.name)+'</b> — <b>'+fmtM(prize)+'</b> in prize money.':''));
+ }catch(e){}}
+
+/* ---------------------------------------------------------------------
+   THE OFFER COMES ROUND EVERY SUMMER
+   --------------------------------------------------------------------- */
+const _advTour=ACTIONS.advance;
+ACTIONS.advance=function(){
+ try{
+  const s=G.seasonStart||0;
+  // a new summer: forget last year's trip and ask the question again
+  if(G.tour&&G.tour.season!==G.season)G.tour=null;
+  if(!G.tourAsked||G.tourAsked!==G.season){
+   if(G.day<=s+11){
+    G.tourAsked=G.season;
+    const inv=tourInvite();
+    // NOT type 'board'. A board mail carrying actions is a blocking
+    // decision — blockingMails() halts the season until it is dealt with,
+    // and nothing here ever cleared it, so the game could not advance past
+    // the first day of August. The tour is a choice, not an ultimatum: the
+    // letter is informational and the card on the home screen is the door.
+    mail('info','✈️ Pre-season: where are we going?',
+     'The commercial department need an answer this week. A tour of the Far East or the United States is worth millions '+
+     'but leaves the squad short of condition for the opening weeks; a camp closer to home earns little and sends them '+
+     'into the season flying.'+(inv?'<br><br>You have also been invited to the <b>'+esc(inv.name)+'</b>.':''),
+     [{lbl:'Choose the tour',act:'tourOpen'}])}}
+ }catch(e){}
+ const r=_advTour.apply(this,arguments);
+ try{tourSettle()}catch(e){}
+ return r};
+
+/* a friendly is not a league game and must never be read as one */
+const _clubFormFriendly=(typeof clubForm==='function')?clubForm:null;
+if(_clubFormFriendly)clubForm=function(ci){
+ const keep=G.fixtures;
+ try{G.fixtures=keep.filter(f=>!f.friendly);return _clubFormFriendly.apply(this,arguments)}
+ finally{G.fixtures=keep}};
+
+/* and the home screen says so while the window is open */
+const _vHomeTour=vHome;
+vHome=function(){
+ let h=_vHomeTour.apply(this,arguments);
+ try{
+  if(G.sacked)return h;
+  const w=preseasonWindow();
+  if(!w.open)return h;
+  const booked=G.tour&&G.tour.booked;
+  h='<div class="card" data-action="tourOpen" style="cursor:pointer;border-color:rgba(251,225,34,.4);'+
+   'background:linear-gradient(140deg,rgba(251,225,34,.10),rgba(9,16,12,.8) 60%)">'+
+   '<div class="spread"><div style="min-width:0">'+
+   '<div style="font-weight:800;font-size:14px">✈️ '+(booked?esc((G.tour.name||'').replace(/&amp;/g,'&')):'Pre-season — where are we going?')+'</div>'+
+   '<div class="xs muted" style="margin-top:3px;line-height:1.45">'+
+   (booked?'Booked. '+((G.fixtures||[]).filter(f=>f.friendly&&!f.played).length)+' friendlies still to play.'
+          :'Money, or a squad that can run. Pick before the season starts.')+
+   '</div></div><div class="chip on" style="flex:none">'+(booked?'View':'Choose')+' ›</div></div></div>'+h}
+ catch(e){}
+ return h};
+
+/*#w32_preseason.js#*//*#w33_loans.js#*/
+
+/* =====================================================================
+   A LOAN MARKET
+   ---------------------------------------------------------------------
+   Loaning a player out was one button and no decisions: it picked a
+   Championship club at random, told you they would cover half his
+   wages, and that was the transaction. You could not choose where he
+   went, you could not negotiate what it cost you, nobody ever asked you
+   for a player, and it only worked for the under-23s — so the
+   thirty-year-old on two hundred grand a week who never gets on the
+   pitch had nowhere to go at all.
+
+   WHERE HE GOES is now your choice, from clubs who actually want him.
+   Interest depends on how good he is against the level they play at: a
+   Championship side will take a promising twenty-year-old from a
+   Premier League academy; a League Two side will not take a
+   ninety-rated international, and a Champions League club will not take
+   your reserve.
+
+   WHAT IT COSTS YOU is the negotiation. A club two divisions down
+   cannot pay eighty per cent of a Premier League wage and will not
+   pretend otherwise — the further down he drops, the more of his money
+   you keep paying. Offer to cover more than they ask and they will take
+   him sooner and play him more; offer less and they walk. What you
+   agree comes off your wage bill for as long as he is away, which is
+   the whole point of doing it.
+
+   AND THEY COME TO YOU. Clubs write in asking for the players who are
+   not getting on the pitch — the academy graduates, the ones behind two
+   better players, the ones on money you would rather not be paying.
+   You can accept, haggle over the split, or say no.
+   ===================================================================== */
+
+function loanShare(p,dest){
+ // what proportion of his wage the DESTINATION can carry
+ const capW=(dest.wageCap||dest.rep*300)/Math.max(14,(dest.players||[]).length);
+ const canPay=clamp(capW/Math.max(1,p.wage),0,1);
+ return clamp(Math.round(canPay*100/5)*5,5,100)}
+
+function loanSuitors(p){
+ try{
+  const me=G.clubs[G.my];
+  const out=[];
+  (G.clubs||[]).forEach(c=>{
+   if(c.i===G.my||!c.players)return;
+   const best=[...c.players].sort((a,b)=>b.ovr-a.ovr);
+   const level=best.length?best[Math.min(10,best.length-1)].ovr:60;
+   // he has to be worth their place but not so good they cannot dream of him
+   const gap=p.ovr-level;
+   if(gap<-6||gap>16)return;
+   const theirShare=loanShare(p,c);
+   // how much football he would get
+   const mins=gap>=6?'certain starter':gap>=1?'regular starter':gap>=-3?'in and out':'squad player';
+   out.push({c,share:theirShare,mins,gap,
+    want:clamp(Math.round(50+gap*4+(p.age<=22?12:0)-(100-theirShare)*.25),1,99)})});
+  out.sort((a,b)=>b.want-a.want);
+  return out.slice(0,8)}
+ catch(e){return []}}
+
+/* what you end up paying, weekly, while he is away */
+function loanCost(p,share){return Math.round(p.wage*(100-share)/100)}
+
+ACTIONS.loanSheet=el=>{
+ const p=playerById(el.dataset.id);if(!p||p.club!==G.my)return;
+ if(p.loan){toast('He is already out on loan.');return}
+ if(G.tacs&&G.tacs.xi&&G.tacs.xi.includes(p.id)){toast('He is in your XI — pick a replacement first.');return}
+ const list=loanSuitors(p);
+ let h='<h3>🛫 Loan out '+esc(p.name)+'</h3>'+
+  '<div class="row" style="gap:10px;margin:6px 0 12px">'+face(p,40)+
+  '<div style="flex:1;min-width:0"><div class="small" style="font-weight:800">'+p.pos+' · '+p.age+' · '+
+  fmtW(p.wage)+'</div><div class="xs faint">'+(p.age<=21?'Needs games to develop':'Not getting on the pitch')+
+  '</div></div>'+ovrPill(p)+'</div>';
+ if(!list.length)h+=emptyBox('🤷','Nobody is interested',
+  'At his level and on his wages there is no club that wants him right now. Try again after the window opens, or when he has played himself back into form.');
+ else{
+  h+='<div class="xs faint" style="margin-bottom:8px;line-height:1.5">The share is how much of his wage <b>they</b> will cover. '+
+   'You pay the rest for as long as he is away.</div><div class="plist">';
+  list.forEach((s,i)=>{
+   const mine=loanCost(p,s.share);
+   h+='<div class="prow" data-action="loanAgree" data-id="'+p.id+'" data-c="'+s.c.i+'" data-s="'+s.share+'">'+
+    '<div class="pav">'+crest(s.c,42)+'</div>'+
+    '<div class="pmain"><div class="pname">'+esc(s.c.name)+'</div>'+
+    '<div class="pmeta">'+esc((typeof DIV_NAMES==='object'&&DIV_NAMES[s.c.league])||'')+' · '+s.mins+'</div>'+
+    '<div class="prail"><span class="rlbl">THEY PAY</span><span class="num" style="font-weight:800;color:'+
+     (s.share>=70?'var(--green)':s.share>=40?'var(--amber)':'var(--danger)')+'">'+s.share+'%</span>'+
+     '<span class="rlbl">YOU PAY</span><span class="num" style="font-weight:800">'+fmtW(mine)+'</span></div></div>'+
+    '<div class="pright"><div class="psub">'+s.want+'% keen</div></div></div>'});
+  h+='</div>'}
+ h+='<button class="btn btn-ghost btn-block" style="margin-top:10px" data-action="closeModal">Keep him</button>';
+ openModal(h)};
+
+ACTIONS.loanAgree=el=>{
+ const p=playerById(el.dataset.id);if(!p)return;
+ const dest=G.clubs[+el.dataset.c];if(!dest)return;
+ const share=+el.dataset.s;
+ const mine=loanCost(p,share);
+ openModal('<h3>🛫 '+esc(p.name)+' → '+esc(dest.name)+'</h3>'+
+  '<div class="small muted" style="margin:6px 0 12px;line-height:1.55">They will cover <b>'+share+'%</b> of his wages. '+
+  'You keep paying <b>'+fmtW(mine)+'</b> a week until the end of the season.</div>'+
+  '<div class="chip-lbl">Offer to cover more of the wage?</div>'+
+  '<div class="chips" style="margin-bottom:12px">'+
+  [0,10,20].map(x=>{const s2=clamp(share-x,0,100);
+   return '<button class="chip'+(x===0?' on':'')+'" data-action="loanDo" data-id="'+p.id+'" data-c="'+dest.i+
+    '" data-s="'+s2+'">'+(x===0?'As offered':'+'+x+'% from you')+' · '+fmtW(loanCost(p,s2))+'</button>'}).join('')+
+  '</div>'+
+  '<div class="xs faint" style="line-height:1.5;margin-bottom:10px">Covering more of his money gets him more football, '+
+  'which is the reason to send him anywhere.</div>'+
+  '<button class="btn btn-ghost btn-block" data-action="loanSheet" data-id="'+p.id+'">← Other clubs</button>')};
+
+ACTIONS.loanDo=el=>{
+ const p=playerById(el.dataset.id);if(!p||p.club!==G.my)return;
+ const dest=G.clubs[+el.dataset.c];if(!dest)return;
+ const share=+el.dataset.s;
+ p.loan={club:dest.i,since:G.day,share,subsidy:(100-share)/100};
+ mail('transfer','🛫 Loan: '+p.name+' → '+dest.short,
+  '<b>'+esc(p.name)+'</b> joins <b>'+esc(dest.name)+'</b> on loan until the end of the season. '+
+  'They cover <b>'+share+'%</b> of his wages; you continue to pay <b>'+fmtW(loanCost(p,share))+'</b> a week.');
+ closeModal();toast('🛫 '+p.name+' → '+dest.short);render()};
+
+/* the old one-button loan still works, and now records a share */
+const _loanOutShare=ACTIONS.loanOut;
+ACTIONS.loanOut=function(el){
+ const r=_loanOutShare.apply(this,arguments);
+ try{const p=playerById(el.dataset.id);
+  if(p&&p.loan&&p.loan.share==null){p.loan.share=50;p.loan.subsidy=.5}}
+ catch(e){}
+ return r};
+
+/* ---------------------------------------------------------------------
+   WHAT YOU ACTUALLY PAY
+   ---------------------------------------------------------------------
+   A loaned-out player stays on your books, so his full wage was still
+   counting against the cap the entire time he was somewhere else. The
+   share you agreed now comes off it, which is what makes moving a big
+   earner out worth doing.
+   --------------------------------------------------------------------- */
+const _squadWageLoan=squadWage;
+squadWage=function(c){
+ let w=_squadWageLoan.apply(this,arguments);
+ try{(c.players||[]).forEach(p=>{
+  if(!p.loan)return;
+  const sub=(p.loan.subsidy!=null)?p.loan.subsidy:.5;   // older saves said "half"
+  w-=p.wage*(1-sub)})}
+ catch(e){}
+ return Math.round(w)};
+
+/* ---------------------------------------------------------------------
+   CLUBS ASK YOU FOR PLAYERS
+   --------------------------------------------------------------------- */
+function loanOfferRound(){
+ try{
+  if(typeof windowOpen==='function'&&!windowOpen())return;
+  if(G.day%7!==3)return;
+  const me=G.clubs[G.my];
+  const xi=(G.tacs&&G.tacs.xi)||[];
+  // the ones who are not playing: fringe seniors and anybody just promoted
+  const fringe=(me.players||[]).filter(p=>!p.loan&&!p.injury&&xi.indexOf(p.id)<0&&
+   ((p.stats&&p.stats.apps||0)<=2)&&p.ovr<(me.rep>8000?84:78));
+  if(!fringe.length)return;
+  if(Math.random()>.45)return;
+  const p=pick(fringe);
+  const list=loanSuitors(p);
+  if(!list.length)return;
+  const s=list[Math.floor(Math.random()*Math.min(3,list.length))];
+  const mine=loanCost(p,s.share);
+  mail('transfer','🛫 Loan enquiry: '+p.name,
+   '<b>'+esc(s.c.name)+'</b> ('+esc((typeof DIV_NAMES==='object'&&DIV_NAMES[s.c.league])||'')+') would like '+
+   '<b>'+esc(p.name)+'</b> on loan until the end of the season. He would be a <b>'+s.mins+'</b> there.<br><br>'+
+   'They will cover <b>'+s.share+'%</b> of his wages, leaving you paying <b>'+fmtW(mine)+'</b> a week.',
+   [{lbl:'Agree the loan',act:'loanDo',arg:p.id},
+    {lbl:'See who else wants him',act:'loanSheet',arg:p.id,ghost:true}]);
+  // the action buttons carry the club and share through the data attributes
+  const m=G.inbox[0];
+  if(m&&m.actions){m.actions[0]._c=s.c.i;m.actions[0]._s=s.share}
+ }catch(e){}}
+
+/* the mail's buttons need the club and the share on them */
+const _mailActionLoan=ACTIONS.loanDo;
+ACTIONS.loanDo=function(el){
+ try{
+  if(el&&el.dataset&&el.dataset.c===undefined&&el.dataset.mid){
+   const m=(G.inbox||[]).find(x=>x.id===el.dataset.mid);
+   const a=m&&m.actions&&m.actions[0];
+   if(a&&a._c!=null){el.dataset.c=a._c;el.dataset.s=a._s;el.dataset.id=a.arg}}}
+ catch(e){}
+ const r=_mailActionLoan.apply(this,arguments);
+ try{if(el&&el.dataset&&el.dataset.mid){
+  const m=(G.inbox||[]).find(x=>x.id===el.dataset.mid);if(m)m.actions=null}}catch(e){}
+ return r};
+
+const _advLoans=ACTIONS.advance;
+ACTIONS.advance=function(){
+ const r=_advLoans.apply(this,arguments);
+ try{loanOfferRound()}catch(e){}
+ return r};
+
+/* ---------------------------------------------------------------------
+   THE DOOR TO IT, ON EVERY PROFILE
+   --------------------------------------------------------------------- */
+const _profLoanBtn=openProfile;
+openProfile=function(pid){
+ _profLoanBtn.apply(this,arguments);
+ try{
+  const p=playerById(pid);const sb=$('#sheetBody');
+  if(!p||!sb||p.club!==G.my||p.loan)return;
+  if(sb.querySelector('[data-action="loanSheet"]'))return;
+  const d=document.createElement('div');
+  d.innerHTML='<button class="btn btn-ghost btn-block" style="margin-top:8px" '+
+   'data-action="loanSheet" data-id="'+p.id+'">🛫 Loan him out (choose the club)</button>';
+  sb.appendChild(d)}
+ catch(e){}};
+
+/* on loan, the squad list says what it is costing you */
+const _loanRowCost=vSquadLoans;
+vSquadLoans=function(){
+ let h=_loanRowCost.apply(this,arguments);
+ try{
+  const c=G.clubs[G.my];
+  const loans=c.players.filter(p=>p.loan);
+  if(!loans.length)return h;
+  const bill=loans.reduce((s,p)=>s+loanCost(p,p.loan.share==null?50:p.loan.share),0);
+  const full=loans.reduce((s,p)=>s+p.wage,0);
+  h+='<div class="card tight" style="margin-top:8px"><div class="spread">'+
+   '<span class="xs faint" style="letter-spacing:.8px;font-weight:800">WAGES WHILE THEY ARE AWAY</span>'+
+   '<span class="xs num" style="font-weight:800">'+fmtW(bill)+' <span class="faint">of '+fmtW(full)+'</span></span>'+
+   '</div><div class="xs faint" style="margin-top:5px;line-height:1.5">Their clubs cover the rest. '+
+   'Sending a big earner out is the quickest way to make room under the cap.</div></div>'}
+ catch(e){}
+ return h};
+
+/*#w33_loans.js#*//*#w34_matchfix.js#*/
+
+/* =====================================================================
+   THE SECOND HALF THAT SOMETIMES WOULD NOT START
+   ---------------------------------------------------------------------
+   Fast forward to half time and the button marked "2nd half" sometimes
+   did nothing. Click it again and it might work. Click it a third time
+   and it would.
+
+   The match loop runs on a ninety millisecond interval, and its very
+   first line at half time was this:
+
+       if(m.stage==='HT'){renderMCtl();return}
+
+   renderMCtl() rebuilds the whole control panel from a string. So while
+   the game sat at half time waiting for you, it was destroying and
+   recreating the "2nd half" button eleven times a second.
+
+   A mouse click is not an event, it is two: the button has to still be
+   the same element when the pointer goes down and when it comes back
+   up. A human click takes somewhere between fifty and a hundred and
+   fifty milliseconds. Against a button being replaced every ninety, a
+   large share of clicks land on an element that no longer exists by the
+   time the browser wants to fire the click — and nothing happens. On a
+   touchscreen the gap is longer still, which is why it felt random.
+
+   The half-time controls are now painted once, when half time arrives,
+   and then left alone until you do something. And resume restarts the
+   loop if it has died, so a resume can never leave the game frozen at
+   forty-six minutes.
+   ===================================================================== */
+
+const _resume2hSafe=ACTIONS.resume2h;
+ACTIONS.resume2h=function(){
+ try{
+  MU._htPainted=false;
+  const m=MU.m;
+  if(!m){closeMatchSafely();return}
+  // the half must actually turn over, whatever the previous handler does
+  if(m.stage==='HT'){m.tickOnce()}
+  if(m.stage==='HT'){m.stage='H2';m.min=Math.max(46,m.min||46)}
+  MU.speed=MU.speed||1;
+  if(!MU.timer&&typeof startLoop==='function')startLoop();
+  if(typeof renderMCtl==='function')renderMCtl();
+  if(typeof renderTop==='function')renderTop();
+  try{sfx('whistle')}catch(e){}
+ }catch(e){
+  try{if(typeof _resume2hSafe==='function')return _resume2hSafe.apply(this,arguments)}catch(err){}
+ }};
+
+function closeMatchSafely(){
+ try{if(typeof stopLoop==='function')stopLoop();
+  const el=document.getElementById('matchScreen');
+  if(el)el.classList.remove('open');
+  if(typeof render==='function')render()}catch(e){}}
+
+/* kick-off and the pre-match screen both start from a clean slate */
+const _kickoffPaint=ACTIONS.kickoff;
+if(typeof _kickoffPaint==='function')ACTIONS.kickoff=function(){
+ MU._htPainted=false;
+ return _kickoffPaint.apply(this,arguments)};
+
+/* skipping the half must not leave the flag set behind it */
+if(typeof skipHalf==='function'){
+ const _skipHalfPaint=skipHalf;
+ skipHalf=function(){MU._htPainted=false;return _skipHalfPaint.apply(this,arguments)}}
+
+/* =====================================================================
+   AND THE MATCH TAKES THE WHOLE SCREEN
+   ---------------------------------------------------------------------
+   On a desktop the match opened as a box floating over the rest of the
+   game — 1180px wide with the dashboard visible around the edges. A
+   match is the thing you sat down for; it should take the window.
+   ===================================================================== */
+(function matchFullCSS(){
+ const st=document.createElement('style');st.id='w34';
+ st.textContent=[
+  '@media (min-width:1024px){',
+  ' #matchScreen{max-width:none!important;width:100vw;left:0;right:0;top:0;bottom:0;',
+  '  border-radius:0!important;border:none!important;box-shadow:none!important;',
+  '  margin:0!important;z-index:120}',
+  /* the pitch and the panels spread into the room they now have */
+  ' #matchScreen .msb,#matchScreen .mtabs,#matchScreen .mbody,#matchScreen .mctl{',
+  '  max-width:1500px;margin-left:auto;margin-right:auto;width:100%}',
+  ' #matchScreen .msb{padding:18px 30px 12px}',
+  ' #matchScreen .msb-score{font-size:44px}',
+  ' #matchScreen .msb-team .n{font-size:16px}',
+  ' #matchScreen .mtabs{padding:10px 30px}',
+  ' #matchScreen .mbody{padding:16px 30px;flex:1;min-height:0}',
+  ' #matchScreen .mctl{padding:14px 30px 18px}',
+  /* the canvas sets its own height from its width (w * 0.66), so the way to
+     make the whole pitch fit is to cap the WIDTH by the vertical room left
+     after the scoreboard, the tabs and the dugout controls. Capping the
+     height instead just crops the bottom third of the pitch off. */
+  ' #matchScreen canvas#pitchCanvas{width:100%;max-width:min(1180px,calc((100vh - 520px)/0.66));',
+  '  margin-left:auto;margin-right:auto;display:block}',
+  ' #matchScreen .commentary{max-width:920px;margin:0 auto}',
+  ' #matchScreen .statgrid{max-width:720px;margin:0 auto}',
+  '}',
+  /* on the very widest screens the pitch and the feed can sit side by side */
+  '@media (min-width:1500px){',
+  ' #matchScreen .mbody.split{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(0,1fr);',
+  '  gap:22px;align-items:start}',
+  ' #matchScreen .mbody.split .commentary{max-width:none;margin:0}',
+  '}'
+ ].join('');
+ document.head.appendChild(st)})();
+
+/* =====================================================================
+   A MATCH THAT CANNOT GET STUCK
+   ---------------------------------------------------------------------
+   A watchdog, because a frozen match is the worst thing this game can
+   do to somebody. If the clock has not moved for six seconds while the
+   game believes it is playing, the loop is restarted. It costs nothing
+   when everything is working, which is almost always.
+   ===================================================================== */
+(function matchWatchdog(){
+ let lastMin=-1,lastAt=0,lastStage='';
+ setInterval(()=>{
+  try{
+   const el=document.getElementById('matchScreen');
+   if(!el||!el.classList.contains('open'))return;
+   const m=MU&&MU.m;
+   if(!m||m.done)return;
+   const now=Date.now();
+   if(m.min!==lastMin||m.stage!==lastStage){lastMin=m.min;lastStage=m.stage;lastAt=now;return}
+   if(m.stage==='HT')return;          // half time is meant to wait for you
+   if(MU.speed===0||MU.speed===9)return;   // so is a deliberate pause
+   if(now-lastAt<6000)return;
+   lastAt=now;
+   if(typeof startLoop==='function')startLoop();
+  }catch(e){}
+ },2000)})();
+
+/*#w34_matchfix.js#*//*#w35_prices.js#*/
+
+/* =====================================================================
+   WHAT A FOOTBALLER ACTUALLY COSTS
+   ---------------------------------------------------------------------
+   Almost every good player wanted a hundred million and the market had
+   no texture: a twenty-six-year-old on a five-year deal and a
+   thirty-three-year-old with a year left and a grievance were priced
+   within a few million of each other.
+
+   MEASURED FIRST, against the curve the game was using:
+
+       ovr   value     asking
+       80    £47.2M    £77.8M
+       84    £65.3M    £107.7M
+       86    £75.8M    £125.1M
+       88    £87.5M    £144.3M
+       90    £100.2M   £165.4M
+
+   Manchester United bought Bryan Mbeumo for sixty-five million and
+   Matheus Cunha for sixty-two and a half. Both are 86 in this game's
+   data. The game was asking a hundred and twenty-five.
+
+   TWO THINGS WERE WRONG. The value curve was too steep — the cube of
+   (rating minus 45) times eleven hundred — and on top of that the
+   asking price was value times 1.65 for anybody good. Multiplying an
+   already-high number by another high number is how everyone ends up
+   costing nine figures.
+
+   The curve now runs at eight hundred rather than eleven hundred, which
+   puts an 86 at £55M and a 90 at £73M, and the asking premium runs from
+   1.10 for a squad player to 1.40 for a club's prize asset. An 86 on a
+   long contract now asks about sixty-six million, which is what Brentford
+   actually got.
+
+   AND THE THINGS THAT MOVE A PRICE. A price is a negotiation, and every
+   one of these is a real lever in a real one:
+
+     a year left on the deal    ×0.62   — twelve months from a free
+     out of contract            ×0.35   — he can talk to anyone
+     two years left             ×0.88
+     unhappy                    ×0.85, and ×0.72 if he is really unhappy
+     transfer-listed            ×0.60   — they have already decided
+     thirty and over            ×0.84, ×0.68 at 32, ×0.50 at 34
+     injured                    ×0.85, ×0.70 if it is a long one
+     out of form and playing    ×0.88
+
+   They stack, because in life they stack: a thirty-two-year-old with a
+   year left who has been listed and is not playing well is not a
+   hundred-million-pound asset, he is a man his club would like off the
+   wage bill, and the game now says so.
+   ===================================================================== */
+
+/* ---------------------------------------------------------------------
+   1. THE CURVE
+   --------------------------------------------------------------------- */
+const _valueForReal=valueFor;
+valueFor=function(p){
+ try{
+  const ovr=Math.round(ovrOf(p));
+  let v=Math.pow(Math.max(6,ovr-45),3)*800;
+  const a=p.age;
+  const af=a<=20?1.2:a<=23?1.1:a<=27?1:a<=29?.9:a<=31?.72:a<=33?.5:.3;
+  v*=af*(1+Math.max(0,p.pot-ovr)*.02);
+  if(p.contract<=1)v*=.65;
+  return Math.round(v/50000)*50000}
+ catch(e){return _valueForReal.apply(this,arguments)}};
+
+/* every player already in the world was priced on the old curve */
+(function repriceWorld(){
+ const fix=()=>{try{
+  (G.clubs||[]).forEach(c=>{
+   (c.players||[]).forEach(p=>{p.value=valueFor(p)});
+   (c.youth||[]).forEach(p=>{p.value=valueFor(p)})});
+  (G.freeAgents||[]).forEach(p=>{p.value=valueFor(p)})}
+  catch(e){}};
+ const _ngPrice=newGame;
+ newGame=function(){const r=_ngPrice.apply(this,arguments);fix();return r};
+ const _lsPrice=loadSlot;
+ loadSlot=function(){const ok=_lsPrice.apply(this,arguments);if(ok)fix();return ok};
+})();
+
+/* ---------------------------------------------------------------------
+   2. THE ASKING PRICE
+   --------------------------------------------------------------------- */
+const _askPriceReal=askPrice;
+askPrice=function(p){
+ try{
+  const c=G.clubs[p.club];
+  if(!c)return _askPriceReal.apply(this,arguments);
+  const top3=[...c.players].sort((a,b)=>b.ovr-a.ovr).slice(0,3);
+  // how badly they want to keep him
+  let m=top3.indexOf(p)>=0?1.40:(squadBestAt(c,POSGROUP(p.pos))===p?1.24:1.10);
+
+  // the contract is the biggest lever there is
+  if(p.contract<=0)m*=.35;
+  else if(p.contract===1)m*=.62;
+  else if(p.contract===2)m*=.88;
+
+  // the dressing room
+  const mor=p.morale==null?60:p.morale;
+  if(mor<32)m*=.72; else if(mor<45)m*=.85;
+
+  // they have already made their minds up
+  if(p.listed)m*=.60;
+
+  // age
+  if(p.age>=34)m*=.50; else if(p.age>=32)m*=.68; else if(p.age>=30)m*=.84;
+
+  // not fit
+  if(p.injury)m*=(p.injury.days>60?.70:.85);
+
+  // playing badly, and playing often enough for it to be known
+  try{const apps=(p.stats&&p.stats.apps)||0;
+   if(apps>=6&&formAvg(p)&&formAvg(p)<6.2)m*=.88}catch(e){}
+
+  const v=p.value||valueFor(p);
+  return Math.max(Math.round(v*m/1e5)*1e5,3e5)}
+ catch(e){return _askPriceReal.apply(this,arguments)}};
+
+/* ---------------------------------------------------------------------
+   3. SAYING WHY
+   ---------------------------------------------------------------------
+   A price you cannot see the reasoning behind feels arbitrary, so the
+   bid sheet now lists what moved it.
+   --------------------------------------------------------------------- */
+function askReasons(p){
+ const out=[];
+ try{
+  const c=G.clubs[p.club];
+  const top3=[...c.players].sort((a,b)=>b.ovr-a.ovr).slice(0,3);
+  if(top3.indexOf(p)>=0)out.push(['One of their prized assets','up']);
+  else if(squadBestAt(c,POSGROUP(p.pos))===p)out.push(['Their first choice there','up']);
+  if(p.contract<=0)out.push(['Out of contract — free to talk to anyone','down']);
+  else if(p.contract===1)out.push(['A year left on his deal','down']);
+  else if(p.contract===2)out.push(['Two years left','down']);
+  const mor=p.morale==null?60:p.morale;
+  if(mor<32)out.push(['Deeply unhappy','down']);
+  else if(mor<45)out.push(['Unsettled','down']);
+  if(p.listed)out.push(['Transfer-listed','down']);
+  if(p.age>=34)out.push(['Thirty-four and winding down','down']);
+  else if(p.age>=32)out.push(['The wrong side of thirty-one','down']);
+  else if(p.age>=30)out.push(['Turning thirty','down']);
+  if(p.injury)out.push([p.injury.days>60?'A long-term injury':'Currently injured','down']);
+  try{const apps=(p.stats&&p.stats.apps)||0;
+   if(apps>=6&&formAvg(p)&&formAvg(p)<6.2)out.push(['Out of form','down'])}catch(e){}}
+ catch(e){}
+ return out}
+
+const _bidSheetReasons=openBidSheet;
+openBidSheet=function(pid){
+ _bidSheetReasons.apply(this,arguments);
+ try{
+  const p=playerById(pid);const sb=$('#sheetBody');
+  if(!p||!sb)return;
+  if(sb.querySelector('.askwhy'))return;
+  const rs=askReasons(p);
+  if(!rs.length)return;
+  const ask=askPrice(p);
+  const d=document.createElement('div');
+  d.className='askwhy';
+  d.innerHTML='<div class="chip-lbl" style="margin-top:12px">What sets the price</div>'+
+   '<div class="card tight" style="padding:9px 11px">'+
+   '<div class="spread" style="margin-bottom:6px"><span class="xs faint">VALUED AT</span>'+
+   '<span class="xs num" style="font-weight:800">'+fmtM(p.value||0)+'</span></div>'+
+   '<div class="spread" style="margin-bottom:7px"><span class="xs faint">THEY WANT</span>'+
+   '<span class="xs num" style="font-weight:800;color:var(--gold)">'+fmtM(ask)+'</span></div>'+
+   rs.map(r=>'<div class="xs" style="line-height:1.6;color:'+(r[1]==='up'?'#ff9a90':'#8dffa0')+'">'+
+    (r[1]==='up'?'▲ ':'▼ ')+esc(r[0])+'</div>').join('')+
+   '</div>';
+  // it belongs above the offer box, not at the bottom of the sheet
+  const f=sb.querySelector('.field');
+  if(f&&f.parentNode)f.parentNode.insertBefore(d,f);else sb.appendChild(d)}
+ catch(e){}};
+
+/* the market list shows the asking price, not just a valuation */
+const _trRowAsk=(typeof trRow==='function')?trRow:null;
+
+/*#w35_prices.js#*/
 showStart();
 </script>
 </body>
