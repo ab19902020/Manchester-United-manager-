@@ -21166,7 +21166,134 @@ ACTIONS.advance=function(){
  catch(e){}
  return _advShortlist.apply(this,arguments)};
 
-/*#w20_roomtobreathe.js#*/
+/*#w20_roomtobreathe.js#*//*#w21_worldtables.js#*/
+
+/* =====================================================================
+   THE CLUB BUTTON THAT DID NOTHING
+   ---------------------------------------------------------------------
+   Press Club on a career you have just carried on from a save and the
+   button lights up and the screen never changes. Every other tab works.
+   Start a brand new career and Club works perfectly. That gap is the
+   whole story.
+
+   The world is built once, by buildWorld(), when a career starts. As
+   well as creating four hundred and eighty-four clubs it fills in two
+   lookup tables that live outside the save file:
+
+       LEAGUES     — every division in the world: its country, its tier,
+                     its size, how many European places it gets
+       DIV_NAMES   — the printed name of each of those divisions
+
+   Neither is part of G, because neither is part of your career: they
+   describe the game, not your save. Which is correct — and is exactly
+   why loading a save has to put them back, and never did. A save
+   restores G and nothing else, so after "Continue career" LEAGUES held
+   nothing at all and DIV_NAMES held the six English entries hard-coded
+   at the top of the file.
+
+   The league table is the Club screen's opening tab, and its second
+   line is
+
+       if(!UI.tblCC)UI.tblCC=LEAGUES[UI.tblDiv].cc;
+
+   With LEAGUES empty that reads .cc of undefined and throws. The throw
+   travels up through vClubFinal to render(), which builds the whole
+   screen in a single assignment:
+
+       $('#view').innerHTML = v==='home'?vHome(): ... :vClub();
+
+   The right-hand side never finishes, so the assignment never happens,
+   so the previous screen simply stays on the display. Nothing changes,
+   nothing is reported. A dead button.
+
+   And it was never only the button. Every division outside England lost
+   its name, so a manager in Spain saw "undefined" where the league
+   should be. initCups() treats an empty LEAGUES as a signal that there
+   is no world yet and throws the cup draws away. loadSlot() calls
+   render() from inside its own try/catch, so the crash was being caught
+   and reported to you as "That save is from an older build" — which it
+   never was.
+
+   THE FIX. The two tables are rebuilt from the same static data
+   buildWorld() reads, without touching a single club, and that rebuild
+   runs whenever a save is loaded. render() checks them too, so any
+   other route into a career — importing a save file, a path added
+   later — repairs itself rather than going quiet. And the league table
+   now normalises the division it was last left on instead of trusting
+   it, and says so in a card if it still cannot draw, because a screen
+   that explains itself beats a button that does nothing.
+   ===================================================================== */
+
+function rebuildWorldTables(){
+ // precisely what buildWorld() writes into these two tables, and none of
+ // the world-building around it
+ LEAGUES.PL={k:'PL',cc:'ENG',country:'England',name:'Premier League',tier:1,
+  coef:5,size:20,euro:[4,2,1],repTop:9400,repBot:6300};
+ W_LG.forEach(L=>{LEAGUES[L.k]={k:L.k,cc:L.cc,country:L.country,name:L.name,
+  tier:L.tier,coef:L.coef,size:L.size,euro:L.euro,repTop:L.repTop,repBot:L.repBot}});
+ for(const k in LEAGUES)DIV_NAMES[k]=LEAGUES[k].name;
+ // buildWorld retires the placeholder "Continental League" because it moves
+ // everybody out of it. A save written before that happened may still have
+ // clubs sitting there, and they need something to be called.
+ let stillEU=false;
+ try{stillEU=!!(G&&G.clubs&&G.clubs.some(c=>c.league==='EU'))}catch(e){}
+ if(stillEU)DIV_NAMES.EU='Europe';else delete DIV_NAMES.EU;
+ try{if(typeof invalidateTables==='function')invalidateTables()}catch(e){}
+ return Object.keys(LEAGUES).length}
+
+function worldTablesReady(){
+ return !!(LEAGUES&&LEAGUES.PL&&DIV_NAMES&&DIV_NAMES.PL)}
+
+/* Loading a save renders from inside its own try/catch, so the tables have
+   to be back before that render runs — not after loadSlot returns. */
+const _loadWorldTables=loadSlot;
+loadSlot=function(slot){
+ try{rebuildWorldTables()}catch(e){}
+ const ok=_loadWorldTables.apply(this,arguments);
+ // and again with G in place, so the Continental League question is
+ // answered against the career that was actually loaded
+ if(ok)try{rebuildWorldTables()}catch(e){}
+ return ok};
+
+/* Any other way into a career — importing a save file straight into G, or
+   a route added later — heals itself on the next redraw. */
+const _renderWorldTables=render;
+render=function(){
+ if(!worldTablesReady()){try{rebuildWorldTables()}catch(e){}}
+ return _renderWorldTables.apply(this,arguments)};
+
+/* ---------------------------------------------------------------------
+   THE LEAGUE TABLE, WHICH NO LONGER TAKES THE SCREEN DOWN WITH IT
+   ---------------------------------------------------------------------
+   UI.tblDiv remembers the division you were last looking at. It is not
+   part of the save, but it does survive a restart within the same tab,
+   and it was trusted without being checked against a world that might
+   have changed underneath it. It is now resolved properly: the division
+   you were on if it still exists, otherwise your own, otherwise the
+   first one there is.
+   --------------------------------------------------------------------- */
+const _vTableWorld=vTable;
+vTable=function(){
+ try{
+  if(!worldTablesReady())rebuildWorldTables();
+  const keys=Object.keys(LEAGUES);
+  if(!UI.tblDiv||!LEAGUES[UI.tblDiv]){
+   let mine=null;
+   try{mine=G.clubs[G.my].league}catch(e){}
+   UI.tblDiv=(mine&&LEAGUES[mine])?mine:(keys[0]||'PL')}
+  if(!UI.tblCC||!LEAGUES[UI.tblDiv]||!leaguesOf(UI.tblCC).length)
+   UI.tblCC=(LEAGUES[UI.tblDiv]||{}).cc||'ENG';
+ }catch(e){}
+ try{return _vTableWorld.apply(this,arguments)}
+ catch(e){
+  return '<div class="card"><div class="small" style="font-weight:800;margin-bottom:4px">'+
+   'The league table could not be drawn</div>'+
+   '<div class="xs muted" style="line-height:1.5">The rest of the Club screen is '+
+   'still here — pick another section above. If this keeps happening, exporting '+
+   'your save from Save &amp; load and importing it again will rebuild the tables.</div>'+
+   '<div class="xs faint" style="margin-top:6px">('+esc(String(e&&e.message||e))+')</div></div>'}};
+
+/*#w21_worldtables.js#*/
 showStart();
 </script>
 </body>
