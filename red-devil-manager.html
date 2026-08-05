@@ -23921,7 +23921,7 @@ if(typeof skipHalf==='function'){
      make the whole pitch fit is to cap the WIDTH by the vertical room left
      after the scoreboard, the tabs and the dugout controls. Capping the
      height instead just crops the bottom third of the pitch off. */
-  ' #matchScreen canvas#pitchCanvas{width:100%;max-width:min(1180px,calc((100vh - 520px)/0.66));',
+  ' #matchScreen canvas#pitchCanvas{width:100%;max-width:min(1180px,calc((100vh - 640px)/0.66));',
   '  margin-left:auto;margin-right:auto;display:block}',
   ' #matchScreen .commentary{max-width:920px;margin:0 auto}',
   ' #matchScreen .statgrid{max-width:720px;margin:0 auto}',
@@ -25984,6 +25984,305 @@ pressBank=function(){
  return out};
 
 /*#w42_press.js#*/
+
+
+/*#w42_press.js#*//*#w43_dugout.js#*/
+
+/* =====================================================================
+   THE TOUCHLINE STRIP
+   ---------------------------------------------------------------------
+   During a match you could see the pitch and you could see the score,
+   and to find out who was having a bad game you had to leave the pitch,
+   open a sheet, read it, and close it again. Every real version of this
+   game puts the eleven along the bottom of the screen where a manager
+   can see them without looking away, and that is what this is: shirt
+   number, name, the position he is playing, his rating as it moves, and
+   a condition bar that turns amber and then red.
+
+   Tap a man and the bench opens against his shirt, filtered to who can
+   actually play there, with the effectiveness of each option worked out
+   in his position rather than his own. It is the substitution the game
+   already had, with the two clicks that were only ever navigation taken
+   out of it.
+
+   Quick tactics sit on the same strip, because the two decisions you
+   make from a dugout are who is on and how you are playing, and neither
+   is worth a trip through a menu.
+
+   It is fixed to the bottom on a desktop, where there is room for it,
+   and collapses to a scrolling row on a phone, where there is not.
+   ===================================================================== */
+
+function dugSide(){
+ try{const m=MU&&MU.m;if(!m)return null;return m.sides[mySideIx()]}catch(e){return null}}
+
+function dugCond(v){
+ const c=Math.round(v==null?100:v);
+ const col=c>=75?'var(--green)':c>=58?'var(--gold)':'var(--danger)';
+ return '<div style="height:3px;border-radius:2px;background:rgba(255,255,255,.10);overflow:hidden">'+
+  '<i style="display:block;height:100%;width:'+Math.max(3,Math.min(100,c))+'%;background:'+col+'"></i></div>'}
+
+function dugChip(pl,club){
+ const p=pl.p;
+ const no=(typeof shirtNo==='function')?shirtNo(p,club):'';
+ const r=pl.rating||6;
+ const rc=r>=7.5?'var(--green)':r>=6.5?'var(--ink)':r>=5.8?'var(--ink-faint)':'var(--danger)';
+ const warn=(pl.cond!=null&&pl.cond<58);
+ return '<button class="dugman'+(warn?' tired':'')+'" data-action="dugPick" data-id="'+p.id+'">'+
+  '<span class="dm-slot">'+esc(pl.slot||p.pos)+'</span>'+
+  '<span class="dm-no">'+no+'</span>'+
+  '<span class="dm-nm">'+esc(dugShortName(p.name))+'</span>'+
+  '<span class="dm-r num" style="color:'+rc+'">'+r.toFixed(1)+'</span>'+
+  dugCond(pl.cond)+
+  (pl.yc?'<span class="dm-card yc"></span>':'')+
+  (pl.goals?'<span class="dm-g">⚽'+(pl.goals>1?pl.goals:'')+'</span>':'')+
+  '</button>'}
+
+/* A touchline strip has no room for "Kiernan Dewsbury-Hall". Taking the
+   last word is not enough: it turns Matthijs de Ligt into "Ligt" and
+   Virgil van Dijk into "Dijk", so the particles come along with the
+   name they belong to. */
+const NAME_PARTICLES=['de','del','della','der','den','van','von','da','dos','das',
+ 'di','du','la','le','al','bin','ter','ten','op','vander','mac','mc','st'];
+function dugShortName(n){
+ const parts=String(n||'').trim().split(/\s+/);
+ if(parts.length===1)return parts[0];
+ let i=parts.length-1;
+ while(i>1&&NAME_PARTICLES.indexOf(parts[i-1].toLowerCase().replace(/[^a-z]/g,''))>=0)i--;
+ const last=parts.slice(i).join(' ');
+ return (last.length>13?last.slice(0,12)+'…':last)}
+
+function dugStripHTML(){
+ const s=dugSide();if(!s)return '';
+ const club=s.c;
+ const on=s.onfield.filter(x=>!x.off);
+ const subsLeft=s.subs;
+ let h='<div class="dugstrip" id="dugStrip">'+
+  '<div class="dug-head">'+
+  '<span class="dug-t">'+esc(club.short||club.name)+'</span>'+
+  '<span class="dug-subs">'+subsLeft+' sub'+(subsLeft===1?'':'s')+' left</span>'+
+  '<span class="dug-tac">'+esc(s.tac.formation)+' · '+esc(s.tac.mentality)+'</span>'+
+  '</div><div class="dug-row">'+on.map(pl=>dugChip(pl,club)).join('')+'</div>'+
+  '<div class="dug-foot">'+
+  ['Defensive','Balanced','Attacking'].map(m=>
+   '<button class="chip'+(s.tac.mentality===m?' on':'')+'" data-action="dugMent" data-v="'+m+'">'+m+'</button>').join('')+
+  '<button class="chip" data-action="instrOpen">📝 Full tactics</button>'+
+  '<button class="chip" data-action="subOpen">↔ Bench</button>'+
+  '</div></div>';
+ return h}
+
+/* ---------------------------------------------------------------------
+   tapping a shirt goes straight to the bench for that position
+   --------------------------------------------------------------------- */
+ACTIONS.dugPick=el=>{
+ const s=dugSide();if(!s)return;
+ const pl=s.onfield.find(x=>x.p&&x.p.id===+el.dataset.id);
+ if(!pl)return;
+ try{sfx('tap')}catch(e){}
+ if(!s.subs)return toast('No substitutions left.');
+ const bench=(s.bench||[]).filter(p=>!p.injury);
+ if(!bench.length)return toast('Nobody left on the bench.');
+ const rows=bench.slice().sort((a,b)=>calcEff(b,pl.slot)-calcEff(a,pl.slot));
+ let h='<div class="row" style="gap:10px;margin-bottom:10px">'+face(pl.p,44)+
+  '<div style="flex:1;min-width:0"><h3 style="margin:0">'+esc(pl.p.name)+'</h3>'+
+  '<div class="small muted">'+esc(pl.slot)+' · rating '+(pl.rating||6).toFixed(1)+
+  ' · '+Math.round(pl.cond==null?100:pl.cond)+'% condition</div></div></div>'+
+  '<div class="chip-lbl">Bring on in his place</div><div class="plist">';
+ rows.forEach(p=>{
+  const eff=Math.round(calcEff(p,pl.slot));
+  const oop=(typeof posPenalty==='function')&&posPenalty(p,pl.slot)>0;
+  h+=pRow(p,{
+   meta:p.age+' · '+esc(p.pos)+' · cond '+Math.round(p.cond)+'%',
+   rail:'<span class="num" style="font-weight:800;color:'+
+    (eff>=80?'var(--green)':eff>=72?'var(--ink)':'var(--ink-faint)')+'">'+eff+' here</span>'+
+    (oop?'<span class="xs" style="color:var(--amber);font-weight:800">⚠ natural '+esc(p.pos)+'</span>':''),
+   sub:'',
+   btns:'<button class="btn btn-primary btn-xs" data-action="subDo" data-id="'+p.id+
+    '" data-arg="'+pl.p.id+'">On</button>'})});
+ h+='</div>';
+ openModal(h)};
+
+ACTIONS.dugMent=el=>{
+ const s=dugSide();if(!s)return;
+ s.tac.mentality=el.dataset.v;
+ if(G.tacs)G.tacs.mentality=el.dataset.v;
+ try{sfx('tap')}catch(e){}
+ toast('Mentality: '+el.dataset.v);
+ paintDugStrip();
+ if(typeof renderMCtl==='function')renderMCtl()};
+
+/* ---------------------------------------------------------------------
+   painting it, and keeping it painted
+   ---------------------------------------------------------------------
+   The strip is rebuilt from the same numbers the match is already
+   producing, but only when they have changed — the loop runs eleven
+   times a second and rebuilding eleven buttons that often is how you
+   make a click land on a destroyed element, which is a mistake this
+   codebase has already made once.
+   --------------------------------------------------------------------- */
+let _dugKey='';
+function dugKey(){
+ const s=dugSide();if(!s)return '';
+ return s.onfield.filter(x=>!x.off).map(x=>
+  x.p.id+':'+(x.rating||0).toFixed(1)+':'+Math.round(x.cond||0)+':'+(x.goals||0)+':'+(x.yc||0)
+ ).join('|')+'|'+s.subs+'|'+s.tac.mentality}
+
+function paintDugStrip(force){
+ try{
+  const scr=document.getElementById('matchScreen');
+  if(!scr||!scr.classList.contains('open'))return;
+  const m=MU&&MU.m;
+  if(!m||m.done){const old=document.getElementById('dugStrip');if(old)old.remove();return}
+  const k=dugKey();
+  let el=document.getElementById('dugStrip');
+  if(el&&k===_dugKey&&!force)return;
+  _dugKey=k;
+  const html=dugStripHTML();
+  if(!html)return;
+  if(el){el.outerHTML=html}
+  else{
+   const ctl=scr.querySelector('.mctl');
+   if(ctl)ctl.insertAdjacentHTML('beforebegin',html);
+   else scr.insertAdjacentHTML('beforeend',html)}
+ }catch(e){}}
+
+const _mctlDug=renderMCtl;
+renderMCtl=function(){
+ const r=_mctlDug.apply(this,arguments);
+ paintDugStrip(true);
+ return r};
+const _topDug=renderTop;
+renderTop=function(){
+ const r=_topDug.apply(this,arguments);
+ paintDugStrip(false);
+ return r};
+
+/* ---------------------------------------------------------------------
+   the look
+   --------------------------------------------------------------------- */
+(function dugCSS(){
+ const st=document.createElement('style');st.id='w43';
+ st.textContent=[
+ '.dugstrip{background:linear-gradient(180deg,rgba(11,16,12,.88),rgba(8,12,9,.97));',
+ ' border-top:1px solid var(--chalk-strong);padding:8px 12px 6px}',
+ '.dug-head{display:flex;align-items:center;gap:10px;margin-bottom:6px}',
+ '.dug-t{font-family:var(--disp);font-size:12px;letter-spacing:1.4px;text-transform:uppercase;font-weight:800}',
+ '.dug-subs{font-size:10px;font-weight:800;letter-spacing:.6px;color:var(--gold)}',
+ '.dug-tac{margin-left:auto;font-size:10px;font-weight:700;color:var(--ink-faint);letter-spacing:.5px}',
+ '.dug-row{display:flex;gap:5px;overflow-x:auto;padding-bottom:4px;-webkit-overflow-scrolling:touch;',
+ ' scrollbar-width:thin}',
+ '.dug-row::-webkit-scrollbar{height:4px}',
+ '.dug-row::-webkit-scrollbar-thumb{background:rgba(255,255,255,.16);border-radius:3px}',
+ '.dugman{position:relative;flex:1 0 68px;min-width:68px;max-width:104px;text-align:left;',
+ ' background:linear-gradient(165deg,rgba(255,255,255,.055),rgba(255,255,255,.018));',
+ ' border:1px solid var(--chalk);border-radius:9px;padding:5px 6px 6px;cursor:pointer;',
+ ' display:flex;flex-direction:column;gap:2px;transition:border-color .12s,transform .12s}',
+ '.dugman:hover{border-color:rgba(251,225,34,.55);transform:translateY(-2px)}',
+ '.dugman.tired{border-color:rgba(255,176,32,.5)}',
+ '.dm-slot{font-size:8.5px;letter-spacing:.8px;font-weight:800;color:var(--ink-faint);text-transform:uppercase}',
+ '.dm-no{position:absolute;top:5px;right:6px;font-size:10px;font-weight:800;color:var(--ink-faint);',
+ ' font-variant-numeric:tabular-nums}',
+ '.dm-nm{font-size:11px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.2}',
+ '.dm-r{font-size:13px;font-weight:800;line-height:1;margin:1px 0 3px}',
+ '.dm-g{position:absolute;bottom:4px;right:5px;font-size:9px}',
+ '.dm-card.yc{position:absolute;bottom:5px;right:5px;width:6px;height:8px;border-radius:1px;background:#ffd21f}',
+ '.dug-foot{display:flex;gap:5px;margin-top:6px;overflow-x:auto;padding-bottom:2px}',
+ '.dug-foot .chip{flex:0 0 auto;font-size:11px}',
+ /* on a phone the strip is one scrolling row and nothing else */
+ '@media (max-width:1023px){',
+ ' .dugstrip{padding:6px 10px 4px}',
+ ' .dug-head{margin-bottom:4px}',
+ ' .dugman{flex:0 0 62px;min-width:62px}',
+ '}',
+ /* on a desktop it sits across the bottom, the way a bench does */
+ '@media (min-width:1024px){',
+ /* .open only: #matchScreen is display:none until a match starts, and a
+    bare display:flex here makes an invisible overlay swallow every click
+    on the front screen */
+ ' #matchScreen.open{display:flex;flex-direction:column}',
+ ' #matchScreen.open .mbody{flex:1;min-height:0;overflow:auto}',
+ ' .dugstrip{max-width:1500px;margin:0 auto;width:100%;padding:10px 30px 8px}',
+ ' .dugman{flex:1 1 0;min-width:74px;max-width:none}',
+ /* six layers each append their own row to the control panel, which together ran to about 470px and clipped the pitch above them. It scrolls inside a ceiling now, so the pitch keeps its room. */
+ ' #matchScreen.open .mctl{max-height:190px;overflow-y:auto}',
+ ' .dm-nm{font-size:12px}',
+ ' .dm-r{font-size:15px}',
+ '}'
+ ].join('');
+ document.head.appendChild(st)})();
+
+/* and it goes away when the match does */
+const _ftDug=(typeof onFT==='function')?onFT:null;
+if(_ftDug)onFT=function(){
+ const r=_ftDug.apply(this,arguments);
+ try{const el=document.getElementById('dugStrip');if(el)el.remove()}catch(e){}
+ return r};
+
+
+/* =====================================================================
+   AND THE PITCH FITS ABOVE IT
+   ---------------------------------------------------------------------
+   sizeCanvas() takes the parent's width and writes the height inline as
+   width × 0.66. That is fine in a column that scrolls and wrong in a
+   screen that does not: on a desktop the match now fills the window, so
+   the pitch has a fixed amount of room and a canvas sized purely from
+   its width overflows it — 468px of pitch in 335px of space, with the
+   bottom third of it simply gone.
+
+   Capping the width in CSS does not help, because the height is inline
+   and inline wins. The canvas has to be told how much room there is, so
+   it is: the width is now the smaller of the space across and the space
+   down, and the aspect ratio survives either way.
+   ===================================================================== */
+const _sizeCanvasFit=sizeCanvas;
+sizeCanvas=function(){
+ const cv=$('#pitchCanvas');
+ if(!cv||!cv.parentElement)return _sizeCanvasFit.apply(this,arguments);
+ try{
+  let w=cv.parentElement.clientWidth;
+  /* Measuring .mbody is circular: it is the flex item the canvas lives
+     in, so sizing the canvas changes the number you just read, and the
+     two chase each other — the first attempt settled 20px overflowed.
+     Everything else in the match screen has a height that does not
+     depend on the pitch, so the room is what is left after them. */
+  const scr=cv.closest('#matchScreen');
+  if(scr&&window.matchMedia&&window.matchMedia('(min-width:1024px)').matches){
+   let used=0;
+   ['.msb','.mtabs','.dugstrip','.mctl','#miniFeed'].forEach(sel=>{
+    const e=scr.querySelector(sel);
+    if(e)used+=e.getBoundingClientRect().height});
+   const avail=window.innerHeight-used-34;
+   if(avail>80)w=Math.min(w,Math.floor(avail/0.66));
+  }
+
+  if(!(w>60))return _sizeCanvasFit.apply(this,arguments);
+  const dpr=Math.min(window.devicePixelRatio||1,2);
+  cv.style.width=w+'px';
+  cv.style.height=Math.round(w*.66)+'px';
+  cv.style.marginLeft='auto';cv.style.marginRight='auto';cv.style.display='block';
+  cv.width=Math.round(w*dpr);cv.height=Math.round(w*.66*dpr);
+  cv._sx=cv.width/105;cv._sy=cv.height/68;
+ }catch(e){return _sizeCanvasFit.apply(this,arguments)}};
+
+/* the strip changes how much room is left, so the pitch is re-measured
+   the moment it appears or disappears */
+const _paintDugResize=paintDugStrip;
+paintDugStrip=function(){
+ const before=!!document.getElementById('dugStrip');
+ const r=_paintDugResize.apply(this,arguments);
+ try{
+  if(before!==!!document.getElementById('dugStrip')){
+   /* twice: once now, and once after the browser has actually laid the
+      strip out, because the first call measures the room the strip has
+      not taken yet */
+   const fit=()=>{try{if(typeof sizeCanvas==='function')sizeCanvas();
+    if(typeof sizeDugCanvas==='function')sizeDugCanvas()}catch(e){}};
+   fit();requestAnimationFrame(fit);
+  }
+ }catch(e){}
+ return r};
+
+/*#w43_dugout.js#*/
 
 showStart();
 </script>
