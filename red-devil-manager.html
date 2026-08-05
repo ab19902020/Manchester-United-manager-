@@ -24634,6 +24634,264 @@ vSave=function(){
 
 /*#w37_dock.js#*/
 
+
+/*#w37_dock.js#*//*#w38_analytics.js#*/
+
+/* =====================================================================
+   EVERY GAME A PLAYER HAS EVER PLAYED
+   ---------------------------------------------------------------------
+   The game already produced a beautiful pile of numbers for every match
+   — passes attempted and completed, tackles won, aerials, dribbles,
+   interceptions, touches, distance covered — and then threw almost all
+   of it away. Season totals survived until the summer; at the season
+   rollover p.stats was reset to six zeroes and the history was gone.
+
+   So there was no answer to the only question that matters about a
+   player you have owned for four years: is he getting better?
+
+   Three things are kept now.
+
+     p.log   the last sixty matches, one compact row each
+     p.car   career totals, added to after every match, never reset
+     p.hist  one row per completed season, archived before the wipe
+
+   All of it is written at the same moment the game already writes the
+   season aggregate, so there is no second pass over anything and no new
+   simulation cost. The store is bounded — sixty match rows and one row a
+   season — because a save has to stay small enough to sit in
+   localStorage for a twenty-year career.
+   ===================================================================== */
+
+/* the flag table predates the countries added with the nationality fix */
+Object.assign(CC_FLAG,{GAM:'🇬🇲',GNB:'🇬🇼',ZIM:'🇿🇼',MOZ:'🇲🇿',BER:'🇧🇲',RCA:'🇨🇫',
+ RUS:'🇷🇺',SUR:'🇸🇷',CUW:'🇨🇼',HAI:'🇭🇹',BEN:'🇧🇯',TOG:'🇹🇬',COM:'🇰🇲',SYR:'🇸🇾',
+ PLE:'🇵🇸',THA:'🇹🇭',VIE:'🇻🇳',IDN:'🇮🇩',IND:'🇮🇳',CYP:'🇨🇾',MDA:'🇲🇩',BLR:'🇧🇾',
+ LVA:'🇱🇻',LTU:'🇱🇹',EST:'🇪🇪',AZE:'🇦🇿',KAZ:'🇰🇿',MTN:'🇲🇷',LBY:'🇱🇾',SDN:'🇸🇩',
+ UGA:'🇺🇬',KEN:'🇰🇪',TAN:'🇹🇿',MWI:'🇲🇼',NAM:'🇳🇦',BOT:'🇧🇼',SLE:'🇸🇱',LBR:'🇱🇷',
+ NIG:'🇳🇪',CHA:'🇹🇩',CGO:'🇨🇬',EQG:'🇬🇶',TRI:'🇹🇹',GUA:'🇬🇹',SLV:'🇸🇻',NCA:'🇳🇮',
+ GUY:'🇬🇾',FIJ:'🇫🇯',PNG:'🇵🇬',SOL:'🇸🇧',TAH:'🇵🇫',VAN:'🇻🇺',NCL:'🇳🇨',SAM:'🇼🇸',
+ TGA:'🇹🇴',MAS:'🇲🇾',SGP:'🇸🇬',PHI:'🇵🇭',MYA:'🇲🇲',HKG:'🇭🇰',TPE:'🇹🇼',BHR:'🇧🇭',
+ OMA:'🇴🇲',KUW:'🇰🇼',LBN:'🇱🇧',TJK:'🇹🇯',TKM:'🇹🇲',KGZ:'🇰🇬',AFG:'🇦🇫',NEP:'🇳🇵',
+ BAN:'🇧🇩',MDV:'🇲🇻',SRI:'🇱🇰'});
+
+const CAR_KEYS=['apps','mins','goals','assists','motm','yc','rc','rSum','cleanSheets',
+ 'pas','pasC','key','sh','sot','tak','takW','intc','clr','duel','duelW','aer','aerW',
+ 'drb','drbW','sav','fls','touch','dist'];
+function carOf(p){
+ if(!p.car){p.car={};CAR_KEYS.forEach(k=>p.car[k]=0)}
+ CAR_KEYS.forEach(k=>{if(p.car[k]==null)p.car[k]=0});
+ return p.car}
+
+/* ---------------------------------------------------------------------
+   1. AFTER EVERY MATCH
+   --------------------------------------------------------------------- */
+const _finishCareer=MatchSim.prototype.finish;
+MatchSim.prototype.finish=function(){
+ const r=_finishCareer.apply(this,arguments);
+ try{
+  const f=this.fix;
+  if(!f||!f.rep)return r;
+  const comp=(typeof compLabel==='function')?compLabel(f):'';
+  [...f.rep.h,...f.rep.a].forEach(row=>{
+   const p=playerById(row.id);if(!p)return;
+   const c=carOf(p);
+   c.apps++;c.mins+=row.min||0;c.goals+=row.g||0;c.assists+=row.a||0;
+   c.rSum+=row.r||0;c.yc+=row.yc?1:0;c.rc+=row.red?1:0;
+   ['pas','pasC','key','sh','sot','tak','takW','intc','clr','duel','duelW',
+    'aer','aerW','drb','drbW','sav','fls','touch'].forEach(k=>c[k]+=row[k]||0);
+   c.dist+=row.dist||0;
+   if(this.motm&&this.motm.p&&this.motm.p.id===p.id)c.motm++;
+   /* a clean sheet belongs to whoever was between the posts and to the
+      back four who kept them out — the report row knows neither, so it
+      is read off the scoreline the same way the season total is */
+   const inH=f.rep.h.indexOf(row)>=0;
+   if((inH?f.as:f.hs)===0&&(row.min||0)>=45)c.cleanSheets++;
+   /* the opponent, from this player's point of view */
+   const home=(f.rep.h.indexOf(row)>=0);
+   const oppI=home?f.a:f.h, gf=home?f.hs:f.as, ga=home?f.as:f.hs;
+   if(!p.log)p.log=[];
+   p.log.unshift({d:G.day,s:G.season,o:oppI,gf:gf,ga:ga,h:home?1:0,
+    r:row.r,g:row.g,a:row.a,m:row.min,pos:row.slot,c:comp,
+    yc:row.yc?1:0,rc:row.red?1:0});
+   if(p.log.length>60)p.log.length=60;
+  });
+ }catch(e){}
+ return r};
+
+/* ---------------------------------------------------------------------
+   2. AT THE END OF EVERY SEASON, before the reset takes it all
+   --------------------------------------------------------------------- */
+const _endSeasonCareer=endSeason;
+endSeason=function(){
+ try{
+  const season=G.season;
+  G.clubs.forEach(c=>{
+   c.players.forEach(p=>{
+    const s=p.stats;if(!s||!s.apps)return;
+    if(!p.hist)p.hist=[];
+    p.hist.push({s:season,club:c.short||c.name,age:p.age,ovr:p.ovr,
+     apps:s.apps,g:s.goals,a:s.assists,
+     r:s.apps?+(s.rSum/s.apps).toFixed(2):0,
+     motm:s.motm||0,cs:s.cleanSheets||0,mins:s.mins||0});
+    if(p.hist.length>25)p.hist.shift();
+   })});
+ }catch(e){}
+ return _endSeasonCareer.apply(this,arguments)};
+
+/* ---------------------------------------------------------------------
+   3. THE SHEET
+   ---------------------------------------------------------------------
+   Reached by tapping the average-rating card on a player, which is where
+   somebody wondering about a player's numbers already has their thumb.
+   --------------------------------------------------------------------- */
+function per90(v,mins){return mins>0?(v/mins*90):0}
+function anaRow(lbl,val,sub){
+ return '<div class="spread" style="padding:6px 2px;border-bottom:1px solid var(--chalk)">'+
+  '<span class="small">'+lbl+'</span>'+
+  '<span class="row" style="gap:8px"><b class="num small">'+val+'</b>'+
+  (sub?'<span class="xs faint" style="min-width:52px;text-align:right">'+sub+'</span>':'')+'</span></div>'}
+
+/* a rating history drawn as bars, because a shape is read faster than a column */
+function ratingSpark(log,n){
+ const rows=log.slice(0,n||18).slice().reverse();
+ if(!rows.length)return '<div class="xs faint">No matches yet.</div>';
+ const H=54;
+ return '<div style="display:flex;align-items:flex-end;gap:3px;height:'+H+'px">'+
+  rows.map(m=>{
+   const r=Math.max(3,Math.min(10,m.r||0));
+   const h=Math.max(4,Math.round((r-3)/7*H));
+   const col=r>=7.5?'var(--green)':r>=6.5?'var(--gold)':r>=5.8?'#8a8f8b':'var(--danger)';
+   return '<div title="'+r.toFixed(1)+'" style="flex:1;min-width:4px;height:'+h+'px;'+
+    'background:'+col+';border-radius:2px 2px 0 0;opacity:.9"></div>'}).join('')+'</div>'}
+
+function playerAnalyticsHTML(p){
+ const c=carOf(p),s=p.stats||{};
+ const cm=Math.max(1,c.mins||1),ca=Math.max(1,c.apps||1);
+ const seasonAvg=s.apps?(s.rSum/s.apps):0;
+ const careerAvg=c.apps?(c.rSum/c.apps):0;
+ const club=G.clubs[p.club];
+ let h='<div class="row" style="gap:10px;margin-bottom:10px">'+face(p,48)+
+  '<div style="flex:1;min-width:0"><h3 style="margin:0">'+esc(p.name)+'</h3>'+
+  '<div class="small muted">'+esc((club&&club.name)||'')+' · '+p.age+' · '+
+  ccFlag(natOf(p))+' '+esc(natName(natOf(p)))+'</div></div>'+
+  ovrPill(p)+'</div>';
+
+ /* the headline four */
+ h+='<div class="grid2" style="margin-bottom:12px">'+
+  '<div class="kpi"><div class="v num" style="font-size:17px">'+(careerAvg?careerAvg.toFixed(2):'—')+'</div><div class="l">Career rating</div></div>'+
+  '<div class="kpi"><div class="v num" style="font-size:17px">'+(seasonAvg?seasonAvg.toFixed(2):'—')+'</div><div class="l">This season</div></div>'+
+  '<div class="kpi"><div class="v num" style="font-size:17px">'+(c.apps||0)+'</div><div class="l">Career apps</div></div>'+
+  '<div class="kpi"><div class="v num" style="font-size:17px">'+(c.goals||0)+' / '+(c.assists||0)+'</div><div class="l">Career G / A</div></div></div>';
+
+ /* form */
+ h+='<div class="chip-lbl">Last '+Math.min(18,(p.log||[]).length)+' matches</div>'+
+  '<div class="card tight" style="padding:10px 11px 8px;margin-bottom:12px">'+
+  ratingSpark(p.log||[],18)+
+  '<div class="spread xs faint" style="margin-top:7px"><span>oldest</span><span>most recent</span></div></div>';
+
+ /* the numbers that describe how he actually plays */
+ const gk=p.pos==='GK';
+ h+='<div class="chip-lbl">Career per 90 minutes</div><div class="card tight" style="padding:4px 11px 6px;margin-bottom:12px">';
+ if(gk){
+  h+=anaRow('Saves',per90(c.sav,cm).toFixed(2),(c.sav||0)+' total');
+  h+=anaRow('Clean sheets',(c.cleanSheets||0),pct(c.cleanSheets,ca));
+  h+=anaRow('Pass completion',pct(c.pasC,c.pas),(c.pas||0)+' att');
+ }else{
+  h+=anaRow('Goals',per90(c.goals,cm).toFixed(2),(c.goals||0)+' total');
+  h+=anaRow('Assists',per90(c.assists,cm).toFixed(2),(c.assists||0)+' total');
+  h+=anaRow('Shots / on target',per90(c.sh,cm).toFixed(2),pct(c.sot,c.sh));
+  h+=anaRow('Key passes',per90(c.key,cm).toFixed(2),(c.key||0)+' total');
+  h+=anaRow('Pass completion',pct(c.pasC,c.pas),per90(c.pas,cm).toFixed(0)+' /90');
+  h+=anaRow('Tackles won',per90(c.takW,cm).toFixed(2),pct(c.takW,c.tak));
+  h+=anaRow('Interceptions',per90(c.intc,cm).toFixed(2),(c.intc||0)+' total');
+  h+=anaRow('Duels won',pct(c.duelW,c.duel),(c.duelW||0)+'/'+(c.duel||0));
+  h+=anaRow('Aerials won',pct(c.aerW,c.aer),(c.aerW||0)+'/'+(c.aer||0));
+  h+=anaRow('Dribbles completed',per90(c.drbW,cm).toFixed(2),pct(c.drbW,c.drb));
+ }
+ h+=anaRow('Distance covered',(c.dist/ca).toFixed(1)+' km','per game');
+ h+=anaRow('Fouls conceded',per90(c.fls,cm).toFixed(2),'');
+ h+=anaRow('Cards',(c.yc||0)+' 🟨 · '+(c.rc||0)+' 🟥','');
+ h+=anaRow('Man of the match',(c.motm||0),pct(c.motm,ca));
+ h+='</div>';
+
+ /* season by season */
+ const hist=(p.hist||[]).slice().reverse();
+ h+='<div class="chip-lbl">Season by season</div><div class="card tight" style="padding:4px 11px 6px;margin-bottom:12px">';
+ if(s.apps)h+='<div class="spread" style="padding:6px 2px;border-bottom:1px solid var(--chalk)">'+
+   '<span class="small"><b>Season '+G.season+'</b> <span class="xs faint">· current</span></span>'+
+   '<span class="xs num">'+s.apps+' apps · '+s.goals+'g '+s.assists+'a · '+(seasonAvg?seasonAvg.toFixed(2):'—')+'</span></div>';
+ if(hist.length)hist.forEach(x=>{
+  h+='<div class="spread" style="padding:6px 2px;border-bottom:1px solid var(--chalk)">'+
+   '<span class="small">Season '+x.s+' <span class="xs faint">· '+esc(x.club)+' · age '+x.age+'</span></span>'+
+   '<span class="xs num">'+x.apps+' apps · '+x.g+'g '+x.a+'a · '+(x.r||'—')+'</span></div>'});
+ else if(!s.apps)h+='<div class="xs faint" style="padding:8px 2px">No completed seasons yet.</div>';
+ h+='</div>';
+
+ /* the match log itself */
+ const log=(p.log||[]).slice(0,25);
+ h+='<div class="chip-lbl">Match log</div><div class="card tight" style="padding:4px 11px 6px">';
+ if(!log.length)h+='<div class="xs faint" style="padding:8px 2px">He has not played yet.</div>';
+ log.forEach(m=>{
+  const opp=G.clubs[m.o];
+  const res=m.gf>m.ga?'W':m.gf<m.ga?'L':'D';
+  const rc=res==='W'?'var(--green)':res==='L'?'var(--danger)':'var(--gold)';
+  h+='<div class="spread" style="padding:6px 2px;border-bottom:1px solid var(--chalk)">'+
+   '<div class="row" style="gap:7px;min-width:0">'+
+   '<span class="xs num" style="color:'+rc+';font-weight:800;min-width:12px">'+res+'</span>'+
+   '<span class="small" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+
+   (m.h?'':'at ')+esc((opp&&opp.short)||'?')+'</span>'+
+   '<span class="xs faint">'+m.gf+'–'+m.ga+'</span>'+
+   (m.g?'<span class="xs">⚽'+(m.g>1?'×'+m.g:'')+'</span>':'')+
+   (m.a?'<span class="xs">🅰'+(m.a>1?'×'+m.a:'')+'</span>':'')+
+   (m.rc?'<span class="xs">🟥</span>':m.yc?'<span class="xs">🟨</span>':'')+
+   '</div>'+
+   '<div class="row" style="gap:8px"><span class="xs faint">'+m.m+"'</span>"+
+   '<b class="num small" style="color:'+(m.r>=7.5?'var(--green)':m.r<6?'var(--danger)':'var(--ink)')+'">'+
+   (m.r||0).toFixed(1)+'</b></div></div>'});
+ h+='</div>';
+ return h}
+
+ACTIONS.playerStats=el=>{
+ const p=playerById(el.dataset.id);if(!p)return;
+ try{sfx('tap')}catch(e){}
+ openModal(playerAnalyticsHTML(p))};
+
+/* ---------------------------------------------------------------------
+   4. MAKING THE CARD A DOOR
+   ---------------------------------------------------------------------
+   The average-rating card in the profile is now the way in, and it says
+   so — a card that does something should look like it does something.
+   --------------------------------------------------------------------- */
+const _profStats=openProfile;
+openProfile=function(pid){
+ _profStats.apply(this,arguments);
+ try{
+  const p=playerById(pid);if(!p)return;
+  const sb=$('#sheetBody');if(!sb)return;
+  if(sb.querySelector('[data-action="playerStats"]'))return;
+  /* find the rating KPI by its label and turn it into the entry point */
+  let card=null;
+  sb.querySelectorAll('.kpi').forEach(k=>{
+   const l=k.querySelector('.l');
+   if(l&&/avg rating/i.test(l.textContent||''))card=k});
+  if(card){
+   card.setAttribute('data-action','playerStats');
+   card.setAttribute('data-id',p.id);
+   card.style.cursor='pointer';
+   card.style.borderColor='rgba(251,225,34,.42)';
+   card.style.background='rgba(251,225,34,.07)';
+   const l=card.querySelector('.l');
+   if(l)l.innerHTML='Avg rating <span style="opacity:.75">›</span>';
+  }else{
+   /* a player at another club has no rating card — give him a button */
+   const d=document.createElement('div');
+   d.innerHTML='<button class="btn btn-ghost btn-block" style="margin-top:8px" '+
+    'data-action="playerStats" data-id="'+p.id+'">📊 Full career analytics</button>';
+   sb.appendChild(d)}
+ }catch(e){}};
+
+/*#w38_analytics.js#*/
+
 showStart();
 </script>
 </body>
