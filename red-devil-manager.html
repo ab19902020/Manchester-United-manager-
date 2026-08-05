@@ -21475,10 +21475,14 @@ vTable=function(){
  ' .continue-dock{position:fixed;left:0;bottom:0;width:var(--side-w);right:auto;',
  '  padding:0 12px 14px;z-index:6;display:block;',
  '  background:linear-gradient(180deg,transparent,rgba(7,12,9,.98) 38%)}',
- ' .continue-dock .btn{min-width:0;width:100%;min-height:60px;font-size:14px;',
- '  letter-spacing:1px;flex-direction:column;gap:2px;padding:0 12px}',
- ' .continue-dock .btn .cd-sub{font-size:9.5px;letter-spacing:.3px;white-space:nowrap;',
- '  overflow:hidden;text-overflow:ellipsis;max-width:100%}',
+ /* the dock is only as wide as the rail, and some of these labels are a
+    whole sentence — "Back to the press room", "Match day". They wrap
+    rather than being cut off, and the button grows to fit them. */
+ ' .continue-dock .btn{min-width:0;width:100%;min-height:60px;height:auto;font-size:13px;',
+ '  letter-spacing:.6px;flex-direction:column;gap:3px;padding:11px 12px;',
+ '  line-height:1.2;text-align:center;white-space:normal}',
+ ' .continue-dock .btn .cd-sub{font-size:9.5px;letter-spacing:.2px;white-space:normal;',
+ '  max-width:100%;line-height:1.35;opacity:.9}',
 
  /* --- every chip row wraps: a mouse cannot flick --- */
  ' .chips,.subtabs,.secnav{flex-wrap:wrap!important;overflow-x:visible!important;',
@@ -21777,55 +21781,103 @@ vTable=function(){
  const st=document.createElement('style');st.id='w24';
  st.textContent=[
 
- /* ---------- the intro ---------- */
- '#introScreen{position:fixed;inset:0;z-index:200;display:flex;align-items:center;',
- ' justify-content:center;background:#040605;overflow:hidden;cursor:pointer;',
- ' -webkit-tap-highlight-color:transparent}',
- '#introScreen.out{animation:introOut .55s ease forwards;pointer-events:none}',
- '@keyframes introOut{to{opacity:0;transform:scale(1.04)}}',
- '#introScreen .in-sky{position:absolute;inset:0;background:',
- ' radial-gradient(120% 70% at 50% 112%,rgba(218,41,28,.34) 0%,rgba(120,18,12,.14) 40%,transparent 68%),',
- ' radial-gradient(80% 46% at 50% -8%,rgba(251,225,34,.05),transparent 60%),',
- ' linear-gradient(180deg,#040605 0%,#0a0605 56%,#130806 100%);opacity:0;',
- ' animation:inSky 1.5s ease .1s forwards}',
- '@keyframes inSky{to{opacity:1}}',
- '#introScreen .in-beams{position:absolute;inset:0;pointer-events:none;opacity:0;',
- ' animation:inBeams 1.9s ease .25s forwards}',
- '@keyframes inBeams{0%{opacity:0}55%{opacity:.85}100%{opacity:.5}}',
- '#introScreen .in-beam{position:absolute;top:-8%;width:19vmax;height:96%;',
- ' background:linear-gradient(180deg,rgba(255,246,220,.20),rgba(255,246,220,.045) 44%,transparent 74%);',
- ' filter:blur(16px);transform-origin:top center}',
- '#introScreen .in-fore{position:relative;z-index:3;display:flex;flex-direction:column;',
- ' align-items:center;text-align:center;padding:0 22px}',
- '#introScreen .in-crest{opacity:0;transform:scale(.62) translateY(16px);',
- ' filter:drop-shadow(0 18px 52px rgba(218,41,28,.62));',
- ' animation:inCrest 1.15s cubic-bezier(.18,.9,.28,1) .35s forwards}',
- '@keyframes inCrest{to{opacity:1;transform:scale(1) translateY(0)}}',
+ /* ---------- the intro: a ground coming to life ---------- */
+ '#introScreen{position:fixed;inset:0;z-index:200;overflow:hidden;cursor:pointer;',
+ ' background:#030404;-webkit-tap-highlight-color:transparent;',
+ ' --lit:0}',
+ '#introScreen.out{animation:introOut .6s cubic-bezier(.4,0,.6,1) forwards;pointer-events:none}',
+ '@keyframes introOut{to{opacity:0;transform:scale(1.05)}}',
+ '#introScreen .in-stage{position:absolute;inset:0;display:flex;flex-direction:column;',
+ ' align-items:center;justify-content:center}',
+ /* night sky, brightening as each bank of lights comes on */
+ '#introScreen .in-sky{position:absolute;inset:0;transition:opacity .9s ease;',
+ ' background:radial-gradient(125% 76% at 50% 116%,rgba(218,41,28,.30) 0%,rgba(96,14,10,.13) 42%,transparent 70%),',
+ ' radial-gradient(90% 52% at 50% -10%,rgba(180,205,255,.05),transparent 62%),',
+ ' linear-gradient(180deg,#030404 0%,#080606 52%,#150907 100%)}',
+ '#introScreen .in-wash{position:absolute;inset:0;pointer-events:none;opacity:0;',
+ ' background:radial-gradient(70% 46% at 50% 8%,rgba(226,238,255,.16),transparent 66%);',
+ ' transition:opacity 1s ease}',
+ '#introScreen.lit1 .in-wash{opacity:.30}',
+ '#introScreen.lit2 .in-wash{opacity:.55}',
+ '#introScreen.lit3 .in-wash{opacity:.78}',
+ '#introScreen.lit4 .in-wash{opacity:1}',
+ /* the stand, drawn as one silhouette across the bottom */
+ '#introScreen .in-ground{position:absolute;left:0;right:0;bottom:0;height:min(46vh,340px);',
+ ' pointer-events:none}',
+ '#introScreen .in-ground svg{width:100%;height:100%;display:block}',
+ /* four pylons, each snapping on in turn */
+ '#introScreen .in-pylon{position:absolute;bottom:min(30vh,220px);',
+ ' width:clamp(34px,5.2vw,74px);transform:translateX(-50%);pointer-events:none}',
+ '#introScreen .in-mast{position:absolute;left:50%;top:100%;width:5px;height:min(22vh,150px);',
+ ' margin-left:-2.5px;background:linear-gradient(180deg,#2a2320,#0c0a09)}',
+ '#introScreen .in-lamps{display:grid;grid-template-columns:repeat(5,1fr);gap:3px;',
+ ' padding:7px;border-radius:5px;background:#171311;box-shadow:0 2px 8px rgba(0,0,0,.8)}',
+ '#introScreen .in-lamps i{display:block;aspect-ratio:1;border-radius:1.5px;background:#241d19;',
+ ' transition:background .12s linear,box-shadow .25s ease}',
+ '#introScreen .in-pylon.on .in-lamps i{background:#fffaf0;',
+ ' box-shadow:0 0 7px 2px rgba(255,247,224,.95)}',
+ '#introScreen .in-cone{position:absolute;left:50%;top:100%;width:44vmax;height:74vh;',
+ ' margin-left:-22vmax;opacity:0;transform-origin:top center;',
+ ' background:radial-gradient(58% 74% at 50% 0%,rgba(255,250,232,.20),rgba(255,250,232,.05) 46%,transparent 72%);',
+ ' filter:blur(22px);transition:opacity .5s ease}',
+ '#introScreen .in-pylon.on .in-cone{opacity:1;animation:coneFlicker 4.6s ease-in-out .5s infinite}',
+ '@keyframes coneFlicker{0%,100%{opacity:1}42%{opacity:.86}58%{opacity:.97}}',
+ /* the crowd, twinkling once there is light to see it by */
+ '#introScreen .in-crowd{position:absolute;left:0;right:0;bottom:min(21vh,150px);',
+ ' height:min(15vh,104px);pointer-events:none;opacity:0;transition:opacity 1.1s ease}',
+ '#introScreen.lit2 .in-crowd{opacity:.5}',
+ '#introScreen.lit4 .in-crowd{opacity:.9}',
+ '#introScreen .in-crowd b{position:absolute;width:2.5px;height:2.5px;border-radius:50%;',
+ ' background:rgba(255,240,214,.95);box-shadow:0 0 4px rgba(255,236,200,.55);',
+ ' animation:twk 3.4s ease-in-out infinite}',
+ '@keyframes twk{0%,100%{opacity:.24}50%{opacity:1}}',
+ /* foreground */
+ '#introScreen .in-fore{position:relative;z-index:5;display:flex;flex-direction:column;',
+ ' align-items:center;text-align:center;padding:0 22px;margin-bottom:min(14vh,96px)}',
+ '#introScreen .in-crest{position:relative;opacity:0;transform:scale(.5) translateY(-40px);',
+ ' filter:drop-shadow(0 22px 60px rgba(218,41,28,.7));',
+ ' animation:inCrest .82s cubic-bezier(.16,1.1,.3,1) 1.45s forwards}',
+ '@keyframes inCrest{60%{opacity:1;transform:scale(1.07) translateY(6px)}',
+ ' 100%{opacity:1;transform:scale(1) translateY(0)}}',
+ /* a shine that sweeps the badge once it has landed */
+ '#introScreen .in-crest::after{content:"";position:absolute;inset:-6%;border-radius:14px;',
+ ' background:linear-gradient(103deg,transparent 38%,rgba(255,255,255,.5) 50%,transparent 62%);',
+ ' mix-blend-mode:screen;opacity:0;animation:crestShine 1s ease 2.25s forwards}',
+ '@keyframes crestShine{0%{opacity:0;transform:translateX(-120%)}',
+ ' 22%{opacity:1}100%{opacity:0;transform:translateX(120%)}}',
+ '#introScreen .in-ring{position:absolute;left:50%;top:50%;width:120px;height:120px;',
+ ' margin:-60px 0 0 -60px;border-radius:50%;border:2px solid rgba(255,226,180,.6);',
+ ' opacity:0;animation:inRing .95s cubic-bezier(.2,.7,.3,1) 2.15s forwards}',
+ '@keyframes inRing{0%{opacity:.85;transform:scale(.45)}100%{opacity:0;transform:scale(2.5)}}',
  '#introScreen .in-t1,#introScreen .in-t2{font-family:"Archivo Black",sans-serif;line-height:1;',
- ' opacity:0;filter:blur(9px);transform:translateY(12px)}',
- '#introScreen .in-t1{font-size:clamp(34px,7.4vw,74px);letter-spacing:.02em;margin-top:26px;',
- ' background:linear-gradient(180deg,#fff 26%,#ffd9d4 62%,#d94a3d 100%);',
+ ' opacity:0;filter:blur(14px);transform:translateY(16px) scale(1.06)}',
+ '#introScreen .in-t1{font-size:clamp(36px,7.8vw,80px);letter-spacing:.02em;margin-top:30px;',
+ ' background:linear-gradient(180deg,#fff 24%,#ffd9d4 60%,#d1453a 100%);',
  ' -webkit-background-clip:text;background-clip:text;color:transparent;',
- ' animation:inWord .8s cubic-bezier(.2,.8,.3,1) 1.05s forwards}',
- '#introScreen .in-t2{font-size:clamp(30px,6.6vw,66px);letter-spacing:.22em;margin-top:6px;',
- ' background:linear-gradient(180deg,#fff6cf 18%,#fbe122 62%,#a8870a 100%);',
+ ' animation:inWord .82s cubic-bezier(.2,.8,.28,1) 2.15s forwards}',
+ '#introScreen .in-t2{font-size:clamp(31px,6.9vw,70px);letter-spacing:.24em;margin-top:8px;',
+ ' text-indent:.24em;background:linear-gradient(180deg,#fff8d8 16%,#fbe122 58%,#9c7d06 100%);',
  ' -webkit-background-clip:text;background-clip:text;color:transparent;',
- ' animation:inWord .8s cubic-bezier(.2,.8,.3,1) 1.42s forwards}',
- '@keyframes inWord{to{opacity:1;filter:blur(0);transform:translateY(0)}}',
- '#introScreen .in-sub{margin-top:22px;font-size:11.5px;letter-spacing:.42em;font-weight:800;',
- ' text-transform:uppercase;color:rgba(240,236,230,.5);opacity:0;',
- ' animation:inFade .8s ease 1.95s forwards}',
- '#introScreen .in-rule{width:0;height:1px;margin-top:20px;',
- ' background:linear-gradient(90deg,transparent,rgba(218,41,28,.9),transparent);',
- ' animation:inRule 1.5s cubic-bezier(.2,.8,.3,1) 1.7s forwards}',
- '@keyframes inRule{to{width:min(420px,72vw)}}',
- '#introScreen .in-skip{position:absolute;bottom:26px;left:0;right:0;text-align:center;',
- ' font-size:10.5px;letter-spacing:.24em;text-transform:uppercase;font-weight:800;',
- ' color:rgba(240,236,230,.26);opacity:0;animation:inFade .7s ease 1.5s forwards}',
+ ' animation:inWord .82s cubic-bezier(.2,.8,.28,1) 2.55s forwards}',
+ '@keyframes inWord{to{opacity:1;filter:blur(0);transform:translateY(0) scale(1)}}',
+ '#introScreen .in-rule{width:0;height:2px;margin-top:24px;border-radius:2px;',
+ ' background:linear-gradient(90deg,transparent,rgba(251,225,34,.95),rgba(218,41,28,.9),transparent);',
+ ' box-shadow:0 0 16px rgba(251,225,34,.5);',
+ ' animation:inRule 1.25s cubic-bezier(.2,.8,.3,1) 2.95s forwards}',
+ '@keyframes inRule{to{width:min(460px,76vw)}}',
+ '#introScreen .in-sub{margin-top:20px;font-size:11.5px;letter-spacing:.46em;font-weight:800;',
+ ' text-transform:uppercase;color:rgba(240,236,230,.56);opacity:0;text-indent:.46em;',
+ ' animation:inFade .9s ease 3.25s forwards}',
+ '#introScreen .in-vig{position:absolute;inset:0;pointer-events:none;z-index:6;',
+ ' background:radial-gradient(120% 86% at 50% 44%,transparent 52%,rgba(0,0,0,.72) 100%)}',
+ '#introScreen .in-skip{position:absolute;bottom:24px;left:0;right:0;z-index:7;text-align:center;',
+ ' font-size:10px;letter-spacing:.28em;text-transform:uppercase;font-weight:800;',
+ ' color:rgba(240,236,230,.3);opacity:0;animation:inFade .8s ease 2.1s forwards}',
  '@keyframes inFade{to{opacity:1}}',
  '@media (prefers-reduced-motion:reduce){',
- ' #introScreen *{animation-duration:.01s!important;animation-delay:0s!important}',
- ' #introScreen .in-rule{width:min(420px,72vw)}}',
+ ' #introScreen *{animation-duration:.01s!important;animation-delay:0s!important;',
+ '  transition-duration:.01s!important}',
+ ' #introScreen .in-rule{width:min(460px,76vw)}}',
 
  /* ---------- ambient depth behind the whole app ---------- */
  '#app::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;',
@@ -21937,40 +21989,88 @@ openModal=function(){
 (function intro(){
  try{
   if(document.getElementById('introScreen'))return;
+  const reduced=window.matchMedia&&window.matchMedia('(prefers-reduced-motion:reduce)').matches;
   const el=document.createElement('div');
   el.id='introScreen';
-  const beams=[18,38,62,82].map((x,i)=>
-   '<div class="in-beam" style="left:'+x+'%;margin-left:-9.5vmax;'+
-   'animation:none;opacity:'+(0.5+(i%2)*0.3)+'"></div>').join('');
+
+  // four pylons across the ground, the outer pair further out
+  const pylons=[14,36,64,86].map(x=>
+   '<div class="in-pylon" style="left:'+x+'%">'+
+    '<div class="in-cone"></div>'+
+    '<div class="in-lamps">'+new Array(15).fill('<i></i>').join('')+'</div>'+
+    '<div class="in-mast"></div>'+
+   '</div>').join('');
+
+  // a band of crowd along the stand, seeded so it is the same every time
+  let seed=20262027,crowd='';
+  const rnd=()=>{seed=(seed*1664525+1013904223)>>>0;return seed/4294967296};
+  for(let i=0;i<230;i++){
+   crowd+='<b style="left:'+(rnd()*100).toFixed(2)+'%;top:'+(rnd()*100).toFixed(2)+
+    '%;animation-delay:'+(rnd()*3.4).toFixed(2)+'s;opacity:'+(0.2+rnd()*0.6).toFixed(2)+'"></b>'}
+
   el.innerHTML=
    '<div class="in-sky"></div>'+
-   '<div class="in-beams">'+beams+'</div>'+
-   '<div class="in-fore">'+
-    '<div class="in-crest">'+
-     crest({i:'intro',c1:'#DA291C',c2:'#FBE122',short:'MUN',name:'Manchester United'},112)+
+   '<div class="in-wash"></div>'+
+   '<div class="in-crowd">'+crowd+'</div>'+
+   '<div class="in-ground">'+
+    '<svg viewBox="0 0 1200 340" preserveAspectRatio="none">'+
+     '<defs><linearGradient id="inStand" x1="0" y1="0" x2="0" y2="1">'+
+      '<stop offset="0" stop-color="#0d0f0e"/><stop offset="1" stop-color="#050706"/>'+
+     '</linearGradient></defs>'+
+     // roof line over the stand
+     '<path d="M0 118 L150 96 L340 84 L600 78 L860 84 L1050 96 L1200 118 L1200 150 L0 150 Z" fill="#0a0c0b"/>'+
+     // the stand itself
+     '<path d="M0 150 L1200 150 L1200 340 L0 340 Z" fill="url(#inStand)"/>'+
+     // the tier steps, catching a little light
+     '<g fill="rgba(255,255,255,.028)">'+
+      '<rect x="0" y="176" width="1200" height="9"/><rect x="0" y="206" width="1200" height="9"/>'+
+      '<rect x="0" y="236" width="1200" height="9"/><rect x="0" y="266" width="1200" height="9"/>'+
+     '</g>'+
+     // the pitch edge in front of it
+     '<path d="M0 300 L1200 300 L1200 340 L0 340 Z" fill="#0b1a0f"/>'+
+     '<path d="M0 306 L1200 306" stroke="rgba(230,255,235,.10)" stroke-width="2"/>'+
+    '</svg>'+
+   '</div>'+
+   pylons+
+   '<div class="in-stage"><div class="in-fore">'+
+    '<div class="in-crest"><div class="in-ring"></div>'+
+     crest({i:'intro',c1:'#DA291C',c2:'#FBE122',short:'MUN',name:'Manchester United'},118)+
     '</div>'+
     '<div class="in-t1">RED DEVIL</div>'+
     '<div class="in-t2">MANAGER</div>'+
     '<div class="in-rule"></div>'+
     '<div class="in-sub">Old Trafford · 2026/27</div>'+
-   '</div>'+
-   '<div class="in-skip">Click to skip</div>';
+   '</div></div>'+
+   '<div class="in-vig"></div>'+
+   '<div class="in-skip">Click, tap or press any key to skip</div>';
   document.body.appendChild(el);
+
+  const timers=[];
+  const at=(ms,fn)=>timers.push(setTimeout(fn,reduced?0:ms));
+  const banks=[...el.querySelectorAll('.in-pylon')];
+
+  // the lights come on one bank at a time, and the ground gets brighter
+  [420,700,980,1260].forEach((t,i)=>at(t,()=>{
+   if(banks[i])banks[i].classList.add('on');
+   el.classList.add('lit'+(i+1));
+   try{sfx('floodlight')}catch(e){}
+  }));
+  at(1450,()=>{try{sfx('crestLand')}catch(e){}});
+  at(2150,()=>{try{sfx('introSwell')}catch(e){}});
 
   let gone=false;
   const finish=()=>{
    if(gone)return;gone=true;
+   timers.forEach(clearTimeout);
    el.classList.add('out');
-   setTimeout(()=>{try{el.remove()}catch(e){}},600);
+   setTimeout(()=>{try{el.remove()}catch(e){}},640);
    document.removeEventListener('keydown',onKey,true);
   };
   const onKey=()=>finish();
   el.addEventListener('click',finish);
   el.addEventListener('touchstart',finish,{passive:true});
   document.addEventListener('keydown',onKey,true);
-
-  const reduced=window.matchMedia&&window.matchMedia('(prefers-reduced-motion:reduce)').matches;
-  setTimeout(finish,reduced?600:4000);
+  at(reduced?600:5200,finish);
  }catch(e){
   // an intro that throws must never be the reason the game will not open
   const el=document.getElementById('introScreen');
@@ -22129,7 +22229,145 @@ vSquad=function(){
  ].join('');
  document.head.appendChild(st)})();
 
-/*#w25_places.js#*/
+/*#w25_places.js#*//*#w26_sound.js#*/
+
+/* =====================================================================
+   SOUND FOR THE MOMENTS THAT DID NOT HAVE ANY
+   ---------------------------------------------------------------------
+   The audio engine here is a good one and it was already doing the hard
+   part: everything is synthesised on the fly out of oscillators and
+   filtered noise, so the whole game is still a single file with nothing
+   to download. What it had no sounds for were the new moments — the
+   lights coming on, the badge landing, a player starred, a substitute
+   sent on.
+
+   ONE THING CANNOT BE FIXED, only handled honestly. A browser will not
+   make a sound until the person has touched the page, and the intro
+   plays before anybody has touched anything. So on a cold load the
+   floodlights come on in silence — there is no way around that, and
+   pretending otherwise with an autoplay attempt just produces a console
+   error. Instead the audio context is unlocked by the first real
+   gesture, and the swell is saved for the moment it can actually be
+   heard: the press of NEW CAREER or CONTINUE, which is a better cue for
+   it anyway. Reload with the game already unlocked and the intro has
+   its sound.
+   ===================================================================== */
+
+/* ---------------------------------------------------------------------
+   1. NEW SOUNDS
+   --------------------------------------------------------------------- */
+(function addSounds(){
+ try{
+  if(typeof SOUNDS!=='object')return;
+
+  /* a floodlight bank striking: the clack of the contactor, then the
+     gas taking, then the hum settling in underneath */
+  SOUNDS.floodlight=function(){
+   sNoise({f:2600,to:900,d:.09,q:1.2,g:.05,filter:'bandpass'});
+   sNoise({f:520,to:220,d:.5,q:.6,g:.035,filter:'lowpass',at:.03});
+   sTone({f:104,to:98,d:.75,type:'sine',g:.028,at:.05});
+  };
+
+  /* the badge landing — a low impact with a bright rim on top */
+  SOUNDS.crestLand=function(){
+   sTone({f:150,to:52,d:.5,type:'sine',g:.16});
+   sNoise({f:1500,to:300,d:.3,q:.5,g:.05,filter:'lowpass'});
+   sTone({f:1240,to:820,d:.34,type:'triangle',g:.05,at:.02});
+  };
+
+  /* the title: a rising swell with the ground opening up under it */
+  SOUNDS.introSwell=function(){
+   sTone({f:73.4,d:1.7,type:'sine',g:.075});
+   sTone({f:110,d:1.5,type:'triangle',g:.045,at:.05});
+   sTone({f:146.8,d:1.3,type:'sine',g:.038,at:.12});
+   sTone({f:220,d:1.1,type:'sine',g:.024,at:.2});
+   sNoise({f:300,to:1800,d:1.5,q:.4,g:.045,filter:'bandpass',a:.7});
+  };
+
+  /* walking through the front door and into a save */
+  SOUNDS.enter=function(){
+   sTone({f:196,to:392,d:.5,type:'triangle',g:.09});
+   sTone({f:293.7,to:587.3,d:.55,type:'sine',g:.06,at:.06});
+   sNoise({f:400,to:2600,d:.9,q:.5,g:.06,filter:'bandpass',a:.45});
+   sNoise({f:180,to:120,d:1.6,q:.5,g:.05,filter:'lowpass',at:.1,a:.6});
+  };
+
+  /* a player added to the shortlist, and taken off it */
+  SOUNDS.star=function(){
+   sTone({f:1046.5,d:.09,type:'triangle',g:.07});
+   sTone({f:1568,d:.13,type:'sine',g:.05,at:.05})};
+  SOUNDS.unstar=function(){
+   sTone({f:784,to:523.3,d:.13,type:'sine',g:.055})};
+
+  /* a change made to the eleven */
+  SOUNDS.swap=function(){
+   sNoise({f:900,to:2200,d:.11,q:.9,g:.05,filter:'bandpass'});
+   sTone({f:523.3,to:784,d:.12,type:'triangle',g:.06,at:.03})};
+ }catch(e){}})();
+
+/* ---------------------------------------------------------------------
+   2. WIRING THEM UP
+   --------------------------------------------------------------------- */
+const _starSfx=ACTIONS.trStar;
+if(typeof _starSfx==='function')ACTIONS.trStar=function(el){
+ let was=false;
+ try{was=isShort({id:+el.dataset.id})}catch(e){}
+ const r=_starSfx.apply(this,arguments);
+ try{sfx(was?'unstar':'star')}catch(e){}
+ return r};
+
+const _benchSfx=ACTIONS.benchPick;
+if(typeof _benchSfx==='function')ACTIONS.benchPick=function(){
+ try{sfx('swap')}catch(e){}
+ return _benchSfx.apply(this,arguments)};
+
+const _slotSfx=ACTIONS.tslot;
+if(typeof _slotSfx==='function')ACTIONS.tslot=function(){
+ try{sfx('tap')}catch(e){}
+ return _slotSfx.apply(this,arguments)};
+
+const _autoSfx=ACTIONS.autoPickBtn;
+if(typeof _autoSfx==='function')ACTIONS.autoPickBtn=function(){
+ try{sfx('swap')}catch(e){}
+ return _autoSfx.apply(this,arguments)};
+
+const _squadSortSfx=ACTIONS.squadSort;
+if(typeof _squadSortSfx==='function')ACTIONS.squadSort=function(){
+ try{sfx('tap')}catch(e){}
+ return _squadSortSfx.apply(this,arguments)};
+
+const _trSortSfx=ACTIONS.trSort;
+if(typeof _trSortSfx==='function')ACTIONS.trSort=function(){
+ try{sfx('tap')}catch(e){}
+ return _trSortSfx.apply(this,arguments)};
+
+const _squadTabSfx=ACTIONS.squadTab;
+if(typeof _squadTabSfx==='function')ACTIONS.squadTab=function(){
+ try{sfx('nav')}catch(e){}
+ return _squadTabSfx.apply(this,arguments)};
+
+/* ---------------------------------------------------------------------
+   3. THE MOMENT SOUND IS ALLOWED, AND THE MOMENT IT IS WANTED
+   ---------------------------------------------------------------------
+   The first gesture anywhere on the page builds the audio context, so
+   everything after it can be heard. Stepping into a career then gets
+   the swell the intro could not have.
+   --------------------------------------------------------------------- */
+(function unlockAudio(){
+ const wake=()=>{try{sfxCtx()}catch(e){}};
+ ['pointerdown','touchstart','keydown'].forEach(ev=>
+  document.addEventListener(ev,wake,{capture:true,once:true,passive:true}));
+})();
+
+['frontNew','resumeCareer','startGame','frontLoad'].forEach(k=>{
+ const prev=ACTIONS[k];
+ if(typeof prev!=='function')return;
+ ACTIONS[k]=function(){
+  try{sfxCtx();sfx(k==='frontLoad'?'open':'enter')}catch(e){}
+  return prev.apply(this,arguments)};
+});
+
+/*#w26_sound.js#*/
 showStart();
 </script>
 </body>
