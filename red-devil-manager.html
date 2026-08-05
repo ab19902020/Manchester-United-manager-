@@ -20989,8 +20989,48 @@ vTransfers=function(){
 /* ---------------------------------------------------------------------
    FACES ON THE PITCH — the XI stops being eleven numbered circles
    --------------------------------------------------------------------- */
+/* ---------------------------------------------------------------------
+   THE BENCH THAT WAS TWENTY PIXELS TALL
+   ---------------------------------------------------------------------
+   Tap a shirt on a desktop and the list of players you could bring on
+   collapsed to a sliver — fourteen rows of seventy-eight pixels each,
+   inside a card measuring twenty. You could not read a single name.
+
+   The desktop tactics screen put the pitch in a second column spanning
+   two hundred grid rows so it could stay beside the instructions. But
+   the instructions are not a container — they are thirty-odd loose
+   blocks sharing the grid with the pitch, so every one of them is its
+   own row. A grid item whose overflow is not visible has an automatic
+   minimum size of zero, so the bench card never insisted on its own
+   height, and the row it landed in was handed whatever was left over
+   after the pitch's height had been shared across two hundred rows.
+   Twenty pixels.
+
+   The fix is to stop asking a flat list of blocks to behave like two
+   columns. Everything except the pitch is moved into one wrapper, so
+   the grid has exactly two items in one row: a column that lays itself
+   out normally, and a pitch beside it that can be sticky against the
+   full height of that column. The move happens on every redraw of the
+   tactics screen, before the pitch is measured, because the pitch sizes
+   its height from its own width and the width changes when it moves.
+   --------------------------------------------------------------------- */
+function wrapTacticsColumns(){
+ try{
+  const view=$('#view');
+  if(!view||UI.view!=='tactics')return;
+  if(!window.matchMedia||!window.matchMedia('(min-width:1300px)').matches)return;
+  const pitch=view.querySelector('.pitchbox');
+  if(!pitch||view.querySelector('.tac-left'))return;
+  const left=document.createElement('div');
+  left.className='tac-left';
+  [...view.children].forEach(n=>{if(n!==pitch)left.appendChild(n)});
+  view.appendChild(left);
+  view.appendChild(pitch);
+ }catch(e){}}
+
 const _paintPitchFaces=paintTacticsPitch;
 paintTacticsPitch=function(){
+ wrapTacticsColumns();
  _paintPitchFaces.apply(this,arguments);
  try{
   const box=$('#tacPitch');if(!box||!G||!G.tacs)return;
@@ -21616,12 +21656,15 @@ document.addEventListener('keydown',e=>{
  ' #view[data-view="home"] .portal{grid-template-columns:repeat(3,1fr)}',
  ' #view[data-view="home"] .quickrow{grid-template-columns:repeat(4,1fr)}',
 
- /* ---- tactics: instructions scroll, the pitch stays where you can see it ---- */
+ /* ---- tactics: instructions scroll, the pitch stays where you can see it ----
+    Two items, one row. See wrapTacticsColumns() for why this is not simply
+    "put the pitch in column two and let the rest fall into column one". */
  ' #view[data-view="tactics"]{display:grid;grid-template-columns:minmax(0,1fr) 560px;',
- '  gap:0 28px;align-content:start}',
- ' #view[data-view="tactics"]>*{grid-column:1;max-width:none;margin:0 0 10px;min-width:0}',
- ' #view[data-view="tactics"]>.pitchbox{grid-column:2;grid-row:1/span 200;',
- '  position:sticky;top:0;align-self:start;margin:0;max-width:560px}',
+ '  gap:0 28px;align-items:start}',
+ ' #view[data-view="tactics"]>*{max-width:none;margin:0;min-width:0}',
+ ' #view[data-view="tactics"]>.tac-left{grid-column:1;min-width:0}',
+ ' #view[data-view="tactics"]>.pitchbox{grid-column:2;position:sticky;top:0;',
+ '  align-self:start;margin:0;max-width:560px}',
 
  /* ---- squad vitals in one band ---- */
  ' .vitalcard{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr) minmax(0,1.1fr);',
@@ -21935,7 +21978,158 @@ openModal=function(){
  }
 })();
 
-/*#w24_intro.js#*/
+/*#w24_intro.js#*//*#w25_places.js#*/
+
+/* =====================================================================
+   PUTTING THINGS WHERE YOU WOULD LOOK FOR THEM
+   ---------------------------------------------------------------------
+   The Club section had grown into everything that was not the squad,
+   the shape or the market: the league table, the calendar, the cups,
+   European results, the international scene, the training ground, the
+   staff, the stadium, the finances, the press and the save slots. Four
+   headings and thirteen tabs, and the one thing nobody could find was
+   training — which is not a club matter at all. Deciding how hard a
+   squad works, what it works on, who is on an individual programme and
+   who is being retrained is squad management. It sat two clicks away
+   under the accounts.
+
+   So the game now has six sections instead of five, split on what a
+   thing IS rather than where it happened to be added:
+
+     SQUAD      who you have — first team, academy, loans, the treatment
+                room, and the training ground
+     TACTICS    how they play
+     TRANSFERS  who you are trying to sign
+     LEAGUE     the competition — table, calendar, cups, fixtures,
+                statistics, the international game
+     CLUB       the institution — staff, stadium, finances, the press,
+                and your save
+
+   Nothing is removed and nothing is rewritten: every screen is the one
+   it always was. What changes is which door it is behind. The Club
+   screen's own section nav is built from one shared list, so switching
+   that list is enough to make both doors show the right rooms.
+   ===================================================================== */
+
+/* ---------------------------------------------------------------------
+   1. A SIXTH DOOR
+   --------------------------------------------------------------------- */
+(function addWorldNav(){
+ try{
+  if(NAV.some(n=>n[0]==='world'))return;
+  const ix=NAV.findIndex(n=>n[0]==='club');
+  const world=['world','League',
+   'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18M3.6 9h16.8M3.6 15h16.8M12 3c2.2 2.4 3.3 5.4 3.3 9s-1.1 6.6-3.3 9c-2.2-2.4-3.3-5.4-3.3-9S9.8 5.4 12 3z'];
+  const club=['club','Club','M3.5 21h17M5.5 21V9.4L12 5.6l6.5 3.8V21M9.5 21v-4.6h5V21M9 12.4h1.6M13.4 12.4H15'];
+  if(ix<0){NAV.push(world);NAV.push(club);return}
+  NAV[ix]=club;          // the Club door becomes the institution
+  NAV.splice(ix,0,world); // the competition gets its own
+ }catch(e){}})();
+
+/* ---------------------------------------------------------------------
+   2. THE TWO TAB SETS
+   --------------------------------------------------------------------- */
+const WORLD_GROUPS=[
+ ['Competition',[['table','Table'],['calendar','Calendar'],['fixtures','Fixtures']]],
+ ['Trophies',[['cups','Cups']]],
+ ['Records',[['stats','Stats'],['intl','International']]]];
+const CLUBONLY_GROUPS=[
+ ['The club',[['staff','Staff'],['stadium','Stadium'],['finances','Finances']]],
+ ['Around the game',[['media','Media']]],
+ ['Game',[['save','Save & load']]]];
+const WORLD_TABS=['table','calendar','fixtures','cups','stats','intl'];
+const CLUB_TABS=['staff','stadium','finances','media','save'];
+
+/* The whole Club screen — six layers of it — builds its section nav by
+   mapping over CLUB_GROUPS and dispatches on UI.clubTab. Swapping what
+   that list holds, just before the screen is drawn, is therefore enough
+   to give the two doors different rooms without touching any of them. */
+function useGroups(list){
+ try{CLUB_GROUPS.length=0;list.forEach(g=>CLUB_GROUPS.push([g[0],g[1].slice()]))}catch(e){}}
+
+const _vClubPlaces=vClubFinal;
+vClubFinal=function(){
+ const world=(UI.view==='world');
+ useGroups(world?WORLD_GROUPS:CLUBONLY_GROUPS);
+ const allowed=world?WORLD_TABS:CLUB_TABS;
+ if(allowed.indexOf(UI.clubTab)<0)UI.clubTab=allowed[0];
+ return _vClubPlaces.apply(this,arguments)};
+
+/* Landing on a door should land you in that door's first room rather
+   than wherever you happened to be standing in the other one. */
+const _navPlaces=ACTIONS.nav;
+ACTIONS.nav=function(el){
+ try{
+  const v=el&&el.dataset&&el.dataset.v;
+  if(v==='world'&&WORLD_TABS.indexOf(UI.clubTab)<0)UI.clubTab='table';
+  if(v==='club'&&CLUB_TABS.indexOf(UI.clubTab)<0)UI.clubTab='staff';
+ }catch(e){}
+ return _navPlaces.apply(this,arguments)};
+
+/* Anything that jumps straight to a club room — a tile on the home
+   screen, a link in a letter — has to arrive at the right door too. */
+const _clubTabPlaces=ACTIONS.clubTab;
+ACTIONS.clubTab=function(el){
+ try{
+  const t=el&&el.dataset&&el.dataset.v;
+  if(WORLD_TABS.indexOf(t)>=0)UI.view='world';
+  else if(CLUB_TABS.indexOf(t)>=0)UI.view='club';
+ }catch(e){}
+ return _clubTabPlaces.apply(this,arguments)};
+
+const _jumpPlaces=ACTIONS.jump;
+if(typeof _jumpPlaces==='function')ACTIONS.jump=function(el){
+ try{
+  const v=el&&el.dataset&&el.dataset.v;
+  if(v==='club'&&WORLD_TABS.indexOf(UI.clubTab)>=0)el.dataset.v='world';
+ }catch(e){}
+ return _jumpPlaces.apply(this,arguments)};
+
+/* The world view is not one of the five the renderer knows about, so it
+   falls through to the Club screen — which, with the list swapped
+   above, is exactly the screen we want. It only needs the section to
+   report itself correctly to the stylesheet and the nav. */
+const _renderPlaces=render;
+render=function(){
+ const r=_renderPlaces.apply(this,arguments);
+ try{if(UI.view==='world'){const v=$('#view');if(v)v.setAttribute('data-view','world')}}catch(e){}
+ return r};
+
+/* ---------------------------------------------------------------------
+   3. TRAINING MOVES IN WITH THE SQUAD
+   --------------------------------------------------------------------- */
+const _squadTabsTrain=vSquadTabs;
+vSquadTabs=function(){
+ let h=_squadTabsTrain.apply(this,arguments);
+ try{
+  if(h.indexOf('data-v="training"')<0)
+   h=h.replace('</div>','<button class="chip'+((UI.squadTab||'first')==='training'?' on':'')+
+    '" data-action="squadTab" data-v="training">Training</button></div>')}
+ catch(e){}
+ return h};
+
+const _vSquadTrain=vSquad;
+vSquad=function(){
+ if((UI.squadTab||'first')!=='training')return _vSquadTrain.apply(this,arguments);
+ let body='';
+ try{body=vTraining()}catch(e){body='<div class="card"><div class="small muted">The training ground could not be drawn.</div></div>'}
+ return vSquadTabs()+body};
+
+/* ---------------------------------------------------------------------
+   4. SIX ACROSS THE BOTTOM OF A PHONE
+   --------------------------------------------------------------------- */
+(function sixUpCSS(){
+ const st=document.createElement('style');st.id='w25';
+ st.textContent=[
+  '@media (max-width:1023px){',
+  ' .nav button{font-size:9px;letter-spacing:.1px;gap:2px;padding:0 1px}',
+  ' .nav button svg{width:20px;height:20px}',
+  '}',
+  '@media (max-width:359px){.nav button{font-size:8.5px}}'
+ ].join('');
+ document.head.appendChild(st)})();
+
+/*#w25_places.js#*/
 showStart();
 </script>
 </body>
