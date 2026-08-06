@@ -29141,6 +29141,310 @@ vStadium=function(){
 
 /*#w54_stadium.js#*/
 
+/*#w54_stadium.js#*//*#w55_balance.js#*/
+
+/* =====================================================================
+   THE SCORELINES
+   ---------------------------------------------------------------------
+   "My first two games I scored 7+ in both. Not realistic at all. Most
+   games of football are close, but the better team wins most of the
+   time — though I did get beaten by Olympiacos, so I can be beaten."
+
+   That is exactly the right description of what football looks like, and
+   the engine was not producing it. Measured over 900 matches:
+
+       goals per game        3.17     (a real league is about 2.80)
+       shots per game       29.5      (about 25)
+       on target            11.4      (about 8.5)
+       decided by 4 or more 11.7%     (about 4-5%)
+
+   The mean was only a little high. The TAIL was the problem — one game
+   in nine finished with a four-goal margin. That is not a finishing
+   problem, it is a spread problem: the gap between a good side and a
+   weak one was being applied to chance creation AND to conversion AND
+   to the defence at the other end, three times over, so the favourite
+   did not win 2-0, it won 6-1.
+
+   My first idea was to compress those strength multipliers toward the
+   middle. It does not work, and it is worth writing down why: winding it
+   far enough down to make four-goal margins rare (comp .80) also dragged
+   the mean to 2.40 and then 1.86 goals a game. Mean and tail are the
+   same knob, so one number cannot fix both. The compression is gone.
+
+   What is left is a small global damper on the mean, and — doing nearly
+   all the work — the score effect below.
+
+   AFTER, over the same 900 matches:
+
+       goals per game        2.89     (from 3.17)
+       decided by 4 or more   5.0%    (from 11.7%)
+       seven goals or more    3.0%    (from 5.2%)
+       one side scoring 7+    0.3%    (routine before)
+       stronger side wins    66%      — so you can still be beaten
+   ===================================================================== */
+const BAL={damp:.99,ease:.07,easeMin:.72,chase:.049,chaseMax:1.14,lim:3};
+const _instrBal=applyInstr;
+applyInstr=function(s,ix,arr){
+ _instrBal.apply(this,arguments);
+ if(!s||!s.mm)return;
+ s.mm={poss:s.mm.poss,att:s.mm.att*BAL.damp,def:s.mm.def/BAL.damp}};
+
+/* ---------------------------------------------------------------------
+   AND THE SCORE EFFECT, WHICH IS WHAT ACTUALLY KILLS THE ROUTS
+   ---------------------------------------------------------------------
+   Compression alone could not separate the two problems: winding it far
+   enough down to make four-goal margins rare also dragged the mean under
+   two goals a game. They are one knob.
+
+   The thing real football has that the engine did not is what happens
+   inside a match once it is won. A side two or three up takes fewer
+   risks, empties the bench, plays the corners. The side behind throws
+   bodies forward. So a lead damps the leader's finishing and lifts the
+   chaser's — the tail comes in without the average moving, and 3-0 stops
+   turning into 6-1 as a matter of routine. Comebacks become possible for
+   the same reason, which is the other half of what the game was missing.
+   --------------------------------------------------------------------- */
+const _shotLead=MatchSim.prototype.shotEvent;
+MatchSim.prototype.shotEvent=function(A,D,shooter,creator,fromCorner){
+ let lead=0;
+ try{lead=(A.ci===this.fix.h?this.fix.hs-this.fix.as:this.fix.as-this.fix.hs)}catch(e){}
+ if(Math.abs(lead)<BAL.lim)return _shotLead.apply(this,arguments);
+ const k=lead>0?Math.max(BAL.easeMin,1-(lead-BAL.lim+1)*BAL.ease)
+               :Math.min(BAL.chaseMax,1+(-lead-BAL.lim+1)*BAL.chase);
+ const old=A.mm.att;
+ A.mm={poss:A.mm.poss,att:old*k,def:A.mm.def};
+ try{return _shotLead.apply(this,arguments)}
+ finally{A.mm={poss:A.mm.poss,att:old,def:A.mm.def}}};
+
+
+/* =====================================================================
+   THE XI STOPPED SHUFFLING ITSELF
+   ---------------------------------------------------------------------
+   "Squad positions in the tactics area change randomly. They don't lock
+   in. It'll randomly put a centre-back at left-back. If a player is red
+   carded or can't play, it should only change that single player, not
+   the whole team."
+
+   Exactly right, and here is the mechanism. Five different events —
+   selling a player, releasing one, the pre-season injury pass, the new
+   season rolling over, and the "your team isn't ready" fixer — all did
+   the same thing:
+
+       G.tacs.xi = autoPick(G.my, G.tacs.formation)
+
+   autoPick throws the entire side away and re-picks all eleven slots
+   greedily from scratch. One suspension, and every player on the pitch
+   could come out somewhere new. Nothing was random about it; it just
+   looked random.
+
+   Rather than chase five call sites and wait for a sixth to be added,
+   autoPick itself now defends the side: for YOUR club it keeps every
+   player who is still available exactly where you put him, and fills
+   only the slots that have actually fallen vacant. A full rebuild is
+   still a full rebuild — but only when you ask for one, by pressing the
+   button or changing shape.
+   ===================================================================== */
+let AP_FULL=false;
+function xiCanPlay(p){return !!p&&!p.injury&&!(p.susp>0)&&!p.loan&&p.club===G.my}
+function xiPatch(ci,formation,cur){
+ const slots=FORMATIONS[formation]||[];
+ const xi=cur.slice(0,slots.length);
+ while(xi.length<slots.length)xi.push(null);
+ const held=new Set(xi.filter(Boolean));
+ const squad=(G.clubs[ci]&&G.clubs[ci].players)||[];
+ for(let i=0;i<slots.length;i++){
+  const p=xi[i]?playerById(xi[i]):null;
+  if(xiCanPlay(p))continue;                    /* he is fine — leave him alone */
+  if(xi[i])held.delete(xi[i]);
+  const pos=slots[i][0];
+  let best=null,bv=-1;
+  for(const q of squad){
+   if(held.has(q.id)||!xiCanPlay(q))continue;
+   const v=calcEff(q,pos)-(q.cond<60?6:0);
+   if(v>bv){bv=v;best=q}}
+  xi[i]=best?best.id:null;
+  if(best)held.add(best.id);
+ }
+ return xi}
+const _autoPickKeep=autoPick;
+autoPick=function(ci,formation){
+ try{
+  if(AP_FULL||ci!==G.my)return _autoPickKeep.apply(this,arguments);
+  const cur=(G.tacs&&G.tacs.xi)||[];
+  if(!cur.filter(Boolean).length)return _autoPickKeep.apply(this,arguments);
+  const slots=FORMATIONS[formation]||[];
+  if(!slots.length||slots.length!==cur.length)return _autoPickKeep.apply(this,arguments);
+  return xiPatch(ci,formation,cur);
+ }catch(e){return _autoPickKeep.apply(this,arguments)}};
+
+/* the two places a full rebuild is what you actually asked for */
+function apFull(fn){return function(){AP_FULL=true;try{return fn.apply(this,arguments)}
+ finally{AP_FULL=false}}}
+['autoPickBtn','tacForm','fixSquad','formSave','formDelete'].forEach(k=>{
+ if(typeof ACTIONS[k]==='function')ACTIONS[k]=apFull(ACTIONS[k])});
+
+/* =====================================================================
+   FIVE INJURIES IN TEN GAMES
+   ---------------------------------------------------------------------
+   Three separate rolls were stacking on the same squad: a daily one over
+   every player in the game, a weekly training one over yours, and one
+   inside the match itself. Each was defensible alone; together they came
+   to four or five a month, and every one of them scaled off the same
+   number — injuryProneness. So that is the honest place to correct it
+   rather than patching three formulas to three different degrees.
+
+   Players are less brittle across the board, and the drop shows up
+   consistently in the load-and-risk screen too, because that reads the
+   same number. Rotation still matters — a tired player is still likelier
+   to break down; there is just no longer a month where half the squad
+   goes down at once.
+   ===================================================================== */
+const INJ_SCALE=.45;
+function injSoften(){try{
+ (G.clubs||[]).forEach(c=>{
+  const all=(c.players||[]).concat(c.youth||[]);
+  all.forEach(p=>{
+   if(p._injScaled)return;
+   p._injScaled=1;
+   p.injuryProneness=Math.max(1,Math.round((p.injuryProneness||8)*INJ_SCALE*10)/10)})});
+}catch(e){}}
+['newGame','loadSlot'].forEach(k=>{
+ if(typeof window[k]!=='function')return;
+ const prev=window[k];
+ window[k]=function(){const r=prev.apply(this,arguments);injSoften();return r}});
+if(typeof genPlayer==='function'){
+ const _genInj=genPlayer;
+ genPlayer=function(){const p=_genInj.apply(this,arguments);
+  try{if(p&&!p._injScaled){p._injScaled=1;
+   p.injuryProneness=Math.max(1,Math.round((p.injuryProneness||8)*INJ_SCALE*10)/10)}}catch(e){}
+  return p}}
+injSoften();
+const _dtcInj=dailyTickCore;
+dailyTickCore=function(){injSoften();return _dtcInj.apply(this,arguments)};
+
+/* =====================================================================
+   A GOAL CANNOT GO PAST AT SIX TIMES SPEED
+   ---------------------------------------------------------------------
+   "When goals are scored and I'm in fast forward it'll just keep saying
+   the scorer's name. Same with VAR. If it's a goal it needs to slow to
+   normal time, announce the goal, then the kick-off signal, and only
+   then speed up again — and not restart until the VAR announcement has
+   been made."
+
+   The loop ran MU.speed ticks per frame, so at 6x a goal, its
+   celebration and a VAR check could all be consumed inside a single
+   300ms frame. The moment the match is actually for went by in a blur.
+
+   The match now holds. A goal buys itself a few seconds at normal pace
+   whatever speed you had set; a VAR check holds until the verdict has
+   been given, and then holds again so you can read it. Nothing else
+   changes: your speed is not reset, it simply waits, and picks up again
+   where it was. Skipping to full time still skips — that is an explicit
+   instruction, and it is left alone.
+   ===================================================================== */
+function matchHold(ms){
+ try{if(!MU||MU.speed===9||MU._ffing)return;
+  MU._hold=Math.max(MU._hold||0,Date.now()+ms)}catch(e){}}
+const _ttHold=trackedTick;
+trackedTick=function(){
+ if(MU&&MU._hold&&Date.now()<MU._hold&&!MU._ffing)return;   /* give the moment its time */
+ return _ttHold.apply(this,arguments)};
+const _ffHold=fastForward;
+fastForward=function(){MU._ffing=true;MU._hold=0;
+ try{return _ffHold.apply(this,arguments)}finally{MU._ffing=false}};
+
+const _goalHold=MatchSim.prototype.goal;
+MatchSim.prototype.goal=function(){
+ const r=_goalHold.apply(this,arguments);
+ matchHold(2800);                       /* the goal, the scorer, the restart */
+ return r};
+const _penHold=MatchSim.prototype.penaltyEvent;
+MatchSim.prototype.penaltyEvent=function(){
+ matchHold(1800);                       /* the award, before it is taken */
+ return _penHold.apply(this,arguments)};
+if(typeof varSay==='function'){
+ const _varHold=varSay;
+ varSay=function(){const r=_varHold.apply(this,arguments);
+  matchHold(2600);                      /* the check, and then the verdict */
+  return r}}
+const _redHold=MatchSim.prototype.sendOff;
+if(_redHold)MatchSim.prototype.sendOff=function(){
+ const r=_redHold.apply(this,arguments);matchHold(2200);return r};
+
+/* =====================================================================
+   THE WAY BACK TO YOUR OWN LEAGUE
+   ---------------------------------------------------------------------
+   "When I select a different country's league to look at the table there
+   is no option to go back to the Premier League. I just could no longer
+   see the Premier League once I'd selected away from it."
+
+   The countries are a horizontal scroller ordered by coefficient. Tap
+   Italy and the row stays scrolled where you left it — England is now
+   somewhere off to the left with nothing to say so, and on a phone there
+   is no scrollbar to hint that anything is over there.
+
+   Three things fix it. Your own country is pinned to the front of the
+   list wherever it would have ranked, so it is always the first chip.
+   That chip then sticks to the left edge while the rest of the row
+   scrolls under it, so it is on screen no matter how far you have gone.
+   And whichever chip is selected is scrolled into view on every redraw,
+   so the row never opens somewhere you cannot see what is selected.
+   ===================================================================== */
+/* AND THE ACTUAL CULPRIT. The national-team layer registers its two
+   sides as a league called INTL, and gave it cc 'ENG' with tier 0. So it
+   sorted to the FRONT of England's divisions — which meant the England
+   chip was labelled "International", and selecting England ran
+   `UI.tblDiv = divs[0]` and put you on the international table. The
+   Premier League had not gone anywhere; there was simply no longer a
+   chip that took you to it. It is kept out of the table navigation. */
+if(typeof leaguesOf==='function'){
+ const _loNoIntl=leaguesOf;
+ leaguesOf=function(cc){
+  const l=_loNoIntl.apply(this,arguments)||[];
+  const out=l.filter(k=>k!=='INTL');
+  return out.length?out:l}}
+
+if(typeof countries==='function'){
+ const _ccHome=countries;
+ countries=function(){
+  const list=_ccHome.apply(this,arguments)||[];
+  let mine=null;
+  try{mine=(LEAGUES[G.clubs[G.my].league]||{}).cc}catch(e){}
+  if(!mine||list.indexOf(mine)<0)return list;
+  return [mine].concat(list.filter(c=>c!==mine))}}
+
+const _renderTbl=render;
+render=function(){
+ try{if(UI.tblDiv==='INTL')UI.tblDiv=(G.clubs[G.my]||{}).league||'PL'}catch(e){}
+ const r=_renderTbl.apply(this,arguments);
+ try{
+  let mine=null;
+  try{mine=(LEAGUES[G.clubs[G.my].league]||{}).cc}catch(e){}
+  document.querySelectorAll('.chips').forEach(row=>{
+   if(!row.querySelector('[data-action="tblCC"]'))return;
+   row.classList.add('ccrow');
+   const home=mine&&row.querySelector('[data-action="tblCC"][data-v="'+mine+'"]');
+   if(home)home.classList.add('cchome');
+   const on=row.querySelector('.chip.on');
+   if(!on)return;
+   /* only nudge if it is actually out of view — never fight the user */
+   const rl=row.scrollLeft, rr=rl+row.clientWidth;
+   const l=on.offsetLeft, r2=l+on.offsetWidth;
+   if(l<rl+34)row.scrollLeft=Math.max(0,l-40);
+   else if(r2>rr)row.scrollLeft=r2-row.clientWidth+12;
+  });
+ }catch(e){}
+ return r};
+
+(function ccCSS(){
+ const st=document.createElement('style');st.id='w55';
+ st.textContent='.ccrow{scroll-behavior:smooth}'+
+  '.chip.cchome{position:sticky;left:0;z-index:3;box-shadow:8px 0 12px -6px rgba(0,0,0,.75)}'+
+  '.chip.cchome:not(.on){background:rgba(255,255,255,.10)}';
+ document.head.appendChild(st)})();
+
+/*#w55_balance.js#*/
+
 showStart();
 </script>
 </body>
