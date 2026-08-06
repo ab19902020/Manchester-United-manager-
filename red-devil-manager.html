@@ -26956,6 +26956,94 @@ if(typeof _mtab46==='function')ACTIONS.mtab=function(){
 
 /*#w46_matchfit.js#*/
 
+/*#w47_voice.js#*/
+
+/* =====================================================================
+   THE WAVENET VOICES, WITHOUT A CLOUD KEY
+   ---------------------------------------------------------------------
+   The request was to use Google's free WaveNet speech. Worth being exact
+   about what is and is not possible here, because the answer is better
+   than it first looks.
+
+   Google Cloud Text-to-Speech — the WaveNet, Neural2 and Studio voices —
+   is not keyless. Every request needs an API key tied to a billing
+   account, even inside the free tier. This game is one self-contained
+   HTML file that people download and run offline, so a key would have to
+   be written into it in plain text, where it would be scraped and
+   revoked within days, and every spoken line would need a round trip.
+
+   But the good voices are already on the device. Android ships Google's
+   speech engine, and Chrome exposes it through the Web Speech API with
+   no key at all. Crucially it exposes TWO tiers, and the naming is the
+   only thing that tells them apart:
+
+       en-gb-x-gbb-network    server-side, the WaveNet-quality ones
+       en-gb-x-gbb-local      the compact on-device fallback
+
+   The ranking could not see the difference, because neither name
+   contains any of the words it was looking for — "natural", "neural",
+   "wavenet" — so a phone with both installed was as likely to pick the
+   compact voice as the good one. That is almost certainly what "the TTS
+   isn't great" was.
+
+   The network tier now outranks everything else, and the picker says
+   which tier each voice belongs to so it can be checked by ear.
+   ===================================================================== */
+const _ttsScoreNet=ttsScore;
+ttsScore=function(v){
+ let s=_ttsScoreNet.apply(this,arguments);
+ try{
+  const n=String((v&&v.name)||'')+' '+String((v&&v.voiceURI)||'');
+  /* Android's server-side Google voices — the WaveNet-quality tier —
+     are identified only by this suffix */
+  if(/-network\b/i.test(n))s+=55;
+  else if(/-local\b/i.test(n))s-=8;
+  /* and the x- voice ids are Google's own, whatever the tier */
+  if(/\bx-[a-z]{3}\b/i.test(n))s+=12;
+ }catch(e){}
+ return s};
+function voiceTier(v){
+ const n=String((v&&v.name)||'')+' '+String((v&&v.voiceURI)||'');
+ if(/-network\b/i.test(n))return 'network';
+ if(/-local\b/i.test(n))return 'compact';
+ if(v&&v.localService===false)return 'network';
+ return 'device'}
+
+/* the list has to be re-sorted with the new ranking, since it was built
+   with the old one before this layer loaded */
+try{if(TTS.voices&&TTS.voices.length)ttsIndex(TTS.voices.slice())}catch(e){}
+
+/* and the picker says which tier you are listening to */
+const _voicePickNet=ACTIONS.sfxVoicePick;
+ACTIONS.sfxVoicePick=function(){
+ const r=_voicePickNet.apply(this,arguments);
+ try{
+  const sb=$('#sheetBody');if(!sb)return r;
+  if(sb.querySelector('.vtier'))return r;
+  const rows=sb.querySelectorAll('[data-action="sfxVoiceSet"][data-v]');
+  rows.forEach(el=>{
+   const nm=el.getAttribute('data-v');if(!nm)return;
+   const v=TTS.byName[nm];if(!v)return;
+   const t=voiceTier(v);
+   const bd=el.querySelector('.bd');if(!bd)return;
+   const lbl=t==='network'?'<b style="color:var(--green)">high quality</b>'
+    :t==='compact'?'<span style="color:var(--amber)">compact</span>':'on device';
+   bd.innerHTML=esc(v.lang||'')+' · '+lbl;
+   el.classList.add('vtier');
+  });
+  const note=document.createElement('div');
+  note.className='vtier xs faint';
+  note.style.cssText='line-height:1.6;padding:8px 2px 0';
+  note.innerHTML='Android installs Google\u2019s speech engine in two tiers. The '+
+   '<b style="color:var(--green)">high quality</b> ones are the server-side voices — the same '+
+   'family as WaveNet — and the game now ranks them first. If your phone only lists compact '+
+   'voices, installing the Google Speech Services update from the Play Store adds the good ones.';
+  sb.appendChild(note);
+ }catch(e){}
+ return r};
+
+/*#w47_voice.js#*/
+
 showStart();
 </script>
 </body>
