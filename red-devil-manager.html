@@ -29630,6 +29630,255 @@ vSetPieces=function(){
 
 /*#w56_duties.js#*/
 
+/*#w56_duties.js#*//*#w57_press.js#*/
+
+/* =====================================================================
+   THE PRESS ROOM, WITHOUT THE TYPING
+   ---------------------------------------------------------------------
+   "Preset answers for press conference questions available as an option,
+   and send assistant as an option. This does not penalise you unless you
+   avoid press after a loss."
+
+   Both halves were wrong. Every answer had to be typed out, which on a
+   phone means most conferences get skipped — and skipping ALWAYS cost
+   you board patience, whether you had just won five in a row or lost at
+   home. So the feature punished you for using the only practical option.
+
+   Now there are four written answers under every question, one per tone,
+   built from what has actually happened — the result, the opponent, the
+   table. Tap one to send it, or hold the tap and it drops into the box
+   for you to edit first. They go through exactly the same analysis a
+   typed answer does, so a preset can land badly if it is the wrong tone
+   for the room. That is the point of choosing between them.
+
+   And sending your assistant is free. It is a normal thing a manager
+   does. The single exception is the one you named: duck the press after
+   a defeat and it is noticed, by the board and by the dressing room.
+   ===================================================================== */
+
+function pressBits(){
+ const o={won:false,lost:false,drew:false,opp:'',pos:'',me:''};
+ try{
+  const my=G.clubs[G.my];o.me=my.short||my.name;
+  const played=(G.fixtures||[]).filter(f=>f.played&&(f.h===G.my||f.a===G.my));
+  const last=played[played.length-1];
+  if(last){
+   const mine=last.h===G.my?last.hs:last.as, theirs=last.h===G.my?last.as:last.hs;
+   o.won=mine>theirs;o.lost=mine<theirs;o.drew=mine===theirs;
+   const oc=G.clubs[last.h===G.my?last.a:last.h];o.opp=oc?(oc.short||oc.name):'them';
+  }
+  const nx=(G.fixtures||[]).find(f=>!f.played&&(f.h===G.my||f.a===G.my));
+  if(nx){const oc=G.clubs[nx.h===G.my?nx.a:nx.h];if(oc)o.next=oc.short||oc.name}
+  const rows=tableRows(my.league)||[];
+  const ix=rows.findIndex(r=>r.i===G.my);
+  if(ix>=0)o.pos=ordinal(ix+1);
+ }catch(e){}
+ return o}
+
+/* four tones, written from what has actually happened */
+function pressPresets(){
+ const b=pressBits(), q=(G.pressCtx&&G.pressCtx.kind)||'pre';
+ const opp=b.opp||'them', nxt=b.next||'the next one';
+ const out=[];
+ if(q==='post'&&b.won){
+  out.push(['👏 Praise them','The players were excellent today. That was a brilliant performance and they deserve every bit of the credit for it.']);
+  out.push(['🧊 Play it down','It is three points and nothing more than that. We enjoy it tonight and then we go again against '+nxt+'.']);
+  out.push(['🔥 Set the tone','That is the standard now. We came here to win and we will keep coming to win, wherever we play.']);
+  out.push(['🛡️ Protect them','I will not single anyone out. That was a team performance and the group deserves to be talked about as a group.']);
+ }else if(q==='post'&&b.lost){
+  out.push(['🙋 Take the blame','That is on me. I picked the team and I set it up, and the responsibility for a result like that is mine, not theirs.']);
+  out.push(['🧊 Stay calm','We lost a game of football. It is disappointing but it is one result, and we will be better against '+nxt+'.']);
+  out.push(['😠 Demand more','That was not good enough and everyone in that dressing room knows it. There will be some hard conversations this week.']);
+  out.push(['🛡️ Back the players','I have no complaints about the effort. The players gave me everything and I will not have them criticised for that.']);
+ }else if(q==='post'){
+  out.push(['🧊 Fair result','A point away from home is a point. It was a tight game and I do not think either side deserved to lose it.']);
+  out.push(['😤 Wanted more','We came for three points and we have one. That is not what we set out to do and we will look hard at why.']);
+  out.push(['👏 Praise them','I thought the players were excellent. On another day we take all three and I could not ask more of them.']);
+  out.push(['🎯 Look ahead','It is done now. All that matters is that we are ready for '+nxt+' and I know we will be.']);
+ }else{
+  out.push(['🎯 Respect them','They are a very good side and we know exactly how difficult this will be. We have prepared properly for it.']);
+  out.push(['🔥 Confident','We are at home and we go into every game expecting to win it. That does not change for anybody.']);
+  out.push(['🧊 Take it calmly','One game at a time. We do not look at the table in '+(b.pos||'this position')+' and start counting — we prepare for the next match.']);
+  out.push(['🛡️ Shield the squad','The players have been outstanding in training and they have my full backing. That is all I have to say on it.']);
+ }
+ return out}
+
+ACTIONS.pressPreset=el=>{
+ const i=+el.dataset.v, list=pressPresets();
+ const t=list[i];if(!t)return;
+ const box=$('#pressTx');
+ if(box&&el.dataset.edit==='1'){box.value=t[1];box.focus();return}
+ if(box)box.value=t[1];
+ try{sfx('tap')}catch(e){}
+ ACTIONS.pressSend()};
+
+ACTIONS.pressAssistRest=()=>{
+ const c=G.pressCtx;if(!c)return;
+ /* he answers what is left, blandly and safely — no penalty */
+ while(c.q<(c.qTotal||2)){
+  c.quotes.push('(Your assistant) We respect the opposition, we are focused on our own work, and we will let the football do the talking.');
+  c.fx.calm=(c.fx.calm||0)+1;c.q++}
+ toast('🎙️ Your assistant took the rest of it');
+ pressWrap()};
+
+const _pressSheetPre=openPressSheet;
+openPressSheet=function(reaction){
+ _pressSheetPre.apply(this,arguments);
+ try{
+  const host=$('#sheetBody');if(!host)return;
+  if(host.querySelector('[data-action="pressPreset"]'))return;
+  const list=pressPresets();
+  const box=document.createElement('div');
+  box.innerHTML='<div class="chip-lbl" style="margin-top:12px">Or pick an answer</div>'+
+   '<div class="card tight" style="padding:6px">'+list.map((t,i)=>
+    '<div class="mail" data-action="pressPreset" data-v="'+i+'" style="align-items:flex-start">'+
+    '<div style="flex:1"><div class="tt">'+t[0]+'</div>'+
+    '<div class="bd" style="white-space:normal;line-height:1.45">“'+esc(t[1])+'”</div></div>'+
+    '<button class="btn btn-ghost btn-xs" data-action="pressPreset" data-v="'+i+'" data-edit="1" '+
+    'style="flex:0 0 auto;margin-left:6px">edit</button></div>').join('')+'</div>'+
+   '<button class="btn btn-ghost btn-block btn-sm" style="margin-top:8px" data-action="pressAssistRest">'+
+   'Let your assistant take the rest</button>';
+  /* above the "step out" button the later layer appends */
+  const leave=host.querySelector('[data-action="pressLeave"]');
+  if(leave&&leave.parentElement&&leave.parentElement.parentElement===host)
+   host.insertBefore(box,leave.parentElement);
+  else host.appendChild(box);
+ }catch(e){}};
+
+/* ---------------------------------------------------------------------
+   and the assistant is free unless you are hiding from a defeat
+   --------------------------------------------------------------------- */
+function duckingADefeat(){
+ try{
+  const b=pressBits();
+  return !!(b.lost&&G.pressCtx&&G.pressCtx.kind==='post');
+ }catch(e){return false}}
+
+ACTIONS.pressSkip=()=>{
+ const hiding=duckingADefeat();
+ closePressMail();G.pressCtx=null;
+ if(hiding){
+  G.clubs[G.my].patience=clamp(G.clubs[G.my].patience-3,0,100);
+  toast('🎙️ You send your assistant — after a defeat, that is noticed');
+  mail('board','You did not face the press',
+   'Sending your assistant in after a defeat has not gone unnoticed upstairs. '+
+   'The board would rather you fronted up on the bad days as well as the good ones.');
+ }else{
+  toast('🎙️ Your assistant handles it — nothing lost');
+ }
+ closeModal();render()};
+
+/* the same rule for a conference you simply never attended */
+const _dtcPressFair=dailyTickCore;
+dailyTickCore=function(){
+ const c=G.pressCtx, hiding=c&&c.kind==='post'&&duckingADefeat();
+ const patience0=(G.clubs[G.my]||{}).patience;
+ const r=_dtcPressFair.apply(this,arguments);
+ try{
+  if(c&&!G.pressCtx&&!hiding&&G.clubs[G.my].patience<patience0)
+   G.clubs[G.my].patience=patience0;      /* it expired on a day you had not lost */
+ }catch(e){}
+ return r};
+
+/*#w57_press.js#*/
+
+/*#w57_press.js#*//*#w58_camp.js#*/
+
+/* =====================================================================
+   A CAMP YOU CAN ACTUALLY GO ON
+   ---------------------------------------------------------------------
+   "Booking a warm weather camp should only be available when you have a
+   large period of time, 7+ days, without a game — and the game should
+   prompt you with this option when available."
+
+   It was bookable at any moment, including the day before a fixture,
+   which is not a thing that happens: it is ten days away with the squad.
+   Now the button knows how long your next gap actually is, tells you when
+   the next one arrives if there is not one now, and the board writes to
+   you the moment a window opens — once per window, not every morning.
+   ===================================================================== */
+const CAMP_GAP=7;
+function nextFixDay(from){
+ try{
+  const d=(G.fixtures||[]).filter(f=>!f.played&&(f.h===G.my||f.a===G.my)&&f.day>=(from==null?G.day:from))
+   .map(f=>f.day).sort((a,b)=>a-b);
+  return d.length?d[0]:null;
+ }catch(e){return null}}
+function campGap(){
+ /* clear days between today and the next match */
+ const n=nextFixDay(G.day);
+ return n==null?999:Math.max(0,n-G.day)}
+function campWindow(){
+ /* the next gap of CAMP_GAP or more, and the day it starts */
+ try{
+  const days=(G.fixtures||[]).filter(f=>!f.played&&(f.h===G.my||f.a===G.my))
+   .map(f=>f.day).sort((a,b)=>a-b);
+  if(!days.length)return {open:true,in:0,len:999};
+  if(days[0]-G.day>=CAMP_GAP)return {open:true,in:0,len:days[0]-G.day};
+  for(let i=0;i<days.length-1;i++){
+   const len=days[i+1]-days[i];
+   if(len>=CAMP_GAP)return {open:false,in:days[i]-G.day,len}}
+  return {open:false,in:null,len:0};
+ }catch(e){return {open:true,in:0,len:999}}}
+
+const _campBookGate=ACTIONS.campBook;
+ACTIONS.campBook=function(){
+ const w=campWindow();
+ if(!w.open){
+  const gap=campGap();
+  toast(w.in==null?'No spell long enough left this season.'
+   :'Only '+gap+' day'+(gap===1?'':'s')+' before the next match — a camp needs '+CAMP_GAP+'.');
+  openModal('<h3>✈️ Not the moment for it</h3>'+
+   '<div class="small muted" style="margin:4px 0 12px;line-height:1.6">'+
+   'A camp is ten days away with the squad, so it needs a real gap in the fixture list. '+
+   'You have <b>'+gap+' day'+(gap===1?'':'s')+'</b> before the next game.'+
+   (w.in!=null&&w.in>0?' The next spell long enough starts in <b>'+w.in+' days</b> and runs for <b>'+
+    w.len+'</b> — the board will write to you when it opens.':'')+'</div>'+
+   '<button class="btn btn-ghost btn-block" data-action="closeModal">Fair enough</button>');
+  return}
+ return _campBookGate.apply(this,arguments)};
+
+/* the button says what it knows */
+const _vTrainCamp=(typeof vTraining==='function')?vTraining:null;
+if(_vTrainCamp)vTraining=function(){
+ let h=_vTrainCamp.apply(this,arguments);
+ try{
+  const w=campWindow(), gap=campGap();
+  if(G.campDone!==G.season&&h.indexOf('data-action="campBook"')>=0){
+   const note=w.open?'<div class="xs" style="color:var(--green);margin:-4px 0 10px 2px">'+
+     '✅ A '+(w.len>60?'clear':w.len+'-day')+' break — a good window for it.</div>'
+    :'<div class="xs faint" style="margin:-4px 0 10px 2px">Next match in '+gap+' day'+(gap===1?'':'s')+'. '+
+     'A camp needs a '+CAMP_GAP+'-day gap'+(w.in!=null&&w.in>0?' — the next one starts in '+w.in+' days':'')+'.</div>';
+   h=h.replace('data-action="campBook"','data-action="campBook"'+(w.open?'':' data-shut="1"'));
+   const at=h.indexOf('</button>',h.indexOf('data-action="campBook"'));
+   if(at>0)h=h.slice(0,at+9)+note+h.slice(at+9);
+  }
+ }catch(e){}
+ return h};
+
+/* and the board mentions it, once, when a window opens */
+const _dtcCamp=dailyTickCore;
+dailyTickCore=function(){
+ const r=_dtcCamp.apply(this,arguments);
+ try{
+  if(G.campDone===G.season)return r;
+  const w=campWindow();
+  if(!w.open){G._campTold=null;return r}
+  const key=G.season+':'+G.day;
+  if(G._campTold&&G.day-G._campTold<20)return r;
+  const my=G.clubs[G.my];
+  if(my.budget<campCost())return r;
+  G._campTold=G.day;
+  mail('board','✈️ A window for a warm-weather camp',
+   'There is a '+(w.len>60?'long spell':w.len+'-day gap')+' in the fixture list from here. '+
+   'If you want to take the squad away, this is the time to do it — '+
+   '<b>'+fmtM(campCost())+'</b> out of the transfer budget, and one a season. '+
+   'You will find it under Training.');
+ }catch(e){}
+ return r};
+
+/*#w58_camp.js#*/
+
 showStart();
 </script>
 </body>
