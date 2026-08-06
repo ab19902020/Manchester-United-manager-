@@ -29445,6 +29445,191 @@ render=function(){
 
 /*#w55_balance.js#*/
 
+/*#w55_balance.js#*//*#w56_duties.js#*/
+
+/* =====================================================================
+   THE ARMBAND, AND WHO SITS ON THE BENCH
+   ---------------------------------------------------------------------
+   Two things you asked for that were simply missing.
+
+   VICE-CAPTAIN. There was a captain, and he lifted the side through the
+   team talk — but only while he was on the pitch. Leave him out, take him
+   off on the hour, get him sent off, and the leadership bonus vanished
+   with him and nobody picked it up. A vice-captain now exists, and the
+   armband actually passes: if the captain does not start, the vice leads
+   out the side; if the captain goes off, it is handed over then and there
+   and the feed says so. Long throws are here too, since the same screen
+   was the natural home for them.
+
+   THE BENCH. It was picked for you — the nine highest-rated players not
+   in the XI, every week, whatever the game needed. You name it yourself
+   now: up to nine, in the order you want them considered, and the game
+   fills any spare places rather than overruling you. Leave it alone and
+   it behaves exactly as it did before.
+   ===================================================================== */
+
+/* ---- 1. THE DUTIES --------------------------------------------------- */
+if(typeof SP_ROLES!=='undefined'&&!SP_ROLES.some(r=>r[0]==='vice')){
+ SP_ROLES.push(['vice','🎖️ Vice-captain','leadership','decisions']);
+ SP_ROLES.push(['throw','🤾 Long throws','strength','crossing']);
+}
+
+/* The captain and the vice are ranked on the same two attributes, so
+   ensureSetPieces handed the armband and the deputy's job to the same
+   man. Nobody deputises for himself: the vice is the best leader who is
+   not already the captain, and choosing one clears the other. */
+const _espVice=ensureSetPieces;
+ensureSetPieces=function(){
+ const r=_espVice.apply(this,arguments);
+ try{
+  if(G.setp&&G.setp.vice&&G.setp.vice===G.setp.capt){
+   const ps=(G.clubs[G.my].players||[]).filter(p=>!p.loan&&!p.youth&&p.id!==G.setp.capt)
+    .sort((x,y)=>((y.attrs.leadership||0)*2+(y.attrs.decisions||0))-
+                 ((x.attrs.leadership||0)*2+(x.attrs.decisions||0)));
+   G.setp.vice=ps.length?ps[0].id:null}
+ }catch(e){}
+ return r};
+const _spSetVice=ACTIONS.spSet;
+ACTIONS.spSet=function(el){
+ const r=_spSetVice.apply(this,arguments);
+ try{
+  const k=el&&el.dataset&&el.dataset.k;
+  if(k==='capt'&&G.setp.vice===G.setp.capt)G.setp.vice=null;
+  if(k==='vice'&&G.setp.capt===G.setp.vice)G.setp.capt=null;
+  ensureSetPieces();
+ }catch(e){}
+ return r};
+
+/* the vice leads when the captain is not out there */
+const _talkVice=applyTalk;
+applyTalk=function(side,type){
+ const r=_talkVice.apply(this,arguments);
+ try{
+  if(!side.isMy||!G.setp||!G.setp.vice)return r;
+  const captOn=G.setp.capt&&side.onfield.some(x=>!x.off&&x.p.id===G.setp.capt);
+  if(captOn)return r;                       /* the captain has it */
+  const vice=side.onfield.find(x=>!x.off&&x.p.id===G.setp.vice);
+  if(!vice)return r;
+  const lead=(vice.p.attrs.leadership||10);
+  side.onfield.forEach(x=>{x.talk=(x.talk||1)*(1+(lead-10)*.004)});
+  vice._armband=true;
+ }catch(e){}
+ return r};
+
+/* and it is handed over when he goes off */
+function passArmband(m,s,goingOff){
+ try{
+  if(!s||!s.isMy||!G.setp||!G.setp.capt)return;
+  if(!goingOff||goingOff.p.id!==G.setp.capt)return;
+  const vice=G.setp.vice&&s.onfield.find(x=>!x.off&&x.p.id===G.setp.vice&&x!==goingOff);
+  const heir=vice||s.onfield.filter(x=>!x.off&&x!==goingOff)
+   .sort((a,b)=>(b.p.attrs.leadership||0)-(a.p.attrs.leadership||0))[0];
+  if(!heir)return;
+  heir._armband=true;
+  const lead=(heir.p.attrs.leadership||10);
+  s.onfield.forEach(x=>{if(!x.off)x.talk=(x.talk||1)*(1+(lead-10)*.002)});
+  m.say(m.dispMin(),s,'🎖️ The armband goes to <b>'+esc(heir.p.name)+'</b>.','big');
+ }catch(e){}}
+
+/* there is no MatchSim.sub — substitutions are made straight out of the
+   action handlers, so that is where the handover is hooked */
+['subDo','dugSub','subConfirm'].forEach(k=>{
+ const prev=ACTIONS[k];
+ if(typeof prev!=='function')return;
+ ACTIONS[k]=function(el){
+  try{
+   const s=MU&&MU.m&&MU.m.sides[mySideIx()];
+   const out=s&&s.onfield.find(x=>!x.off&&x.p.id===+(el&&el.dataset&&el.dataset.arg));
+   if(out)passArmband(MU.m,s,out);
+  }catch(e){}
+  return prev.apply(this,arguments)}});
+const _redArm=MatchSim.prototype.sendOff;
+if(_redArm)MatchSim.prototype.sendOff=function(D,dp,straight){
+ const r=_redArm.apply(this,arguments);
+ passArmband(this,D,dp);
+ return r};
+
+/* ---- 2. THE BENCH ---------------------------------------------------- */
+function benchPool(){
+ const c=G.clubs[G.my];if(!c)return [];
+ const xi=new Set(((G.tacs&&G.tacs.xi)||[]).filter(Boolean));
+ return (c.players||[]).filter(p=>!xi.has(p.id)&&!p.injury&&!(p.susp>0)&&!p.loan)}
+function benchNamed(){
+ /* your list first, in your order, then the best of the rest to fill up */
+ const pool=benchPool();
+ const byId=new Map(pool.map(p=>[p.id,p]));
+ const want=((G.tacs&&G.tacs.bench)||[]).map(id=>byId.get(id)).filter(Boolean);
+ if(!want.length)return pool.slice().sort((a,b)=>b.ovr-a.ovr).slice(0,9);
+ const have=new Set(want.map(p=>p.id));
+ const rest=pool.filter(p=>!have.has(p.id)).sort((a,b)=>b.ovr-a.ovr);
+ return want.concat(rest).slice(0,9)}
+
+const _sideBench=MatchSim.prototype._side;
+MatchSim.prototype._side=function(ci,home){
+ const s=_sideBench.apply(this,arguments);
+ try{
+  if(!s||!s.isMy||!G.tacs||!(G.tacs.bench||[]).length)return s;
+  const on=new Set(s.onfield.map(x=>x.p.id));
+  const named=benchNamed().filter(p=>!on.has(p.id));
+  if(named.length)s.bench=named;
+ }catch(e){}
+ return s};
+
+ACTIONS.benchPick=el=>{
+ const id=+el.dataset.id;
+ if(!G.tacs.bench)G.tacs.bench=[];
+ const ix=G.tacs.bench.indexOf(id);
+ if(ix>=0)G.tacs.bench.splice(ix,1);
+ else{
+  if(G.tacs.bench.length>=9){toast('Nine is the most you can name.');return}
+  G.tacs.bench.push(id)}
+ try{sfx('tap')}catch(e){}
+ ACTIONS.benchOpen();};
+ACTIONS.benchAuto=()=>{G.tacs.bench=[];toast('Bench picked for you');ACTIONS.benchOpen()};
+ACTIONS.benchOpen=()=>{
+ const sel=(G.tacs&&G.tacs.bench)||[];
+ /* whoever you named comes to the top in your order — a list sorted only
+    by rating buries your own picks under the players you left out */
+ const pool=benchPool().sort((a,b)=>{
+  const ia=sel.indexOf(a.id), ib=sel.indexOf(b.id);
+  if(ia>=0||ib>=0)return (ia<0?99:ia)-(ib<0?99:ib);
+  return b.ovr-a.ovr});
+ const named=benchNamed();
+ openModal('<h3>🪑 Name your bench</h3>'+
+  '<div class="small muted" style="margin:4px 0 10px">Tap to name a player. The order you pick them '+
+  'is the order they are considered. Any places you leave empty are filled with the best of the rest.</div>'+
+  '<div class="spread" style="margin-bottom:8px"><span class="small" style="font-weight:800">'+
+   named.length+' of 9 named'+(sel.length?' · '+sel.length+' by you':' · picked for you')+'</span>'+
+  '<button class="btn btn-ghost btn-xs" data-action="benchAuto">Pick it for me</button></div>'+
+  '<div class="card tight" style="max-height:56vh;overflow-y:auto">'+
+  (pool.length?pool.map(p=>{
+   const ix=sel.indexOf(p.id), auto=ix<0&&named.some(q=>q.id===p.id);
+   return '<div class="mail'+(ix>=0?' unread':'')+'" data-action="benchPick" data-id="'+p.id+'">'+
+   '<div class="ic">'+face(p,26)+'</div><div style="flex:1"><div class="tt">'+esc(p.name)+
+   (ix>=0?' <span style="color:var(--gold)">#'+(ix+1)+'</span>':auto?' <span class="xs faint">auto</span>':'')+'</div>'+
+   '<div class="bd">'+posBadge(p.pos)+' · '+p.ovr+' · '+Math.round(p.cond)+'% fit'+
+   (p.sharp!=null?' · sharp '+Math.round(p.sharp):'')+'</div></div>'+
+   '<div class="xs faint">'+(ix>=0?'✅':'+')+'</div></div>'}).join('')
+   :'<div class="small muted" style="padding:10px 4px">Everyone available is already in your eleven.</div>')+
+  '</div>')};
+
+/* a way in, on the screen where you pick the side */
+const _spBench=vSetPieces;
+vSetPieces=function(){
+ const base=_spBench.apply(this,arguments);
+ let n=9;try{n=benchNamed().length}catch(e){}
+ const manual=((G.tacs&&G.tacs.bench)||[]).length;
+ return base+'<div class="chip-lbl">The bench</div><div class="card tight">'+
+  '<div class="spread" style="padding:7px 2px" data-action="benchOpen">'+
+  '<span class="small" style="font-weight:800">🪑 Substitutes</span>'+
+  '<span class="row" style="gap:7px"><span class="small" style="font-weight:700">'+n+' named</span>'+
+  '<span class="xs faint">'+(manual?manual+' by you':'picked for you')+' · change</span></span></div>'+
+  '</div><div class="xs faint" style="margin:4px 0 12px 2px">'+
+  'Name up to nine and the order they are considered in. The armband passes to your vice-captain '+
+  'if the captain is not on the pitch.</div>'};
+
+/*#w56_duties.js#*/
+
 showStart();
 </script>
 </body>
