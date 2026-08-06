@@ -30288,6 +30288,246 @@ openProfile=function(pid){
 
 /*#w61_training.js#*/
 
+/*#w61_training.js#*//*#w62_loans.js#*/
+
+/* =====================================================================
+   THE OTHER HALF OF THE LOAN MARKET
+   ---------------------------------------------------------------------
+   "A real loan system, so if you're taking charge of a lower league team,
+   or even players like Sancho who have been loaned out. Build a real loan
+   system with wage percentage and fee from the deal. Lower league clubs
+   can find good loan deals."
+
+   Sending players out already worked, with a wage split. The half that
+   did not exist was BRINGING THEM IN — which is the half that matters if
+   you take a job outside the top flight, because a Championship side does
+   not sign a 78 from Manchester City, it borrows one.
+
+   So there is a loan market now. It lists players who are actually
+   available: good enough to want, stuck behind someone at a club above
+   you, and not so good their club would laugh. What you pay is two
+   things, both negotiable in the sense that both are visible before you
+   agree — a fee for the season, and the share of his wages you take on.
+   A weaker club pays a smaller share but gets a smaller pick; a big club
+   can take the lot and get anybody.
+
+   The thing that decides whether he says yes is football. If you can
+   promise a player minutes he is far more likely to come than a club
+   that would leave him on the bench again — which is the actual logic of
+   a loan, and it means a well-run small club can land somebody a bigger
+   club could not be bothered to ask for.
+
+   Loans out now carry a fee too, and you can recall a player you have
+   sent somewhere if it is not working.
+   ===================================================================== */
+
+function clubLevel(c){
+ try{const b=[...(c.players||[])].sort((x,y)=>y.ovr-x.ovr);
+  return b.length?b[Math.min(10,b.length-1)].ovr:60}catch(e){return 60}}
+
+/* who would let him go, and what he would cost */
+function loanMarket(){
+ const out=[];
+ try{
+  const me=G.clubs[G.my];
+  const myLvl=clubLevel(me);
+  (G.clubs||[]).forEach(c=>{
+   if(c.i===G.my||!c.players)return;
+   const lvl=clubLevel(c);
+   if(lvl<myLvl-2)return;                   /* they are not above you; buy instead */
+   const theirBest=[...c.players].sort((a,b)=>b.ovr-a.ovr);
+   theirBest.forEach((p,rank)=>{
+    if(p.loan||p.loanIn||p.injury||(p.susp>0))return;
+    /* "outside the top eleven" is not enough on its own: a 23-man elite
+       squad has first-team players at ranks 11-15, and it was offering
+       Semenyo out on loan four months after he cost sixty-four million.
+       He has to be genuinely surplus — below his own club's first-choice
+       level, and either young enough to need games or clearly fringe. */
+    if(rank<13)return;
+    if(p.ovr>=lvl-1)return;
+    if(p.age>27&&p.ovr<myLvl+2)return;      /* an old squad player is no help */
+    if(p.age>24&&p.ovr>=lvl-3)return;       /* a settled squad man stays put */
+    const gap=p.ovr-myLvl;
+    if(gap<-4||gap>14)return;
+    out.push({p,from:c,gap,
+     fee:loanFeeFor(p,c),
+     share:loanShareIn(p,c)});
+   });
+  });
+  out.sort((a,b)=>b.p.ovr-a.p.ovr);
+ }catch(e){}
+ return out.slice(0,40)}
+
+/* a season-long fee, scaled off what he is worth and who is asking */
+function loanFeeFor(p,from){
+ try{
+  const v=p.value||valueFor(p);
+  const t=(typeof clubTier==='function')?clubTier(G.clubs[G.my]).k:2;
+  const eager=p.age<=22?.55:1;             /* they want the kid playing */
+  return Math.max(2e5,Math.round(v*.075*eager*(1+(3-t)*.06)/5e4)*5e4);
+ }catch(e){return 5e5}}
+/* the share of his wages THEY keep — the rest is yours */
+function loanShareIn(p,from){
+ try{
+  const t=(typeof clubTier==='function')?clubTier(G.clubs[G.my]).k:2;
+  const young=p.age<=22?22:0;
+  return clamp(Math.round(20+young+(4-t)*7),10,75);
+ }catch(e){return 40}}
+
+/* will he come? football first, then the badge */
+function loanAppeal(row){
+ const me=G.clubs[G.my];
+ const myLvl=clubLevel(me);
+ const mins=row.p.ovr>=myLvl+4?'straight into the side':
+            row.p.ovr>=myLvl-1?'regular football':'squad rotation';
+ /* I had this backwards first time and it showed: every player was "3%
+    keen" on a Championship club that would have played him every week,
+    which is the exact opposite of how a loan works. The reason a fringe
+    player goes on loan is FOOTBALL. Being well above your level is the
+    attraction, not the objection — up to the point where the drop is so
+    far it stops being useful to him. */
+ const play=clamp((row.p.ovr-myLvl)*4,-20,26);      /* he would walk into your side */
+ const drop=Math.max(0,(row.p.ovr-myLvl-10))*3;     /* but not that far down */
+ let want=46+play-drop;
+ if(row.p.age<=22)want+=16;                         /* a kid needs games above all */
+ try{want+=((clubTier(me).k)-2)*6}catch(e){}        /* and the badge still counts for something */
+ return {mins,want:clamp(Math.round(want),3,97)}}
+
+ACTIONS.loanInOpen=()=>{
+ const list=loanMarket();
+ const me=G.clubs[G.my];
+ openModal('<h3>🛬 Loan market</h3>'+
+  '<div class="small muted" style="margin:4px 0 10px;line-height:1.5">'+
+  'Players who cannot get in at a club above you. You pay a fee for the season and a share of '+
+  'his wages — and the biggest thing in your favour is the football you can promise him.</div>'+
+  (list.length?'<div class="card tight" style="max-height:56vh;overflow-y:auto">'+
+   list.map((r,i)=>{const a=loanAppeal(r);
+    return '<div class="mail" data-action="loanInSheet" data-v="'+i+'">'+
+    '<div class="ic">'+face(r.p,26)+'</div><div style="flex:1">'+
+    '<div class="tt">'+esc(r.p.name)+' <span class="xs faint">'+r.p.ovr+'</span></div>'+
+    '<div class="bd">'+posBadge(r.p.pos)+' · '+r.p.age+' · '+esc(r.from.short)+
+    ' · '+fmtM(r.fee)+' + '+(100-r.share)+'% of '+fmtW(r.p.wage)+'</div>'+
+    '<div class="xs" style="color:'+(a.want>=60?'var(--green)':a.want>=35?'var(--amber)':'var(--ink-faint)')+'">'+
+    a.mins+' · '+a.want+'% keen</div></div></div>'}).join('')+'</div>'
+   :'<div class="card"><div class="small muted">Nobody is available to you on loan right now. '+
+    'Clubs above you have to have someone surplus for this list to fill up.</div></div>'));
+ G._loanList=list};
+
+ACTIONS.loanInSheet=el=>{
+ const r=(G._loanList||[])[+el.dataset.v];if(!r)return;
+ const a=loanAppeal(r);
+ const me=G.clubs[G.my];
+ const weekly=Math.round(r.p.wage*(100-r.share)/100);
+ openModal('<h3>'+esc(r.p.name)+'</h3>'+
+  '<div class="small muted" style="margin:2px 0 10px">'+posBadge(r.p.pos)+' · '+r.p.age+' · '+
+  r.p.ovr+' rated · on the books at '+esc(r.from.name)+'</div>'+
+  '<div class="stadrow" style="margin-bottom:10px">'+
+   '<div class="stadstat"><div class="ss-v">'+fmtM(r.fee)+'</div><div class="ss-l">Loan fee</div></div>'+
+   '<div class="stadstat"><div class="ss-v">'+fmtW(weekly)+'</div><div class="ss-l">You pay weekly</div>'+
+   '<div class="ss-s">'+(100-r.share)+'% of his wage</div></div>'+
+   '<div class="stadstat"><div class="ss-v" style="color:'+(a.want>=60?'var(--green)':'var(--amber)')+'">'+
+    a.want+'%</div><div class="ss-l">Keen</div><div class="ss-s">'+a.mins+'</div></div>'+
+  '</div>'+
+  '<div class="xs faint" style="line-height:1.6;margin-bottom:10px">'+
+  esc(r.from.short)+' will let him go for the season. He wants to play — if you can give him '+
+  a.mins+', he is '+(a.want>=60?'very likely to say yes':a.want>=35?'weighing it up':'unlikely to be persuaded')+'.</div>'+
+  '<button class="btn btn-primary btn-block" data-action="loanInDo" data-v="'+el.dataset.v+'">'+
+  'Agree the loan — '+fmtM(r.fee)+'</button>'+
+  '<button class="btn btn-ghost btn-block" style="margin-top:8px" data-action="loanInOpen">← Back to the market</button>')};
+
+ACTIONS.loanInDo=el=>{
+ const r=(G._loanList||[])[+el.dataset.v];if(!r)return;
+ const me=G.clubs[G.my];
+ if(me.budget<r.fee){toast('The fee is beyond your budget.');return}
+ const a=loanAppeal(r);
+ if(Math.random()*100>a.want){
+  closeModal();
+  toast('👎 '+r.p.name+' turns it down');
+  mail('transfer',r.p.name+' turns down the loan',
+   '<b>'+esc(r.p.name)+'</b> has decided against joining on loan. '+
+   (a.want<35?'He does not believe he would play enough here to be worth the move.'
+             :'He has opted to stay and fight for his place instead.'));
+  render();return}
+ me.budget-=r.fee;
+ r.from.players=r.from.players.filter(x=>x!==r.p);
+ r.p.club=me.i;
+ r.p.loanIn={from:r.from.i,share:r.share,fee:r.fee,since:G.day,wage:r.p.wage};
+ r.p.wage=Math.round(r.p.wage*(100-r.share)/100);
+ me.players.push(r.p);
+ closeModal();
+ toast('🛬 '+r.p.name+' joins on loan');
+ mail('transfer','🛬 Loan in: '+r.p.name,
+  '<b>'+esc(r.p.name)+'</b> joins on loan from <b>'+esc(r.from.name)+'</b> until the end of the season. '+
+  'Fee <b>'+fmtM(r.fee)+'</b>; you cover <b>'+(100-r.share)+'%</b> of his wages at '+fmtW(r.p.wage)+' a week. '+
+  'He cannot play against his parent club.');
+ render()};
+
+/* a loan is for the season — he goes back when it ends */
+const _dtcLoanBack=dailyTickCore;
+dailyTickCore=function(){
+ const r=_dtcLoanBack.apply(this,arguments);
+ try{
+  if(!G._seasonClosed)return r;
+  (G.clubs||[]).forEach(c=>{
+   (c.players||[]).slice().forEach(p=>{
+    if(!p.loanIn)return;
+    const home=G.clubs[p.loanIn.from];
+    c.players=c.players.filter(x=>x!==p);
+    if(home){p.club=home.i;p.wage=p.loanIn.wage||p.wage;home.players.push(p)}
+    p.loanIn=null;
+   });
+  });
+ }catch(e){}
+ return r};
+
+/* he cannot face the club that owns him */
+const _sideLoanBar=MatchSim.prototype._side;
+MatchSim.prototype._side=function(ci,home){
+ const s=_sideLoanBar.apply(this,arguments);
+ try{
+  const oppI=(this.fix&&(ci===this.fix.h?this.fix.a:this.fix.h));
+  if(oppI==null)return s;
+  s.onfield=s.onfield.filter(x=>!(x.p.loanIn&&x.p.loanIn.from===oppI));
+  s.bench=(s.bench||[]).filter(p=>!(p.loanIn&&p.loanIn.from===oppI));
+ }catch(e){}
+ return s};
+
+/* ---- and a way to bring your own players home ---- */
+ACTIONS.loanRecall=el=>{
+ const p=playerById(el.dataset.id);if(!p||!p.loan)return;
+ const dest=G.clubs[p.loan.club];
+ p.loan=null;
+ p.sharp=clamp(p.sharp||70,55,90);
+ toast('↩︎ '+p.name+' recalled');
+ mail('transfer','↩︎ Recalled: '+p.name,
+  '<b>'+esc(p.name)+'</b> has been recalled from his loan'+(dest?' at <b>'+esc(dest.name)+'</b>':'')+
+  '. He is back in your squad and will need a little time to sharpen up.');
+ closeModal();render()};
+
+/* the entry points, on the transfers screen */
+const _vTrLoan=vTransfers;
+vTransfers=function(){
+ const base=_vTrLoan.apply(this,arguments);
+ let out='';
+ try{
+  const me=G.clubs[G.my];
+  const away=(me.players||[]).filter(p=>p.loan);
+  out='<div class="chip-lbl">Loans</div><div class="card tight">'+
+   '<div class="spread" style="padding:8px 2px" data-action="loanInOpen">'+
+   '<span class="small" style="font-weight:800">🛬 Loan market</span>'+
+   '<span class="xs faint">bring a player in · browse</span></div>'+
+   (away.length?away.map(p=>{const d=G.clubs[p.loan.club];
+    return '<div class="spread" style="padding:7px 2px;border-top:1px solid var(--chalk)">'+
+    '<span class="small" style="font-weight:700">🛫 '+esc(p.name)+'</span>'+
+    '<span class="row" style="gap:8px"><span class="xs faint">'+(d?esc(d.short):'away')+'</span>'+
+    '<button class="btn btn-ghost btn-xs" data-action="loanRecall" data-id="'+p.id+'">Recall</button></span></div>'}).join('')
+    :'<div class="xs faint" style="padding:6px 2px">Nobody of yours is out on loan.</div>')+
+   '</div>';
+ }catch(e){}
+ return out+base};
+
+/*#w62_loans.js#*/
+
 showStart();
 </script>
 </body>
