@@ -27389,6 +27389,241 @@ render=function(){
 
 /*#w48_natplay.js#*/
 
+
+/*#w48_natplay.js#*//*#w49_canvasfit.js#*/
+
+/* =====================================================================
+   ONE THING SIZES THE PITCH
+   ---------------------------------------------------------------------
+   Three mechanisms had grown up to size the match canvas, and they were
+   fighting each other.
+
+     a CSS max-width from the fullscreen work
+     a JS sizer that measures the fixed chrome, for desktop
+     a second JS sizer that measures the body, for phones
+
+   Measured at 1920x1080 the result was a canvas whose inline style said
+   773px wide and whose rendered box was 667px, because the CSS cap
+   clamped what the JS had just worked out. The backing store was still
+   1546x1020 — an aspect of 1.516 — being painted into a box of 1.308.
+   Every player on it was stretched, and the pitch did not match the
+   picture the drawing code thought it was drawing.
+
+   The CSS cap is gone. One function owns the size on every screen: it
+   measures what the match chrome leaves behind — the score bar, the
+   tabs, the touchline strip, the control panel, the commentary strip —
+   subtracts it from the window, fits the pitch into whatever rectangle
+   remains, and writes the element size and the backing store from the
+   same numbers so they can never disagree again.
+
+   And it verifies itself: after sizing, the rendered width must equal
+   the width it asked for. If a stylesheet is still interfering the
+   element is measured again and the backing store is rebuilt to match
+   what is actually on screen, so a wrong rule can distort nothing.
+   ===================================================================== */
+
+/* the CSS cap that was clamping the JS */
+(function dropCanvasCap(){
+ const st=document.createElement('style');st.id='w49';
+ st.textContent=[
+  '#matchScreen canvas#pitchCanvas,#matchScreen canvas#dugCanvas{',
+  ' max-width:none!important;max-height:none!important;object-fit:fill!important}',
+  /* the match screen never scrolls; the panels inside it do */
+  '#matchScreen.open{overflow:hidden!important}',
+  '#matchScreen.open .mctl{overflow-y:auto}'
+ ].join('');
+ document.head.appendChild(st)})();
+
+/* how much room the pitch actually has, on any screen */
+function matchRoom(){
+ const scr=document.getElementById('matchScreen');
+ if(!scr)return null;
+ let used=0;
+ ['.msb','.mtabs','.dugstrip','.mctl'].forEach(sel=>{
+  const e=scr.querySelector(sel);
+  if(e)used+=e.getBoundingClientRect().height});
+ const feed=scr.querySelector('#miniFeed');
+ if(feed&&feed.offsetParent)used+=feed.getBoundingClientRect().height;
+ const body=scr.querySelector('.mbody');
+ let padY=0,padX=0,availW=scr.clientWidth;
+ if(body){
+  const cs=getComputedStyle(body);
+  padY=parseFloat(cs.paddingTop||0)+parseFloat(cs.paddingBottom||0);
+  padX=parseFloat(cs.paddingLeft||0)+parseFloat(cs.paddingRight||0);
+  availW=body.clientWidth-padX;
+ }
+ const h=Math.floor(window.innerHeight-used-padY-8);
+ return {w:Math.floor(availW),h:h}}
+
+/* size a canvas into that room, and make sure it took */
+function fitMatchCanvas(sel,ratio){
+ const cv=document.querySelector('#matchScreen '+sel);
+ if(!cv||!cv.parentElement)return false;
+ const room=matchRoom();
+ if(!room||room.w<80||room.h<80)return false;
+ let w=Math.min(room.w,Math.floor(room.h/ratio));
+ if(!(w>60))return false;
+ const dpr=Math.min(window.devicePixelRatio||1,2);
+ const apply=(ww)=>{
+  cv.style.maxWidth='none';cv.style.maxHeight='none';
+  cv.style.width=ww+'px';
+  cv.style.height=Math.round(ww*ratio)+'px';
+  cv.style.marginLeft='auto';cv.style.marginRight='auto';cv.style.display='block';
+  cv.width=Math.round(ww*dpr);cv.height=Math.round(ww*ratio*dpr);
+  if(sel.indexOf('pitch')>=0){cv._sx=cv.width/105;cv._sy=cv.height/68}
+  else cv._bg=null;
+ };
+ apply(w);
+ /* did anything else have an opinion? if the box is not the width we
+    asked for, believe the box and rebuild the backing store from it —
+    a mismatch here is exactly what stretches the players */
+ const got=Math.round(cv.getBoundingClientRect().width);
+ if(got>0&&Math.abs(got-w)>1)apply(got);
+ return true}
+
+/* both sizers now go through it, on every screen size */
+sizeCanvas=function(){fitMatchCanvas('canvas#pitchCanvas',0.66)};
+sizeDugCanvas=function(){fitMatchCanvas('canvas#dugCanvas',0.74)};
+
+/* re-fit whenever anything that eats room changes */
+function refitMatch(){
+ try{
+  const scr=document.getElementById('matchScreen');
+  if(!scr||!scr.classList.contains('open'))return;
+  if(MU.tab==='pitch')sizeCanvas();
+  else if(MU.tab==='dugout')sizeDugCanvas();
+ }catch(e){}}
+['resize','orientationchange'].forEach(ev=>
+ window.addEventListener(ev,()=>{refitMatch();setTimeout(refitMatch,120)},{passive:true}));
+if(window.visualViewport)window.visualViewport.addEventListener('resize',refitMatch,{passive:true});
+
+const _mbodyFit49=renderMBody;
+renderMBody=function(){
+ const r=_mbodyFit49.apply(this,arguments);
+ refitMatch();requestAnimationFrame(refitMatch);setTimeout(refitMatch,80);
+ return r};
+const _dugFit49=paintDugStrip;
+paintDugStrip=function(){
+ const had=!!document.getElementById('dugStrip');
+ const r=_dugFit49.apply(this,arguments);
+ if(had!==!!document.getElementById('dugStrip')){refitMatch();requestAnimationFrame(refitMatch)}
+ return r};
+
+/* =====================================================================
+   AND FULL TIME ACTUALLY ENDS
+   ---------------------------------------------------------------------
+   "Full time — continue" opens a summary, and the summary has its own
+   Continue at the bottom of it. If that second button is below the fold
+   — which it was on a short desktop window, where the control panel and
+   the touchline strip had already eaten the screen — then pressing
+   continue at full time genuinely does nothing, twice, and the match
+   will not close.
+
+   The summary is now guaranteed to fit: it scrolls inside the sheet, and
+   its Continue is pinned to the bottom of it where it cannot be pushed
+   off. And full time gets an escape hatch — the match screen's own close
+   control finishes the day properly rather than leaving you stranded in
+   a match that has ended.
+   ===================================================================== */
+(function ftCSS(){
+ const st=document.createElement('style');st.id='w49b';
+ st.textContent=[
+  '#modalHost.open #sheetBody{max-height:88vh;overflow-y:auto;-webkit-overflow-scrolling:touch}',
+  '#sheetBody [data-action="matchDone"]{position:sticky;bottom:0;z-index:3;',
+  ' box-shadow:0 -10px 20px rgba(8,12,9,.9)}'
+ ].join('');
+ document.head.appendChild(st)})();
+
+/* if the match is over and the screen is still open, closing it must end
+   the day rather than abandon it half-finished */
+ACTIONS.ftEscape=()=>{
+ try{
+  if(MU&&MU.m&&MU.m.done){
+   if(typeof ACTIONS.matchDone==='function')return ACTIONS.matchDone();
+  }
+ }catch(e){}
+ try{const el=document.getElementById('matchScreen');if(el)el.classList.remove('open')}catch(e){}
+ try{render()}catch(e){}};
+
+/* a visible way out on the full-time control bar, next to the summary */
+const _mctlFT=renderMCtl;
+renderMCtl=function(){
+ const r=_mctlFT.apply(this,arguments);
+ try{
+  const c=$('#mCtl');
+  if(!c||!MU.m||!MU.m.done)return r;
+  if(c.querySelector('[data-action="ftEscape"]'))return r;
+  c.insertAdjacentHTML('beforeend',
+   '<button class="btn btn-ghost btn-sm btn-block" style="margin-top:7px" '+
+   'data-action="ftEscape">Skip the summary — finish the day</button>');
+ }catch(e){}
+ return r};
+
+/*#w49_canvasfit.js#*/
+
+/* =====================================================================
+   AND THE CONTROLS FIT IN ONE PICTURE
+   ---------------------------------------------------------------------
+   Six layers each append their own row to the control panel — speed,
+   shouts, substitutions, the camera switches, shape, sound — and
+   together they came to about four hundred and seventy pixels inside a
+   panel capped at a hundred and ninety. Nothing was lost, but two thirds
+   of it was behind an internal scroll, which is the same complaint as
+   before wearing a different hat: you should not have to scroll a match.
+
+   The rows you touch during a game stay out: speed, shouts, subs,
+   tactics, and whatever full time needs. Everything else — the camera,
+   the shape overlay, the sound switches — folds behind one control, and
+   the panel shrinks to what is actually on it.
+   ===================================================================== */
+const MCTL_KEEP=['mspeed','subOpen','instrOpen','shout','shoutMore','ftSummary',
+ 'resume2h','htTalkOpen','ftEscape','matchDone'];
+function mctlFold(){
+ try{
+  const c=$('#mCtl');if(!c)return;
+  if(c.querySelector('.mctl-more'))return;
+  const kids=[...c.children];
+  const extra=kids.filter(el=>{
+   if(el.classList.contains('mctl-tog')||el.classList.contains('mctl-more'))return false;
+   const acts=[...el.querySelectorAll('[data-action]')].map(x=>x.dataset.action);
+   if(el.dataset&&el.dataset.action)acts.push(el.dataset.action);
+   if(!acts.length)return false;                       /* plain text, leave it */
+   return !acts.some(a=>MCTL_KEEP.indexOf(a)>=0);
+  });
+  if(extra.length<2)return;
+  const box=document.createElement('div');
+  box.className='mctl-more';
+  box.style.display=UI.mctlOpen?'block':'none';
+  extra.forEach(el=>box.appendChild(el));
+  const tog=document.createElement('button');
+  tog.className='chip mctl-tog';
+  tog.style.cssText='margin-top:6px';
+  tog.dataset.action='mctlMore';
+  tog.textContent=UI.mctlOpen?'▴ Fewer controls':'⚙ More controls';
+  c.appendChild(tog);c.appendChild(box);
+ }catch(e){}}
+ACTIONS.mctlMore=()=>{UI.mctlOpen=!UI.mctlOpen;
+ try{sfx('tap')}catch(e){}
+ const c=$('#mCtl');
+ if(c){const b=c.querySelector('.mctl-more'),t=c.querySelector('.mctl-tog');
+  if(b)b.style.display=UI.mctlOpen?'block':'none';
+  if(t)t.textContent=UI.mctlOpen?'\u25b4 Fewer controls':'\u2699 More controls'}
+ refitMatch();requestAnimationFrame(refitMatch)};
+
+const _mctlFold=renderMCtl;
+renderMCtl=function(){
+ const r=_mctlFold.apply(this,arguments);
+ mctlFold();
+ return r};
+
+/* with the panel shorter, the pitch gets the room back */
+(function mctlCSS(){
+ const st=document.createElement('style');st.id='w49c';
+ st.textContent='#matchScreen.open .mctl{max-height:none!important;overflow:visible!important}'+
+  '#matchScreen.open .mctl-more{margin-top:6px}';
+ document.head.appendChild(st)})();
+
+
 showStart();
 </script>
 </body>
