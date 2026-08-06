@@ -26683,6 +26683,367 @@ dailyTickCore=function(){
 
 /*#w45_country.js#*/
 
+
+/*#w45_country.js#*//*#w46_matchfit.js#*/
+
+/* =====================================================================
+   A MATCH THAT FITS ON THE SCREEN YOU ARE HOLDING
+   ---------------------------------------------------------------------
+   On a phone you had to scroll a live match. Measured on a 419x936
+   handset, watching the dugout view:
+
+       header          170px
+       body            305px   ← everything below had to fit in here
+         canvas        310px   ← it did not
+         commentary    183px   ← nor did this
+       touchline strip 139px
+       control panel   322px
+
+   The canvas alone was five pixels taller than the box holding it and
+   the commentary underneath it was another hundred and eighty-three, so
+   watching the game meant dragging the pitch up to read the text and
+   dragging it back down to see the pitch. The control panel — six layers
+   of the game each politely appending their own row — had grown to three
+   hundred and twenty-two pixels, a third of the phone.
+
+   THREE THINGS FIX IT.
+
+   The canvas is told how much room it has, in both directions, instead
+   of sizing itself from its own width and hoping. Same bug the desktop
+   pitch had, same fix.
+
+   The running commentary is gone from the pitch and dugout views. That
+   is what was asked for and it is also right: you are watching, and if
+   you want the written match there is a Text tab for it. Nothing is
+   lost, and the pitch gets a hundred and eighty pixels back.
+
+   What replaces it is a callout — goals, bookings, sendings-off, VAR
+   checks and substitutions flash briefly over the pitch itself and then
+   get out of the way, which is how you find out about a booking at a
+   real match.
+
+   The control panel scrolls inside a ceiling on a phone as it already
+   does on a desktop, so a game with a lot of buttons cannot squeeze the
+   thing you actually came to look at.
+   ===================================================================== */
+
+function isPhoneMatch(){
+ return !(window.matchMedia&&window.matchMedia('(min-width:1024px)').matches)}
+function watchingTab(){return MU&&(MU.tab==='pitch'||MU.tab==='dugout')}
+
+/* ---------------------------------------------------------------------
+   1. THE SHELL
+   --------------------------------------------------------------------- */
+(function matchFitCSS(){
+ const st=document.createElement('style');st.id='w46';
+ st.textContent=[
+ '@media (max-width:1023px){',
+ /* .open only — #matchScreen is display:none until a match starts, and a
+    bare display:flex makes an invisible overlay eat every tap */
+ ' #matchScreen.open{display:flex;flex-direction:column;overflow:hidden;',
+ '  height:100dvh;max-height:100dvh}',
+ ' #matchScreen.open .mbody{flex:1 1 0;min-height:0;overflow:hidden;',
+ '  display:flex;flex-direction:column;justify-content:center;padding:8px 12px}',
+ /* the written views are the ones allowed to scroll */
+ ' #matchScreen.open .mbody.mreads{overflow-y:auto;justify-content:flex-start;',
+ '  -webkit-overflow-scrolling:touch}',
+ ' #matchScreen.open .mctl{max-height:26vh;overflow-y:auto;',
+ '  padding:8px 12px calc(env(safe-area-inset-bottom) + 8px)}',
+ ' #matchScreen.open .msb{padding:calc(env(safe-area-inset-top) + 7px) 12px 7px}',
+ ' #matchScreen.open .mtabs{padding:7px 12px}',
+ /* the touchline strip gives up whatever it can */
+ ' #matchScreen.open .dugstrip{padding:5px 10px 3px}',
+ ' #matchScreen.open .dug-head{margin-bottom:3px}',
+ ' #matchScreen.open .dug-foot{margin-top:4px}',
+ ' #matchScreen.open .dugman{flex:0 0 58px;min-width:58px;padding:4px 5px 5px}',
+ ' #matchScreen.open .dm-nm{font-size:10px}',
+ ' #matchScreen.open .dm-r{font-size:12px}',
+ /* while you are watching, the written feed is not there at all */
+ ' #matchScreen.open .mbody:not(.mreads) #miniFeed{display:none!important}',
+ '}',
+ /* the callout that replaces it, on every screen size */
+ '.mcall{position:absolute;left:50%;transform:translateX(-50%);top:10px;z-index:6;',
+ ' display:flex;flex-direction:column;gap:5px;align-items:center;pointer-events:none;',
+ ' width:calc(100% - 24px)}',
+ '.mcall-i{background:linear-gradient(180deg,rgba(18,26,19,.97),rgba(10,15,11,.97));',
+ ' border:1px solid var(--chalk-strong);border-radius:11px;padding:7px 13px;',
+ ' font-size:12.5px;font-weight:800;letter-spacing:.2px;line-height:1.35;text-align:center;',
+ ' box-shadow:0 8px 22px rgba(0,0,0,.5);animation:mcallIn .22s ease;max-width:100%}',
+ '.mcall-i.goal{border-color:rgba(218,41,28,.75);background:linear-gradient(180deg,#3a1210,#170a09);',
+ ' font-family:var(--disp);letter-spacing:1.4px;text-transform:uppercase;font-size:15px}',
+ '.mcall-i.card{border-color:rgba(255,210,31,.6)}',
+ '.mcall-i.red{border-color:rgba(255,83,72,.7)}',
+ '.mcall-i.var{border-color:rgba(125,175,255,.6)}',
+ '.mcall-i.sub{border-color:rgba(141,255,160,.45)}',
+ '.mcall-i.out{animation:mcallOut .3s ease forwards}',
+ '@keyframes mcallIn{from{opacity:0;transform:translateY(-8px) scale(.96)}to{opacity:1;transform:none}}',
+ '@keyframes mcallOut{to{opacity:0;transform:translateY(-6px)}}',
+ '.mbody{position:relative}'
+ ].join('');
+ document.head.appendChild(st)})();
+
+/* ---------------------------------------------------------------------
+   2. SIZING THE PITCH TO THE ROOM IT HAS
+   ---------------------------------------------------------------------
+   Both canvases derive their height from their own width, which is fine
+   in a column that scrolls and wrong in a screen that must not. They are
+   given the smaller of the space across and the space down.
+   --------------------------------------------------------------------- */
+function fitCanvas(sel,ratio){
+ try{
+  const cv=$(sel);if(!cv||!cv.parentElement)return false;
+  const body=cv.closest('.mbody');if(!body)return false;
+  const cs=getComputedStyle(body);
+  const padX=parseFloat(cs.paddingLeft||0)+parseFloat(cs.paddingRight||0);
+  const padY=parseFloat(cs.paddingTop||0)+parseFloat(cs.paddingBottom||0);
+  let w=Math.floor(body.clientWidth-padX);
+  const availH=body.clientHeight-padY-2;
+  if(availH>60)w=Math.min(w,Math.floor(availH/ratio));
+  if(!(w>60))return false;
+  const dpr=Math.min(window.devicePixelRatio||1,2);
+  cv.style.width=w+'px';
+  cv.style.height=Math.round(w*ratio)+'px';
+  cv.style.marginLeft='auto';cv.style.marginRight='auto';cv.style.display='block';
+  cv.width=Math.round(w*dpr);cv.height=Math.round(w*ratio*dpr);
+  if(sel==='#pitchCanvas'){cv._sx=cv.width/105;cv._sy=cv.height/68}
+  else cv._bg=null;
+  return true}
+ catch(e){return false}}
+
+/* Phones only. On a desktop the pitch is already sized against the fixed
+   chrome — header, tabs, touchline strip, control panel — precisely
+   because measuring .mbody there is circular: the canvas is the flex item
+   inside it, so sizing the canvas changes the number you just read.
+   Letting this run on desktop re-broke that, and the pitch was clipped
+   again. */
+const _sizeCanvasFit46=sizeCanvas;
+sizeCanvas=function(){
+ if(isPhoneMatch()&&fitCanvas('#pitchCanvas',0.66))return;
+ return _sizeCanvasFit46.apply(this,arguments)};
+const _sizeDugFit46=sizeDugCanvas;
+sizeDugCanvas=function(){
+ if(isPhoneMatch()&&fitCanvas('#dugCanvas',0.74))return;
+ return _sizeDugFit46.apply(this,arguments)};
+
+/* ---------------------------------------------------------------------
+   3. THE BODY KNOWS WHICH KIND OF VIEW IT IS
+   --------------------------------------------------------------------- */
+function markBody(){
+ try{
+  const b=$('#mBody');if(!b)return;
+  b.classList.toggle('mreads',!watchingTab());
+  const feed=b.querySelector('#miniFeed');
+  if(feed&&watchingTab())feed.remove();      // and it is not merely hidden
+ }catch(e){}}
+
+const _renderMBody46=renderMBody;
+renderMBody=function(){
+ const r=_renderMBody46.apply(this,arguments);
+ try{
+  markBody();
+  /* re-measure after the feed has gone and the layout has settled */
+  const fit=()=>{try{if(MU.tab==='pitch')sizeCanvas();else if(MU.tab==='dugout')sizeDugCanvas()}catch(e){}};
+  fit();requestAnimationFrame(fit);setTimeout(fit,90);
+ }catch(e){}
+ return r};
+
+/* the strip appearing changes the room, so re-fit when it does */
+const _paintDug46=paintDugStrip;
+paintDugStrip=function(){
+ const had=!!document.getElementById('dugStrip');
+ const r=_paintDug46.apply(this,arguments);
+ try{
+  if(had!==!!document.getElementById('dugStrip')){
+   const fit=()=>{try{if(MU.tab==='pitch')sizeCanvas();else if(MU.tab==='dugout')sizeDugCanvas()}catch(e){}};
+   fit();requestAnimationFrame(fit);
+  }
+ }catch(e){}
+ return r};
+
+['resize','orientationchange'].forEach(ev=>window.addEventListener(ev,()=>{
+ try{if(MU&&MU.m){if(MU.tab==='pitch')sizeCanvas();else if(MU.tab==='dugout')sizeDugCanvas()}}catch(e){}
+},{passive:true}));
+
+/* ---------------------------------------------------------------------
+   4. THE CALLOUT
+   ---------------------------------------------------------------------
+   What is worth interrupting a match for: a goal, a booking, a sending
+   off, a VAR check, a substitution, and the whistle at either end. Read
+   straight off the feed the engine is already writing, so nothing has to
+   be plumbed into the engine itself.
+   --------------------------------------------------------------------- */
+const MCALL={seen:0,items:[]};
+function callBox(){
+ const b=$('#mBody');if(!b)return null;
+ let c=b.querySelector('.mcall');
+ if(!c){c=document.createElement('div');c.className='mcall';b.appendChild(c)}
+ return c}
+function showCall(text,kind,ms){
+ try{
+  if(!watchingTab())return;
+  const c=callBox();if(!c)return;
+  const d=document.createElement('div');
+  d.className='mcall-i'+(kind?' '+kind:'');
+  d.innerHTML=text;
+  c.appendChild(d);
+  /* two at a time on a phone: three stacked callouts cover the pitch they
+     are meant to be annotating */
+  const cap=isPhoneMatch()?2:3;
+  while(c.children.length>cap)c.removeChild(c.firstChild);
+  setTimeout(()=>{d.classList.add('out');setTimeout(()=>{try{d.remove()}catch(e){}},320)},ms||2600);
+ }catch(e){}}
+
+/* The feed is written for a scrolling text column, so it arrives with its
+   own emoji, its own bold tags and no length limit. A callout is a glance,
+   not a paragraph: tags come out, a leading icon is not repeated, and the
+   cut lands on a word. */
+function cleanCall(t){
+ let s=String(t||'')
+  .replace(/<[^>]*>/g,'')                     // it is a glance, not a document
+  /* every emoji goes, not just the leading ones — the callout supplies
+     its own icon and the feed likes to sprinkle them mid-sentence */
+  .replace(/[\u{1F000}-\u{1FAFF}\u{2190}-\u{21FF}\u{2300}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE0F}\u{200D}]/gu,'')
+  .replace(/\s+/g,' ')
+  .trim();
+ if(s.length>96){
+  const cut=s.slice(0,96);
+  const sp=cut.lastIndexOf(' ');
+  s=(sp>50?cut.slice(0,sp):cut).replace(/[,;:\-\u2014]$/,'')+'…';
+ }
+ return esc(s)}
+
+/* classify a feed line without the engine having to tell us */
+function callFor(e){
+ const raw=String(e.text||'').replace(/<[^>]*>/g,'');
+ const t=cleanCall(e.text);
+ /* a sending-off in the middle of a goal sequence still carries the goal
+    class, so the more specific event is asked about first */
+ if(/second yellow|sent off|red card|is off!|dismissed/i.test(raw))return {k:'red',ms:3200,txt:'🟥 '+t};
+ if(e.cls==='goal')return {k:'goal',ms:3400,txt:'⚽ '+t};
+ if(/yellow card|booked|goes into the book/i.test(raw))return {k:'card',ms:2500,txt:'🟨 '+t};
+ if(/\bVAR\b|overturn|on review/i.test(raw))return {k:'var',ms:3000,txt:'📺 '+t};
+ if(/comes on|replaced by|substitut/i.test(raw))return {k:'sub',ms:2300,txt:'🔁 '+t};
+ if(/penalty/i.test(raw))return {k:'var',ms:3000,txt:'⚠️ '+t};
+ if(/half time|half-time/i.test(raw))return {k:'',ms:2400,txt:'⏸ Half time'};
+ if(/full time|full-time/i.test(raw))return {k:'',ms:2600,txt:'⏹ Full time'};
+ return null}
+
+function pumpCalls(){
+ try{
+  const m=MU&&MU.m;if(!m||!m.feed)return;
+  if(MCALL.m!==m){MCALL.m=m;MCALL.seen=0}
+  if(m.feed.length<MCALL.seen){MCALL.seen=0}
+  for(let i=MCALL.seen;i<m.feed.length;i++){
+   const c=callFor(m.feed[i]);
+   if(c)showCall(c.txt,c.k,c.ms);
+  }
+  MCALL.seen=m.feed.length;
+ }catch(e){}}
+
+/* the top bar redraws on every tick, which is the cheapest place to look */
+const _renderTop46=renderTop;
+renderTop=function(){
+ const r=_renderTop46.apply(this,arguments);
+ pumpCalls();
+ return r};
+
+/* switching tabs should not replay the whole match at you */
+const _mtab46=ACTIONS.mtab;
+if(typeof _mtab46==='function')ACTIONS.mtab=function(){
+ const r=_mtab46.apply(this,arguments);
+ try{const m=MU&&MU.m;if(m&&m.feed)MCALL.seen=m.feed.length;markBody()}catch(e){}
+ return r};
+
+/*#w46_matchfit.js#*/
+
+/*#w47_voice.js#*/
+
+/* =====================================================================
+   THE WAVENET VOICES, WITHOUT A CLOUD KEY
+   ---------------------------------------------------------------------
+   The request was to use Google's free WaveNet speech. Worth being exact
+   about what is and is not possible here, because the answer is better
+   than it first looks.
+
+   Google Cloud Text-to-Speech — the WaveNet, Neural2 and Studio voices —
+   is not keyless. Every request needs an API key tied to a billing
+   account, even inside the free tier. This game is one self-contained
+   HTML file that people download and run offline, so a key would have to
+   be written into it in plain text, where it would be scraped and
+   revoked within days, and every spoken line would need a round trip.
+
+   But the good voices are already on the device. Android ships Google's
+   speech engine, and Chrome exposes it through the Web Speech API with
+   no key at all. Crucially it exposes TWO tiers, and the naming is the
+   only thing that tells them apart:
+
+       en-gb-x-gbb-network    server-side, the WaveNet-quality ones
+       en-gb-x-gbb-local      the compact on-device fallback
+
+   The ranking could not see the difference, because neither name
+   contains any of the words it was looking for — "natural", "neural",
+   "wavenet" — so a phone with both installed was as likely to pick the
+   compact voice as the good one. That is almost certainly what "the TTS
+   isn't great" was.
+
+   The network tier now outranks everything else, and the picker says
+   which tier each voice belongs to so it can be checked by ear.
+   ===================================================================== */
+const _ttsScoreNet=ttsScore;
+ttsScore=function(v){
+ let s=_ttsScoreNet.apply(this,arguments);
+ try{
+  const n=String((v&&v.name)||'')+' '+String((v&&v.voiceURI)||'');
+  /* Android's server-side Google voices — the WaveNet-quality tier —
+     are identified only by this suffix */
+  if(/-network\b/i.test(n))s+=55;
+  else if(/-local\b/i.test(n))s-=8;
+  /* and the x- voice ids are Google's own, whatever the tier */
+  if(/\bx-[a-z]{3}\b/i.test(n))s+=12;
+ }catch(e){}
+ return s};
+function voiceTier(v){
+ const n=String((v&&v.name)||'')+' '+String((v&&v.voiceURI)||'');
+ if(/-network\b/i.test(n))return 'network';
+ if(/-local\b/i.test(n))return 'compact';
+ if(v&&v.localService===false)return 'network';
+ return 'device'}
+
+/* the list has to be re-sorted with the new ranking, since it was built
+   with the old one before this layer loaded */
+try{if(TTS.voices&&TTS.voices.length)ttsIndex(TTS.voices.slice())}catch(e){}
+
+/* and the picker says which tier you are listening to */
+const _voicePickNet=ACTIONS.sfxVoicePick;
+ACTIONS.sfxVoicePick=function(){
+ const r=_voicePickNet.apply(this,arguments);
+ try{
+  const sb=$('#sheetBody');if(!sb)return r;
+  if(sb.querySelector('.vtier'))return r;
+  const rows=sb.querySelectorAll('[data-action="sfxVoiceSet"][data-v]');
+  rows.forEach(el=>{
+   const nm=el.getAttribute('data-v');if(!nm)return;
+   const v=TTS.byName[nm];if(!v)return;
+   const t=voiceTier(v);
+   const bd=el.querySelector('.bd');if(!bd)return;
+   const lbl=t==='network'?'<b style="color:var(--green)">high quality</b>'
+    :t==='compact'?'<span style="color:var(--amber)">compact</span>':'on device';
+   bd.innerHTML=esc(v.lang||'')+' · '+lbl;
+   el.classList.add('vtier');
+  });
+  const note=document.createElement('div');
+  note.className='vtier xs faint';
+  note.style.cssText='line-height:1.6;padding:8px 2px 0';
+  note.innerHTML='Android installs Google\u2019s speech engine in two tiers. The '+
+   '<b style="color:var(--green)">high quality</b> ones are the server-side voices — the same '+
+   'family as WaveNet — and the game now ranks them first. If your phone only lists compact '+
+   'voices, installing the Google Speech Services update from the Play Store adds the good ones.';
+  sb.appendChild(note);
+ }catch(e){}
+ return r};
+
+/*#w47_voice.js#*/
+
 showStart();
 </script>
 </body>
