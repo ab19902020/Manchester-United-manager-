@@ -15159,7 +15159,7 @@ drawDugout=function(){
   for(let i=0;i<130;i++)MU.fx.push({x:Math.random()*W,y:-Math.random()*H*.5,
    vx:(Math.random()-.5)*W*.005,vy:H*.004+Math.random()*H*.007,
    c:Math.random()<.62?cc.c1:(Math.random()<.5?'#ffffff':cc.c2||'#fbe122'),
-   r:Math.max(2,W*.0055*Math.random()),rot:Math.random()*7})}
+   r:Math.max(2,W*.0028*Math.random()),rot:Math.random()*7})}
  if(MU.goalFlash>0){
   MU.goalFlash--;
   MU.fx.forEach(f=>{f.x+=f.vx;f.y+=f.vy;f.rot+=.16;
@@ -23921,7 +23921,7 @@ if(typeof skipHalf==='function'){
      make the whole pitch fit is to cap the WIDTH by the vertical room left
      after the scoreboard, the tabs and the dugout controls. Capping the
      height instead just crops the bottom third of the pitch off. */
-  ' #matchScreen canvas#pitchCanvas{width:100%;max-width:min(1180px,calc((100vh - 520px)/0.66));',
+  ' #matchScreen canvas#pitchCanvas{width:100%;max-width:min(1180px,calc((100vh - 640px)/0.66));',
   '  margin-left:auto;margin-right:auto;display:block}',
   ' #matchScreen .commentary{max-width:920px;margin:0 auto}',
   ' #matchScreen .statgrid{max-width:720px;margin:0 auto}',
@@ -24140,6 +24140,2549 @@ openBidSheet=function(pid){
 const _trRowAsk=(typeof trRow==='function')?trRow:null;
 
 /*#w35_prices.js#*/
+
+/*#w35_prices.js#*//*#w36_nations.js#*/
+
+/* =====================================================================
+   WHERE EVERY PLAYER IS ACTUALLY FROM
+   ---------------------------------------------------------------------
+   Jude Bellingham was Colombian.
+
+   Not because anybody typed that. The game shipped an exact-nationality
+   table covering three clubs — United, City and Liverpool — and everybody
+   else fell through to a surname regex and then, failing that, to a
+   weighted random pool keyed on the country their club plays in. Real
+   Madrid's pool is five parts Spain and one part each of Argentina,
+   Brazil, Uruguay, Colombia and Morocco. Bellingham's name hashed onto
+   Colombia and stayed there, deterministically, in every save.
+
+   Harry Kane came out of Bayern's pool, Olise out of the same one, Cole
+   Palmer out of Chelsea's. Any player the regexes did not happen to name
+   was a coin toss.
+
+   There are nine hundred real players in this game's data. All nine
+   hundred are now named explicitly below. The regexes and the pool are
+   still there and still do useful work — they are what a newly generated
+   sixteen-year-old goes through — but no real footballer reaches them.
+   ===================================================================== */
+
+/* a few countries the original list did not have anybody from */
+[['GAM','Gambia','CAF',68],['GNB','Guinea-Bissau','CAF',68],
+ ['ZIM','Zimbabwe','CAF',68],['MOZ','Mozambique','CAF',67],
+ ['BER','Bermuda','CONCACAF',60],['RCA','Central African Republic','CAF',62],
+ ['RUS','Russia','UEFA',77],['SUR','Suriname','CONMEBOL',66],
+ ['CUW','Curaçao','CONCACAF',66],['HAI','Haiti','CONCACAF',66],
+ ['BEN','Benin','CAF',68],['TOG','Togo','CAF',67],['COM','Comoros','CAF',66],
+ ['SYR','Syria','AFC',68],['PLE','Palestine','AFC',66],['THA','Thailand','AFC',67],
+ ['VIE','Vietnam','AFC',67],['IDN','Indonesia','AFC',65],['IND','India','AFC',63],
+ ['LUX','Luxembourg','UEFA',69],['CYP','Cyprus','UEFA',66],['MDA','Moldova','UEFA',65],
+ ['BLR','Belarus','UEFA',68],['LVA','Latvia','UEFA',65],['LTU','Lithuania','UEFA',64],
+ ['EST','Estonia','UEFA',64],['AZE','Azerbaijan','UEFA',66],['KAZ','Kazakhstan','UEFA',67],
+ ['MTN','Mauritania','CAF',66],['LBY','Libya','CAF',66],['SDN','Sudan','CAF',65],
+ ['UGA','Uganda','CAF',67],['KEN','Kenya','CAF',66],['TAN','Tanzania','CAF',65],
+ ['MWI','Malawi','CAF',63],['NAM','Namibia','CAF',64],['BOT','Botswana','CAF',62],
+ ['SLE','Sierra Leone','CAF',64],['LBR','Liberia','CAF',63],['NIG','Niger','CAF',64],
+ ['CHA','Chad','CAF',60],['CGO','Congo','CAF',66],['EQG','Equatorial Guinea','CAF',68],
+ ['TRI','Trinidad & Tobago','CONCACAF',66],['GUA','Guatemala','CONCACAF',66],
+ ['SLV','El Salvador','CONCACAF',65],['NCA','Nicaragua','CONCACAF',60],
+ ['GUY','Guyana','CONMEBOL',60],['FIJ','Fiji','OFC',58],['PNG','Papua New Guinea','OFC',56],
+ ['SOL','Solomon Islands','OFC',57],['TAH','Tahiti','OFC',58],['VAN','Vanuatu','OFC',55],
+ ['NCL','New Caledonia','OFC',57],['SAM','Samoa','OFC',52],['TGA','Tonga','OFC',50],
+ ['MAS','Malaysia','AFC',64],['SGP','Singapore','AFC',62],['PHI','Philippines','AFC',63],
+ ['MYA','Myanmar','AFC',58],['HKG','Hong Kong','AFC',61],['TPE','Chinese Taipei','AFC',56],
+ ['BHR','Bahrain','AFC',70],['OMA','Oman','AFC',71],['KUW','Kuwait','AFC',68],
+ ['LBN','Palestine ','AFC',66],['TJK','Tajikistan','AFC',69],['TKM','Turkmenistan','AFC',65],
+ ['KGZ','Kyrgyzstan','AFC',67],['AFG','Afghanistan','AFC',58],['NEP','Nepal','AFC',57],
+ ['BAN','Bangladesh','AFC',56],['MDV','Maldives','AFC',57],['SRI','Sri Lanka','AFC',53]
+].forEach(n=>{if(!NAT_BY[n[0]]){NATIONS.push(n);NAT_BY[n[0]]={code:n[0],name:n[1],conf:n[2],base:n[3]}}});
+
+/* ---------------------------------------------------------------------
+   THE NINE HUNDRED
+   Written out club by club, in the order the game's own data lists them.
+   --------------------------------------------------------------------- */
+const NAT_REAL={
+/* Manchester United */
+'Senne Lammens':'BEL','Altay Bayındır':'TUR','Karl Darlow':'ENG','Diogo Dalot':'POR',
+'Noussair Mazraoui':'MAR','Matthijs de Ligt':'NED','Leny Yoro':'FRA','Lisandro Martínez':'ARG',
+'Harry Maguire':'ENG','Ayden Heaven':'ENG','Luke Shaw':'ENG','Manuel Ugarte':'URU',
+'Andrey Santos':'BRA','Youri Tielemans':'BEL','Kobbie Mainoo':'ENG','Mason Mount':'ENG',
+'Bruno Fernandes':'POR','Amad Diallo':'CIV','Bryan Mbeumo':'CMR','Matheus Cunha':'BRA',
+'Benjamin Šeško':'SVN','Joshua Zirkzee':'NED','Chido Obi':'DEN','Marcus Rashford':'ENG',
+'JJ Gabriel':'ENG','Patrick Dorgu':'DEN',
+/* Manchester City */
+'Gianluigi Donnarumma':'ITA','James Trafford':'ENG','Rúben Dias':'POR','Joško Gvardiol':'CRO',
+'Abdukodir Khusanov':'UZB','Rayan Aït-Nouri':'ALG','Matheus Nunes':'POR','Rico Lewis':'ENG',
+'Elliot Anderson':'ENG','Rodri':'ESP','Phil Foden':'ENG','Tijjani Reijnders':'NED',
+'Nico González':'ESP','Rayan Cherki':'FRA','Erling Haaland':'NOR','Omar Marmoush':'EGY',
+'Jérémy Doku':'BEL','Savinho':'BRA','Oscar Bobb':'NOR',
+/* Liverpool */
+'Alisson':'BRA','Giorgi Mamardashvili':'GEO','Virgil van Dijk':'NED','Ibrahima Konaté':'FRA',
+'Joe Gomez':'ENG','Giovanni Leoni':'ITA','Jeremy Jacquet':'FRA','Milos Kerkez':'HUN',
+'Jeremie Frimpong':'NED','Conor Bradley':'NIR','Alexis Mac Allister':'ARG',
+'Dominik Szoboszlai':'HUN','Ryan Gravenberch':'NED','Curtis Jones':'ENG','Florian Wirtz':'GER',
+'Cody Gakpo':'NED','Alexander Isak':'SWE','Hugo Ekitiké':'FRA','Federico Chiesa':'ITA',
+/* Arsenal */
+'David Raya':'ESP','Kepa Arrizabalaga':'ESP','William Saliba':'FRA','Gabriel Magalhães':'BRA',
+'Jurriën Timber':'NED','Riccardo Calafiori':'ITA','Ben White':'ENG','Myles Lewis-Skelly':'ENG',
+'Cristhian Mosquera':'ESP','Piero Hincapié':'ECU','Declan Rice':'ENG','Martín Zubimendi':'ESP',
+'Martin Ødegaard':'NOR','Mikel Merino':'ESP','Christian Nørgaard':'DEN','Eberechi Eze':'ENG',
+'Bukayo Saka':'ENG','Gabriel Martinelli':'BRA','Noni Madueke':'ENG','Viktor Gyökeres':'SWE',
+'Kai Havertz':'GER',
+/* Chelsea */
+'Robert Sánchez':'ESP','Filip Jörgensen':'SWE','Morgan Rogers':'ENG','Levi Colwill':'ENG',
+'Trevoh Chalobah':'ENG','Wesley Fofana':'FRA','Benoît Badiashile':'FRA','Malo Gusto':'FRA',
+'Reece James':'ENG','Jorrel Hato':'NED','Josh Acheampong':'ENG','Moisés Caicedo':'ECU',
+'Enzo Fernández':'ARG','Roméo Lavia':'BEL','Cole Palmer':'ENG','Pedro Neto':'POR',
+'Jamie Gittens':'ENG','Estêvão':'BRA','Geovany Quenda':'POR','João Pedro':'BRA',
+'Liam Delap':'ENG',
+/* Tottenham */
+'Guglielmo Vicario':'ITA','Antonín Kinský':'CZE','Cristian Romero':'ARG','Micky van de Ven':'NED',
+'Jan Paul van Hecke':'NED','Mateus Fernandes':'POR','Kevin Danso':'AUT','Pedro Porro':'ESP',
+'Destiny Udogie':'ITA','Djed Spence':'ENG','Ben Davies':'WAL','João Palhinha':'POR',
+'Rodrigo Bentancur':'URU','Pape Matar Sarr':'SEN','Lucas Bergvall':'SWE','Archie Gray':'ENG',
+'Xavi Simons':'NED','Mohammed Kudus':'GHA','Brennan Johnson':'WAL','Wilson Odobert':'FRA',
+'Dominic Solanke':'ENG','Richarlison':'BRA','Randal Kolo Muani':'FRA','Mathys Tel':'FRA',
+/* Newcastle */
+'Nick Pope':'ENG','Aaron Ramsdale':'ENG','Kieran Trippier':'ENG','Tino Livramento':'ENG',
+'Lewis Hall':'ENG','Dan Burn':'ENG','Fabian Schär':'SUI','Sven Botman':'NED',
+'Malick Thiaw':'GER','Sandro Tonali':'ITA','Bruno Guimarães':'BRA','Joelinton':'BRA',
+'Lewis Miley':'ENG','Jacob Ramsey':'ENG','Anthony Elanga':'SWE','Jacob Murphy':'ENG',
+'Harvey Barnes':'ENG','Nick Woltemade':'GER','Yoane Wissa':'COD','William Osula':'DEN',
+/* Aston Villa */
+'Emiliano Martínez':'ARG','Marco Bizot':'NED','Matty Cash':'POL','Ezri Konsa':'ENG',
+'Pau Torres':'ESP','Tyrone Mings':'ENG','Lucas Digne':'FRA','Ian Maatsen':'NED',
+'Victor Lindelöf':'SWE','Boubacar Kamara':'FRA','Amadou Onana':'BEL','João Gomes':'BRA',
+'Johan Manzambi':'SUI','John McGinn':'SCO','Emiliano Buendía':'ARG','Harvey Elliott':'ENG',
+'Alejandro Garnacho':'ARG','Donyell Malen':'NED','Evann Guessand':'CIV','Ollie Watkins':'ENG',
+/* Brighton */
+'Bart Verbruggen':'NED','Jason Steele':'ENG','Luka Vušković':'CRO','Lewis Dunk':'ENG',
+'Adam Webster':'ENG','Joël Veltman':'NED','Ferdi Kadıoğlu':'TUR','Maxim De Cuyper':'BEL',
+'Diego Coppola':'ITA','Olivier Boscagli':'FRA','Carlos Baleba':'CMR','Jack Hinshelwood':'ENG',
+'Yasin Ayari':'SWE','Mats Wieffer':'NED','Kaoru Mitoma':'JPN','Yankuba Minteh':'GAM',
+'Brajan Gruda':'GER','Georginio Rutter':'FRA','Danny Welbeck':'ENG',
+'Charalampos Kostoulas':'GRE','Stefanos Tzimas':'GRE',
+/* West Ham */
+'Alphonse Areola':'FRA','Mads Hermansen':'DEN','Aaron Wan-Bissaka':'COD','Max Kilman':'UKR',
+'Konstantinos Mavropanos':'GRE','Jean-Clair Todibo':'FRA','El Hadji Malick Diouf':'SEN',
+'Oliver Scarles':'ENG','Kyle Walker-Peters':'ENG','Tomáš Souček':'CZE',
+'James Ward-Prowse':'ENG','Soungoutou Magassa':'FRA','Freddie Potts':'ENG',
+'Lucas Paquetá':'BRA','Jarrod Bowen':'ENG','Crysencio Summerville':'NED',
+'Niclas Füllkrug':'GER','Callum Wilson':'ENG',
+/* Everton */
+'Jordan Pickford':'ENG','Mark Travers':'IRL','James Tarkowski':'ENG','Jarrad Branthwaite':'ENG',
+'Michael Keane':'ENG','Vitalii Mykolenko':'UKR','Nathan Patterson':'SCO','Séamus Coleman':'IRL',
+'Idrissa Gueye':'SEN','James Garner':'ENG','Tim Iroegbunam':'ENG','Kiernan Dewsbury-Hall':'ENG',
+'Carlos Alcaraz':'ARG','Merlin Röhl':'GER','Iliman Ndiaye':'SEN','Jack Grealish':'ENG',
+'Dwight McNeil':'ENG','Tyler Dibling':'ENG','Beto':'GNB','Thierno Barry':'FRA',
+/* Fulham */
+'Bernd Leno':'GER','Benjamin Lecomte':'FRA','Kenny Tete':'NED','Calvin Bassey':'NGA',
+'Joachim Andersen':'DEN','Jorge Cuenca':'ESP','Antonee Robinson':'USA','Timothy Castagne':'BEL',
+'Issa Diop':'FRA','Ryan Sessegnon':'ENG','Sander Berge':'NOR','Saša Lukić':'SRB',
+'Tom Cairney':'SCO','Josh King':'NOR','Andreas Pereira':'BRA','Alex Iwobi':'NGA',
+'Emile Smith Rowe':'ENG','Kevin':'BRA','Harry Wilson':'WAL','Raúl Jiménez':'MEX',
+'Rodrigo Muniz':'BRA',
+/* Brentford */
+'Caoimhín Kelleher':'IRL','Hákon Valdimarsson':'ISL','Kristoffer Ajer':'NOR',
+'Nathan Collins':'IRL','Ethan Pinnock':'JAM','Sepp van den Berg':'NED','Michael Kayode':'ITA',
+'Keane Lewis-Potter':'ENG','Aaron Hickey':'SCO','Rico Henry':'ENG','Vitaly Janelt':'GER',
+'Yehor Yarmoliuk':'UKR','Jordan Henderson':'ENG','Antoni Milambo':'NED','Mathias Jensen':'DEN',
+'Frank Onyeka':'NGA','Mikkel Damsgaard':'DEN','Kevin Schade':'GER','Dango Ouattara':'BFA',
+'Reiss Nelson':'ENG','Igor Thiago':'BRA',
+/* Crystal Palace */
+'Dean Henderson':'ENG','Walter Benítez':'ARG','Marc Guéhi':'ENG','Maxence Lacroix':'FRA',
+'Chris Richards':'USA','Jaydee Canvot':'FRA','Tyrick Mitchell':'ENG','Daniel Muñoz':'COL',
+'Nathaniel Clyne':'ENG','Borna Sosa':'CRO','Adam Wharton':'ENG','Will Hughes':'ENG',
+'Cheick Doucouré':'MLI','Daichi Kamada':'JPN','Jefferson Lerma':'COL','Ismaïla Sarr':'SEN',
+'Yeremy Pino':'ESP','Christantus Uche':'NGA','Eddie Nketiah':'ENG','Jean-Philippe Mateta':'FRA',
+/* Nottingham Forest */
+'Matz Sels':'BEL','John Victor':'BRA','Ola Aina':'NGA','Nikola Milenković':'SRB',
+'Murillo':'BRA','Neco Williams':'WAL','Nicolò Savona':'ITA','Morato':'BRA','Jair Cunha':'BRA',
+'Ibrahim Sangaré':'CIV','Douglas Luiz':'BRA','Ryan Yates':'ENG','James McAtee':'ENG',
+'Morgan Gibbs-White':'ENG','Callum Hudson-Odoi':'ENG','Dan Ndoye':'SUI',
+'Omari Hutchinson':'ENG','Dilane Bakwa':'FRA','Chris Wood':'NZL','Igor Jesus':'BRA',
+'Taiwo Awoniyi':'NGA',
+/* Bournemouth */
+'Đorđe Petrović':'SRB','Will Dennis':'ENG','Marcos Senesi':'ARG','Bafodé Diakité':'FRA',
+'James Hill':'ENG','Adrien Truffert':'FRA','Álex Jiménez':'ESP','Julián Araujo':'MEX',
+'Veljko Milosavljević':'SRB','Tyler Adams':'USA','Alex Scott':'ENG','Ryan Christie':'SCO',
+'David Brooks':'WAL','Marcus Tavernier':'ENG','Antoine Semenyo':'GHA','Justin Kluivert':'NED',
+'Amine Adli':'MAR','Ben Gannon-Doak':'SCO','Evanilson':'BRA','Eli Junior Kroupi':'FRA',
+/* Wolves */
+'José Sá':'POR','Sam Johnstone':'ENG','Emmanuel Agbadou':'CIV','Toti Gomes':'POR',
+'Ladislav Krejčí':'CZE','Matt Doherty':'IRL','Ki-Jana Hoever':'NED','Hugo Bueno':'ESP',
+'David Møller Wolfe':'NOR','Yerson Mosquera':'COL','André':'BRA',
+'Jean-Ricner Bellegarde':'FRA','Marshall Munetsi':'ZIM','Jhon Arias':'COL',
+'Rodrigo Gomes':'POR','Hwang Hee-chan':'KOR','Fer López':'ESP','Jørgen Strand Larsen':'NOR',
+'Tolu Arokodare':'NGA',
+/* Burnley */
+'Martin Dúbravka':'SVK','Max Weiß':'GER','Kyle Walker':'ENG','Maxime Estève':'FRA',
+'Axel Tuanzebe':'ENG','Quilindschy Hartman':'NED','Bashir Humphreys':'ENG','Joe Worrall':'ENG',
+'Oliver Sonne':'PER','Josh Cullen':'IRL','Lesley Ugochukwu':'FRA','Florentino Luís':'POR',
+'Josh Laurent':'ENG','Hannibal Mejbri':'TUN','Jaidon Anthony':'ENG',
+'Jacob Bruun Larsen':'DEN','Loum Tchaouna':'FRA','Marcus Edwards':'ENG','Lyle Foster':'RSA',
+'Zian Flemming':'NED','Armando Broja':'ALB',
+/* Leeds */
+'Lucas Perri':'BRA','Jayden Bogle':'ENG','Joe Rodon':'WAL','Pascal Struijk':'NED',
+'Jaka Bijol':'SVN','Gabriel Gudmundsson':'SWE','James Justin':'ENG','Sebastiaan Bornauw':'BEL',
+'Ethan Ampadu':'WAL','Ao Tanaka':'JPN','Anton Stach':'GER','Ilia Gruev':'BUL',
+'Sean Longstaff':'ENG','Daniel James':'WAL','Wilfried Gnonto':'ITA','Brenden Aaronson':'USA',
+'Jack Harrison':'ENG','Noah Okafor':'SUI','Dominic Calvert-Lewin':'ENG','Joël Piroe':'NED',
+'Lukas Nmecha':'GER',
+/* Sunderland */
+'Robin Roefs':'NED','Anthony Patterson':'ENG','Trai Hume':'NIR','Daniel Ballard':'NIR',
+'Nordi Mukiele':'FRA','Omar Alderete':'PAR','Arthur Masuaku':'COD','Lutsharel Geertruida':'NED',
+'Reinildo Mandava':'MOZ','Granit Xhaka':'SUI','Noah Sadiki':'COD','Chris Rigg':'ENG',
+'Enzo Le Fée':'FRA','Habib Diarra':'SEN','Simon Adingra':'CIV','Chemsdine Talbi':'MAR',
+'Patrick Roberts':'ENG','Wilson Isidor':'FRA','Brian Brobbey':'NED','Eliezer Mayenda':'ESP',
+/* Real Madrid */
+'Thibaut Courtois':'BEL','Trent Alexander-Arnold':'ENG','Éder Militão':'BRA',
+'Antonio Rüdiger':'GER','Dean Huijsen':'ESP','Álvaro Carreras':'ESP','Marc Cucurella':'ESP',
+'Aurélien Tchouaméni':'FRA','Eduardo Camavinga':'FRA','Federico Valverde':'URU',
+'Jude Bellingham':'ENG','Arda Güler':'TUR','Rodrygo':'BRA','Vinícius Júnior':'BRA',
+'Kylian Mbappé':'FRA','Gonzalo García':'ESP',
+/* Barcelona */
+'Joan García':'ESP','Marc-André ter Stegen':'GER','Jules Koundé':'FRA','Pau Cubarsí':'ESP',
+'Ronald Araújo':'URU','Alejandro Balde':'ESP','Frenkie de Jong':'NED','Pedri':'ESP',
+'Gavi':'ESP','Dani Olmo':'ESP','Fermín López':'ESP','Lamine Yamal':'ESP','Raphinha':'BRA',
+'Robert Lewandowski':'POL','Ferran Torres':'ESP','Anthony Gordon':'ENG',
+/* Atlético Madrid */
+'Jan Oblak':'SVN','Marcos Llorente':'ESP','José María Giménez':'URU','Robin Le Normand':'ESP',
+'Dávid Hancko':'SVK','Matteo Ruggeri':'ITA','Pablo Barrios':'ESP','Conor Gallagher':'ENG',
+'Koke':'ESP','Thiago Almada':'ARG','Álex Baena':'ESP','Giuliano Simeone':'ARG',
+'Antoine Griezmann':'FRA','Julián Álvarez':'ARG','Alexander Sørloth':'NOR',
+/* Bayern */
+'Manuel Neuer':'GER','Jonas Urbig':'GER','Sacha Boey':'FRA','Dayot Upamecano':'FRA',
+'Jonathan Tah':'GER','Min-jae Kim':'KOR','Raphaël Guerreiro':'POR','Josip Stanišić':'CRO',
+'Joshua Kimmich':'GER','Aleksandar Pavlović':'GER','Jamal Musiala':'GER','Michael Olise':'FRA',
+'Luis Díaz':'COL','Serge Gnabry':'GER','Harry Kane':'ENG',
+/* Leverkusen */
+'Mark Flekken':'NED','Jarell Quansah':'ENG','Edmond Tapsoba':'BFA','Arthur':'BRA',
+'Robert Andrich':'GER','Exequiel Palacios':'ARG','Aleix García':'ESP','Malik Tillman':'USA',
+'Ibrahim Maza':'ALG','Ernest Poku':'NED','Nathan Tella':'NGA','Patrik Schick':'CZE',
+'Christian Kofane':'CMR',
+/* Dortmund */
+'Gregor Kobel':'SUI','Julian Ryerson':'NOR','Nico Schlotterbeck':'GER','Waldemar Anton':'GER',
+'Ramy Bensebaini':'ALG','Daniel Svensson':'SWE','Marcel Sabitzer':'AUT','Felix Nmecha':'GER',
+'Pascal Groß':'GER','Julian Brandt':'GER','Karim Adeyemi':'GER','Jobe Bellingham':'ENG',
+'Julien Duranville':'BEL','Serhou Guirassy':'GUI','Maximilian Beier':'GER',
+/* PSG */
+'Lucas Chevalier':'FRA','Achraf Hakimi':'MAR','Marquinhos':'BRA','Willian Pacho':'ECU',
+'Illia Zabarnyi':'UKR','Nuno Mendes':'POR','Vitinha':'POR','João Neves':'POR',
+'Warren Zaïre-Emery':'FRA','Fabián Ruiz':'ESP','Ousmane Dembélé':'FRA',
+'Khvicha Kvaratskhelia':'GEO','Désiré Doué':'FRA','Bradley Barcola':'FRA',
+'Gonçalo Ramos':'POR','Senny Mayulu':'FRA',
+/* Inter */
+'Yann Sommer':'SUI','Manuel Akanji':'SUI','Alessandro Bastoni':'ITA','Francesco Acerbi':'ITA',
+'Hakan Çalhanoğlu':'TUR','Nicolò Barella':'ITA','Petar Sučić':'CRO',
+'Henrikh Mkhitaryan':'ARM','Davide Frattesi':'ITA','Luis Henrique':'BRA',
+'Lautaro Martínez':'ARG','Marcus Thuram':'FRA','Ange-Yoan Bonny':'FRA',
+/* Milan */
+'Mike Maignan':'FRA','Fikayo Tomori':'ENG','Strahinja Pavlović':'SRB','Matteo Gabbia':'ITA',
+'Pervis Estupiñán':'ECU','Youssouf Fofana':'FRA','Adrien Rabiot':'FRA',
+'Ruben Loftus-Cheek':'ENG','Samuele Ricci':'ITA','Christian Pulisic':'USA',
+'Rafael Leão':'POR','Christopher Nkunku':'FRA','Santiago Giménez':'MEX',
+/* Juventus */
+'Michele Di Gregorio':'ITA','Gleison Bremer':'BRA','Federico Gatti':'ITA','Pierre Kalulu':'FRA',
+'Andrea Cambiaso':'ITA','Juan Cabal':'COL','Manuel Locatelli':'ITA','Khéphren Thuram':'FRA',
+'Teun Koopmeiners':'NED','Weston McKennie':'USA','Kenan Yıldız':'TUR',
+'Francisco Conceição':'POR','Edon Zhegrova':'KVX','Jonathan David':'CAN','Loïs Openda':'BEL',
+/* Napoli */
+'Alex Meret':'ITA','Giovanni Di Lorenzo':'ITA','Amir Rrahmani':'KVX',
+'Alessandro Buongiorno':'ITA','Sam Beukema':'NED','Mathías Olivera':'URU',
+'Stanislav Lobotka':'SVK','André-Frank Zambo Anguissa':'CMR','Scott McTominay':'SCO',
+'Kevin De Bruyne':'BEL','Matteo Politano':'ITA','David Neres':'BRA','Noa Lang':'NED',
+'Romelu Lukaku':'BEL','Rasmus Højlund':'DEN','Lorenzo Lucca':'ITA',
+/* Benfica */
+'Anatoliy Trubin':'UKR','Nicolás Otamendi':'ARG','António Silva':'POR','Alexander Bah':'DEN',
+'Samuel Dahl':'SWE','Fredrik Aursnes':'NOR','Orkun Kökçü':'TUR','Enzo Barrenechea':'ARG',
+'Richard Ríos':'COL','Georgiy Sudakov':'UKR','Kerem Aktürkoğlu':'TUR',
+'Franjo Ivanović':'CRO','Vangelis Pavlidis':'GRE','Andreas Schjelderup':'NOR',
+'Dodi Lukébakio':'BEL',
+/* Leicester / Southampton / Ipswich / Sheffield Utd / West Brom / Coventry etc. */
+'Jakub Stolarczyk':'POL','Wout Faes':'BEL','Jannik Vestergaard':'DEN','Conor Coady':'ENG',
+'Luke Thomas':'ENG','Wilfred Ndidi':'NGA','Harry Winks':'ENG','Boubakary Soumaré':'FRA',
+'Kasey McAteer':'IRL','Abdul Fatawu':'GHA','Stephy Mavididi':'ENG','Patson Daka':'ZAM',
+'Jordan Ayew':'GHA','Alex McCarthy':'ENG','James Bree':'ENG','Taylor Harwood-Bellis':'ENG',
+'Jan Bednarek':'POL','Ryan Manning':'IRL','Flynn Downes':'ENG','Joe Aribo':'NGA',
+'Finn Azaz':'IRL','Lewis Dobbin':'ENG','Ryan Fraser':'SCO','Ross Stewart':'SCO',
+'Adam Armstrong':'ENG','Kamari Doyle':'ENG','Christian Walton':'ENG','Leif Davis':'ENG',
+'Luke Woolfenden':'ENG','Dara O’Shea':'IRL','Cameron Burgess':'AUS','Harry Clarke':'ENG',
+'Massimo Luongo':'AUS','Jack Taylor':'IRL','Sammie Szmodics':'IRL','Conor Chaplin':'ENG',
+'Jack Clarke':'ENG','Wes Burns':'WAL','George Hirst':'ENG','Ali Al-Hamadi':'IRQ',
+'Michael Cooper':'ENG','Femi Seriki':'ENG','Anel Ahmedhodžić':'BIH','Jack Robinson':'ENG',
+'Rhys Norrington-Davies':'WAL','Vinicius Souza':'BRA','Gustavo Hamer':'NED',
+'Andre Brooks':'ENG','Callum O’Hare':'ENG','Romelle Donovan':'ENG','Jesurun Rak-Sakyi':'ENG',
+'Tyrese Campbell':'ENG','Kieffer Moore':'WAL','Louie Barry':'ENG','Josh Griffiths':'WAL',
+'Darnell Furlong':'ENG','Cedric Kipré':'CIV','Kyle Bartley':'ENG','Conor Townsend':'ENG',
+'Alex Mowatt':'ENG','Jayson Molumby':'IRL','Ousmane Diakité':'MLI','Tom Fellows':'ENG',
+'Mikey Johnston':'SCO','Grady Diangana':'COD','Josh Maja':'NGA','Aune Heggebo':'NOR',
+'Isaac Price':'NIR','George Long':'ENG','Kellen Fisher':'ENG','Shane Duffy':'IRL',
+'Callum Doyle':'ENG','Jose Córdoba':'PAN','Kenny McLean':'SCO','Jacob Wright':'ENG',
+'Marcelino Núñez':'CHI','Oscar Schwartau':'DEN','Amankwah Forson':'GHA','Ante Crnac':'CRO',
+'Josh Sargent':'USA','Kaide Gordon':'ENG','Angus Gunn':'SCO','Seny Dieng':'SEN',
+'Darragh Lenihan':'IRL','George Edmundson':'ENG','Rav van den Berg':'NED','Neto Borges':'BRA',
+'Luke Ayling':'ENG','Hayden Hackney':'ENG','Aidan Morris':'USA','Riley McGree':'AUS',
+'Morgan Whittaker':'ENG','Jeremy Sarmiento':'ECU','Delano Burgzorg':'NED',
+'Tommy Conway':'SCO','Emmanuel Dennis':'NGA','Oliver Dovin':'SWE','Milan van Ewijk':'NED',
+'Liam Kitching':'ENG','Bobby Thomas':'ENG','Jay Dasilva':'ENG','Ben Sheaf':'ENG',
+'Victor Torp':'DEN','Josh Eccles':'ENG','Ogochukwu Onyeka':'NGA','Tatsuhiro Sakamoto':'JPN',
+'Ephron Mason-Clark':'ENG','Haji Wright':'USA','Brandon Thomas-Asante':'GHA',
+'Norman Bassette':'BEL','Egil Selvik':'NOR','Jeremy Ngakia':'ENG','Ryan Porteous':'SCO',
+'Francisco Sierralta':'CHI','Mattie Pollock':'ENG','James Morris':'ENG','Edo Kayembe':'COD',
+'Imrân Louza':'MAR','Giorgi Chakvetadze':'GEO','Othmane Maamma':'MAR','Kwadwo Baah':'ENG',
+'Vakoun Bayo':'CIV','Mileta Rajović':'DEN','Tom Dele-Bashiru':'NGA','Viktor Johansson':'SWE',
+'Junior Tchamadeu':'ENG','Ben Wilmot':'ENG','Ashley Phillips':'ENG','Ben Gibson':'ENG',
+'Enda Stevens':'IRL','Wouter Burger':'NED','Bae Jun-ho':'KOR','Andrew Moran':'IRL',
+'Million Manhoef':'NED','Sorba Thomas':'WAL','Lewis Baker':'ENG','Tom Cannon':'IRL',
+'Robert Boženík':'SVK','Ivor Pandur':'CRO','Lewie Coyle':'ENG','Alfie Jones':'ENG',
+'John Egan':'IRL','Sean McLoughlin':'IRL','Charlie Hughes':'ENG','Ryan Giles':'ENG',
+'Regan Slater':'ENG','Matt Crooks':'ENG','Amir Hadžiahmetović':'BIH','Kasey Palmer':'ENG',
+'Mohamed Belloumi':'ALG','Abu Kamara':'ENG','Joe Gelhardt':'ENG','Oli McBurnie':'SCO',
+'Max O’Leary':'IRL','Ross McCrorie':'SCO','Zak Vyner':'ENG','Rob Dickie':'ENG',
+'George Tanner':'ENG','Cameron Pring':'ENG','Jason Knight':'IRL','Max Bird':'ENG',
+'Joe Williams':'ENG','Scott Twine':'ENG','Anis Mehmeti':'ALB','Yu Hirakawa':'JPN',
+'Nahki Wells':'BER','Sinclair Armstrong':'IRL','Emil Riis':'DEN','Kai Rooney':'ENG',
+'Jariyah Shah':'ENG','Jayden Ngwashi':'ENG','Dante Plunkett':'ENG','James Bailey':'ENG',
+'Jay McEvoy':'ENG','Louie Bradbury':'ENG','Noah Ajayi':'ENG','Rafe McCormack':'ENG',
+'Douka Abdoulaye':'MLI','Nathaniel-Junior Brown':'ENG','Bendito Mantato':'ENG',
+/* Sporting CP */
+'Rui Silva':'POR','Gonçalo Inácio':'POR','Ousmane Diomande':'CIV','Iván Fresneda':'ESP',
+'Morten Hjulmand':'DEN','João Simões':'POR','Pedro Gonçalves':'POR',
+'Francisco Trincão':'POR','Geny Catamo':'MOZ','Luis Suárez':'COL','Fotis Ioannidis':'GRE',
+/* Porto */
+'Diogo Costa':'POR','Nehuén Pérez':'ARG','Zé Pedro':'POR','Martim Fernandes':'POR',
+'Francisco Moura':'POR','Alan Varela':'ARG','Victor Froholdt':'DEN','Gabri Veiga':'ESP',
+'Rodrigo Mora':'POR','Pepê':'BRA','William Gomes':'BRA','Samu Aghehowa':'ESP',
+'Deniz Gül':'TUR',
+/* Ajax */
+'Vitezslav Jaros':'CZE','Josip Šutalo':'CRO','Youri Baas':'NED','Anton Gaaei':'DEN',
+'Owen Wijndal':'NED','Kenneth Taylor':'NED','Davy Klaassen':'NED','Kian Fitz-Jim':'NED',
+'Oscar Gloukh':'ISR','Mika Godts':'BEL','Steven Berghuis':'NED','Kasper Dolberg':'DEN',
+'Don-Angelo Konadu':'GER',
+/* Celtic */
+'Kasper Schmeichel':'DEN','Cameron Carter-Vickers':'USA','Liam Scales':'IRL',
+'Alistair Johnston':'CAN','Kieran Tierney':'SCO','Callum McGregor':'SCO','Reo Hatate':'JPN',
+'Arne Engels':'BEL','Benjamin Nygren':'SWE','Daizen Maeda':'JPN','James Forrest':'SCO',
+'Johnny Kenny':'IRL','Shin Yamada':'JPN',
+/* Rangers */
+'Jack Butland':'ENG','James Tavernier':'ENG','John Souttar':'SCO','Nasser Djiga':'BFA',
+'Jefté':'BRA','Nicolas Raskin':'BEL','Mohamed Diomande':'CIV','Joe Rothwell':'ENG',
+'Djeidi Gassama':'FRA','Oliver Antman':'FIN','Findlay Curtis':'SCO','Cyriel Dessers':'NGA',
+'Danilo':'BRA',
+/* Marseille */
+'Gerónimo Rulli':'ARG','Leonardo Balerdi':'ARG','Nayef Aguerd':'MAR','CJ Egan-Riley':'ENG',
+'Amir Murillo':'PAN','Ulisses Garcia':'SUI','Geoffrey Kondogbia':'RCA',
+'Pierre-Emile Højbjerg':'DEN','Angel Gomes':'ENG','Matt O’Riley':'DEN',
+'Mason Greenwood':'ENG','Igor Paixão':'BRA','Timothy Weah':'USA','Amine Gouiri':'ALG',
+'Pierre-Emerick Aubameyang':'GAB',
+/* Monaco */
+'Philipp Köhn':'SUI','Thilo Kehrer':'GER','Christian Mawissa':'FRA','Eric Dier':'ENG',
+'Vanderson':'BRA','Caio Henrique':'BRA','Denis Zakaria':'SUI','Lamine Camara':'SEN',
+'Paul Pogba':'FRA','Maghnes Akliouche':'FRA','Aleksandr Golovin':'RUS',
+'Takumi Minamino':'JPN','Ansu Fati':'ESP','Folarin Balogun':'USA','Mika Biereth':'DEN',
+/* Atalanta */
+'Marco Carnesecchi':'ITA','Isak Hien':'SWE','Odilon Kossounou':'CIV','Berat Djimsiti':'ALB',
+'Raoul Bellanova':'ITA','Davide Zappacosta':'ITA','Ederson':'BRA','Marten de Roon':'NED',
+'Mario Pašalić':'CRO','Charles De Ketelaere':'BEL','Ademola Lookman':'NGA',
+'Kamaldeen Sulemana':'GHA','Gianluca Scamacca':'ITA','Nikola Krstović':'MNE',
+'Matt Targett':'ENG','Hidemasa Morita':'JPN','Xaver Schlager':'AUT','Dušan Vlahović':'SRB',
+/* free agents and veterans */
+'Jadon Sancho':'ENG','Bernardo Silva':'POR','Mohamed Salah':'EGY','John Stones':'ENG',
+'Dani Carvajal':'ESP','Nathan Aké':'NED','Leon Goretzka':'GER','Casemiro':'BRA',
+'Andrew Robertson':'SCO','Thomas Partey':'GHA','Riyad Mahrez':'ALG','Raheem Sterling':'ENG',
+'Stefan Ortega':'GER','Mauro Icardi':'ARG','Luka Modrić':'CRO','Wilfried Zaha':'CIV',
+'Adama Traoré':'MLI','Anthony Martial':'FRA','James Rodríguez':'COL'};
+
+/* fold it into the table the game already consults, real names winning */
+for(const k in NAT_REAL)NAT_EXACT[k]=NAT_REAL[k];
+
+/* =====================================================================
+   AND ANY SAVE THAT ALREADY HAS BELLINGHAM DOWN AS COLOMBIAN
+   ---------------------------------------------------------------------
+   natOf() caches onto the player object and the object is serialised into
+   the save, so a career already in progress carries the wrong answer
+   forever. Every real name is re-stamped on load and on a new game.
+   ===================================================================== */
+function restampNations(){
+ try{let n=0;
+  const hit=p=>{const t=NAT_REAL[p.name];if(t&&p.nat!==t){p.nat=t;n++}};
+  /* eachPlayer only walks senior squads — the academy and the free agents
+     hold real names too, and a released veteran is exactly where you would
+     notice the wrong flag */
+  (G.clubs||[]).forEach(c=>{(c.players||[]).forEach(hit);(c.youth||[]).forEach(hit)});
+  (G.freeAgents||[]).forEach(hit);
+  NSQ_CACHE=null;NSQ_KEY='';
+  return n}
+ catch(e){return 0}}
+(function(){
+ const _ngNat=newGame;
+ newGame=function(){const r=_ngNat.apply(this,arguments);restampNations();return r};
+ const _lsNat=loadSlot;
+ loadSlot=function(){const ok=_lsNat.apply(this,arguments);if(ok)restampNations();return ok};
+})();
+
+/*#w36_nations.js#*/
+
+
+/*#w36_nations.js#*//*#w37_dock.js#*/
+
+/* =====================================================================
+   THE CONTINUE BUTTON THAT FLOATED
+   ---------------------------------------------------------------------
+   It sat marooned in the middle of nowhere: overlapping the list above
+   it, with a band of empty black between it and the navigation bar.
+
+   The stylesheet asks for exactly the right thing —
+
+       .continue-dock{position:fixed;bottom:calc(var(--nav-h) + 10px)}
+
+   — and never got it. A later polish pass of mine added
+
+       #app>*{position:relative;z-index:1}
+
+   to give every direct child of the app its own stacking context. That
+   is an ID selector, so it outranks a class selector no matter which
+   order they are written in, and it quietly turned both the Continue
+   dock AND the bottom navigation bar from fixed into relative.
+
+   A relatively positioned box with bottom:72px does not move to
+   seventy-two pixels off the bottom of the screen. It stays exactly
+   where the layout put it and is then painted seventy-two pixels higher,
+   leaving its original space empty. That is the overlap above the button
+   and the gap below it, in one line of CSS.
+
+   The same rule caught #app itself never having a real height — only a
+   min-height — so #view grew to its content instead of scrolling inside
+   it, and the whole page scrolled with the navigation attached to the
+   bottom of the document rather than the bottom of the window.
+
+   Both are fixed here, and the button now sits directly on top of Home
+   / Squad / Tactics, which is where a thumb already is.
+   ===================================================================== */
+(function dockCSS(){
+ const st=document.createElement('style');st.id='w37';
+ st.textContent=[
+  /* ID-level specificity, because that is what it takes to win */
+  '@media (max-width:1023px){',
+  /* a real height, so #view scrolls inside the app instead of the page
+     scrolling underneath a navigation bar that came along for the ride */
+  ' #app{height:100dvh;min-height:0}',
+  ' #app>#view{flex:1 1 0;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch}',
+  /* the navigation belongs to the window */
+  ' #app>.nav{position:fixed;left:0;right:0;bottom:0;z-index:40;',
+  '  margin:0 auto;max-width:520px}',
+  /* and Continue sits on top of it, not adrift above it */
+  ' #app>.continue-dock{position:fixed;left:0;right:0;z-index:39;',
+  '  bottom:calc(var(--nav-h) + env(safe-area-inset-bottom) + 6px);',
+  '  margin:0 auto;max-width:520px;',
+  /* a short fade so the list runs under it rather than colliding */
+  '  background:linear-gradient(180deg,rgba(8,12,9,0),rgba(8,12,9,.82) 42%,rgba(8,12,9,.94));',
+  '  padding:14px 0 6px}',
+  /* room at the end of every scroller for the dock to sit over */
+  ' #app>#view{padding-bottom:calc(var(--nav-h) + 96px)}',
+  '}'
+ ].join('');
+ document.head.appendChild(st)})();
+
+/* =====================================================================
+   AND CONTINUE TAKES YOU HOME
+   ---------------------------------------------------------------------
+   You press Continue to move the game on, and the game moves on — but
+   it left you wherever you happened to be standing, which after a look
+   at somebody else's squad is a screen with nothing on it about your
+   own club. Continue now returns to the home screen, which is where the
+   news, the fixture and the decisions are.
+
+   Off by a toggle in Settings for anybody who liked it the old way.
+   ===================================================================== */
+function optCfg(){
+ if(!G)return{homeOnContinue:true};
+ if(!G.opt)G.opt={};
+ if(G.opt.homeOnContinue==null)G.opt.homeOnContinue=true;
+ return G.opt}
+
+const _advHome=ACTIONS.advance;
+ACTIONS.advance=function(){
+ const r=_advHome.apply(this,arguments);
+ try{
+  if(!optCfg().homeOnContinue)return r;
+  /* not while a decision is holding the day, and not on the way into a
+     match — both of those put you exactly where you need to be already */
+  if(typeof blockingMails==='function'&&blockingMails().length)return r;
+  const ms=document.getElementById('matchScreen');
+  if(ms&&ms.classList.contains('open'))return r;
+  if(UI.view!=='home'){UI.view='home';if(typeof render==='function')render()}
+ }catch(e){}
+ return r};
+
+ACTIONS.optHome=()=>{const o=optCfg();o.homeOnContinue=!o.homeOnContinue;
+ try{sfx('tap')}catch(e){}
+ if(typeof render==='function')render()};
+
+/* the toggle, in with the rest of the switches */
+const _vSaveOpt=vSave;
+vSave=function(){
+ const o=optCfg();
+ const h='<div class="sec" style="margin-top:0"><div class="t">🎮 Game</div><div class="ln"></div>'+
+  '<div class="sub">'+(o.homeOnContinue?'returns home':'stays put')+'</div></div>'+
+  '<div class="card"><div class="chips">'+
+  '<button class="chip'+(o.homeOnContinue?' on':'')+'" data-action="optHome">🏠 Continue returns to home</button>'+
+  '</div><div class="xs faint" style="margin-top:8px;line-height:1.6">'+
+  'With this on, pressing Continue always brings you back to the home screen. '+
+  'Turn it off to stay on whatever screen you were reading.</div></div>';
+ return h+_vSaveOpt.apply(this,arguments)};
+
+/*#w37_dock.js#*/
+
+
+/*#w37_dock.js#*//*#w38_analytics.js#*/
+
+/* =====================================================================
+   EVERY GAME A PLAYER HAS EVER PLAYED
+   ---------------------------------------------------------------------
+   The game already produced a beautiful pile of numbers for every match
+   — passes attempted and completed, tackles won, aerials, dribbles,
+   interceptions, touches, distance covered — and then threw almost all
+   of it away. Season totals survived until the summer; at the season
+   rollover p.stats was reset to six zeroes and the history was gone.
+
+   So there was no answer to the only question that matters about a
+   player you have owned for four years: is he getting better?
+
+   Three things are kept now.
+
+     p.log   the last sixty matches, one compact row each
+     p.car   career totals, added to after every match, never reset
+     p.hist  one row per completed season, archived before the wipe
+
+   All of it is written at the same moment the game already writes the
+   season aggregate, so there is no second pass over anything and no new
+   simulation cost. The store is bounded — sixty match rows and one row a
+   season — because a save has to stay small enough to sit in
+   localStorage for a twenty-year career.
+   ===================================================================== */
+
+/* the flag table predates the countries added with the nationality fix */
+Object.assign(CC_FLAG,{GAM:'🇬🇲',GNB:'🇬🇼',ZIM:'🇿🇼',MOZ:'🇲🇿',BER:'🇧🇲',RCA:'🇨🇫',
+ RUS:'🇷🇺',SUR:'🇸🇷',CUW:'🇨🇼',HAI:'🇭🇹',BEN:'🇧🇯',TOG:'🇹🇬',COM:'🇰🇲',SYR:'🇸🇾',
+ PLE:'🇵🇸',THA:'🇹🇭',VIE:'🇻🇳',IDN:'🇮🇩',IND:'🇮🇳',CYP:'🇨🇾',MDA:'🇲🇩',BLR:'🇧🇾',
+ LVA:'🇱🇻',LTU:'🇱🇹',EST:'🇪🇪',AZE:'🇦🇿',KAZ:'🇰🇿',MTN:'🇲🇷',LBY:'🇱🇾',SDN:'🇸🇩',
+ UGA:'🇺🇬',KEN:'🇰🇪',TAN:'🇹🇿',MWI:'🇲🇼',NAM:'🇳🇦',BOT:'🇧🇼',SLE:'🇸🇱',LBR:'🇱🇷',
+ NIG:'🇳🇪',CHA:'🇹🇩',CGO:'🇨🇬',EQG:'🇬🇶',TRI:'🇹🇹',GUA:'🇬🇹',SLV:'🇸🇻',NCA:'🇳🇮',
+ GUY:'🇬🇾',FIJ:'🇫🇯',PNG:'🇵🇬',SOL:'🇸🇧',TAH:'🇵🇫',VAN:'🇻🇺',NCL:'🇳🇨',SAM:'🇼🇸',
+ TGA:'🇹🇴',MAS:'🇲🇾',SGP:'🇸🇬',PHI:'🇵🇭',MYA:'🇲🇲',HKG:'🇭🇰',TPE:'🇹🇼',BHR:'🇧🇭',
+ OMA:'🇴🇲',KUW:'🇰🇼',LBN:'🇱🇧',TJK:'🇹🇯',TKM:'🇹🇲',KGZ:'🇰🇬',AFG:'🇦🇫',NEP:'🇳🇵',
+ BAN:'🇧🇩',MDV:'🇲🇻',SRI:'🇱🇰'});
+
+const CAR_KEYS=['apps','mins','goals','assists','motm','yc','rc','rSum','cleanSheets',
+ 'pas','pasC','key','sh','sot','tak','takW','intc','clr','duel','duelW','aer','aerW',
+ 'drb','drbW','sav','fls','touch','dist'];
+function carOf(p){
+ if(!p.car){p.car={};CAR_KEYS.forEach(k=>p.car[k]=0)}
+ CAR_KEYS.forEach(k=>{if(p.car[k]==null)p.car[k]=0});
+ return p.car}
+
+/* ---------------------------------------------------------------------
+   1. AFTER EVERY MATCH
+   --------------------------------------------------------------------- */
+const _finishCareer=MatchSim.prototype.finish;
+MatchSim.prototype.finish=function(){
+ const r=_finishCareer.apply(this,arguments);
+ try{
+  const f=this.fix;
+  if(!f||!f.rep)return r;
+  const comp=(typeof compLabel==='function')?compLabel(f):'';
+  [...f.rep.h,...f.rep.a].forEach(row=>{
+   const p=playerById(row.id);if(!p)return;
+   const c=carOf(p);
+   c.apps++;c.mins+=row.min||0;c.goals+=row.g||0;c.assists+=row.a||0;
+   c.rSum+=row.r||0;c.yc+=row.yc?1:0;c.rc+=row.red?1:0;
+   ['pas','pasC','key','sh','sot','tak','takW','intc','clr','duel','duelW',
+    'aer','aerW','drb','drbW','sav','fls','touch'].forEach(k=>c[k]+=row[k]||0);
+   c.dist+=row.dist||0;
+   if(this.motm&&this.motm.p&&this.motm.p.id===p.id)c.motm++;
+   /* a clean sheet belongs to whoever was between the posts and to the
+      back four who kept them out — the report row knows neither, so it
+      is read off the scoreline the same way the season total is */
+   const inH=f.rep.h.indexOf(row)>=0;
+   if((inH?f.as:f.hs)===0&&(row.min||0)>=45)c.cleanSheets++;
+   /* the opponent, from this player's point of view */
+   const home=(f.rep.h.indexOf(row)>=0);
+   const oppI=home?f.a:f.h, gf=home?f.hs:f.as, ga=home?f.as:f.hs;
+   if(!p.log)p.log=[];
+   p.log.unshift({d:G.day,s:G.season,o:oppI,gf:gf,ga:ga,h:home?1:0,
+    r:row.r,g:row.g,a:row.a,m:row.min,pos:row.slot,c:comp,
+    yc:row.yc?1:0,rc:row.red?1:0});
+   if(p.log.length>60)p.log.length=60;
+  });
+ }catch(e){}
+ return r};
+
+/* ---------------------------------------------------------------------
+   2. AT THE END OF EVERY SEASON, before the reset takes it all
+   --------------------------------------------------------------------- */
+const _endSeasonCareer=endSeason;
+endSeason=function(){
+ try{
+  const season=G.season;
+  G.clubs.forEach(c=>{
+   c.players.forEach(p=>{
+    const s=p.stats;if(!s||!s.apps)return;
+    if(!p.hist)p.hist=[];
+    p.hist.push({s:season,club:c.short||c.name,age:p.age,ovr:p.ovr,
+     apps:s.apps,g:s.goals,a:s.assists,
+     r:s.apps?+(s.rSum/s.apps).toFixed(2):0,
+     motm:s.motm||0,cs:s.cleanSheets||0,mins:s.mins||0});
+    if(p.hist.length>25)p.hist.shift();
+   })});
+ }catch(e){}
+ return _endSeasonCareer.apply(this,arguments)};
+
+/* ---------------------------------------------------------------------
+   3. THE SHEET
+   ---------------------------------------------------------------------
+   Reached by tapping the average-rating card on a player, which is where
+   somebody wondering about a player's numbers already has their thumb.
+   --------------------------------------------------------------------- */
+function per90(v,mins){return mins>0?(v/mins*90):0}
+function anaRow(lbl,val,sub){
+ return '<div class="spread" style="padding:6px 2px;border-bottom:1px solid var(--chalk)">'+
+  '<span class="small">'+lbl+'</span>'+
+  '<span class="row" style="gap:8px"><b class="num small">'+val+'</b>'+
+  (sub?'<span class="xs faint" style="min-width:52px;text-align:right">'+sub+'</span>':'')+'</span></div>'}
+
+/* a rating history drawn as bars, because a shape is read faster than a column */
+function ratingSpark(log,n){
+ const rows=log.slice(0,n||18).slice().reverse();
+ if(!rows.length)return '<div class="xs faint">No matches yet.</div>';
+ const H=54;
+ return '<div style="display:flex;align-items:flex-end;gap:3px;height:'+H+'px">'+
+  rows.map(m=>{
+   const r=Math.max(3,Math.min(10,m.r||0));
+   const h=Math.max(4,Math.round((r-3)/7*H));
+   const col=r>=7.5?'var(--green)':r>=6.5?'var(--gold)':r>=5.8?'#8a8f8b':'var(--danger)';
+   return '<div title="'+r.toFixed(1)+'" style="flex:1;min-width:4px;height:'+h+'px;'+
+    'background:'+col+';border-radius:2px 2px 0 0;opacity:.9"></div>'}).join('')+'</div>'}
+
+function playerAnalyticsHTML(p){
+ const c=carOf(p),s=p.stats||{};
+ const cm=Math.max(1,c.mins||1),ca=Math.max(1,c.apps||1);
+ const seasonAvg=s.apps?(s.rSum/s.apps):0;
+ const careerAvg=c.apps?(c.rSum/c.apps):0;
+ const club=G.clubs[p.club];
+ let h='<div class="row" style="gap:10px;margin-bottom:10px">'+face(p,48)+
+  '<div style="flex:1;min-width:0"><h3 style="margin:0">'+esc(p.name)+'</h3>'+
+  '<div class="small muted">'+esc((club&&club.name)||'')+' · '+p.age+' · '+
+  ccFlag(natOf(p))+' '+esc(natName(natOf(p)))+'</div></div>'+
+  ovrPill(p)+'</div>';
+
+ /* the headline four */
+ h+='<div class="grid2" style="margin-bottom:12px">'+
+  '<div class="kpi"><div class="v num" style="font-size:17px">'+(careerAvg?careerAvg.toFixed(2):'—')+'</div><div class="l">Career rating</div></div>'+
+  '<div class="kpi"><div class="v num" style="font-size:17px">'+(seasonAvg?seasonAvg.toFixed(2):'—')+'</div><div class="l">This season</div></div>'+
+  '<div class="kpi"><div class="v num" style="font-size:17px">'+(c.apps||0)+'</div><div class="l">Career apps</div></div>'+
+  '<div class="kpi"><div class="v num" style="font-size:17px">'+(c.goals||0)+' / '+(c.assists||0)+'</div><div class="l">Career G / A</div></div></div>';
+
+ /* form */
+ h+='<div class="chip-lbl">Last '+Math.min(18,(p.log||[]).length)+' matches</div>'+
+  '<div class="card tight" style="padding:10px 11px 8px;margin-bottom:12px">'+
+  ratingSpark(p.log||[],18)+
+  '<div class="spread xs faint" style="margin-top:7px"><span>oldest</span><span>most recent</span></div></div>';
+
+ /* the numbers that describe how he actually plays */
+ const gk=p.pos==='GK';
+ h+='<div class="chip-lbl">Career per 90 minutes</div><div class="card tight" style="padding:4px 11px 6px;margin-bottom:12px">';
+ if(gk){
+  h+=anaRow('Saves',per90(c.sav,cm).toFixed(2),(c.sav||0)+' total');
+  h+=anaRow('Clean sheets',(c.cleanSheets||0),pct(c.cleanSheets,ca));
+  h+=anaRow('Pass completion',pct(c.pasC,c.pas),(c.pas||0)+' att');
+ }else{
+  h+=anaRow('Goals',per90(c.goals,cm).toFixed(2),(c.goals||0)+' total');
+  h+=anaRow('Assists',per90(c.assists,cm).toFixed(2),(c.assists||0)+' total');
+  h+=anaRow('Shots / on target',per90(c.sh,cm).toFixed(2),pct(c.sot,c.sh));
+  h+=anaRow('Key passes',per90(c.key,cm).toFixed(2),(c.key||0)+' total');
+  h+=anaRow('Pass completion',pct(c.pasC,c.pas),per90(c.pas,cm).toFixed(0)+' /90');
+  h+=anaRow('Tackles won',per90(c.takW,cm).toFixed(2),pct(c.takW,c.tak));
+  h+=anaRow('Interceptions',per90(c.intc,cm).toFixed(2),(c.intc||0)+' total');
+  h+=anaRow('Duels won',pct(c.duelW,c.duel),(c.duelW||0)+'/'+(c.duel||0));
+  h+=anaRow('Aerials won',pct(c.aerW,c.aer),(c.aerW||0)+'/'+(c.aer||0));
+  h+=anaRow('Dribbles completed',per90(c.drbW,cm).toFixed(2),pct(c.drbW,c.drb));
+ }
+ h+=anaRow('Distance covered',(c.dist/ca).toFixed(1)+' km','per game');
+ h+=anaRow('Fouls conceded',per90(c.fls,cm).toFixed(2),'');
+ h+=anaRow('Cards',(c.yc||0)+' 🟨 · '+(c.rc||0)+' 🟥','');
+ h+=anaRow('Man of the match',(c.motm||0),pct(c.motm,ca));
+ h+='</div>';
+
+ /* season by season */
+ const hist=(p.hist||[]).slice().reverse();
+ h+='<div class="chip-lbl">Season by season</div><div class="card tight" style="padding:4px 11px 6px;margin-bottom:12px">';
+ if(s.apps)h+='<div class="spread" style="padding:6px 2px;border-bottom:1px solid var(--chalk)">'+
+   '<span class="small"><b>Season '+G.season+'</b> <span class="xs faint">· current</span></span>'+
+   '<span class="xs num">'+s.apps+' apps · '+s.goals+'g '+s.assists+'a · '+(seasonAvg?seasonAvg.toFixed(2):'—')+'</span></div>';
+ if(hist.length)hist.forEach(x=>{
+  h+='<div class="spread" style="padding:6px 2px;border-bottom:1px solid var(--chalk)">'+
+   '<span class="small">Season '+x.s+' <span class="xs faint">· '+esc(x.club)+' · age '+x.age+'</span></span>'+
+   '<span class="xs num">'+x.apps+' apps · '+x.g+'g '+x.a+'a · '+(x.r||'—')+'</span></div>'});
+ else if(!s.apps)h+='<div class="xs faint" style="padding:8px 2px">No completed seasons yet.</div>';
+ h+='</div>';
+
+ /* the match log itself */
+ const log=(p.log||[]).slice(0,25);
+ h+='<div class="chip-lbl">Match log</div><div class="card tight" style="padding:4px 11px 6px">';
+ if(!log.length)h+='<div class="xs faint" style="padding:8px 2px">He has not played yet.</div>';
+ log.forEach(m=>{
+  const opp=G.clubs[m.o];
+  const res=m.gf>m.ga?'W':m.gf<m.ga?'L':'D';
+  const rc=res==='W'?'var(--green)':res==='L'?'var(--danger)':'var(--gold)';
+  h+='<div class="spread" style="padding:6px 2px;border-bottom:1px solid var(--chalk)">'+
+   '<div class="row" style="gap:7px;min-width:0">'+
+   '<span class="xs num" style="color:'+rc+';font-weight:800;min-width:12px">'+res+'</span>'+
+   '<span class="small" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+
+   (m.h?'':'at ')+esc((opp&&opp.short)||'?')+'</span>'+
+   '<span class="xs faint">'+m.gf+'–'+m.ga+'</span>'+
+   (m.g?'<span class="xs">⚽'+(m.g>1?'×'+m.g:'')+'</span>':'')+
+   (m.a?'<span class="xs">🅰'+(m.a>1?'×'+m.a:'')+'</span>':'')+
+   (m.rc?'<span class="xs">🟥</span>':m.yc?'<span class="xs">🟨</span>':'')+
+   '</div>'+
+   '<div class="row" style="gap:8px"><span class="xs faint">'+m.m+"'</span>"+
+   '<b class="num small" style="color:'+(m.r>=7.5?'var(--green)':m.r<6?'var(--danger)':'var(--ink)')+'">'+
+   (m.r||0).toFixed(1)+'</b></div></div>'});
+ h+='</div>';
+ return h}
+
+ACTIONS.playerStats=el=>{
+ const p=playerById(el.dataset.id);if(!p)return;
+ try{sfx('tap')}catch(e){}
+ openModal(playerAnalyticsHTML(p))};
+
+/* ---------------------------------------------------------------------
+   4. MAKING THE CARD A DOOR
+   ---------------------------------------------------------------------
+   The average-rating card in the profile is now the way in, and it says
+   so — a card that does something should look like it does something.
+   --------------------------------------------------------------------- */
+const _profStats=openProfile;
+openProfile=function(pid){
+ _profStats.apply(this,arguments);
+ try{
+  const p=playerById(pid);if(!p)return;
+  const sb=$('#sheetBody');if(!sb)return;
+  if(sb.querySelector('[data-action="playerStats"]'))return;
+  /* find the rating KPI by its label and turn it into the entry point */
+  let card=null;
+  sb.querySelectorAll('.kpi').forEach(k=>{
+   const l=k.querySelector('.l');
+   if(l&&/avg rating/i.test(l.textContent||''))card=k});
+  if(card){
+   card.setAttribute('data-action','playerStats');
+   card.setAttribute('data-id',p.id);
+   card.style.cursor='pointer';
+   card.style.borderColor='rgba(251,225,34,.42)';
+   card.style.background='rgba(251,225,34,.07)';
+   const l=card.querySelector('.l');
+   if(l)l.innerHTML='Avg rating <span style="opacity:.75">›</span>';
+  }else{
+   /* a player at another club has no rating card — give him a button */
+   const d=document.createElement('div');
+   d.innerHTML='<button class="btn btn-ghost btn-block" style="margin-top:8px" '+
+    'data-action="playerStats" data-id="'+p.id+'">📊 Full career analytics</button>';
+   sb.appendChild(d)}
+ }catch(e){}};
+
+/*#w38_analytics.js#*/
+
+
+/*#w38_analytics.js#*//*#w39_market.js#*/
+
+/* =====================================================================
+   A MARKET WITH SOME ROOM IN IT
+   ---------------------------------------------------------------------
+   Two things were missing.
+
+   THE BUDGET WAS A NUMBER, NOT A DECISION. The board handed over a
+   transfer budget and a wage ceiling and that was the end of it. Every
+   real manager in this situation does the same arithmetic: I do not need
+   all of that fee money, but I cannot pay this man what he wants — so
+   move some across. It goes both ways. Selling your wage room buys
+   transfer money.
+
+   The exchange rate is not invented. A wage ceiling is per week and a
+   transfer budget is a lump, so a year is the honest bridge: give up
+   £100k a week of headroom and you free £5.2M to spend. That is the
+   number the board would run, so it is the number the game runs.
+
+   Guard rails, because a budget you can wreck in one tap is not a
+   decision either: you cannot push the wage ceiling below what you are
+   already paying, you cannot take the transfer budget below zero, and
+   you cannot move more than forty per cent of what the board originally
+   allocated in either direction. The board did set a plan.
+
+   THE SEARCH COULD FIND A NAME AND NOT MUCH ELSE. Position, an age
+   ceiling, a name box and two toggles. You could not ask for a left-
+   footed centre-half with a year left on his deal, or everybody under
+   twenty-three with crossing above fifteen, or the unhappy ones at clubs
+   who have stopped picking them — which is the entire job.
+   ===================================================================== */
+
+/* ---------------------------------------------------------------------
+   1. MOVING MONEY BETWEEN THE TWO POTS
+   --------------------------------------------------------------------- */
+const WEEKS_IN_YEAR=52;
+function budOrigin(c){
+ if(!c._bud0)c._bud0={budget:c.budget,wageCap:c.wageCap};
+ return c._bud0}
+
+/* how far the shift can go before the board objects */
+function budLimits(c){
+ const o=budOrigin(c);
+ return {feeLo:Math.round(o.budget*.6),feeHi:Math.round(o.budget*1.4),
+         wageLo:Math.round(o.wageCap*.6),wageHi:Math.round(o.wageCap*1.4)}}
+
+/* fee -> wages: spend a lump to raise the weekly ceiling for a year */
+ACTIONS.budToWage=el=>{
+ const c=G.clubs[G.my],amt=+el.dataset.v;
+ const L=budLimits(c),perWk=Math.round(amt/WEEKS_IN_YEAR);
+ if(c.budget-amt<0)return toast('Not enough transfer budget left.');
+ if(c.budget-amt<L.feeLo)return toast('The board will not thin the transfer budget any further.');
+ if(c.wageCap+perWk>L.wageHi)return toast('The board will not raise the wage ceiling any further.');
+ c.budget-=amt;c.wageCap+=perWk;
+ try{sfx('tap')}catch(e){}
+ toast('💷 '+fmtM(amt)+' moved to wages (+'+fmtW(perWk)+' room)');
+ render()};
+
+/* wages -> fee: sell a year of headroom for a lump */
+ACTIONS.budToFee=el=>{
+ const c=G.clubs[G.my],amt=+el.dataset.v;
+ const L=budLimits(c),perWk=Math.round(amt/WEEKS_IN_YEAR);
+ const bill=squadWage(c);
+ if(c.wageCap-perWk<L.wageLo)return toast('The board will not cut the wage ceiling any further.');
+ if(c.wageCap-perWk<bill)return toast('That would put the ceiling below the wages you already pay.');
+ if(c.budget+amt>L.feeHi)return toast('The board will not inflate the transfer budget any further.');
+ c.wageCap-=perWk;c.budget+=amt;
+ try{sfx('tap')}catch(e){}
+ toast('💷 '+fmtW(perWk)+' of wage room sold for '+fmtM(amt));
+ render()};
+
+ACTIONS.budReset=()=>{
+ const c=G.clubs[G.my],o=budOrigin(c);
+ c.budget=o.budget;c.wageCap=o.wageCap;
+ toast('Budget restored to the board’s allocation');render()};
+
+vTransferBudget=function(){
+ const my=G.clubs[G.my];
+ const o=budOrigin(my);
+ const bill=squadWage(my),room=Math.max(0,my.wageCap*1.18-bill);
+ const moved=my.budget-o.budget;
+ const steps=[5e6,10e6,25e6].filter(a=>a<=Math.max(5e6,o.budget*.4));
+ let h='<div class="budgetbar">'+
+  '<div class="bb"><div class="bv" style="color:var(--gold)">'+fmtM(my.budget)+'</div>'+
+   '<div class="bl">Transfer budget</div></div>'+
+  '<div class="bb"><div class="bv" style="color:'+(room>0?'var(--green)':'var(--danger)')+'">'+fmtW(room)+'</div>'+
+   '<div class="bl">Wage room left</div></div></div>';
+ h+='<div class="card tight" style="padding:10px 11px">'+
+  '<div class="spread" style="margin-bottom:8px">'+
+  '<span class="chip-lbl" style="margin:0">Rebalance the budget</span>'+
+  (moved?'<button class="chip" data-action="budReset">↺ Reset</button>':'')+'</div>'+
+  '<div class="xs faint" style="line-height:1.6;margin-bottom:9px">'+
+  'A wage ceiling is weekly and a fee is a lump, so a year is the bridge: '+
+  '<b>'+fmtM(WEEKS_IN_YEAR*1e5)+'</b> of transfer money is worth '+
+  '<b>'+fmtW(1e5)+'</b> of weekly headroom. Paying '+fmtW(bill)+' now, ceiling '+fmtW(my.wageCap)+'.</div>'+
+  '<div class="chip-lbl">Fee → wages</div><div class="chips" style="margin-bottom:8px">'+
+  steps.map(a=>'<button class="chip" data-action="budToWage" data-v="'+a+'">'+
+   fmtM(a)+' → +'+fmtW(Math.round(a/WEEKS_IN_YEAR))+'</button>').join('')+'</div>'+
+  '<div class="chip-lbl">Wages → fee</div><div class="chips">'+
+  steps.map(a=>'<button class="chip" data-action="budToFee" data-v="'+a+'">'+
+   '−'+fmtW(Math.round(a/WEEKS_IN_YEAR))+' → '+fmtM(a)+'</button>').join('')+'</div>';
+ if(moved)h+='<div class="xs" style="margin-top:8px;color:'+(moved>0?'var(--green)':'var(--gold)')+
+   '">Shifted '+(moved>0?'+':'')+fmtM(moved)+' against the board’s original split.</div>';
+ h+='</div>';
+ return h};
+
+/* ---------------------------------------------------------------------
+   2. A SEARCH THAT CAN BE ASKED A REAL QUESTION
+   --------------------------------------------------------------------- */
+const TR_DEF={trOvr:'0',trPot:'0',trFee:'0',trWage:'0',trCon:'any',trMood:'any',
+ trFit:'any',trAttr:'',trAttrMin:'14',trNat:'any',trRole:'any'};
+function trGet(k){const v=UI[k];return (v==null||v==='')?TR_DEF[k]:v}
+function trAnyActive(){
+ return Object.keys(TR_DEF).some(k=>String(trGet(k))!==String(TR_DEF[k]))||
+  (UI.trPos!=='Any')||(UI.trAge!=='40')||UI.trQ||UI.trListed||UI.trShort}
+
+const _trResetDeep=ACTIONS.trReset;
+ACTIONS.trReset=()=>{Object.keys(TR_DEF).forEach(k=>UI[k]=TR_DEF[k]);_trResetDeep()};
+ACTIONS.trMore=()=>{UI.trMore=!UI.trMore;render()};
+
+/* which nationalities actually exist out there, so the list is not 160 long */
+function trNations(){
+ const seen={};
+ G.clubs.forEach(c=>{if(c.i===G.my)return;c.players.forEach(p=>{
+  if(p.ovr>=68){const n=natOf(p);seen[n]=(seen[n]||0)+1}})});
+ return Object.keys(seen).sort((a,b)=>seen[b]-seen[a]).slice(0,40)}
+
+/* is this man his club's first choice in his position? */
+function trStarter(p){
+ try{const c=G.clubs[p.club];if(!c)return true;
+  return squadBestAt(c,POSGROUP(p.pos))===p}
+ catch(e){return true}}
+
+vTrFilters=function(){
+ const active=trAnyActive();
+ const more=!!UI.trMore;
+ const allAttrs=[].concat(TECH,MENT,PHYS);
+ let h='<div class="card tight">'+
+ '<div class="grid2" style="margin-bottom:10px">'+
+ '<div class="field" style="margin-bottom:0"><label>Position</label><select data-live="trPos">'+
+  '<option'+(UI.trPos==='Any'?' selected':'')+'>Any</option>'+
+  POSN.map(p=>'<option'+(UI.trPos===p?' selected':'')+'>'+p+'</option>').join('')+'</select></div>'+
+ '<div class="field" style="margin-bottom:0"><label>Max age</label><select data-live="trAge">'+
+  ['40','33','29','26','23','21','19'].map(a=>'<option'+(UI.trAge===a?' selected':'')+' value="'+a+'">'+
+  (a==='40'?'Any':a+' & under')+'</option>').join('')+'</select></div></div>'+
+ '<div class="field" style="margin-bottom:10px"><label>Name search</label>'+
+  '<input type="text" data-live="trQ" placeholder="e.g. Haaland" value="'+esc(UI.trQ||'')+'"></div>';
+
+ /* the money, always visible — it is the first question anybody asks */
+ h+='<div class="grid2" style="margin-bottom:10px">'+
+ '<div class="field" style="margin-bottom:0"><label>Max fee</label><select data-live="trFee">'+
+  [['0','Any'],['5000000','£5M'],['15000000','£15M'],['30000000','£30M'],['50000000','£50M'],
+   ['80000000','£80M'],['120000000','£120M']].map(x=>'<option'+(String(trGet('trFee'))===x[0]?' selected':'')+
+   ' value="'+x[0]+'">'+x[1]+'</option>').join('')+'</select></div>'+
+ '<div class="field" style="margin-bottom:0"><label>Max wage</label><select data-live="trWage">'+
+  [['0','Any'],['25000','£25k/w'],['60000','£60k/w'],['100000','£100k/w'],['150000','£150k/w'],
+   ['250000','£250k/w'],['400000','£400k/w']].map(x=>'<option'+(String(trGet('trWage'))===x[0]?' selected':'')+
+   ' value="'+x[0]+'">'+x[1]+'</option>').join('')+'</select></div></div>';
+
+ h+='<button class="chip'+(more?' on':'')+'" data-action="trMore" style="margin-bottom:'+(more?'10px':'2px')+'">'+
+  (more?'▴ Fewer filters':'▾ More filters')+'</button>';
+
+ if(more){
+  h+='<div class="grid2" style="margin-bottom:10px">'+
+  '<div class="field" style="margin-bottom:0"><label>Min ability</label><select data-live="trOvr">'+
+   ['0','65','70','75','78','80','83','85','88'].map(a=>'<option'+(String(trGet('trOvr'))===a?' selected':'')+
+   ' value="'+a+'">'+(a==='0'?'Any':a+'+')+'</option>').join('')+'</select></div>'+
+  '<div class="field" style="margin-bottom:0"><label>Min potential</label><select data-live="trPot">'+
+   ['0','75','80','84','87','90','93'].map(a=>'<option'+(String(trGet('trPot'))===a?' selected':'')+
+   ' value="'+a+'">'+(a==='0'?'Any':a+'+')+'</option>').join('')+'</select></div></div>';
+
+  h+='<div class="grid2" style="margin-bottom:10px">'+
+  '<div class="field" style="margin-bottom:0"><label>Contract</label><select data-live="trCon">'+
+   [['any','Any'],['1','A year or less left'],['2','Two years or less'],['0','Out of contract']]
+   .map(x=>'<option'+(String(trGet('trCon'))===x[0]?' selected':'')+' value="'+x[0]+'">'+x[1]+'</option>').join('')+
+   '</select></div>'+
+  '<div class="field" style="margin-bottom:0"><label>Mood</label><select data-live="trMood">'+
+   [['any','Any'],['unhappy','Unsettled or worse'],['angry','Deeply unhappy']]
+   .map(x=>'<option'+(String(trGet('trMood'))===x[0]?' selected':'')+' value="'+x[0]+'">'+x[1]+'</option>').join('')+
+   '</select></div></div>';
+
+  h+='<div class="grid2" style="margin-bottom:10px">'+
+  '<div class="field" style="margin-bottom:0"><label>Fitness</label><select data-live="trFit">'+
+   [['any','Any'],['fit','Fit only'],['inj','Injured only']]
+   .map(x=>'<option'+(String(trGet('trFit'))===x[0]?' selected':'')+' value="'+x[0]+'">'+x[1]+'</option>').join('')+
+   '</select></div>'+
+  '<div class="field" style="margin-bottom:0"><label>Role at his club</label><select data-live="trRole">'+
+   [['any','Any'],['bench','Not first choice'],['star','First choice']]
+   .map(x=>'<option'+(String(trGet('trRole'))===x[0]?' selected':'')+' value="'+x[0]+'">'+x[1]+'</option>').join('')+
+   '</select></div></div>';
+
+  h+='<div class="grid2" style="margin-bottom:10px">'+
+  '<div class="field" style="margin-bottom:0"><label>Attribute</label><select data-live="trAttr">'+
+   '<option value=""'+(!trGet('trAttr')?' selected':'')+'>Any</option>'+
+   allAttrs.map(a=>'<option value="'+a+'"'+(trGet('trAttr')===a?' selected':'')+'>'+
+    (ATTR_LABEL[a]||a)+'</option>').join('')+'</select></div>'+
+  '<div class="field" style="margin-bottom:0"><label>At least</label><select data-live="trAttrMin">'+
+   ['10','12','14','15','16','17','18'].map(a=>'<option'+(String(trGet('trAttrMin'))===a?' selected':'')+
+   ' value="'+a+'">'+a+'</option>').join('')+'</select></div></div>';
+
+  h+='<div class="field" style="margin-bottom:10px"><label>Nationality</label><select data-live="trNat">'+
+   '<option value="any"'+(trGet('trNat')==='any'?' selected':'')+'>Any</option>'+
+   trNations().map(n=>'<option value="'+n+'"'+(trGet('trNat')===n?' selected':'')+'>'+
+    ccFlag(n)+' '+esc(natName(n))+'</option>').join('')+'</select></div>';
+ }
+
+ h+='<div class="chips">'+
+  '<button class="chip'+(UI.trListed?' on':'')+'" data-action="trToggleListed">💷 Transfer-listed</button>'+
+  '<button class="chip'+(UI.trShort?' on':'')+'" data-action="trShortOnly">⭐ Shortlist ('+shortlist().length+')</button>'+
+  (active?'<button class="chip" data-action="trReset">✕ Clear filters</button>':'')+
+ '</div>'+
+ '<div class="chip-lbl">Sort by</div><div class="chips">'+
+  [['ovr','Ability'],['val','Value'],['age','Youngest'],['pot','Potential'],['wage','Wage'],['ask','Cheapest']]
+  .map(x=>'<button class="chip'+((UI.trSort||'ovr')===x[0]?' on':'')+'" data-action="trSort" data-v="'+x[0]+'">'+
+  x[1]+'</button>').join('')+'</div>';
+ return h+'</div>'};
+
+trResultsHtml=function(){
+ const q=(UI.trQ||'').trim().toLowerCase();
+ const sl=shortlist();
+ const fOvr=+trGet('trOvr'),fPot=+trGet('trPot'),fFee=+trGet('trFee'),fWage=+trGet('trWage');
+ const fCon=trGet('trCon'),fMood=trGet('trMood'),fFit=trGet('trFit'),fRole=trGet('trRole');
+ const fAttr=trGet('trAttr'),fAttrMin=+trGet('trAttrMin'),fNat=trGet('trNat');
+ const askOf=p=>(typeof askPrice==='function')?askPrice(p):p.value;
+ let list=[];
+ G.clubs.forEach(c=>{if(c.i===G.my)return;c.players.forEach(p=>{
+  if(UI.trShort&&sl.indexOf(p.id)<0)return;
+  if(UI.trPos!=='Any'&&p.pos!==UI.trPos)return;
+  if(p.age>+(UI.trAge||'40'))return;
+  if(UI.trListed&&!p.listed)return;
+  if(q&&!p.name.toLowerCase().includes(q))return;
+  if(fOvr&&p.ovr<fOvr)return;
+  if(fPot&&(p.pot||p.ovr)<fPot)return;
+  if(fWage&&p.wage>fWage)return;
+  if(fCon!=='any'){const cc=p.contract==null?3:p.contract;
+   if(fCon==='0'&&cc>0)return;
+   if(fCon==='1'&&cc>1)return;
+   if(fCon==='2'&&cc>2)return}
+  if(fMood!=='any'){const m=p.morale==null?60:p.morale;
+   if(fMood==='unhappy'&&m>=45)return;
+   if(fMood==='angry'&&m>=32)return}
+  if(fFit==='fit'&&p.injury)return;
+  if(fFit==='inj'&&!p.injury)return;
+  if(fRole==='bench'&&trStarter(p))return;
+  if(fRole==='star'&&!trStarter(p))return;
+  if(fNat!=='any'&&natOf(p)!==fNat)return;
+  if(fAttr&&((p.attrs&&p.attrs[fAttr])||0)<fAttrMin)return;
+  if(fFee&&askOf(p)>fFee)return;
+  list.push(p)})});
+ const s=UI.trSort||'ovr';
+ list.sort((a,b)=>
+  s==='val'?b.value-a.value:
+  s==='age'?a.age-b.age||b.ovr-a.ovr:
+  s==='pot'?(b.pot||b.ovr)-(a.pot||a.ovr)||b.ovr-a.ovr:
+  s==='wage'?a.wage-b.wage||b.ovr-a.ovr:
+  s==='ask'?askOf(a)-askOf(b)||b.ovr-a.ovr:
+  b.ovr-a.ovr);
+ const shown=list.slice(0,40);
+ /* say what was actually asked for, so an empty result explains itself */
+ const bits=[];
+ if(UI.trPos!=='Any')bits.push(UI.trPos);
+ if(UI.trAge!=='40')bits.push(UI.trAge+' & under');
+ if(fOvr)bits.push(fOvr+'+ ability');
+ if(fPot)bits.push(fPot+'+ potential');
+ if(fFee)bits.push('under '+fmtM(fFee));
+ if(fWage)bits.push('under '+fmtW(fWage));
+ if(fCon==='0')bits.push('out of contract');else if(fCon!=='any')bits.push(fCon+'y or less left');
+ if(fMood==='unhappy')bits.push('unsettled');else if(fMood==='angry')bits.push('deeply unhappy');
+ if(fFit==='fit')bits.push('fit');else if(fFit==='inj')bits.push('injured');
+ if(fRole==='bench')bits.push('not first choice');else if(fRole==='star')bits.push('first choice');
+ if(fNat!=='any')bits.push(natName(fNat));
+ if(fAttr)bits.push((ATTR_LABEL[fAttr]||fAttr)+' '+fAttrMin+'+');
+
+ let h='<div class="sec"><div class="t">Market</div><div class="ln"></div>'+
+  '<div class="sub">'+list.length+' match'+(list.length===1?'':'es')+'</div></div>';
+ if(bits.length)h+='<div class="xs faint" style="padding:0 4px 7px;line-height:1.6">Looking for: '+
+  esc(bits.join(' · '))+'</div>';
+ h+='<div class="card tight" style="padding:4px 8px">';
+ if(!shown.length)h+=emptyBox('🔍','Nobody matches those filters',
+  UI.trShort?'Star a player from the market to build a shortlist.':
+  'Loosen one of them — the fee ceiling and the minimum ability are usually the two doing the work.');
+ else h+='<div class="plist">'+shown.map(trRow).join('')+'</div>';
+ h+='</div>';
+ if(list.length>40)h+='<div class="xs faint" style="padding:6px 4px;text-align:center">Showing the top 40 of '+
+  list.length+' — tighten the filters to see further down the list.</div>';
+ return h};
+
+/*#w39_market.js#*/
+
+
+/*#w39_market.js#*//*#w40_saga.js#*/
+
+/* =====================================================================
+   THE TRANSFER CENTRE — DEALS YOU CAN WATCH, AND STEAL
+   ---------------------------------------------------------------------
+   The game already gossiped. A journalist would post that somebody was
+   linked with somebody, and then nothing ever came of it, because the
+   rumour had no connection to the machinery that actually moved players
+   between clubs. Two separate systems: one that talked and one that did.
+
+   They are one system now. A saga is a real negotiation with a real
+   outcome — it starts as a link, becomes talks, reaches personal terms,
+   and completes — and at every stage before it completes, you can walk
+   into the middle of it.
+
+   HIJACKING IS THE POINT. This is the part of a window that a manager
+   actually lives in: somebody else has agreed a fee, the player has not
+   signed, and you have forty-eight hours to change his mind. You have
+   three things to offer and they cost different currencies —
+
+     the fee        goes to the selling club, out of your budget
+     the wages      go to the player, out of your wage room
+     the promise    costs nothing now and everything later
+
+   — and the player weighs them the way a person would: money matters,
+   but so does whether he will play, and so does whether the club he is
+   joining is going somewhere. A twenty-year-old will take less to be
+   first choice. A twenty-nine-year-old on his last big contract will
+   not.
+
+   The promise is entered in the game's ledger, not thrown away. Tell a
+   man he is your first choice and then leave him on the bench and his
+   morale goes with it.
+   ===================================================================== */
+
+const SAGA_STAGES=['linked','talks','terms','done'];
+const SAGA_LBL={linked:'Linked',talks:'In talks',terms:'Personal terms agreed',done:'Completed'};
+function sagas(){if(!G.sagas)G.sagas=[];return G.sagas}
+
+/* ---------------------------------------------------------------------
+   1. STARTING ONE
+   Built from the same heat the rumour mill already computes, so the
+   deals the game talks about are the deals the game is actually doing.
+   --------------------------------------------------------------------- */
+function sagaStart(){
+ try{
+  const r=rumourMill();if(!r)return;
+  const {p,from,to}=r;
+  if(to.i===G.my||from.i===G.my)return;          // your own business is not a saga
+  if(sagas().some(s=>s.pid===p.id))return;
+  if(p.loan||p.injury)return;
+  const fee=Math.round(askPrice(p)*(.92+Math.random()*.2)/1e5)*1e5;
+  if(fee>to.budget*1.15)return;
+  const wage=Math.round(wageFor(p.ovr,to.rep)*(1.02+Math.random()*.22));
+  sagas().unshift({id:'sg'+Math.random().toString(36).slice(2),
+   pid:p.id,from:from.i,to:to.i,fee,wage,stage:0,day:G.day,next:G.day+irnd(3,6),
+   hijacked:false,dead:false});
+  if(sagas().length>14)sagas().length=14;
+ }catch(e){}}
+
+/* ---------------------------------------------------------------------
+   2. MOVING ONE ALONG
+   --------------------------------------------------------------------- */
+function sagaTick(){
+ try{
+  const live=sagas();
+  for(let i=live.length-1;i>=0;i--){
+   const s=live[i];
+   if(s.dead){if(G.day-s.day>25)live.splice(i,1);continue}
+   const p=playerById(s.pid);
+   const buyer=G.clubs[s.to],seller=G.clubs[s.from];
+   if(!p||!buyer||!seller||p.club!==s.from){s.dead=true;continue}
+   if(G.day<s.next)continue;
+   /* a deal can also simply collapse, which is most of them */
+   if(Math.random()<.16){
+    s.dead=true;s.collapsed=true;
+    mail('news','📰 Off: '+buyer.short+' walk away from '+p.name,
+     '<b>'+esc(buyer.name)+'</b> have ended their interest in <b>'+esc(p.name)+'</b>. '+
+     esc(seller.name)+'’s valuation is understood to have been the sticking point.');
+    continue}
+   s.stage++;s.next=G.day+irnd(3,6);
+   if(s.stage>=3){sagaComplete(s);continue}
+   const head=s.stage===1?'📰 '+buyer.short+' open talks for '+p.name
+                         :'📰 '+p.name+' agrees personal terms with '+buyer.short;
+   mail('news',head,
+    '<b>'+esc(buyer.name)+'</b> '+(s.stage===1?'have opened formal talks with <b>'+esc(seller.name)+
+      '</b> over <b>'+esc(p.name)+'</b>':'have agreed personal terms with <b>'+esc(p.name)+'</b>')+
+    '. The fee on the table is <b>'+fmtM(s.fee)+'</b>'+
+    (s.stage===2?' and he is understood to have been offered <b>'+fmtW(s.wage)+'</b>':'')+'.'+
+    '<br><br><span style="color:var(--gold)">You can still step in — the Transfer Centre is on the Transfers screen.</span>');
+  }
+ }catch(e){}}
+
+function sagaComplete(s){
+ const p=playerById(s.pid),buyer=G.clubs[s.to],seller=G.clubs[s.from];
+ if(!p||!buyer||!seller){s.dead=true;return}
+ seller.players=seller.players.filter(x=>x.id!==p.id);
+ p.club=buyer.i;p.listed=false;p.morale=clamp(p.morale+10,1,100);
+ p.contract=irnd(3,5);p.wage=s.wage;
+ if(typeof windowId==='function')p.movedWindow=windowId();
+ buyer.players.push(p);
+ buyer.budget-=s.fee;seller.budget+=Math.round(s.fee*.7);seller.bank+=s.fee;
+ s.stage=3;s.dead=true;s.done=true;
+ if(!G.gossip)G.gossip=[];
+ G.gossip.unshift({d:G.day,fee:s.fee,ovr:p.ovr,nm:p.name,pos:p.pos,age:p.age,
+  to:buyer.short,from:seller.short,big:s.fee>=9e7||p.ovr>=88});
+ mail('news','✅ DONE DEAL: '+p.name+' to '+buyer.short,
+  '<b>'+esc(buyer.name)+'</b> have completed the signing of <b>'+esc(p.name)+'</b> from '+
+  esc(seller.name)+' for <b>'+fmtM(s.fee)+'</b>. You did not move.')}
+
+/* ---------------------------------------------------------------------
+   3. WALKING INTO THE MIDDLE OF IT
+   ---------------------------------------------------------------------
+   Three levers, three currencies, one number that comes out of them.
+   --------------------------------------------------------------------- */
+const PROMISES=[
+ {k:'none', lbl:'No promises',            pull:0,   note:'He takes the club as he finds it.'},
+ {k:'play', lbl:'First-choice football',  pull:9,   note:'He expects to start. Bench him and he will remember.'},
+ {k:'euro', lbl:'European football',      pull:6,   note:'You are promising to qualify. Miss out and he will be unsettled.'},
+ {k:'build',lbl:'Build the team round him',pull:12, note:'The heaviest promise there is. Break it and you may lose him.'}];
+function promiseBy(k){return PROMISES.find(x=>x.k===k)||PROMISES[0]}
+
+/* how likely he is to choose you over them */
+function hijackOdds(s,fee,wage,promise){
+ const p=playerById(s.pid);
+ const me=G.clubs[G.my],riv=G.clubs[s.to];
+ if(!p||!riv)return 0;
+ /* reputation is the ground everything else is built on */
+ let score=(me.rep-riv.rep)/55;
+ /* money he will be paid, which he understands perfectly. Capped,
+    because there is a point past which more money stops being the
+    question and he is simply deciding who he wants to play for. */
+ score+=clamp((wage-s.wage)/Math.max(1,s.wage)*30,-35,20);
+ /* money his club will be paid, which decides whether they let him talk */
+ score+=clamp((fee-s.fee)/Math.max(1,s.fee)*22,-40,12);
+ /* the promise, weighed by what a man his age is actually chasing */
+ const pr=promiseBy(promise);
+ const ageW=p.age<=22?1.35:p.age<=26?1.05:p.age<=29?.75:.5;
+ score+=pr.pull*ageW;
+ /* how far along it already is — terms agreed is nearly signed */
+ score-=[0,10,24][Math.min(2,s.stage)];
+ /* ambition: a big club turning up late still turns heads */
+ if(me.rep>riv.rep+900)score+=7;
+ return clamp(50+score,3,93)}
+
+ACTIONS.hijackSheet=el=>{
+ const s=sagas().find(x=>x.id===el.dataset.id);
+ if(!s)return;
+ UI.hjFee=UI.hjFee||Math.round(s.fee*1.1);
+ UI.hjWage=UI.hjWage||Math.round(s.wage*1.15);
+ UI.hjProm=UI.hjProm||'none';
+ openHijack(s.id)};
+ACTIONS.hjSet=el=>{UI[el.dataset.k]=+el.dataset.v||el.dataset.v;openHijack(el.dataset.id)};
+ACTIONS.hjProm=el=>{UI.hjProm=el.dataset.v;openHijack(el.dataset.id)};
+
+function openHijack(sid){
+ const s=sagas().find(x=>x.id===sid);if(!s)return;
+ const p=playerById(s.pid);if(!p)return;
+ const me=G.clubs[G.my],riv=G.clubs[s.to],from=G.clubs[s.from];
+ const fee=UI.hjFee,wage=UI.hjWage,prom=UI.hjProm||'none';
+ const odds=hijackOdds(s,fee,wage,prom);
+ const room=me.wageCap*1.18-squadWage(me);
+ const canFee=fee<=me.budget, canWage=wage<=room;
+ let h='<div class="row" style="gap:10px;margin-bottom:8px">'+face(p,48)+
+  '<div style="flex:1;min-width:0"><h3 style="margin:0">'+esc(p.name)+'</h3>'+
+  '<div class="small muted">'+esc(from.name)+' · '+p.age+' · '+ccFlag(natOf(p))+' '+esc(natName(natOf(p)))+
+  '</div></div>'+ovrPill(p)+'</div>';
+ h+='<div class="card tight" style="padding:9px 11px;margin-bottom:10px">'+
+  '<div class="xs faint" style="line-height:1.6">'+esc(riv.name)+' are at <b style="color:var(--ink)">'+
+  SAGA_LBL[SAGA_STAGES[s.stage]].toLowerCase()+'</b>, offering <b style="color:var(--ink)">'+fmtM(s.fee)+
+  '</b> and <b style="color:var(--ink)">'+fmtW(s.wage)+'</b>.</div></div>';
+
+ const feeOpts=[Math.round(s.fee*.95),Math.round(s.fee*1.1),Math.round(s.fee*1.25),Math.round(s.fee*1.45)];
+ const wageOpts=[Math.round(s.wage*1.0),Math.round(s.wage*1.15),Math.round(s.wage*1.35),Math.round(s.wage*1.6)];
+ h+='<div class="chip-lbl">Your fee</div><div class="chips" style="margin-bottom:9px">'+
+  feeOpts.map(v=>'<button class="chip'+(fee===v?' on':'')+(v>me.budget?' ':'')+
+   '" data-action="hjSet" data-k="hjFee" data-v="'+v+'" data-id="'+s.id+'"'+
+   (v>me.budget?' style="opacity:.42"':'')+'>'+fmtM(v)+'</button>').join('')+'</div>';
+ h+='<div class="chip-lbl">Your wage offer</div><div class="chips" style="margin-bottom:9px">'+
+  wageOpts.map(v=>'<button class="chip'+(wage===v?' on':'')+
+   '" data-action="hjSet" data-k="hjWage" data-v="'+v+'" data-id="'+s.id+'"'+
+   (v>room?' style="opacity:.42"':'')+'>'+fmtW(v)+'</button>').join('')+'</div>';
+ h+='<div class="chip-lbl">What you promise him</div><div class="chips" style="margin-bottom:6px">'+
+  PROMISES.map(x=>'<button class="chip'+(prom===x.k?' on':'')+
+   '" data-action="hjProm" data-v="'+x.k+'" data-id="'+s.id+'">'+x.lbl+'</button>').join('')+'</div>'+
+  '<div class="xs faint" style="line-height:1.6;margin-bottom:11px">'+esc(promiseBy(prom).note)+'</div>';
+
+ const col=odds>=66?'var(--green)':odds>=40?'var(--gold)':'var(--danger)';
+ h+='<div class="card tight" style="padding:11px;margin-bottom:10px">'+
+  '<div class="spread"><span class="small">He chooses you</span>'+
+  '<b class="num" style="font-size:20px;color:'+col+'">'+Math.round(odds)+'%</b></div>'+
+  '<div style="height:7px;border-radius:4px;background:rgba(255,255,255,.08);margin-top:8px;overflow:hidden">'+
+  '<i style="display:block;height:100%;width:'+Math.round(odds)+'%;background:'+col+'"></i></div></div>';
+ if(!canFee)h+='<div class="xs" style="color:var(--danger);margin-bottom:8px">That fee is beyond your transfer budget ('+fmtM(me.budget)+').</div>';
+ if(!canWage)h+='<div class="xs" style="color:var(--danger);margin-bottom:8px">That wage is beyond your wage room ('+fmtW(Math.max(0,room))+').</div>';
+ h+='<button class="btn btn-primary btn-block"'+((canFee&&canWage)?'':' disabled')+
+  ' data-action="hjGo" data-id="'+s.id+'">Hijack the deal</button>'+
+  '<div class="xs faint" style="text-align:center;margin-top:7px">One attempt. If he turns you down, he signs for them.</div>';
+ openModal(h)}
+
+ACTIONS.hjGo=el=>{
+ const s=sagas().find(x=>x.id===el.dataset.id);if(!s||s.dead)return;
+ const p=playerById(s.pid);if(!p)return;
+ const me=G.clubs[G.my],riv=G.clubs[s.to],from=G.clubs[s.from];
+ const fee=UI.hjFee,wage=UI.hjWage,prom=UI.hjProm||'none';
+ if(fee>me.budget)return toast('Not enough transfer budget.');
+ const odds=hijackOdds(s,fee,wage,prom);
+ s.hijacked=true;
+ closeModal();
+ if(Math.random()*100<odds){
+  from.players=from.players.filter(x=>x.id!==p.id);
+  p.club=G.my;p.listed=false;p.contract=irnd(3,5);p.wage=wage;
+  p.morale=clamp(p.morale+14,1,100);
+  if(typeof windowId==='function')p.movedWindow=windowId();
+  if(prom!=='none'){if(!G.promises)G.promises=[];
+   G.promises.push({pid:p.id,k:prom,made:G.day,season:G.season})}
+  me.players.push(p);me.budget-=fee;from.budget+=Math.round(fee*.7);from.bank+=fee;
+  s.dead=true;s.done=true;s.won=true;
+  try{sfx('cheer')}catch(e){}
+  toast('🔥 Hijacked — '+p.name+' is yours');
+  mail('transfer','🔥 HIJACKED: '+p.name+' signs for us',
+   '<b>'+esc(p.name)+'</b> has turned down <b>'+esc(riv.name)+'</b> to join us for <b>'+fmtM(fee)+'</b> on '+
+   fmtW(wage)+'.'+(prom!=='none'?'<br><br>You promised him <b>'+esc(promiseBy(prom).lbl.toLowerCase())+
+   '</b>. He will hold you to it.':''));
+ }else{
+  s.dead=true;
+  try{sfx('miss')}catch(e){}
+  toast(p.name+' chose '+riv.short);
+  mail('news','📰 '+p.name+' snubs us for '+riv.short,
+   'We went in for <b>'+esc(p.name)+'</b> and were turned down. He has signed for <b>'+esc(riv.name)+
+   '</b> for '+fmtM(s.fee)+'.');
+  sagaComplete({pid:s.pid,to:s.to,from:s.from,fee:s.fee,wage:s.wage,stage:2,dead:false});
+ }
+ render()};
+
+/* ---------------------------------------------------------------------
+   4. THE FEED
+   --------------------------------------------------------------------- */
+function vTransferCentre(){
+ const live=sagas().filter(s=>!s.dead);
+ let h='<div class="sec"><div class="t">📰 Transfer centre</div><div class="ln"></div>'+
+  '<div class="sub">'+live.length+' live</div></div>';
+ if(!live.length)return h+'<div class="card tight" style="padding:12px">'+
+  '<div class="xs faint" style="line-height:1.6">Nothing moving right now. '+
+  'Deals between other clubs appear here as they develop — and you can step in before they sign.</div></div>';
+ h+='<div class="card tight" style="padding:5px 9px">';
+ live.forEach(s=>{
+  const p=playerById(s.pid);if(!p)return;
+  const from=G.clubs[s.from],to=G.clubs[s.to];
+  if(!from||!to)return;
+  const st=SAGA_STAGES[Math.min(3,s.stage)];
+  const pcol=s.stage>=2?'var(--danger)':s.stage===1?'var(--gold)':'var(--ink-faint)';
+  h+='<div style="padding:9px 2px;border-bottom:1px solid var(--chalk)">'+
+   '<div class="row" style="gap:9px;margin-bottom:6px">'+face(p,32)+
+   '<div style="flex:1;min-width:0">'+
+   '<div class="small" style="font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+
+   esc(p.name)+' <span class="xs faint">'+p.pos+' · '+p.age+' · '+p.ovr+'</span></div>'+
+   '<div class="xs faint">'+esc(from.short)+' → <b style="color:var(--ink)">'+esc(to.short)+'</b> · '+
+   fmtM(s.fee)+(s.stage>=2?' · '+fmtW(s.wage):'')+'</div></div>'+
+   '<span class="intchip" style="color:'+pcol+'">'+SAGA_LBL[st]+'</span></div>'+
+   '<div style="height:4px;border-radius:3px;background:rgba(255,255,255,.07);overflow:hidden;margin-bottom:7px">'+
+   '<i style="display:block;height:100%;width:'+((s.stage+1)/4*100).toFixed(0)+'%;background:'+pcol+'"></i></div>'+
+   '<button class="btn btn-ghost btn-sm btn-block" data-action="hijackSheet" data-id="'+s.id+'">'+
+   '🔥 Step in'+(s.stage>=2?' — he is close to signing':'')+'</button></div>'});
+ return h+'</div>'}
+
+const _vTransSaga=vTransfers;
+vTransfers=function(){
+ let h='';
+ try{h=vTransferCentre()}catch(e){h=''}
+ return _vTransSaga.apply(this,arguments)+h};
+
+/* ---------------------------------------------------------------------
+   5. RUNNING IT
+   --------------------------------------------------------------------- */
+const _dtcSaga=dailyTickCore;
+dailyTickCore=function(){
+ _dtcSaga.apply(this,arguments);
+ try{
+  sagaTick();
+  const w=(typeof windowOpen==='function')&&windowOpen();
+  if(w&&G.day%4===1&&sagas().filter(s=>!s.dead).length<6)sagaStart();
+ }catch(e){}};
+
+/* ---------------------------------------------------------------------
+   6. A PROMISE IS A DEBT
+   ---------------------------------------------------------------------
+   Told a man he would be first choice? The game checks, every month.
+   --------------------------------------------------------------------- */
+function promiseCheck(){
+ try{
+  if(!G.promises||!G.promises.length)return;
+  const me=G.clubs[G.my];
+  G.promises=G.promises.filter(pr=>{
+   const p=playerById(pr.pid);
+   if(!p||p.club!==G.my)return false;
+   if(G.day-pr.made<40)return true;
+   if(pr.k==='play'){
+    const apps=(p.stats&&p.stats.apps)||0;
+    const played=G.day>60?apps:99;
+    if(played<4){
+     p.morale=clamp(p.morale-14,1,100);
+     mail('contract','Broken promise: '+p.name,
+      '<b>'+esc(p.name)+'</b> was promised first-choice football and has started '+apps+
+      ' matches. He is not happy, and he is not wrong.');
+     return false}}
+   if(pr.k==='build'&&G.day-pr.made>150){
+    const rank=[...me.players].sort((a,b)=>b.ovr-a.ovr).indexOf(p);
+    if(rank>4){p.morale=clamp(p.morale-16,1,100);
+     mail('contract','Broken promise: '+p.name,
+      'You told <b>'+esc(p.name)+'</b> the team would be built around him. It has not been.');
+     return false}}
+   return true});
+ }catch(e){}}
+const _dtcPromise=dailyTickCore;
+dailyTickCore=function(){
+ _dtcPromise.apply(this,arguments);
+ if(G.day%30===7)promiseCheck()};
+
+/*#w40_saga.js#*/
+
+
+/*#w40_saga.js#*//*#w41_chances.js#*/
+
+/* =====================================================================
+   THE CHANCE IS NOW A KIND OF CHANCE
+   ---------------------------------------------------------------------
+   The engine was never a coin flip. It already ran three attribute duels
+   before anybody shot, and finishing already mattered enormously —
+   measured over two hundred thousand shots against a keeper rated 13:
+
+       shooting 10 → scores  4.0%
+       shooting 14 → scores 24.2%
+       shooting 18 → scores 54.9%
+       shooting 20 → scores 69.4%
+
+   What was missing is that every chance was the same chance. A cross, a
+   ball played through the middle, a cutback and a hopeful drive from
+   twenty-five yards all resolved through one identical sum, so a
+   brilliant crosser and a brilliant dribbler were interchangeable, and a
+   centre forward who wins everything in the air was worth no more
+   against a small defence than a tall one.
+
+   A chance now has a type, and the type decides which attributes are
+   asked the question:
+
+     CROSS      the crosser's crossing, then the striker's heading and
+                strength against what the defence has in the air
+     THROUGH    the passer's vision, then the runner's acceleration
+                against the defensive line's pace and positioning
+     CUTBACK    the wide man's dribbling against the full-back, then the
+                arriving player's first touch and composure
+     LONG SHOT  shooting and strength, from range, and mostly a bad idea
+     SOLO       one man's dribbling against the whole defence
+
+   HOW IT IS APPLIED, AND WHY NOT THE OBVIOUS WAY. The obvious way is to
+   work out a quality for the chance and multiply the shot by it. That
+   was the first attempt and it was a disaster, in a way worth writing
+   down: this engine decides a goal by comparing the strike against the
+   save with a hard threshold, and around the operating point that
+   comparison is savagely sharp. Multipliers averaging 1.06 took the
+   league from 3.59 goals a game to 7.69. Re-centred to average exactly
+   1.00 — verified at 0.998 over eight thousand chances — it went the
+   other way to 1.39, because a spread that helps weak defences and hurts
+   strong ones does not cancel when the response is that steep. Forcing
+   the multiplier to a flat 1 returned 3.57, which proved the wiring was
+   sound and the lever was wrong.
+
+   So the lever changed. Nothing multiplies the shot. Instead the chance
+   type decides WHICH ATTRIBUTE is read as the second half of the
+   shooter's finishing — the engine already averages his shooting with
+   one other quality, and it is composure by default and heading from a
+   corner. Every substitute is another attribute on the same one-to-
+   twenty scale, so the arithmetic stays in exactly the range it was
+   already in, the scoreline does not move, and a tall striker really is
+   better on a cross while a quick one really is better through the
+   middle. Which was the whole point.
+   ===================================================================== */
+
+const WIDE_SLOTS=['AML','AMR','ML','MR','WBL','WBR','DL','DR'];
+const CHANCE_LBL={cross:'from the cross',through:'through the middle',
+ cutback:'from the cutback',long:'from distance',solo:'on his own',
+ header:'from the set piece'};
+
+/* ---------------------------------------------------------------------
+   1. WHICH KIND OF CHANCE THIS IS
+   Decided by who is involved and what they are good at, which is how a
+   real chance decides what kind it is.
+   --------------------------------------------------------------------- */
+function chanceKind(m,A,D,shooter,creator,fromCorner){
+ if(fromCorner)return 'header';
+ const eff=(x,a)=>{try{return m.effA(x,a)}catch(e){return 10}};
+ const wide=!!(creator&&WIDE_SLOTS.includes(creator.slot));
+ const w={};
+ w.cross   = wide?(eff(creator,'crossing')*.62+eff(shooter,'heading')*.50):2;
+ w.through = (eff(creator||shooter,'vision')*.55+eff(shooter,'acceleration')*.45)*
+             (A.tac&&A.tac.passStyle==='Direct'?1.3:1);
+ w.cutback = wide?(eff(creator,'dribbling')*.60+eff(shooter,'firstTouch')*.45):2.5;
+ w.long    = (eff(shooter,'shooting')*.32+eff(shooter,'strength')*.22)*
+             (['MC','DM','AMC'].includes(shooter.slot)?1.5:.7);
+ w.solo    = eff(shooter,'dribbling')*.50*
+             (['AML','AMR','ST','AMC'].includes(shooter.slot)?1.2:.55);
+ /* a short-passing side makes cutbacks; a direct one slings crosses in */
+ if(A.tac&&A.tac.passStyle==='Short'){w.cutback*=1.35;w.cross*=.78;w.long*=.70}
+ let tot=0;const ks=Object.keys(w);ks.forEach(k=>{w[k]=Math.max(.4,w[k]);tot+=w[k]});
+ let r=Math.random()*tot;
+ for(let i=0;i<ks.length;i++){r-=w[ks[i]];if(r<=0)return ks[i]}
+ return 'through'}
+
+/* ---------------------------------------------------------------------
+   2. WHAT THE SHOOTER IS ACTUALLY BEING JUDGED ON
+   ---------------------------------------------------------------------
+   Returns the replacement for the second half of the shooter's finishing
+   — the term the engine fills with composure, or heading from a corner.
+   Everything returned is on the same 1–20 scale as the thing it replaces,
+   which is what keeps the scoreline still.
+
+   The opposed part — his aerial ability against theirs, his pace against
+   their line — is folded in as a bounded nudge of at most a couple of
+   points, because a couple of points is already worth roughly seven
+   percentage points of conversion in this engine.
+   --------------------------------------------------------------------- */
+function shotBasis(m,D,shooter,creator,kind){
+ const eff=(x,a)=>{try{return m.effA(x,a)}catch(e){return 10}};
+ const davg=(l)=>{try{return m.avg(D,l,'def')}catch(e){return 11}};
+ const nudge=(v,lo,hi)=>Math.max(lo,Math.min(hi,v));
+ let base,edge=0;
+ if(kind==='cross'||kind==='header'){
+  base=eff(shooter,'heading')*.62+eff(shooter,'strength')*.38;
+  /* he has to beat somebody to it */
+  edge=nudge((base-davg(['heading','strength','positioning']))*.22,-2.0,2.0);
+  /* and somebody has to put it on his head */
+  if(creator)edge+=nudge((eff(creator,'crossing')-12)*.12,-1.2,1.2);
+ }else if(kind==='through'){
+  base=eff(shooter,'composure')*.55+eff(shooter,'acceleration')*.45;
+  edge=nudge((eff(shooter,'acceleration')*.6+eff(shooter,'pace')*.4
+             -davg(['pace','positioning','decisions']))*.20,-2.0,2.0);
+  if(creator)edge+=nudge((eff(creator,'vision')-12)*.11,-1.1,1.1);
+ }else if(kind==='cutback'){
+  base=eff(shooter,'firstTouch')*.5+eff(shooter,'composure')*.5;
+  if(creator)edge=nudge((eff(creator,'dribbling')
+             -davg(['tackling','pace','positioning']))*.20,-1.8,1.8);
+ }else if(kind==='long'){
+  /* range punishes everybody, and rewards the one who can really hit it */
+  base=eff(shooter,'shooting')*.5+eff(shooter,'strength')*.5;
+  edge=-2.4;
+ }else{ /* solo */
+  base=eff(shooter,'dribbling')*.42+eff(shooter,'composure')*.58;
+  edge=nudge((eff(shooter,'dribbling')
+             -davg(['tackling','positioning','aggression']))*.18,-1.8,1.8);
+ }
+ return Math.max(1,Math.min(20,base+edge))}
+
+/* ---------------------------------------------------------------------
+   3. WIRING IT IN
+   ---------------------------------------------------------------------
+   effA is intercepted for the duration of the shot only, and only for
+   the shooter, and only for the one attribute the engine is about to
+   read as his second finishing quality. Everything else in there —
+   the keeper, the traits, the home advantage — is untouched.
+   --------------------------------------------------------------------- */
+const _shotKind=MatchSim.prototype.shotEvent;
+MatchSim.prototype.shotEvent=function(A,D,shooter,creator,fromCorner){
+ let restore=null;
+ try{
+  const kind=chanceKind(this,A,D,shooter,creator,fromCorner);
+  this._kind=kind;
+  if(!A.st.kinds)A.st.kinds={};
+  A.st.kinds[kind]=(A.st.kinds[kind]||0)+1;
+  const basis=shotBasis(this,D,shooter,creator,kind);
+  const own=Object.prototype.hasOwnProperty.call(this,'effA');
+  const prev=this.effA;
+  const want=fromCorner?'heading':'composure';
+  let used=false;
+  this.effA=function(x,a){
+   if(!used&&x===shooter&&a===want){used=true;return basis}
+   return prev.apply(this,arguments)};
+  restore=()=>{if(own)this.effA=prev;else delete this.effA};
+ }catch(e){}
+ try{return _shotKind.apply(this,arguments)}
+ finally{try{if(restore)restore()}catch(e){}}};
+
+/* ---------------------------------------------------------------------
+   4. SAYING WHAT HAPPENED
+   A mechanism you cannot see is a mechanism nobody believes in.
+   --------------------------------------------------------------------- */
+const _goalKind=MatchSim.prototype.goal;
+MatchSim.prototype.goal=function(A,D,scorer,creator){
+ const r=_goalKind.apply(this,arguments);
+ try{
+  const k=this._kind;
+  if(!k||!this.feed||!this.feed.length)return r;
+  const last=this.feed[this.feed.length-1];
+  if(!last||last.cls!=='goal')return r;
+  const cn=creator&&creator.p?creator.p.name:null;
+  const extra={
+   cross:cn?'A '+cn+' cross, and he attacked it.':'Headed in from the flank.',
+   header:'Rises above the marker from the set piece.',
+   through:cn?cn+' split them open and he was away.':'Straight through the middle.',
+   cutback:cn?cn+' got to the byline and pulled it back.':'Cut back from the byline.',
+   long:'From fully twenty-five yards.',
+   solo:'He beat two men and finished it himself.'}[k];
+  if(extra)last.text=String(last.text||'')+' '+extra;
+ }catch(e){}
+ return r};
+
+/* ---------------------------------------------------------------------
+   5. AND SHOWING IT IN THE STATS
+   --------------------------------------------------------------------- */
+function kindsLine(st){
+ const k=(st&&st.kinds)||{};
+ const order=[['cross','Crosses'],['through','Through balls'],['cutback','Cutbacks'],
+  ['solo','Solo runs'],['long','Long shots'],['header','Set-piece headers']];
+ const rows=order.filter(x=>k[x[0]]);
+ return rows.length?rows.map(x=>x[1]+' '+k[x[0]]).join(' · '):''}
+
+if(typeof renderStats==='function'){
+ const _renderStatsKinds=renderStats;
+ renderStats=function(){
+  const r=_renderStatsKinds.apply(this,arguments);
+  try{
+   const m=MU&&MU.m;if(!m)return r;
+   const box=$('#statList')||$('#mBody');if(!box)return r;
+   if(box.querySelector('.kindrow'))return r;
+   const a=kindsLine(m.sides[0].st),b=kindsLine(m.sides[1].st);
+   if(!a&&!b)return r;
+   const d=document.createElement('div');
+   d.className='kindrow';
+   d.innerHTML='<div class="chip-lbl" style="margin-top:10px">How the chances came</div>'+
+    '<div class="card tight" style="padding:9px 11px">'+
+    '<div class="xs" style="line-height:1.7"><b>'+esc(m.sides[0].c.short)+'</b> '+(a||'nothing yet')+'</div>'+
+    '<div class="xs" style="line-height:1.7"><b>'+esc(m.sides[1].c.short)+'</b> '+(b||'nothing yet')+'</div></div>';
+   box.appendChild(d);
+  }catch(e){}
+  return r}}
+
+/*#w41_chances.js#*/
+
+
+/*#w41_chances.js#*//*#w42_press.js#*/
+
+/* =====================================================================
+   A PRESS ROOM THAT KNOWS WHAT MONTH IT IS
+   ---------------------------------------------------------------------
+   "Twentieth in the league. How worried are you?"
+
+   Asked in August. Before a ball had been kicked. The question bank was
+   already large and well built, but the rule that fires it reads
+
+       {id:'pos-bad', w:F=>F.pos&&F.pos>=14}
+
+   and league position exists from day one, when the table is thirty-eight
+   games of nothing sorted by reputation. Every table question in the bank
+   had the same hole, so the first press conference of every season was a
+   reporter demanding you account for a position nobody had earned yet.
+
+   Two things are done about it.
+
+   FIRST, no question about the table until there is a table. Every
+   position and form rule now needs games actually played behind it —
+   six of them before anybody asks you to justify where you are, three
+   before anyone mentions form.
+
+   SECOND, the calendar is a fact now. A press conference in July is not
+   a press conference in April, and the room knows the difference:
+
+     PRE-SEASON     the summer, the window, the tour, what this season is
+                    supposed to be
+     OPENING WEEKS  first impressions, whether it is too early to judge
+     TITLE RACE     gated on being genuinely close to the top, not merely
+                    high up
+     RELEGATION     the same, from the other end, and only when the gap
+                    is small enough to be frightening
+     THE RUN-IN     the last six matches, when everything is decided
+     CUP FINAL      and semi-final, which deserve their own week
+     THE DERBY      because it is never just another game
+     THE WINDOW     open, and shutting, and shut
+
+   A title race is not "you are second". It is "you are second and four
+   points off with nine to play", and the question sounds different
+   because the situation is different.
+   ===================================================================== */
+
+/* ---------------------------------------------------------------------
+   1. THE FACTS THE ROOM WAS MISSING
+   --------------------------------------------------------------------- */
+const _pqFactsCal=pqFacts;
+pqFacts=function(){
+ const F=_pqFactsCal.apply(this,arguments);
+ if(!F)return F;
+ try{
+  const my=F.my;
+  const rows=tableRows(my.league)||[];
+  const me=rows.find(r=>r.i===G.my)||{p:0,pts:0};
+  F.played=me.p||0;
+  F.pts=me.pts||0;
+  F.rows=rows;
+  F.games=rows.length?(rows.length-1)*2:38;
+  F.left=Math.max(0,F.games-F.played);
+
+  /* how far off the top, and how far above the drop */
+  const top=rows[0]||me;
+  F.gapTop=Math.max(0,(top.pts||0)-F.pts);
+  const dropIx=Math.max(0,rows.length-3);
+  const safe=rows[dropIx-1]||rows[rows.length-1]||me;
+  F.gapDrop=(F.pos&&F.pos>=dropIx+1)?Math.max(0,(safe.pts||0)-F.pts):
+   Math.max(0,F.pts-((rows[dropIx]||{}).pts||0));
+
+  /* a race is proximity plus time, not a league position */
+  /* a race is proximity measured against the time left to close it, not
+     a fixed number of points — twelve behind with eighteen to play is not
+     a title race, and four behind with six to play very much is */
+  F.inTitleRace=F.played>=12&&F.pos<=4&&F.gapTop<=Math.max(4,Math.round(F.left*.45));
+  F.inDropFight=F.played>=12&&F.pos>=rows.length-5&&F.gapDrop<=Math.max(4,Math.round(F.left*.45));
+  F.runIn=F.played>=10&&F.left<=6&&F.left>0;
+
+  /* the calendar */
+  F.preSeason=F.played===0&&G.day<34;
+  F.opening=F.played>0&&F.played<=4;
+  F.midSeason=F.played>=5;
+  F.window=(typeof windowOpen==='function')?!!windowOpen():false;
+
+  /* the next match, in context */
+  const nf=F.nextFix;
+  F.cupTie=!!(nf&&nf.cup);
+  F.cupRound=nf&&nf.cup&&CUP_DEFS[nf.cup]&&nf.r!=null?
+   (CUP_DEFS[nf.cup].rn||[])[nf.r]:null;
+  F.isFinal=!!(F.cupRound&&/final/i.test(F.cupRound)&&!/semi/i.test(F.cupRound));
+  F.isSemi=!!(F.cupRound&&/semi/i.test(F.cupRound));
+  /* a derby is a near neighbour of comparable size in the same division */
+  F.derby=!!(F.opp&&F.opp.league===my.league&&Math.abs((F.opp.rep||0)-(my.rep||0))<900&&
+   F.oppPos&&Math.abs(F.oppPos-(F.pos||10))<=6);
+
+  /* the summer's business, for the pre-season room */
+  F.signings=(my.players||[]).filter(p=>p.movedWindow!=null&&
+   (typeof windowId!=='function'||p.movedWindow===windowId()))
+   .sort((a,b)=>b.ovr-a.ovr).slice(0,3);
+  F.tour=(G.tour&&G.tour.booked)?G.tour.booked:null;
+ }catch(e){}
+ return F};
+
+/* ---------------------------------------------------------------------
+   2. NOBODY ASKS ABOUT A TABLE THAT DOES NOT EXIST YET
+   ---------------------------------------------------------------------
+   The rules are already written and already good. Rather than rewrite
+   them, the ones that lean on the table or on form have their gate
+   tightened in place — a wrapper on w() that adds the missing condition.
+   --------------------------------------------------------------------- */
+(function gatePress(){
+ const NEEDS_TABLE=['pos-top','pos-euro','pos-mid','pos-bad','expect','legacy',
+  'title-talk','cup-run','vs-pos','gap','table','rivals'];
+ const NEEDS_FORM=['form','streak','slump','winning','unbeaten','wobble','crisis'];
+ try{
+  PQ.forEach(rule=>{
+   const id=String(rule.id||'');
+   const table=NEEDS_TABLE.some(k=>id.indexOf(k)>=0);
+   const form=NEEDS_FORM.some(k=>id.indexOf(k)>=0);
+   if(!table&&!form)return;
+   const w0=rule.w;
+   rule.w=F=>{
+    if(table&&(!F||(F.played||0)<6))return false;
+    if(form&&(!F||(F.played||0)<3))return false;
+    try{return !!w0(F)}catch(e){return false}};
+  });
+ }catch(e){}
+})();
+
+/* ---------------------------------------------------------------------
+   3. AND THE ROOM GETS THE QUESTIONS IT SHOULD HAVE HAD
+   --------------------------------------------------------------------- */
+const PNM2=(p)=>p?p.name:'him';
+PQ.push(
+ /* ---- pre-season ---- */
+ {id:'pre-summer',w:F=>F.preSeason,q:F=>[
+  'A new season. What is this one supposed to be?',
+  'What did you want from the summer, and did you get it?',
+  'Is this squad stronger than the one that finished last season?',
+  'Where do you think you will finish? Be brave.',
+  'What is the one thing that has to be better this year?',
+  'Have you changed anything about how you want to play?',
+  'Is there a position you are still short in?',
+  'How much of pre-season is fitness and how much is ideas?']},
+ {id:'pre-signings',w:F=>F.preSeason&&F.signings.length,q:F=>[
+  'You have brought in '+PNM2(F.signings[0])+'. What does he give you?',
+  'Are the new ones ready to start, or will they need time?',
+  F.signings.length>1?'Two or three new faces. How quickly can they settle?'
+   :'One significant addition. Is that enough?']},
+ {id:'pre-nosignings',w:F=>F.preSeason&&!F.signings.length,q:F=>[
+  'A quiet summer. Is that by choice?',
+  'The supporters expected additions and there have been none. What do you say to them?',
+  'Is the money there if you find the right player?']},
+ {id:'pre-tour',w:F=>F.preSeason&&F.tour,q:F=>[
+  'How did the tour go?',
+  'Does travelling that far in July help or hurt you in August?',
+  'What did you learn about the group while you were away?']},
+ {id:'pre-young',w:F=>F.preSeason&&F.kids&&F.kids.length,q:F=>[
+  PNM2(F.kids[0])+' has trained with you all summer. Is he ready?',
+  'Will any of the academy get a real chance this season?']},
+
+ /* ---- the opening weeks ---- */
+ {id:'opening-early',w:F=>F.opening,q:F=>[
+  'Only '+F.played+' game'+(F.played===1?'':'s')+' in. Is it too early to read anything into it?',
+  'What have you learned about this side so far?',
+  'Do the first few weeks set the tone for a season, in your experience?',
+  'Is the table worth looking at yet?']},
+
+ /* ---- a title race, properly defined ---- */
+ {id:'race-title',w:F=>F.inTitleRace,q:F=>[
+  F.gapTop===0?'You are top of the league with '+F.left+' to play. Can you hold on?'
+   :F.gapTop+' points off the top with '+F.left+' to play. Is this a title race?',
+  'Have you spoken to the players about what is in front of them?',
+  'Does a squad like this know how to win a league?',
+  'Who do you fear most between now and May?',
+  'Do you watch the other results?']},
+ {id:'race-drop',w:F=>F.inDropFight,q:F=>[
+  'You are '+ordinal(F.pos)+' with '+F.left+' to play. Are you in a relegation fight?',
+  'Do the players believe they can get out of this?',
+  'What is the plan for the next six weeks?',
+  'Have you been in a fight like this before?',
+  'Is there a game you have circled as the one that has to be won?']},
+ {id:'runin',w:F=>F.runIn&&!F.inTitleRace&&!F.inDropFight,q:F=>[
+  'Six games or fewer left. What are you playing for now?',
+  'Is there anything still to be decided for you this season?',
+  'Have you started thinking about the summer already?']},
+
+ /* ---- cup weeks ---- */
+ {id:'cup-final',w:F=>F.isFinal,q:F=>[
+  'A final. How do you prepare a squad for a week like this?',
+  'Does a trophy change how this season is remembered?',
+  'Do you tell them it is just another game, or do you tell them the truth?',
+  'Have you thought about what you will say to them beforehand?',
+  'What would winning this mean to you personally?']},
+ {id:'cup-semi',w:F=>F.isSemi,q:F=>[
+  'Ninety minutes from a final. How are the nerves?',
+  'Is a semi-final the worst game in football to lose?',
+  'Will you go with your strongest side?']},
+
+ /* ---- the derby ---- */
+ {id:'derby',w:F=>F.derby&&F.played>=3,q:F=>[
+  'It is the derby. Does the week feel different?',
+  'How much do you lean on what this fixture means to the supporters?',
+  'Do you change anything for a game like this?',
+  'What happens in this city if you lose it?']},
+
+ /* ---- the window ---- */
+ {id:'window-open',w:F=>F.window&&!F.preSeason,q:F=>[
+  'The window is open. Are you expecting business?',
+  'Is anybody going to be allowed to leave?',
+  'Would you say the squad needs strengthening, or settling?']},
+ {id:'window-expiring',w:F=>F.window&&F.expiring&&F.expiring.length,q:F=>[
+  PNM2(F.expiring[0])+' has a year left. Where are you with that?',
+  'Are you comfortable letting a player run down a contract?']}
+);
+
+/* ---------------------------------------------------------------------
+   4. AND THE OPENING LINE MATCHES THE OCCASION
+   The room's first words set the tone; a cup final should not open with
+   "so, another Saturday".
+   --------------------------------------------------------------------- */
+if(typeof pressIntro==='function'){
+ const _pressIntro=pressIntro;
+ pressIntro=function(){
+  try{
+   const F=pqFacts();
+   if(F){
+    if(F.isFinal)return 'Cup final week. The room is fuller than usual.';
+    if(F.isSemi)return 'A semi-final to talk about. Everybody is here.';
+    if(F.preSeason)return 'First press conference of the season. A new campaign to sell.';
+    if(F.derby)return 'Derby week. They have come for a headline.';
+    if(F.inDropFight)return 'The mood in the room is not warm.';
+    if(F.inTitleRace)return 'They want to talk about the title, whether you do or not.';
+   }
+  }catch(e){}
+  return _pressIntro.apply(this,arguments)}}
+
+
+/* ---------------------------------------------------------------------
+   5. AND THEY ACTUALLY GET ASKED
+   ---------------------------------------------------------------------
+   The bank runs to several hundred lines, so a contextual question drawn
+   uniformly against all of them is a contextual question nobody ever
+   hears — the first test of this had a pre-season room that correctly
+   refused to mention the table and then asked about technology in
+   refereeing. Occasion questions are weighted so the room leads with the
+   thing that is actually happening, without ever becoming the only thing
+   it can talk about.
+   --------------------------------------------------------------------- */
+const PRESS_OCCASION=['pre-summer','pre-signings','pre-nosignings','pre-tour','pre-young',
+ 'opening-early','race-title','race-drop','runin','cup-final','cup-semi','derby',
+ 'window-open','window-expiring'];
+const _pressBankW=pressBank;
+pressBank=function(){
+ const bank=_pressBankW.apply(this,arguments)||[];
+ const out=bank.slice();
+ bank.forEach(q=>{
+  const rid=String(q.id||'').split('#')[0];
+  if(PRESS_OCCASION.indexOf(rid)>=0)for(let i=0;i<7;i++)out.push(q);
+ });
+ return out};
+
+/*#w42_press.js#*/
+
+
+/*#w42_press.js#*//*#w43_dugout.js#*/
+
+/* =====================================================================
+   THE TOUCHLINE STRIP
+   ---------------------------------------------------------------------
+   During a match you could see the pitch and you could see the score,
+   and to find out who was having a bad game you had to leave the pitch,
+   open a sheet, read it, and close it again. Every real version of this
+   game puts the eleven along the bottom of the screen where a manager
+   can see them without looking away, and that is what this is: shirt
+   number, name, the position he is playing, his rating as it moves, and
+   a condition bar that turns amber and then red.
+
+   Tap a man and the bench opens against his shirt, filtered to who can
+   actually play there, with the effectiveness of each option worked out
+   in his position rather than his own. It is the substitution the game
+   already had, with the two clicks that were only ever navigation taken
+   out of it.
+
+   Quick tactics sit on the same strip, because the two decisions you
+   make from a dugout are who is on and how you are playing, and neither
+   is worth a trip through a menu.
+
+   It is fixed to the bottom on a desktop, where there is room for it,
+   and collapses to a scrolling row on a phone, where there is not.
+   ===================================================================== */
+
+function dugSide(){
+ try{const m=MU&&MU.m;if(!m)return null;return m.sides[mySideIx()]}catch(e){return null}}
+
+function dugCond(v){
+ const c=Math.round(v==null?100:v);
+ const col=c>=75?'var(--green)':c>=58?'var(--gold)':'var(--danger)';
+ return '<div style="height:3px;border-radius:2px;background:rgba(255,255,255,.10);overflow:hidden">'+
+  '<i style="display:block;height:100%;width:'+Math.max(3,Math.min(100,c))+'%;background:'+col+'"></i></div>'}
+
+function dugChip(pl,club){
+ const p=pl.p;
+ const no=(typeof shirtNo==='function')?shirtNo(p,club):'';
+ const r=pl.rating||6;
+ const rc=r>=7.5?'var(--green)':r>=6.5?'var(--ink)':r>=5.8?'var(--ink-faint)':'var(--danger)';
+ const warn=(pl.cond!=null&&pl.cond<58);
+ return '<button class="dugman'+(warn?' tired':'')+'" data-action="dugPick" data-id="'+p.id+'">'+
+  '<span class="dm-slot">'+esc(pl.slot||p.pos)+'</span>'+
+  '<span class="dm-no">'+no+'</span>'+
+  '<span class="dm-nm">'+esc(dugShortName(p.name))+'</span>'+
+  '<span class="dm-r num" style="color:'+rc+'">'+r.toFixed(1)+'</span>'+
+  dugCond(pl.cond)+
+  (pl.yc?'<span class="dm-card yc"></span>':'')+
+  (pl.goals?'<span class="dm-g">⚽'+(pl.goals>1?pl.goals:'')+'</span>':'')+
+  '</button>'}
+
+/* A touchline strip has no room for "Kiernan Dewsbury-Hall". Taking the
+   last word is not enough: it turns Matthijs de Ligt into "Ligt" and
+   Virgil van Dijk into "Dijk", so the particles come along with the
+   name they belong to. */
+const NAME_PARTICLES=['de','del','della','der','den','van','von','da','dos','das',
+ 'di','du','la','le','al','bin','ter','ten','op','vander','mac','mc','st'];
+function dugShortName(n){
+ const parts=String(n||'').trim().split(/\s+/);
+ if(parts.length===1)return parts[0];
+ let i=parts.length-1;
+ while(i>1&&NAME_PARTICLES.indexOf(parts[i-1].toLowerCase().replace(/[^a-z]/g,''))>=0)i--;
+ const last=parts.slice(i).join(' ');
+ return (last.length>13?last.slice(0,12)+'…':last)}
+
+function dugStripHTML(){
+ const s=dugSide();if(!s)return '';
+ const club=s.c;
+ const on=s.onfield.filter(x=>!x.off);
+ const subsLeft=s.subs;
+ let h='<div class="dugstrip" id="dugStrip">'+
+  '<div class="dug-head">'+
+  '<span class="dug-t">'+esc(club.short||club.name)+'</span>'+
+  '<span class="dug-subs">'+subsLeft+' sub'+(subsLeft===1?'':'s')+' left</span>'+
+  '<span class="dug-tac">'+esc(s.tac.formation)+' · '+esc(s.tac.mentality)+'</span>'+
+  '</div><div class="dug-row">'+on.map(pl=>dugChip(pl,club)).join('')+'</div>'+
+  '<div class="dug-foot">'+
+  ['Defensive','Balanced','Attacking'].map(m=>
+   '<button class="chip'+(s.tac.mentality===m?' on':'')+'" data-action="dugMent" data-v="'+m+'">'+m+'</button>').join('')+
+  '<button class="chip" data-action="instrOpen">📝 Full tactics</button>'+
+  '<button class="chip" data-action="subOpen">↔ Bench</button>'+
+  '</div></div>';
+ return h}
+
+/* ---------------------------------------------------------------------
+   tapping a shirt goes straight to the bench for that position
+   --------------------------------------------------------------------- */
+ACTIONS.dugPick=el=>{
+ const s=dugSide();if(!s)return;
+ const pl=s.onfield.find(x=>x.p&&x.p.id===+el.dataset.id);
+ if(!pl)return;
+ try{sfx('tap')}catch(e){}
+ if(!s.subs)return toast('No substitutions left.');
+ const bench=(s.bench||[]).filter(p=>!p.injury);
+ if(!bench.length)return toast('Nobody left on the bench.');
+ const rows=bench.slice().sort((a,b)=>calcEff(b,pl.slot)-calcEff(a,pl.slot));
+ let h='<div class="row" style="gap:10px;margin-bottom:10px">'+face(pl.p,44)+
+  '<div style="flex:1;min-width:0"><h3 style="margin:0">'+esc(pl.p.name)+'</h3>'+
+  '<div class="small muted">'+esc(pl.slot)+' · rating '+(pl.rating||6).toFixed(1)+
+  ' · '+Math.round(pl.cond==null?100:pl.cond)+'% condition</div></div></div>'+
+  '<div class="chip-lbl">Bring on in his place</div><div class="plist">';
+ rows.forEach(p=>{
+  const eff=Math.round(calcEff(p,pl.slot));
+  const oop=(typeof posPenalty==='function')&&posPenalty(p,pl.slot)>0;
+  h+=pRow(p,{
+   meta:p.age+' · '+esc(p.pos)+' · cond '+Math.round(p.cond)+'%',
+   rail:'<span class="num" style="font-weight:800;color:'+
+    (eff>=80?'var(--green)':eff>=72?'var(--ink)':'var(--ink-faint)')+'">'+eff+' here</span>'+
+    (oop?'<span class="xs" style="color:var(--amber);font-weight:800">⚠ natural '+esc(p.pos)+'</span>':''),
+   sub:'',
+   btns:'<button class="btn btn-primary btn-xs" data-action="subDo" data-id="'+p.id+
+    '" data-arg="'+pl.p.id+'">On</button>'})});
+ h+='</div>';
+ openModal(h)};
+
+ACTIONS.dugMent=el=>{
+ const s=dugSide();if(!s)return;
+ s.tac.mentality=el.dataset.v;
+ if(G.tacs)G.tacs.mentality=el.dataset.v;
+ try{sfx('tap')}catch(e){}
+ toast('Mentality: '+el.dataset.v);
+ paintDugStrip();
+ if(typeof renderMCtl==='function')renderMCtl()};
+
+/* ---------------------------------------------------------------------
+   painting it, and keeping it painted
+   ---------------------------------------------------------------------
+   The strip is rebuilt from the same numbers the match is already
+   producing, but only when they have changed — the loop runs eleven
+   times a second and rebuilding eleven buttons that often is how you
+   make a click land on a destroyed element, which is a mistake this
+   codebase has already made once.
+   --------------------------------------------------------------------- */
+let _dugKey='';
+function dugKey(){
+ const s=dugSide();if(!s)return '';
+ return s.onfield.filter(x=>!x.off).map(x=>
+  x.p.id+':'+(x.rating||0).toFixed(1)+':'+Math.round(x.cond||0)+':'+(x.goals||0)+':'+(x.yc||0)
+ ).join('|')+'|'+s.subs+'|'+s.tac.mentality}
+
+function paintDugStrip(force){
+ try{
+  const scr=document.getElementById('matchScreen');
+  if(!scr||!scr.classList.contains('open'))return;
+  const m=MU&&MU.m;
+  if(!m||m.done){const old=document.getElementById('dugStrip');if(old)old.remove();return}
+  const k=dugKey();
+  let el=document.getElementById('dugStrip');
+  if(el&&k===_dugKey&&!force)return;
+  _dugKey=k;
+  const html=dugStripHTML();
+  if(!html)return;
+  if(el){el.outerHTML=html}
+  else{
+   const ctl=scr.querySelector('.mctl');
+   if(ctl)ctl.insertAdjacentHTML('beforebegin',html);
+   else scr.insertAdjacentHTML('beforeend',html)}
+ }catch(e){}}
+
+const _mctlDug=renderMCtl;
+renderMCtl=function(){
+ const r=_mctlDug.apply(this,arguments);
+ paintDugStrip(true);
+ return r};
+const _topDug=renderTop;
+renderTop=function(){
+ const r=_topDug.apply(this,arguments);
+ paintDugStrip(false);
+ return r};
+
+/* ---------------------------------------------------------------------
+   the look
+   --------------------------------------------------------------------- */
+(function dugCSS(){
+ const st=document.createElement('style');st.id='w43';
+ st.textContent=[
+ '.dugstrip{background:linear-gradient(180deg,rgba(11,16,12,.88),rgba(8,12,9,.97));',
+ ' border-top:1px solid var(--chalk-strong);padding:8px 12px 6px}',
+ '.dug-head{display:flex;align-items:center;gap:10px;margin-bottom:6px}',
+ '.dug-t{font-family:var(--disp);font-size:12px;letter-spacing:1.4px;text-transform:uppercase;font-weight:800}',
+ '.dug-subs{font-size:10px;font-weight:800;letter-spacing:.6px;color:var(--gold)}',
+ '.dug-tac{margin-left:auto;font-size:10px;font-weight:700;color:var(--ink-faint);letter-spacing:.5px}',
+ '.dug-row{display:flex;gap:5px;overflow-x:auto;padding-bottom:4px;-webkit-overflow-scrolling:touch;',
+ ' scrollbar-width:thin}',
+ '.dug-row::-webkit-scrollbar{height:4px}',
+ '.dug-row::-webkit-scrollbar-thumb{background:rgba(255,255,255,.16);border-radius:3px}',
+ '.dugman{position:relative;flex:1 0 68px;min-width:68px;max-width:104px;text-align:left;',
+ ' background:linear-gradient(165deg,rgba(255,255,255,.055),rgba(255,255,255,.018));',
+ ' border:1px solid var(--chalk);border-radius:9px;padding:5px 6px 6px;cursor:pointer;',
+ ' display:flex;flex-direction:column;gap:2px;transition:border-color .12s,transform .12s}',
+ '.dugman:hover{border-color:rgba(251,225,34,.55);transform:translateY(-2px)}',
+ '.dugman.tired{border-color:rgba(255,176,32,.5)}',
+ '.dm-slot{font-size:8.5px;letter-spacing:.8px;font-weight:800;color:var(--ink-faint);text-transform:uppercase}',
+ '.dm-no{position:absolute;top:5px;right:6px;font-size:10px;font-weight:800;color:var(--ink-faint);',
+ ' font-variant-numeric:tabular-nums}',
+ '.dm-nm{font-size:11px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.2}',
+ '.dm-r{font-size:13px;font-weight:800;line-height:1;margin:1px 0 3px}',
+ '.dm-g{position:absolute;bottom:4px;right:5px;font-size:9px}',
+ '.dm-card.yc{position:absolute;bottom:5px;right:5px;width:6px;height:8px;border-radius:1px;background:#ffd21f}',
+ '.dug-foot{display:flex;gap:5px;margin-top:6px;overflow-x:auto;padding-bottom:2px}',
+ '.dug-foot .chip{flex:0 0 auto;font-size:11px}',
+ /* on a phone the strip is one scrolling row and nothing else */
+ '@media (max-width:1023px){',
+ ' .dugstrip{padding:6px 10px 4px}',
+ ' .dug-head{margin-bottom:4px}',
+ ' .dugman{flex:0 0 62px;min-width:62px}',
+ '}',
+ /* on a desktop it sits across the bottom, the way a bench does */
+ '@media (min-width:1024px){',
+ /* .open only: #matchScreen is display:none until a match starts, and a
+    bare display:flex here makes an invisible overlay swallow every click
+    on the front screen */
+ ' #matchScreen.open{display:flex;flex-direction:column}',
+ ' #matchScreen.open .mbody{flex:1;min-height:0;overflow:auto}',
+ ' .dugstrip{max-width:1500px;margin:0 auto;width:100%;padding:10px 30px 8px}',
+ ' .dugman{flex:1 1 0;min-width:74px;max-width:none}',
+ /* six layers each append their own row to the control panel, which together ran to about 470px and clipped the pitch above them. It scrolls inside a ceiling now, so the pitch keeps its room. */
+ ' #matchScreen.open .mctl{max-height:190px;overflow-y:auto}',
+ ' .dm-nm{font-size:12px}',
+ ' .dm-r{font-size:15px}',
+ '}'
+ ].join('');
+ document.head.appendChild(st)})();
+
+/* and it goes away when the match does */
+const _ftDug=(typeof onFT==='function')?onFT:null;
+if(_ftDug)onFT=function(){
+ const r=_ftDug.apply(this,arguments);
+ try{const el=document.getElementById('dugStrip');if(el)el.remove()}catch(e){}
+ return r};
+
+
+/* =====================================================================
+   AND THE PITCH FITS ABOVE IT
+   ---------------------------------------------------------------------
+   sizeCanvas() takes the parent's width and writes the height inline as
+   width × 0.66. That is fine in a column that scrolls and wrong in a
+   screen that does not: on a desktop the match now fills the window, so
+   the pitch has a fixed amount of room and a canvas sized purely from
+   its width overflows it — 468px of pitch in 335px of space, with the
+   bottom third of it simply gone.
+
+   Capping the width in CSS does not help, because the height is inline
+   and inline wins. The canvas has to be told how much room there is, so
+   it is: the width is now the smaller of the space across and the space
+   down, and the aspect ratio survives either way.
+   ===================================================================== */
+const _sizeCanvasFit=sizeCanvas;
+sizeCanvas=function(){
+ const cv=$('#pitchCanvas');
+ if(!cv||!cv.parentElement)return _sizeCanvasFit.apply(this,arguments);
+ try{
+  let w=cv.parentElement.clientWidth;
+  /* Measuring .mbody is circular: it is the flex item the canvas lives
+     in, so sizing the canvas changes the number you just read, and the
+     two chase each other — the first attempt settled 20px overflowed.
+     Everything else in the match screen has a height that does not
+     depend on the pitch, so the room is what is left after them. */
+  const scr=cv.closest('#matchScreen');
+  if(scr&&window.matchMedia&&window.matchMedia('(min-width:1024px)').matches){
+   let used=0;
+   ['.msb','.mtabs','.dugstrip','.mctl','#miniFeed'].forEach(sel=>{
+    const e=scr.querySelector(sel);
+    if(e)used+=e.getBoundingClientRect().height});
+   const avail=window.innerHeight-used-34;
+   if(avail>80)w=Math.min(w,Math.floor(avail/0.66));
+  }
+
+  if(!(w>60))return _sizeCanvasFit.apply(this,arguments);
+  const dpr=Math.min(window.devicePixelRatio||1,2);
+  cv.style.width=w+'px';
+  cv.style.height=Math.round(w*.66)+'px';
+  cv.style.marginLeft='auto';cv.style.marginRight='auto';cv.style.display='block';
+  cv.width=Math.round(w*dpr);cv.height=Math.round(w*.66*dpr);
+  cv._sx=cv.width/105;cv._sy=cv.height/68;
+ }catch(e){return _sizeCanvasFit.apply(this,arguments)}};
+
+/* the strip changes how much room is left, so the pitch is re-measured
+   the moment it appears or disappears */
+const _paintDugResize=paintDugStrip;
+paintDugStrip=function(){
+ const before=!!document.getElementById('dugStrip');
+ const r=_paintDugResize.apply(this,arguments);
+ try{
+  if(before!==!!document.getElementById('dugStrip')){
+   /* twice: once now, and once after the browser has actually laid the
+      strip out, because the first call measures the room the strip has
+      not taken yet */
+   const fit=()=>{try{if(typeof sizeCanvas==='function')sizeCanvas();
+    if(typeof sizeDugCanvas==='function')sizeDugCanvas()}catch(e){}};
+   fit();requestAnimationFrame(fit);
+  }
+ }catch(e){}
+ return r};
+
+/*#w43_dugout.js#*/
+
+
+/*#w43_dugout.js#*//*#w44_pin.js#*/
+
+/* =====================================================================
+   THE DOCK STOPS TRUSTING A CONSTANT
+   ---------------------------------------------------------------------
+   The Continue dock was positioned like this:
+
+       bottom: calc(var(--nav-h) + env(safe-area-inset-bottom) + 6px)
+
+   Every term in that is a guess about somebody else's phone. --nav-h is
+   a hard-coded 62px, but the navigation bar's real height depends on the
+   font that actually loaded, on the label text wrapping, and on the
+   gesture-bar inset the browser decides to report — and env() is only
+   applied where the stylesheet remembers to ask for it. Measured in
+   Chromium the sum comes out right and the button sits eleven pixels
+   above the navigation. On a real Android handset it came out about
+   ninety pixels high, which is a button marooned in the middle of the
+   screen with the squad list still visible underneath it.
+
+   Guessing is the mistake, not the number. The navigation bar is right
+   there in the document and it knows exactly how tall it is, safe-area
+   inset and all. So the dock now measures it and sits four pixels on top
+   of it, and it re-measures whenever anything could have changed: every
+   redraw, every resize, every orientation change, and every movement of
+   the visual viewport — which is what fires when a mobile browser slides
+   its own toolbar in and out.
+
+   The CSS rule stays as the starting position so there is no flash
+   before the first measurement, but from then on the measurement wins.
+   ===================================================================== */
+
+function pinDock(){
+ try{
+  const d=document.getElementById('continueDock');
+  if(!d)return;
+  /* the desktop layout parks the dock in the sidebar, where the bottom
+     navigation does not exist — leave that one alone */
+  if(window.matchMedia&&window.matchMedia('(min-width:1024px)').matches){
+   d.style.bottom='';return}
+  const nav=document.querySelector('.nav');
+  if(!nav){d.style.bottom='';return}
+  const r=nav.getBoundingClientRect();
+  if(!r.height)return;
+  /* how much of the window the navigation occupies from the bottom edge,
+     whatever it is made of */
+  const occupied=Math.max(0,Math.round(window.innerHeight-r.top));
+  const want=(occupied+4)+'px';
+  if(d.style.bottom!==want)d.style.bottom=want;
+ }catch(e){}}
+
+/* after every redraw of the dock, because its contents change height —
+   "Back to the press room" wraps to two lines where "Continue" does not */
+const _dockPin=renderDock;
+renderDock=function(){
+ const r=_dockPin.apply(this,arguments);
+ pinDock();
+ return r};
+
+const _renderPin=render;
+render=function(){
+ const r=_renderPin.apply(this,arguments);
+ pinDock();
+ return r};
+
+/* and whenever the window itself moves under us */
+['resize','orientationchange','load'].forEach(ev=>
+ window.addEventListener(ev,()=>{pinDock();setTimeout(pinDock,120)},{passive:true}));
+if(window.visualViewport){
+ /* a mobile browser sliding its own toolbar away changes the usable
+    height without firing a window resize */
+ window.visualViewport.addEventListener('resize',pinDock,{passive:true});
+ window.visualViewport.addEventListener('scroll',pinDock,{passive:true});
+}
+/* fonts land after first paint and can change the navigation's height */
+try{if(document.fonts&&document.fonts.ready)document.fonts.ready.then(()=>pinDock())}catch(e){}
+setTimeout(pinDock,60);
+setTimeout(pinDock,400);
+
+/*#w44_pin.js#*/
+
+
+/*#w44_pin.js#*//*#w45_country.js#*/
+
+/* =====================================================================
+   MANAGING A COUNTRY AS WELL
+   ---------------------------------------------------------------------
+   The international game was already all here — a hundred and sixty
+   nations, squads picked from every player in the world, qualifying with
+   the confederation places the real thing uses, groups seeded into pots,
+   knockouts with penalties, caps and goals recorded against the players
+   who are also in your club side. All of it ran without you.
+
+   Now you can take one. It is a second job, not a replacement: you keep
+   the club, the club keeps paying you, and the two calendars fit
+   together the way they do in life — your country only plays during the
+   six international breaks, which is precisely when your club does not.
+
+   WHAT THE JOB ACTUALLY IS. It is selection. A national manager does not
+   coach anybody for more than a fortnight a year; what he does is decide
+   which twenty-three go. So that is what you do, and it matters, because
+   nationStrength() is computed from the squad — leave your best striker
+   at home and the country is measurably worse in the tournament the
+   engine then simulates.
+
+   WHO WILL HAVE YOU. Not everybody. A nation's association looks at your
+   reputation and your record, and the strongest countries in the world do
+   not hand the job to somebody who has never won anything. Your own
+   nationality helps, as it does in life.
+
+   AND YOU CAN WALK AWAY. Resigning the international job leaves the club
+   job untouched, which is the whole point of it being a second job.
+   ===================================================================== */
+
+function natJob(){return G.natJob||null}
+function natJobCode(){const j=natJob();return j?j.code:null}
+function isNatBoss(code){return natJobCode()===code}
+
+/* ---------------------------------------------------------------------
+   1. WHICH COUNTRIES WOULD HAVE YOU
+   ---------------------------------------------------------------------
+   Reputation buys you a hearing. A big nation wants a big name; a small
+   one will take anybody who has managed at this level at all.
+   --------------------------------------------------------------------- */
+function mgrStanding(){
+ try{
+  const my=G.clubs[G.my];
+  let s=(my.rep||6000)/110;                          // the club you hold
+  s+=Math.min(28,(G.honours||[]).length*7);          // and what you have won
+  s+=Math.min(10,(G.season-1)*1.6);                  // and how long you have lasted
+  return s}
+ catch(e){return 55}}
+
+function natOpenTo(code){
+ const n=NAT_BY[code];if(!n)return false;
+ if(natJobCode())return false;
+ /* a country already has a manager; it is only open if you are good
+    enough that they would move for you */
+ const need=(n.base-58)*2.6;
+ return mgrStanding()>=need}
+
+function natCandidates(){
+ const out=NATIONS.map(n=>n[0]).filter(natOpenTo)
+  .map(c=>({c,s:nationStrength(c),base:(NAT_BY[c]||{}).base||60}));
+ out.sort((a,b)=>b.base-a.base);
+ return out}
+
+/* ---------------------------------------------------------------------
+   2. TAKING IT, AND LEAVING IT
+   --------------------------------------------------------------------- */
+ACTIONS.natOffers=()=>{
+ if(natJobCode())return toast('You already manage a country.');
+ const list=natCandidates();
+ let h='<h3 style="margin:0 0 4px">Take a national job</h3>'+
+  '<p class="small muted" style="margin:0 0 12px">A second job alongside the club. '+
+  'Your country plays only during international breaks, and you can resign from it at any time '+
+  'without touching your club job.</p>';
+ if(!list.length)h+=emptyBox('🌍','No association would appoint you yet',
+  'Win something, or manage a bigger club, and the calls start coming.');
+ else{
+  h+='<div class="card tight" style="padding:4px 9px">';
+  list.slice(0,26).forEach(x=>{
+   const sq=(nationSquads()[x.c]||[]);
+   const mine=sq.filter(p=>p.club===G.my).length;
+   h+='<div class="spread" style="padding:8px 2px;border-bottom:1px solid var(--chalk)">'+
+    '<div class="row" style="gap:9px;min-width:0"><span style="font-size:19px">'+ccFlag(x.c)+'</span>'+
+    '<div style="min-width:0"><div class="small" style="font-weight:800">'+esc(natName(x.c))+'</div>'+
+    '<div class="xs faint">'+((NAT_BY[x.c]||{}).conf||'')+' · strength '+Math.round(x.s)+
+    (mine?' · <span style="color:var(--gold)">'+mine+' of yours</span>':'')+'</div></div></div>'+
+    '<button class="btn btn-primary btn-xs" data-action="natTake" data-v="'+x.c+'">Accept</button></div>'});
+  h+='</div>'}
+ openModal(h)};
+
+ACTIONS.natTake=el=>{
+ const code=el.dataset.v;
+ if(!NAT_BY[code])return;
+ if(natJobCode())return toast('You already manage a country.');
+ G.natJob={code,since:G.season,sinceDay:G.day,picked:null,record:{p:0,w:0,d:0,l:0},honours:[]};
+ closeModal();
+ try{sfx('cheer')}catch(e){}
+ toast(ccFlag(code)+' You are the '+natName(code)+' manager');
+ mail('board','🌍 Appointed by '+natName(code),
+  'You have accepted the '+esc(natName(code))+' job alongside your work at '+
+  esc(G.clubs[G.my].name)+'.<br><br>Your country plays during the six international breaks. '+
+  'Between now and then, the job is selection — pick the squad, and the squad is the team. '+
+  'You may resign the international post at any time and keep your club.');
+ render()};
+
+ACTIONS.natResign=()=>{
+ const code=natJobCode();if(!code)return;
+ openModal('<h3>Resign as '+esc(natName(code))+' manager?</h3>'+
+  '<p class="small muted" style="margin:8px 0 14px">This ends the international job only. '+
+  'You remain manager of '+esc(G.clubs[G.my].name)+'.</p>'+
+  '<div class="grid2"><button class="btn btn-ghost" data-action="closeModal">Stay on</button>'+
+  '<button class="btn btn-danger" data-action="natResignDo">Resign</button></div>')};
+ACTIONS.natResignDo=()=>{
+ const code=natJobCode();if(!code)return;
+ const rec=(natJob()||{}).record||{p:0,w:0,d:0,l:0};
+ G.natPast=(G.natPast||[]).concat([{code,from:G.natJob.since,to:G.season,record:rec}]);
+ G.natJob=null;
+ closeModal();
+ toast('You have resigned as '+natName(code)+' manager');
+ mail('board','You leave the '+natName(code)+' job',
+  'You have stepped down as '+esc(natName(code))+' manager after '+rec.p+' matches ('+
+  rec.w+'W '+rec.d+'D '+rec.l+'L). Your work at '+esc(G.clubs[G.my].name)+' continues.');
+ render()};
+
+/* ---------------------------------------------------------------------
+   3. SELECTION, WHICH IS THE JOB
+   ---------------------------------------------------------------------
+   nationSquads() picks the best twenty-three eligible players in the
+   world. For the country you manage, it uses yours instead — and because
+   nationStrength() reads the squad, a bad selection is a worse team.
+   --------------------------------------------------------------------- */
+function natPool(code){
+ const out=[];
+ eachPlayer(p=>{if(p.age>=17&&!p.youth&&natOf(p)===code)out.push(p)});
+ (G.freeAgents||[]).forEach(p=>{if(p.age>=17&&natOf(p)===code)out.push(p)});
+ return out.sort((a,b)=>b.ovr-a.ovr)}
+
+function natPicked(){
+ const j=natJob();if(!j)return null;
+ if(!j.picked)return null;
+ const byId={};natPool(j.code).forEach(p=>byId[p.id]=p);
+ const sq=j.picked.map(id=>byId[id]).filter(Boolean);
+ return sq.length?sq:null}
+
+const _nationSquadsUser=nationSquads;
+nationSquads=function(){
+ const by=_nationSquadsUser.apply(this,arguments);
+ try{
+  const j=natJob();
+  if(j){const mine=natPicked();if(mine)by[j.code]=mine}
+ }catch(e){}
+ return by};
+
+ACTIONS.natSquad=()=>{
+ const j=natJob();if(!j)return;
+ const pool=natPool(j.code);
+ const picked=new Set((j.picked||nationSquads()[j.code]||[]).map(p=>p.id||p));
+ let h='<h3 style="margin:0 0 3px">'+ccFlag(j.code)+' '+esc(natName(j.code))+' squad</h3>'+
+  '<p class="small muted" style="margin:0 0 10px">Pick up to 23. The squad is the team — '+
+  'strength is computed from who you take, so leaving somebody at home costs you.</p>'+
+  '<div class="row" style="gap:7px;margin-bottom:10px">'+
+  '<button class="btn btn-ghost btn-sm" style="flex:1" data-action="natAuto">⚡ Best available</button>'+
+  '<button class="btn btn-ghost btn-sm" style="flex:1" data-action="natClear">Clear</button></div>'+
+  '<div class="xs faint" style="margin-bottom:8px" id="natCount">'+picked.size+' of 23 selected</div>'+
+  '<div class="plist">';
+ pool.slice(0,70).forEach(p=>{
+  const on=picked.has(p.id);
+  const club=G.clubs[p.club];
+  h+=pRow(p,{
+   meta:(club?esc(club.short||club.name):'Free agent')+' · '+p.age+
+    ((p.caps||0)?' · '+p.caps+' caps':''),
+   rail:'<span class="num" style="font-weight:800;color:'+(on?'var(--green)':'var(--ink-faint)')+'">'+
+    p.ovr+'</span>',
+   sub:'',
+   btns:'<button class="btn '+(on?'btn-gold':'btn-ghost')+' btn-xs" data-action="natToggle" data-id="'+
+    p.id+'">'+(on?'In':'Call up')+'</button>'})});
+ h+='</div>';
+ openModal(h)};
+
+ACTIONS.natToggle=el=>{
+ const j=natJob();if(!j)return;
+ const id=+el.dataset.id;
+ let cur=(j.picked||(nationSquads()[j.code]||[]).map(p=>p.id)).slice();
+ const ix=cur.indexOf(id);
+ if(ix>=0)cur.splice(ix,1);
+ else{if(cur.length>=23)return toast('Twenty-three is the limit.');cur.push(id)}
+ j.picked=cur;
+ NSQ_CACHE=null;NSQ_KEY='';
+ try{sfx('tap')}catch(e){}
+ ACTIONS.natSquad()};
+ACTIONS.natAuto=()=>{
+ const j=natJob();if(!j)return;
+ j.picked=natPool(j.code).slice(0,23).map(p=>p.id);
+ NSQ_CACHE=null;NSQ_KEY='';
+ toast('Best available selected');ACTIONS.natSquad()};
+ACTIONS.natClear=()=>{
+ const j=natJob();if(!j)return;
+ j.picked=[];NSQ_CACHE=null;NSQ_KEY='';
+ ACTIONS.natSquad()};
+
+/* ---------------------------------------------------------------------
+   4. RESULTS, AND BEING JUDGED ON THEM
+   --------------------------------------------------------------------- */
+const _tourneyUser=(typeof runTournament==='function')?runTournament:null;
+if(_tourneyUser)runTournament=function(t,year){
+ const res=_tourneyUser.apply(this,arguments);
+ try{
+  const j=natJob();
+  if(j&&res){
+   const won=res.winner===j.code;
+   const runner=res.runner===j.code;
+   if(won){
+    j.honours=(j.honours||[]).concat([{name:t.name,year}]);
+    G.honours=(G.honours||[]).concat([t.name+' '+year]);
+    mail('board','🏆 '+natName(j.code)+' win the '+t.name+'!',
+     'You have won the <b>'+esc(t.name)+'</b> with <b>'+esc(natName(j.code))+'</b>.'+
+     '<br><br>A national team manager is judged on exactly one thing, and you have just done it.');
+    try{sfx('cheer')}catch(e){}
+   }else if(runner){
+    mail('board','Runners-up at the '+t.name,
+     '<b>'+esc(natName(j.code))+'</b> reached the final of the '+esc(t.name)+' and lost it. '+
+     'Closer than most ever get, and it will not feel like it.');
+   }else{
+    const went=(res.teams||[]).indexOf&&(res.teams||[]).indexOf(j.code)>=0;
+    mail('news',natName(j.code)+' at the '+t.name,
+     went?'<b>'+esc(natName(j.code))+'</b> went out of the '+esc(t.name)+'. '+
+      'The inquest starts tomorrow.'
+     :'<b>'+esc(natName(j.code))+'</b> did not qualify for the '+esc(t.name)+
+      '. That is the question you will be asked all season.');
+   }
+  }
+ }catch(e){}
+ return res};
+
+/* ---------------------------------------------------------------------
+   5. THE SCREEN
+   --------------------------------------------------------------------- */
+function vNatJob(){
+ const j=natJob();
+ if(!j){
+  const n=natCandidates().length;
+  return '<div class="sec"><div class="t">🌍 International management</div><div class="ln"></div>'+
+   '<div class="sub">'+(n?n+' open':'none open')+'</div></div>'+
+   '<div class="card tight" style="padding:12px">'+
+   '<div class="xs faint" style="line-height:1.7;margin-bottom:10px">You can manage a country '+
+   'alongside your club. Your nation plays only during international breaks, so the two never '+
+   'clash, and you can resign the international job at any time without affecting your club.</div>'+
+   '<button class="btn btn-primary btn-block" data-action="natOffers">'+
+   (n?'🌍 See which countries would appoint you':'🌍 Check your standing')+'</button></div>'}
+ const code=j.code;
+ const sq=nationSquads()[code]||[];
+ const mine=sq.filter(p=>p.club===G.my).length;
+ const rec=j.record||{p:0,w:0,d:0,l:0};
+ const rank=NATIONS.map(n=>n[0]).map(c=>({c,s:nationStrength(c)}))
+  .sort((a,b)=>b.s-a.s).findIndex(x=>x.c===code)+1;
+ let h='<div class="sec"><div class="t">'+ccFlag(code)+' '+esc(natName(code))+'</div><div class="ln"></div>'+
+  '<div class="sub">your country</div></div>'+
+  '<div class="grid3" style="margin-bottom:10px">'+
+  '<div class="kpi"><div class="v num" style="font-size:15px">'+(rank||'—')+'</div><div class="l">World rank</div></div>'+
+  '<div class="kpi"><div class="v num" style="font-size:15px">'+Math.round(nationStrength(code))+'</div><div class="l">Strength</div></div>'+
+  '<div class="kpi"><div class="v num" style="font-size:15px">'+sq.length+'</div><div class="l">In the squad</div></div></div>';
+ if(j.honours&&j.honours.length)h+='<div class="card tight" style="padding:9px 11px;margin-bottom:10px">'+
+  '<div class="xs" style="color:var(--gold);font-weight:800">🏆 '+
+  j.honours.map(x=>esc(x.name)+' '+x.year).join(' · ')+'</div></div>';
+ h+='<div class="card tight" style="padding:10px 11px">'+
+  '<div class="xs faint" style="line-height:1.7;margin-bottom:10px">'+
+  'Appointed in season '+j.since+'. '+(mine?'<b style="color:var(--gold)">'+mine+
+  '</b> of your club players are in the squad. ':'')+
+  'The job is selection: strength is computed from who you take.</div>'+
+  '<div class="grid2">'+
+  '<button class="btn btn-primary btn-sm" data-action="natSquad">👥 Pick the squad</button>'+
+  '<button class="btn btn-ghost btn-sm" data-action="natResign">Resign the job</button></div></div>';
+ /* who is actually in it */
+ if(sq.length){
+  h+='<div class="chip-lbl">Current selection</div><div class="card tight" style="padding:4px 9px">';
+  sq.slice(0,23).forEach(p=>{
+   const club=G.clubs[p.club];
+   h+='<div class="spread" data-action="profile" data-id="'+p.id+'" style="padding:6px 2px;border-bottom:1px solid var(--chalk)">'+
+    '<div class="row" style="gap:8px;min-width:0">'+
+    '<span class="xs faint" style="min-width:26px">'+esc(p.pos)+'</span>'+
+    '<span class="small" style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+
+    esc(p.name)+'</span>'+(p.club===G.my?'<span class="xs" style="color:var(--gold)">yours</span>':'')+'</div>'+
+    '<div class="row" style="gap:9px"><span class="xs faint">'+esc(club?(club.short||''):'FA')+'</span>'+
+    '<b class="num small">'+p.ovr+'</b></div></div>'});
+  h+='</div>'}
+ return h}
+
+const _vIntlNat=vIntl;
+vIntl=function(){
+ let head='';
+ try{head=vNatJob()}catch(e){head=''}
+ return head+_vIntlNat.apply(this,arguments)};
+
+/* an offer arrives on its own once you are big enough */
+const _dtcNat=dailyTickCore;
+dailyTickCore=function(){
+ _dtcNat.apply(this,arguments);
+ try{
+  if(natJobCode()||G.natOffered)return;
+  if(G.day%37!==11)return;
+  const list=natCandidates();
+  if(!list.length)return;
+  const pick=list[Math.floor(Math.random()*Math.min(6,list.length))];
+  if(!pick)return;
+  G.natOffered=true;
+  mail('board','🌍 '+natName(pick.c)+' would like to speak to you',
+   'The '+esc(natName(pick.c))+' football association has been in touch. They would like you to '+
+   'take charge of the national team <b>alongside</b> your job at '+esc(G.clubs[G.my].name)+'.'+
+   '<br><br>It is a second job, not a move. Your country plays during international breaks only, '+
+   'and you can walk away from it whenever you like.',
+   [{lbl:'Accept the '+natName(pick.c)+' job',act:'natTake',arg:pick.c},
+    {lbl:'Look at all the offers',act:'natOffers',ghost:1}]);
+ }catch(e){}};
+
+/*#w45_country.js#*/
+
 showStart();
 </script>
 </body>
