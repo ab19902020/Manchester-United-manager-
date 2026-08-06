@@ -27940,6 +27940,285 @@ openModal=function(html){
  return r};
 
 
+
+/*#w50_speedvalue.js#*//*#w51_audiopack.js#*/
+
+/* =====================================================================
+   REAL AUDIO, IF THERE IS ANY — SYNTHESIS IF NOT
+   ---------------------------------------------------------------------
+   Everything this game has ever made a noise with has been synthesised
+   on the fly: filtered noise for the crowd, oscillators for the whistle,
+   grains for the chatter. That is why it is one file you can download
+   and open with no internet and no folder of assets, and it is also why
+   the crowd sounds like filtered noise, because it is.
+
+   Recorded audio would be better. So the game now looks for it.
+
+   On the first sound, it tries to load an audio pack from ./audio/
+   next to the HTML file. Anything it finds replaces the synthesised
+   version; anything missing falls back to synthesis exactly as before.
+   A player who downloads the single file still gets a complete game.
+   A player who takes the folder as well gets a real stadium.
+
+   THE MANIFEST is below and is the whole contract — drop a file with the
+   right name into ./audio/ and it is used. The crowd is four separate
+   beds rather than one, because a crowd is not one sound: the game
+   crossfades between them as the match turns, so a nervous ground and a
+   ground that has just seen a goal are different recordings, not the
+   same recording louder.
+
+   Seamless loops matter more than length. Thirty seconds that loops
+   without a click beats three minutes with a seam in it.
+   ===================================================================== */
+
+const AUDIO_FILES={
+ /* ---- the crowd, as four beds the game crossfades between ---- */
+ crowd_base:   {loop:true, gain:.55, note:'general murmur, nothing happening'},
+ crowd_tension:{loop:true, gain:.55, note:'edgy, expectant — a corner, a late 1-0'},
+ crowd_roar:   {loop:true, gain:.70, note:'sustained roar for a spell of pressure'},
+ crowd_away:   {loop:true, gain:.45, note:'the away end, used when you are the visitors'},
+ /* ---- moments ---- */
+ goal_home:    {loop:false,gain:.95, note:'the eruption — 4 to 6 seconds'},
+ goal_away:    {loop:false,gain:.70, note:'silence and a small away pocket'},
+ near_miss:    {loop:false,gain:.80, note:'the ooooh'},
+ whistle_start:{loop:false,gain:.70},
+ whistle_half: {loop:false,gain:.70},
+ whistle_full: {loop:false,gain:.75},
+ whistle_foul: {loop:false,gain:.60},
+ kick:         {loop:false,gain:.55, note:'boot on ball'},
+ post:         {loop:false,gain:.80, note:'off the woodwork'},
+ /* ---- the ground itself ---- */
+ tannoy_goal:  {loop:false,gain:.70, note:'PA announcing the scorer'},
+ tannoy_teams: {loop:false,gain:.60, note:'PA reading the teams out'},
+ anthem:       {loop:false,gain:.55, note:'walk-out music'},
+ /* ---- menus ---- */
+ theme:        {loop:true, gain:.35, note:'title music'},
+ sting_win:    {loop:false,gain:.60},
+ sting_lose:   {loop:false,gain:.55}
+};
+
+const PACK={base:'audio/',buf:{},tried:false,found:0,missing:[],loading:false};
+try{const b=localStorage.getItem('rdmAudioBase');if(b)PACK.base=b}catch(e){}
+
+function packUrl(name){return PACK.base.replace(/\/?$/,'/')+name+'.mp3'}
+
+/* LOADED WITH MEDIA ELEMENTS, NOT fetch(). The first attempt used
+   fetch + decodeAudioData, which is the tidier API and cannot work here:
+   fetch refuses the file:// scheme, so a player who had downloaded the
+   single HTML and put a folder beside it — the exact case this feature
+   exists for — got nineteen console errors and no audio. An <audio>
+   element has no such restriction, plays from disk, and streams rather
+   than holding every bed in memory. */
+function packOne(n,onOk,onBad){
+ let el;
+ try{el=new Audio()}catch(e){return onBad()}
+ /* no crossOrigin: setting it forces a CORS check that file:// can never
+    satisfy, which defeats the whole point of loading from disk */
+ el.preload='auto';el.loop=!!AUDIO_FILES[n].loop;
+ let settled=false;
+ const ok=()=>{if(settled)return;settled=true;PACK.buf[n]=el;PACK.found++;onOk()};
+ const bad=()=>{if(settled)return;settled=true;PACK.missing.push(n);onBad()};
+ el.addEventListener('canplaythrough',ok,{once:true});
+ el.addEventListener('loadeddata',ok,{once:true});
+ el.addEventListener('error',bad,{once:true});
+ setTimeout(bad,6000);
+ try{el.src=packUrl(n);el.load()}catch(e){bad()}}
+
+/* PROBE BEFORE LOADING. Asking for all nineteen files when there is no
+   folder produced nineteen console errors on every run — harmless, but a
+   noisy console is how real problems get missed. Two probes decide it:
+   no crowd bed and no goal means there is no pack, and the game stays
+   entirely synthesised without another request. */
+function packLoad(){
+ if(PACK.tried||PACK.loading)return;
+ PACK.loading=true;
+ packOne('crowd_base',()=>packRest(),()=>{
+  packOne('goal_home',()=>packRest(),()=>{PACK.tried=true;PACK.loading=false})});
+}
+function packRest(){
+ const names=Object.keys(AUDIO_FILES);
+ const rest=names.filter(n=>!PACK.buf[n]&&PACK.missing.indexOf(n)<0);
+ let left=rest.length||1;
+ const done=()=>{if(--left<=0){PACK.tried=true;PACK.loading=false;
+  if(PACK.found)toast('🔊 Audio pack loaded ('+PACK.found+' of '+names.length+')')}};
+ if(!rest.length)return done();
+ rest.forEach(n=>packOne(n,done,done));
+}
+function packHas(n){return !!PACK.buf[n]}
+
+/* play one; loops keep their element, one-shots get a clone so the same
+   sound can overlap itself */
+function packPlay(n,opt){
+ opt=opt||{};
+ const base=PACK.buf[n];if(!base)return null;
+ if(!sfxOn())return null;
+ try{
+  const want=(opt.gain!=null?opt.gain:((AUDIO_FILES[n]&&AUDIO_FILES[n].gain)||.6))*
+             ((sfxCfg().vol==null?.7:sfxCfg().vol)/.7);
+  const loop=!!(opt.loop!=null?opt.loop:AUDIO_FILES[n]&&AUDIO_FILES[n].loop);
+  const el=loop?base:base.cloneNode(true);
+  el.loop=loop;
+  el.volume=Math.max(0,Math.min(1,loop?0:want));
+  if(opt.rate)el.playbackRate=opt.rate;
+  el.currentTime=0;
+  const pr=el.play();if(pr&&pr.catch)pr.catch(()=>{});
+  if(loop){
+   /* fade in by hand — a media element has no gain node */
+   let v=0;const step=()=>{v=Math.min(want,v+want/14);el.volume=v;
+    if(v<want&&el.loop)setTimeout(step,45)};step();
+  }
+  return {el,target:want,
+   fade:(to,ms)=>{const from=el.volume,t0=Date.now();
+    const st=()=>{const k=Math.min(1,(Date.now()-t0)/(ms||500));
+     el.volume=Math.max(0,Math.min(1,from+(to-from)*k));
+     if(k<1)setTimeout(st,45);else if(to<=0){try{el.pause()}catch(e){}}};st()}};
+ }
+ catch(e){return null}}
+
+/* =====================================================================
+   THE CROWD, WHEN THERE ARE RECORDINGS FOR IT
+   ---------------------------------------------------------------------
+   Four beds running at once with only one of them audible, crossfaded by
+   how the match is going. That is how a real broadcast mix works and it
+   is the reason a recorded crowd beats a synthesised one: the difference
+   between a nervous ground and a roaring one is timbre, not volume.
+   ===================================================================== */
+const CBED={on:false,layers:null,raf:0};
+function packCrowdStart(){
+ if(CBED.on)return false;
+ if(!packHas('crowd_base'))return false;
+ if(!sfxOn()||!sfxCfg().crowd)return false;
+ const L={};
+ ['crowd_base','crowd_tension','crowd_roar','crowd_away'].forEach(n=>{
+  if(packHas(n))L[n]=packPlay(n,{loop:true,gain:0,fade:.6})});
+ if(!L.crowd_base)return false;
+ CBED.on=true;CBED.layers=L;
+ const mix=()=>{
+  if(!CBED.on)return;
+  try{
+   const ex=Math.max(0,Math.min(1,A2.excite||0));
+   const away=(MU.fix&&MU.fix.a===G.my)?1:0;
+   const set=(n,v)=>{const l=L[n];if(l&&l.fade)l.fade(
+     Math.max(0,Math.min(1,v*((AUDIO_FILES[n]&&AUDIO_FILES[n].gain)||.6))),420)};
+   set('crowd_base',Math.max(0,1-ex*1.3));
+   set('crowd_tension',ex<.6?ex*1.5:Math.max(0,(1-ex)*2.2));
+   set('crowd_roar',Math.max(0,(ex-.45)*1.9));
+   set('crowd_away',away?.5+ex*.3:0);
+  }catch(e){}
+  CBED.raf=setTimeout(mix,420)};
+ mix();
+ return true}
+function packCrowdStop(){
+ if(!CBED.on)return false;
+ CBED.on=false;clearTimeout(CBED.raf);
+ const L=CBED.layers||{};
+ try{Object.keys(L).forEach(n=>{const l=L[n];if(!l)return;
+  if(l.fade)l.fade(0,400);
+  setTimeout(()=>{try{l.el.pause();l.el.loop=false}catch(e){}},700)})}catch(e){}
+ CBED.layers=null;
+ return true}
+
+/* the recorded bed takes precedence; synthesis still runs if it is absent */
+const _crowdStartPack=crowdStart;
+crowdStart=function(){
+ packLoad();
+ if(packCrowdStart())return;
+ return _crowdStartPack.apply(this,arguments)};
+const _crowdStopPack=crowdStop;
+crowdStop=function(){
+ packCrowdStop();
+ return _crowdStopPack.apply(this,arguments)};
+
+/* =====================================================================
+   AND EVERY OTHER NOISE, THE SAME WAY ROUND
+   ---------------------------------------------------------------------
+   sfx() is the one door every sound in the game goes through, so the
+   pack is checked there: a recording if there is one, the oscillator if
+   there is not. The mapping is deliberately loose — several of the
+   game's cues share a recording, because a crowd does not have thirty
+   distinct reactions.
+   ===================================================================== */
+const SFX_TO_PACK={
+ whistle:'whistle_start',kickoff:'whistle_start',halftime:'whistle_half',
+ fulltime:'whistle_full',foul:'whistle_foul',card:'whistle_foul',
+ goal:'goal_home',cheer:'goal_home',roar:'goal_home',
+ miss:'near_miss',ooh:'near_miss',post:'post',woodwork:'post',
+ kick:'kick',shot:'kick',pass:'kick',
+ pa:'tannoy_goal',tannoy:'tannoy_goal',teams:'tannoy_teams',
+ win:'sting_win',lose:'sting_lose'};
+const _sfxPack=sfx;
+sfx=function(name){
+ try{
+  if(!PACK.tried&&!PACK.loading)packLoad();
+  const key=SFX_TO_PACK[name];
+  if(key&&packHas(key)){
+   /* a goal against you is a different recording, if one was supplied */
+   let use=key;
+   if(key==='goal_home'&&MU&&MU._lastGoalAway&&packHas('goal_away'))use='goal_away';
+   if(packPlay(use,{loop:false}))return;
+  }
+ }catch(e){}
+ return _sfxPack.apply(this,arguments)};
+
+/* remember whose goal it was, so the right recording can be chosen */
+const _goalSidePack=MatchSim.prototype.goal;
+MatchSim.prototype.goal=function(A,D,scorer,creator){
+ try{MU._lastGoalAway=(A&&A.ci!=null&&A.ci!==G.my)}catch(e){}
+ return _goalSidePack.apply(this,arguments)};
+
+/* =====================================================================
+   TELLING YOU WHAT IT FOUND
+   ---------------------------------------------------------------------
+   An audio pack that silently does not load is worse than none, so
+   Settings lists exactly which files were found and which were not, and
+   lets the folder be pointed somewhere else.
+   ===================================================================== */
+ACTIONS.audioPack=()=>{
+ packLoad();
+ const names=Object.keys(AUDIO_FILES);
+ const rows=names.map(n=>{
+  const ok=packHas(n);
+  const note=(AUDIO_FILES[n].note||'')+(AUDIO_FILES[n].loop?' · must loop seamlessly':'');
+  return '<div class="spread" style="padding:6px 2px;border-bottom:1px solid var(--chalk)">'+
+   '<div style="min-width:0"><div class="small" style="font-weight:700">'+
+   (ok?'✅ ':'⬜ ')+esc(n)+'.mp3</div>'+
+   (note?'<div class="xs faint">'+esc(note)+'</div>':'')+'</div></div>'}).join('');
+ openModal('<h3>🔊 Audio pack</h3>'+
+  '<p class="small muted" style="margin:4px 0 10px">The game synthesises every sound it makes, '+
+  'which is why it works as one downloadable file. Put MP3s in a folder called '+
+  '<b>'+esc(PACK.base)+'</b> next to the HTML and they are used instead — anything missing '+
+  'falls back to synthesis, so a partial pack is fine.</p>'+
+  '<div class="card tight" style="padding:10px 11px;margin-bottom:10px">'+
+  '<div class="spread"><span class="small">Found</span>'+
+  '<b class="num">'+PACK.found+' of '+names.length+'</b></div></div>'+
+  '<div class="field"><label>Folder</label><input type="text" id="packBase" value="'+
+  esc(PACK.base)+'" placeholder="audio/"></div>'+
+  '<button class="btn btn-ghost btn-block" style="margin-bottom:10px" data-action="audioPackSet">'+
+  'Use this folder and reload the pack</button>'+
+  '<div class="card tight" style="padding:4px 10px;max-height:300px;overflow:auto">'+rows+'</div>')};
+ACTIONS.audioPackSet=()=>{
+ const el=document.getElementById('packBase');
+ if(!el)return;
+ PACK.base=(el.value||'audio/').trim();
+ try{localStorage.setItem('rdmAudioBase',PACK.base)}catch(e){}
+ PACK.buf={};PACK.found=0;PACK.missing=[];PACK.tried=false;PACK.loading=false;
+ packLoad();
+ toast('Reloading from '+PACK.base);
+ setTimeout(()=>ACTIONS.audioPack(),900)};
+
+/* a door to it in the sound settings */
+const _vSavePack=vSave;
+vSave=function(){
+ const h='<div class="sec" style="margin-top:0"><div class="t">🔊 Audio pack</div><div class="ln"></div>'+
+  '<div class="sub">'+(PACK.found?PACK.found+' files':'synthesised')+'</div></div>'+
+  '<div class="card"><div class="xs faint" style="line-height:1.7;margin-bottom:9px">'+
+  'Every sound is generated in the browser so the game stays a single file. '+
+  'Supply real recordings in a folder and they take over.</div>'+
+  '<button class="btn btn-ghost btn-block" data-action="audioPack">Manage the audio pack</button></div>';
+ return _vSavePack.apply(this,arguments)+h};
+
+/*#w51_audiopack.js#*/
+
 showStart();
 </script>
 </body>
