@@ -26093,16 +26093,43 @@ ACTIONS.dugPick=el=>{
  rows.forEach(p=>{
   const eff=Math.round(calcEff(p,pl.slot));
   const oop=(typeof posPenalty==='function')&&posPenalty(p,pl.slot)>0;
-  h+=pRow(p,{
-   meta:p.age+' · '+esc(p.pos)+' · cond '+Math.round(p.cond)+'%',
-   rail:'<span class="num" style="font-weight:800;color:'+
-    (eff>=80?'var(--green)':eff>=72?'var(--ink)':'var(--ink-faint)')+'">'+eff+' here</span>'+
-    (oop?'<span class="xs" style="color:var(--amber);font-weight:800">⚠ natural '+esc(p.pos)+'</span>':''),
-   sub:'',
-   btns:'<button class="btn btn-primary btn-xs" data-action="subDo" data-id="'+p.id+
-    '" data-arg="'+pl.p.id+'">On</button>'})});
+  /* Built by hand rather than through pRow(), which stamps
+     data-action="profile" on the whole row. In a substitution sheet that
+     is exactly wrong: tapping the man you want to bring on opened his
+     career stats and the only thing that actually made the change was a
+     button the width of a thumbnail. The row IS the action here, and the
+     card moves to a deliberate second target. */
+  h+='<div class="prow" data-action="dugSub" data-id="'+p.id+'" data-arg="'+pl.p.id+'">'+
+   pRowInner(p,{
+    meta:p.age+' · '+esc(p.pos)+' · cond '+Math.round(p.cond)+'%',
+    rail:'<span class="num" style="font-weight:800;color:'+
+     (eff>=80?'var(--green)':eff>=72?'var(--ink)':'var(--ink-faint)')+'">'+eff+' here</span>'+
+     (oop?'<span class="xs" style="color:var(--amber);font-weight:800">⚠ natural '+esc(p.pos)+'</span>':''),
+    sub:'',
+    btns:'<button class="btn btn-ghost btn-xs" data-action="subInfo" data-id="'+p.id+
+     '" title="Player card">ℹ︎</button>'})+'</div>'});
  h+='</div>';
  openModal(h)};
+
+/* ACTIONS.subDo does not make a substitution — it QUEUES one into a
+   pending list and reopens the game's own sub sheet, where a separate
+   Confirm applies it. That is fine for the full sheet and wrong for a
+   quick sub off the touchline strip, where tapping the man you want IS
+   the instruction. This queues and confirms in one go. */
+ACTIONS.dugSub=el=>{
+ try{
+  const s=(typeof mySide==='function')?mySide():null;
+  if(!s)return;
+  if(s.subs<=0)return toast('No substitutions left.');
+  ACTIONS.subDo(el);
+  ACTIONS.subConfirm();
+ }catch(e){}};
+
+/* the card, without making the substitution on the way */
+ACTIONS.subInfo=(el,ev)=>{
+ try{if(ev&&ev.stopPropagation)ev.stopPropagation()}catch(e){}
+ const id=el.dataset.id;
+ setTimeout(()=>{try{openProfile(+id)}catch(e){}},0)};
 
 ACTIONS.dugMent=el=>{
  const s=dugSide();if(!s)return;
