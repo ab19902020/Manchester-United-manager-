@@ -28219,6 +28219,228 @@ vSave=function(){
 
 /*#w51_audiopack.js#*/
 
+
+/*#w51_audiopack.js#*//*#w52_unblock.js#*/
+
+/* =====================================================================
+   THE JOB OFFER THAT FROZE THE GAME
+   ---------------------------------------------------------------------
+   "Continue does nothing after a match." "I can't accept the
+   international job, it gets stuck." "I chose Portugal over Brazil and
+   it still tells me I have to take the Brazil job."
+
+   One bug. The international offer was posted as
+
+       mail('board', '... would like to speak to you', body, [actions])
+
+   and `board` is one of BLOCKING_TYPES. A blocking mail carrying actions
+   halts the season until it is cleared — and nothing cleared this one.
+   Accepting closed the modal without touching the mail. Browsing the
+   other offers did not touch it. There was no way to decline at all. So
+   from the moment an association got in touch, every Continue was
+   intercepted by the decision handler, for the rest of the save.
+
+   That is also why full time appeared to do nothing: the match ended
+   correctly and the day advanced, but the dock had become the decision
+   button, so the next press went nowhere.
+
+   I made this exact mistake with the pre-season tour offer, fixed it, and
+   wrote a comment about it. Then repeated it here.
+
+   THREE CORRECTIONS.
+
+   A job offer is news, not a decision. It is an `info` mail now and can
+   never block a season.
+
+   You can say no. There is a Decline, and accepting one offer clears
+   every other outstanding one — which is what should have happened when
+   Portugal was chosen over Brazil.
+
+   AND A NET UNDER ALL OF IT. Any blocking mail older than a fortnight is
+   released automatically, with a note. A bug of this shape must not be
+   able to end a career again, whichever mail it comes from next time.
+   ===================================================================== */
+
+/* ---------------------------------------------------------------------
+   1. THE OFFER ITSELF
+   --------------------------------------------------------------------- */
+function natOfferMails(){
+ try{return (G.inbox||[]).filter(m=>m&&m._natOffer)}catch(e){return []}}
+function natClearOffers(){
+ try{natOfferMails().forEach(m=>{m.actions=null;m.must=false;m.read=true})}catch(e){}}
+
+/* accepting one ends the whole conversation */
+const _natTakeClear=ACTIONS.natTake;
+ACTIONS.natTake=function(el){
+ const r=_natTakeClear.apply(this,arguments);
+ natClearOffers();
+ try{if(typeof render==='function')render()}catch(e){}
+ return r};
+
+ACTIONS.natDecline=el=>{
+ const code=el&&el.dataset&&el.dataset.v;
+ natClearOffers();
+ G.natOffered=true;
+ try{sfx('tap')}catch(e){}
+ toast(code?'Turned down '+natName(code):'Offer declined');
+ mail('info','You turn down the '+(code?natName(code):'international')+' job',
+  'You have told them no for now. Associations have long memories and short ones in equal measure — '+
+  'another will be in touch if your record keeps improving.');
+ if(typeof render==='function')render()};
+
+/* browsing the list should not leave the original offer hanging either */
+const _natOffersClear=ACTIONS.natOffers;
+ACTIONS.natOffers=function(){
+ natClearOffers();
+ return _natOffersClear.apply(this,arguments)};
+
+/* ---------------------------------------------------------------------
+   2. POSTING IT AS NEWS, WITH A WAY OUT
+   --------------------------------------------------------------------- */
+/* Scan the inbox rather than trying to catch the mail as it is posted.
+   The first attempt diffed inbox length before and after the tick, which
+   missed it — mail() does not always append at the end, and the offer can
+   arrive from more than one place. A scan is order-independent and, more
+   importantly, repairs a save that already has one stuck in it. */
+function natFixOffers(){
+ try{
+  (G.inbox||[]).forEach(m=>{
+   if(!m||!m.actions||!m.actions.length)return;
+   const acts=m.actions.map(a=>a&&a.act);
+   if(acts.indexOf('natTake')<0)return;
+   m._natOffer=true;
+   m.type='info';                 /* news, never a decision */
+   m.must=false;
+   if(acts.indexOf('natDecline')>=0)return;
+   const code=(m.actions.find(a=>a&&a.act==='natTake')||{}).arg||null;
+   m.actions=[{lbl:'Accept'+(code?' the '+natName(code)+' job':''),act:'natTake',arg:code},
+              {lbl:'See every offer',act:'natOffers',ghost:1},
+              {lbl:'Decline',act:'natDecline',arg:code,ghost:1}];
+  });
+ }catch(e){}}
+
+const _dtcOffer=dailyTickCore;
+dailyTickCore=function(){
+ const r=_dtcOffer.apply(this,arguments);
+ natFixOffers();
+ return r};
+/* and on every redraw, so a save loaded with one already stuck is repaired
+   the moment it is opened */
+const _renderNatFix=render;
+render=function(){natFixOffers();return _renderNatFix.apply(this,arguments)};
+
+/* ---------------------------------------------------------------------
+   3. THE NET
+   ---------------------------------------------------------------------
+   Whatever posts it, a blocking decision that has sat unresolved for two
+   weeks is a bug, not a decision. It is released rather than allowed to
+   end the save.
+   --------------------------------------------------------------------- */
+const _dtcNet=dailyTickCore;
+dailyTickCore=function(){
+ const r=_dtcNet.apply(this,arguments);
+ try{
+  if(typeof blockingMails!=='function')return r;
+  blockingMails().forEach(m=>{
+   if(m._bornDay==null)m._bornDay=G.day;
+   if(G.day-m._bornDay>14){
+    m.actions=null;m.must=false;m.read=true;
+    mail('info','Expired: '+String(m.title||'a decision'),
+     'That matter went unanswered long enough that it resolved itself. '+
+     'The game will not hold up a season waiting on it.');
+   }});
+ }catch(e){}
+ return r};
+
+/* and a manual release, on the decision dock, for anything already stuck
+   in a save made before this fix */
+ACTIONS.decisionClear=()=>{
+ try{
+  const n=blockingMails().length;
+  blockingMails().forEach(m=>{m.actions=null;m.must=false;m.read=true});
+  toast(n?'Cleared '+n+' stuck decision'+(n===1?'':'s'):'Nothing stuck');
+  if(typeof render==='function')render();
+ }catch(e){}};
+
+const _dockUnstick=renderDock;
+renderDock=function(){
+ const r=_dockUnstick.apply(this,arguments);
+ try{
+  const d=$('#continueDock');
+  if(!d)return r;
+  const btn=d.querySelector('[data-action="gotoDecision"]');
+  if(!btn)return r;
+  /* an offer that cannot be answered is the thing this fixes; give it an
+     unmistakable way out on any save that already has one */
+  if(d.querySelector('[data-action="decisionClear"]'))return r;
+  d.insertAdjacentHTML('beforeend',
+   '<button class="btn btn-ghost btn-sm" style="pointer-events:auto;margin-left:8px" '+
+   'data-action="decisionClear" title="Release a decision that will not clear">✕</button>');
+ }catch(e){}
+ return r};
+
+/* =====================================================================
+   4. THE CHAMPIONS SHOULD LOOK LIKE CHAMPIONS
+   ---------------------------------------------------------------------
+   Arsenal won the league in this game's fiction and were rated below
+   sides that finished behind them. Reputation drives the board's
+   expectations, the transfer market's willingness and the engine's
+   estimate of a side, so a champion carrying a mid-table reputation is
+   wrong in every one of those places at once.
+   ===================================================================== */
+(function championRep(){
+ const REP={'Arsenal':9550,'Liverpool':9450,'Manchester City':9400,'Manchester United':9180,
+  'Chelsea':9050,'Tottenham Hotspur':8800,'Newcastle United':8700,'Aston Villa':8500,
+  'Brighton & Hove Albion':8150,'Nottingham Forest':7950,'Crystal Palace':7900,
+  'AFC Bournemouth':7850,'Brentford':7750,'Fulham':7750,'Everton':7600,
+  'West Ham United':7550,'Wolverhampton Wanderers':7350,'Leeds United':7250,
+  'Burnley':7050,'Sunderland':7050};
+ const apply=()=>{try{
+  (G.clubs||[]).forEach(c=>{const r=REP[c.name];if(r)c.rep=Math.max(c.rep||0,r)});
+ }catch(e){}};
+ const _ngRep=newGame;newGame=function(){const r=_ngRep.apply(this,arguments);apply();return r};
+ const _lsRep=loadSlot;loadSlot=function(){const ok=_lsRep.apply(this,arguments);if(ok)apply();return ok};
+})();
+
+/* =====================================================================
+   5. THE TACTICS SCREEN SHOULD SHOW YOU A FIT PLAYER FROM AN UNFIT ONE
+   ---------------------------------------------------------------------
+   You pick a side on that screen and it told you nothing about whether
+   anybody could run. Condition, sharpness and recent form now sit under
+   every name, and selecting a shirt offers the bench players who could
+   take that place — ranked by how good they are in it.
+   ===================================================================== */
+const _pitchVitals=paintTacticsPitch;
+paintTacticsPitch=function(){
+ const r=_pitchVitals.apply(this,arguments);
+ try{
+  const box=$('#tacPitch');if(!box||!G||!G.tacs)return r;
+  const slots=FORMATIONS[G.tacs.formation]||[];
+  box.querySelectorAll('.tslot').forEach(el=>{
+   const ix=+el.dataset.v;
+   const p=playerById(G.tacs.xi[ix]);
+   if(!p)return;
+   let tag=el.querySelector('.tvit');
+   if(!tag){tag=document.createElement('span');tag.className='tvit';el.appendChild(tag)}
+   const cond=Math.round(p.cond==null?100:p.cond);
+   const fa=(typeof formAvg==='function')?formAvg(p):0;
+   const col=cond>=80?'#8dffa0':cond>=62?'#ffd21f':'#ff8f84';
+   tag.innerHTML='<i style="background:'+col+'"></i>'+cond+'%'+
+    (fa?' · '+fa.toFixed(1):'')+(p.injury?' 🚑':'');
+  });
+ }catch(e){}
+ return r};
+
+(function vitCSS(){
+ const st=document.createElement('style');st.id='w52';
+ st.textContent='.tvit{position:absolute;left:50%;transform:translateX(-50%);'+
+  'bottom:-15px;white-space:nowrap;font-size:8.5px;font-weight:800;letter-spacing:.2px;'+
+  'color:var(--ink-faint);display:flex;align-items:center;gap:3px;pointer-events:none}'+
+  '.tvit i{width:5px;height:5px;border-radius:50%;display:inline-block}';
+ document.head.appendChild(st)})();
+
+/*#w52_unblock.js#*/
+
 showStart();
 </script>
 </body>
