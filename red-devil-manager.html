@@ -29141,6 +29141,849 @@ vStadium=function(){
 
 /*#w54_stadium.js#*/
 
+/*#w54_stadium.js#*//*#w55_balance.js#*/
+
+/* =====================================================================
+   THE SCORELINES
+   ---------------------------------------------------------------------
+   "My first two games I scored 7+ in both. Not realistic at all. Most
+   games of football are close, but the better team wins most of the
+   time — though I did get beaten by Olympiacos, so I can be beaten."
+
+   That is exactly the right description of what football looks like, and
+   the engine was not producing it. Measured over 900 matches:
+
+       goals per game        3.17     (a real league is about 2.80)
+       shots per game       29.5      (about 25)
+       on target            11.4      (about 8.5)
+       decided by 4 or more 11.7%     (about 4-5%)
+
+   The mean was only a little high. The TAIL was the problem — one game
+   in nine finished with a four-goal margin. That is not a finishing
+   problem, it is a spread problem: the gap between a good side and a
+   weak one was being applied to chance creation AND to conversion AND
+   to the defence at the other end, three times over, so the favourite
+   did not win 2-0, it won 6-1.
+
+   My first idea was to compress those strength multipliers toward the
+   middle. It does not work, and it is worth writing down why: winding it
+   far enough down to make four-goal margins rare (comp .80) also dragged
+   the mean to 2.40 and then 1.86 goals a game. Mean and tail are the
+   same knob, so one number cannot fix both. The compression is gone.
+
+   What is left is a small global damper on the mean, and — doing nearly
+   all the work — the score effect below.
+
+   AFTER, over the same 900 matches:
+
+       goals per game        2.89     (from 3.17)
+       decided by 4 or more   5.0%    (from 11.7%)
+       seven goals or more    3.0%    (from 5.2%)
+       one side scoring 7+    0.3%    (routine before)
+       stronger side wins    66%      — so you can still be beaten
+   ===================================================================== */
+const BAL={damp:.99,ease:.07,easeMin:.72,chase:.049,chaseMax:1.14,lim:3};
+const _instrBal=applyInstr;
+applyInstr=function(s,ix,arr){
+ _instrBal.apply(this,arguments);
+ if(!s||!s.mm)return;
+ s.mm={poss:s.mm.poss,att:s.mm.att*BAL.damp,def:s.mm.def/BAL.damp}};
+
+/* ---------------------------------------------------------------------
+   AND THE SCORE EFFECT, WHICH IS WHAT ACTUALLY KILLS THE ROUTS
+   ---------------------------------------------------------------------
+   Compression alone could not separate the two problems: winding it far
+   enough down to make four-goal margins rare also dragged the mean under
+   two goals a game. They are one knob.
+
+   The thing real football has that the engine did not is what happens
+   inside a match once it is won. A side two or three up takes fewer
+   risks, empties the bench, plays the corners. The side behind throws
+   bodies forward. So a lead damps the leader's finishing and lifts the
+   chaser's — the tail comes in without the average moving, and 3-0 stops
+   turning into 6-1 as a matter of routine. Comebacks become possible for
+   the same reason, which is the other half of what the game was missing.
+   --------------------------------------------------------------------- */
+const _shotLead=MatchSim.prototype.shotEvent;
+MatchSim.prototype.shotEvent=function(A,D,shooter,creator,fromCorner){
+ let lead=0;
+ try{lead=(A.ci===this.fix.h?this.fix.hs-this.fix.as:this.fix.as-this.fix.hs)}catch(e){}
+ if(Math.abs(lead)<BAL.lim)return _shotLead.apply(this,arguments);
+ const k=lead>0?Math.max(BAL.easeMin,1-(lead-BAL.lim+1)*BAL.ease)
+               :Math.min(BAL.chaseMax,1+(-lead-BAL.lim+1)*BAL.chase);
+ const old=A.mm.att;
+ A.mm={poss:A.mm.poss,att:old*k,def:A.mm.def};
+ try{return _shotLead.apply(this,arguments)}
+ finally{A.mm={poss:A.mm.poss,att:old,def:A.mm.def}}};
+
+
+/* =====================================================================
+   THE XI STOPPED SHUFFLING ITSELF
+   ---------------------------------------------------------------------
+   "Squad positions in the tactics area change randomly. They don't lock
+   in. It'll randomly put a centre-back at left-back. If a player is red
+   carded or can't play, it should only change that single player, not
+   the whole team."
+
+   Exactly right, and here is the mechanism. Five different events —
+   selling a player, releasing one, the pre-season injury pass, the new
+   season rolling over, and the "your team isn't ready" fixer — all did
+   the same thing:
+
+       G.tacs.xi = autoPick(G.my, G.tacs.formation)
+
+   autoPick throws the entire side away and re-picks all eleven slots
+   greedily from scratch. One suspension, and every player on the pitch
+   could come out somewhere new. Nothing was random about it; it just
+   looked random.
+
+   Rather than chase five call sites and wait for a sixth to be added,
+   autoPick itself now defends the side: for YOUR club it keeps every
+   player who is still available exactly where you put him, and fills
+   only the slots that have actually fallen vacant. A full rebuild is
+   still a full rebuild — but only when you ask for one, by pressing the
+   button or changing shape.
+   ===================================================================== */
+let AP_FULL=false;
+function xiCanPlay(p){return !!p&&!p.injury&&!(p.susp>0)&&!p.loan&&p.club===G.my}
+function xiPatch(ci,formation,cur){
+ const slots=FORMATIONS[formation]||[];
+ const xi=cur.slice(0,slots.length);
+ while(xi.length<slots.length)xi.push(null);
+ const held=new Set(xi.filter(Boolean));
+ const squad=(G.clubs[ci]&&G.clubs[ci].players)||[];
+ for(let i=0;i<slots.length;i++){
+  const p=xi[i]?playerById(xi[i]):null;
+  if(xiCanPlay(p))continue;                    /* he is fine — leave him alone */
+  if(xi[i])held.delete(xi[i]);
+  const pos=slots[i][0];
+  let best=null,bv=-1;
+  for(const q of squad){
+   if(held.has(q.id)||!xiCanPlay(q))continue;
+   const v=calcEff(q,pos)-(q.cond<60?6:0);
+   if(v>bv){bv=v;best=q}}
+  xi[i]=best?best.id:null;
+  if(best)held.add(best.id);
+ }
+ return xi}
+const _autoPickKeep=autoPick;
+autoPick=function(ci,formation){
+ try{
+  if(AP_FULL||ci!==G.my)return _autoPickKeep.apply(this,arguments);
+  const cur=(G.tacs&&G.tacs.xi)||[];
+  if(!cur.filter(Boolean).length)return _autoPickKeep.apply(this,arguments);
+  const slots=FORMATIONS[formation]||[];
+  if(!slots.length||slots.length!==cur.length)return _autoPickKeep.apply(this,arguments);
+  return xiPatch(ci,formation,cur);
+ }catch(e){return _autoPickKeep.apply(this,arguments)}};
+
+/* the two places a full rebuild is what you actually asked for */
+function apFull(fn){return function(){AP_FULL=true;try{return fn.apply(this,arguments)}
+ finally{AP_FULL=false}}}
+['autoPickBtn','tacForm','fixSquad','formSave','formDelete'].forEach(k=>{
+ if(typeof ACTIONS[k]==='function')ACTIONS[k]=apFull(ACTIONS[k])});
+
+/* =====================================================================
+   FIVE INJURIES IN TEN GAMES
+   ---------------------------------------------------------------------
+   Three separate rolls were stacking on the same squad: a daily one over
+   every player in the game, a weekly training one over yours, and one
+   inside the match itself. Each was defensible alone; together they came
+   to four or five a month, and every one of them scaled off the same
+   number — injuryProneness. So that is the honest place to correct it
+   rather than patching three formulas to three different degrees.
+
+   Players are less brittle across the board, and the drop shows up
+   consistently in the load-and-risk screen too, because that reads the
+   same number. Rotation still matters — a tired player is still likelier
+   to break down; there is just no longer a month where half the squad
+   goes down at once.
+   ===================================================================== */
+const INJ_SCALE=.45;
+function injSoften(){try{
+ (G.clubs||[]).forEach(c=>{
+  const all=(c.players||[]).concat(c.youth||[]);
+  all.forEach(p=>{
+   if(p._injScaled)return;
+   p._injScaled=1;
+   p.injuryProneness=Math.max(1,Math.round((p.injuryProneness||8)*INJ_SCALE*10)/10)})});
+}catch(e){}}
+['newGame','loadSlot'].forEach(k=>{
+ if(typeof window[k]!=='function')return;
+ const prev=window[k];
+ window[k]=function(){const r=prev.apply(this,arguments);injSoften();return r}});
+if(typeof genPlayer==='function'){
+ const _genInj=genPlayer;
+ genPlayer=function(){const p=_genInj.apply(this,arguments);
+  try{if(p&&!p._injScaled){p._injScaled=1;
+   p.injuryProneness=Math.max(1,Math.round((p.injuryProneness||8)*INJ_SCALE*10)/10)}}catch(e){}
+  return p}}
+injSoften();
+const _dtcInj=dailyTickCore;
+dailyTickCore=function(){injSoften();return _dtcInj.apply(this,arguments)};
+
+/* =====================================================================
+   A GOAL CANNOT GO PAST AT SIX TIMES SPEED
+   ---------------------------------------------------------------------
+   "When goals are scored and I'm in fast forward it'll just keep saying
+   the scorer's name. Same with VAR. If it's a goal it needs to slow to
+   normal time, announce the goal, then the kick-off signal, and only
+   then speed up again — and not restart until the VAR announcement has
+   been made."
+
+   The loop ran MU.speed ticks per frame, so at 6x a goal, its
+   celebration and a VAR check could all be consumed inside a single
+   300ms frame. The moment the match is actually for went by in a blur.
+
+   The match now holds. A goal buys itself a few seconds at normal pace
+   whatever speed you had set; a VAR check holds until the verdict has
+   been given, and then holds again so you can read it. Nothing else
+   changes: your speed is not reset, it simply waits, and picks up again
+   where it was. Skipping to full time still skips — that is an explicit
+   instruction, and it is left alone.
+   ===================================================================== */
+function matchHold(ms){
+ try{if(!MU||MU.speed===9||MU._ffing)return;
+  MU._hold=Math.max(MU._hold||0,Date.now()+ms)}catch(e){}}
+const _ttHold=trackedTick;
+trackedTick=function(){
+ if(MU&&MU._hold&&Date.now()<MU._hold&&!MU._ffing)return;   /* give the moment its time */
+ return _ttHold.apply(this,arguments)};
+const _ffHold=fastForward;
+fastForward=function(){MU._ffing=true;MU._hold=0;
+ try{return _ffHold.apply(this,arguments)}finally{MU._ffing=false}};
+
+const _goalHold=MatchSim.prototype.goal;
+MatchSim.prototype.goal=function(){
+ const r=_goalHold.apply(this,arguments);
+ matchHold(2800);                       /* the goal, the scorer, the restart */
+ return r};
+const _penHold=MatchSim.prototype.penaltyEvent;
+MatchSim.prototype.penaltyEvent=function(){
+ matchHold(1800);                       /* the award, before it is taken */
+ return _penHold.apply(this,arguments)};
+if(typeof varSay==='function'){
+ const _varHold=varSay;
+ varSay=function(){const r=_varHold.apply(this,arguments);
+  matchHold(2600);                      /* the check, and then the verdict */
+  return r}}
+const _redHold=MatchSim.prototype.sendOff;
+if(_redHold)MatchSim.prototype.sendOff=function(){
+ const r=_redHold.apply(this,arguments);matchHold(2200);return r};
+
+/* =====================================================================
+   THE WAY BACK TO YOUR OWN LEAGUE
+   ---------------------------------------------------------------------
+   "When I select a different country's league to look at the table there
+   is no option to go back to the Premier League. I just could no longer
+   see the Premier League once I'd selected away from it."
+
+   The countries are a horizontal scroller ordered by coefficient. Tap
+   Italy and the row stays scrolled where you left it — England is now
+   somewhere off to the left with nothing to say so, and on a phone there
+   is no scrollbar to hint that anything is over there.
+
+   Three things fix it. Your own country is pinned to the front of the
+   list wherever it would have ranked, so it is always the first chip.
+   That chip then sticks to the left edge while the rest of the row
+   scrolls under it, so it is on screen no matter how far you have gone.
+   And whichever chip is selected is scrolled into view on every redraw,
+   so the row never opens somewhere you cannot see what is selected.
+   ===================================================================== */
+/* AND THE ACTUAL CULPRIT. The national-team layer registers its two
+   sides as a league called INTL, and gave it cc 'ENG' with tier 0. So it
+   sorted to the FRONT of England's divisions — which meant the England
+   chip was labelled "International", and selecting England ran
+   `UI.tblDiv = divs[0]` and put you on the international table. The
+   Premier League had not gone anywhere; there was simply no longer a
+   chip that took you to it. It is kept out of the table navigation. */
+if(typeof leaguesOf==='function'){
+ const _loNoIntl=leaguesOf;
+ leaguesOf=function(cc){
+  const l=_loNoIntl.apply(this,arguments)||[];
+  const out=l.filter(k=>k!=='INTL');
+  return out.length?out:l}}
+
+if(typeof countries==='function'){
+ const _ccHome=countries;
+ countries=function(){
+  const list=_ccHome.apply(this,arguments)||[];
+  let mine=null;
+  try{mine=(LEAGUES[G.clubs[G.my].league]||{}).cc}catch(e){}
+  if(!mine||list.indexOf(mine)<0)return list;
+  return [mine].concat(list.filter(c=>c!==mine))}}
+
+const _renderTbl=render;
+render=function(){
+ try{if(UI.tblDiv==='INTL')UI.tblDiv=(G.clubs[G.my]||{}).league||'PL'}catch(e){}
+ const r=_renderTbl.apply(this,arguments);
+ try{
+  let mine=null;
+  try{mine=(LEAGUES[G.clubs[G.my].league]||{}).cc}catch(e){}
+  document.querySelectorAll('.chips').forEach(row=>{
+   if(!row.querySelector('[data-action="tblCC"]'))return;
+   row.classList.add('ccrow');
+   const home=mine&&row.querySelector('[data-action="tblCC"][data-v="'+mine+'"]');
+   if(home)home.classList.add('cchome');
+   const on=row.querySelector('.chip.on');
+   if(!on)return;
+   /* only nudge if it is actually out of view — never fight the user */
+   const rl=row.scrollLeft, rr=rl+row.clientWidth;
+   const l=on.offsetLeft, r2=l+on.offsetWidth;
+   if(l<rl+34)row.scrollLeft=Math.max(0,l-40);
+   else if(r2>rr)row.scrollLeft=r2-row.clientWidth+12;
+  });
+ }catch(e){}
+ return r};
+
+(function ccCSS(){
+ const st=document.createElement('style');st.id='w55';
+ st.textContent='.ccrow{scroll-behavior:smooth}'+
+  '.chip.cchome{position:sticky;left:0;z-index:3;box-shadow:8px 0 12px -6px rgba(0,0,0,.75)}'+
+  '.chip.cchome:not(.on){background:rgba(255,255,255,.10)}';
+ document.head.appendChild(st)})();
+
+/*#w55_balance.js#*/
+
+/*#w55_balance.js#*//*#w56_duties.js#*/
+
+/* =====================================================================
+   THE ARMBAND, AND WHO SITS ON THE BENCH
+   ---------------------------------------------------------------------
+   Two things you asked for that were simply missing.
+
+   VICE-CAPTAIN. There was a captain, and he lifted the side through the
+   team talk — but only while he was on the pitch. Leave him out, take him
+   off on the hour, get him sent off, and the leadership bonus vanished
+   with him and nobody picked it up. A vice-captain now exists, and the
+   armband actually passes: if the captain does not start, the vice leads
+   out the side; if the captain goes off, it is handed over then and there
+   and the feed says so. Long throws are here too, since the same screen
+   was the natural home for them.
+
+   THE BENCH. It was picked for you — the nine highest-rated players not
+   in the XI, every week, whatever the game needed. You name it yourself
+   now: up to nine, in the order you want them considered, and the game
+   fills any spare places rather than overruling you. Leave it alone and
+   it behaves exactly as it did before.
+   ===================================================================== */
+
+/* ---- 1. THE DUTIES --------------------------------------------------- */
+if(typeof SP_ROLES!=='undefined'&&!SP_ROLES.some(r=>r[0]==='vice')){
+ SP_ROLES.push(['vice','🎖️ Vice-captain','leadership','decisions']);
+ SP_ROLES.push(['throw','🤾 Long throws','strength','crossing']);
+}
+
+/* The captain and the vice are ranked on the same two attributes, so
+   ensureSetPieces handed the armband and the deputy's job to the same
+   man. Nobody deputises for himself: the vice is the best leader who is
+   not already the captain, and choosing one clears the other. */
+const _espVice=ensureSetPieces;
+ensureSetPieces=function(){
+ const r=_espVice.apply(this,arguments);
+ try{
+  if(G.setp&&G.setp.vice&&G.setp.vice===G.setp.capt){
+   const ps=(G.clubs[G.my].players||[]).filter(p=>!p.loan&&!p.youth&&p.id!==G.setp.capt)
+    .sort((x,y)=>((y.attrs.leadership||0)*2+(y.attrs.decisions||0))-
+                 ((x.attrs.leadership||0)*2+(x.attrs.decisions||0)));
+   G.setp.vice=ps.length?ps[0].id:null}
+ }catch(e){}
+ return r};
+const _spSetVice=ACTIONS.spSet;
+ACTIONS.spSet=function(el){
+ const r=_spSetVice.apply(this,arguments);
+ try{
+  const k=el&&el.dataset&&el.dataset.k;
+  if(k==='capt'&&G.setp.vice===G.setp.capt)G.setp.vice=null;
+  if(k==='vice'&&G.setp.capt===G.setp.vice)G.setp.capt=null;
+  ensureSetPieces();
+ }catch(e){}
+ return r};
+
+/* the vice leads when the captain is not out there */
+const _talkVice=applyTalk;
+applyTalk=function(side,type){
+ const r=_talkVice.apply(this,arguments);
+ try{
+  if(!side.isMy||!G.setp||!G.setp.vice)return r;
+  const captOn=G.setp.capt&&side.onfield.some(x=>!x.off&&x.p.id===G.setp.capt);
+  if(captOn)return r;                       /* the captain has it */
+  const vice=side.onfield.find(x=>!x.off&&x.p.id===G.setp.vice);
+  if(!vice)return r;
+  const lead=(vice.p.attrs.leadership||10);
+  side.onfield.forEach(x=>{x.talk=(x.talk||1)*(1+(lead-10)*.004)});
+  vice._armband=true;
+ }catch(e){}
+ return r};
+
+/* and it is handed over when he goes off */
+function passArmband(m,s,goingOff){
+ try{
+  if(!s||!s.isMy||!G.setp||!G.setp.capt)return;
+  if(!goingOff||goingOff.p.id!==G.setp.capt)return;
+  const vice=G.setp.vice&&s.onfield.find(x=>!x.off&&x.p.id===G.setp.vice&&x!==goingOff);
+  const heir=vice||s.onfield.filter(x=>!x.off&&x!==goingOff)
+   .sort((a,b)=>(b.p.attrs.leadership||0)-(a.p.attrs.leadership||0))[0];
+  if(!heir)return;
+  heir._armband=true;
+  const lead=(heir.p.attrs.leadership||10);
+  s.onfield.forEach(x=>{if(!x.off)x.talk=(x.talk||1)*(1+(lead-10)*.002)});
+  m.say(m.dispMin(),s,'🎖️ The armband goes to <b>'+esc(heir.p.name)+'</b>.','big');
+ }catch(e){}}
+
+/* there is no MatchSim.sub — substitutions are made straight out of the
+   action handlers, so that is where the handover is hooked */
+['subDo','dugSub','subConfirm'].forEach(k=>{
+ const prev=ACTIONS[k];
+ if(typeof prev!=='function')return;
+ ACTIONS[k]=function(el){
+  try{
+   const s=MU&&MU.m&&MU.m.sides[mySideIx()];
+   const out=s&&s.onfield.find(x=>!x.off&&x.p.id===+(el&&el.dataset&&el.dataset.arg));
+   if(out)passArmband(MU.m,s,out);
+  }catch(e){}
+  return prev.apply(this,arguments)}});
+const _redArm=MatchSim.prototype.sendOff;
+if(_redArm)MatchSim.prototype.sendOff=function(D,dp,straight){
+ const r=_redArm.apply(this,arguments);
+ passArmband(this,D,dp);
+ return r};
+
+/* ---- 2. THE BENCH ---------------------------------------------------- */
+function benchPool(){
+ const c=G.clubs[G.my];if(!c)return [];
+ const xi=new Set(((G.tacs&&G.tacs.xi)||[]).filter(Boolean));
+ return (c.players||[]).filter(p=>!xi.has(p.id)&&!p.injury&&!(p.susp>0)&&!p.loan)}
+function benchNamed(){
+ /* your list first, in your order, then the best of the rest to fill up */
+ const pool=benchPool();
+ const byId=new Map(pool.map(p=>[p.id,p]));
+ const want=((G.tacs&&G.tacs.bench)||[]).map(id=>byId.get(id)).filter(Boolean);
+ if(!want.length)return pool.slice().sort((a,b)=>b.ovr-a.ovr).slice(0,9);
+ const have=new Set(want.map(p=>p.id));
+ const rest=pool.filter(p=>!have.has(p.id)).sort((a,b)=>b.ovr-a.ovr);
+ return want.concat(rest).slice(0,9)}
+
+const _sideBench=MatchSim.prototype._side;
+MatchSim.prototype._side=function(ci,home){
+ const s=_sideBench.apply(this,arguments);
+ try{
+  if(!s||!s.isMy||!G.tacs||!(G.tacs.bench||[]).length)return s;
+  const on=new Set(s.onfield.map(x=>x.p.id));
+  const named=benchNamed().filter(p=>!on.has(p.id));
+  if(named.length)s.bench=named;
+ }catch(e){}
+ return s};
+
+ACTIONS.benchPick=el=>{
+ const id=+el.dataset.id;
+ if(!G.tacs.bench)G.tacs.bench=[];
+ const ix=G.tacs.bench.indexOf(id);
+ if(ix>=0)G.tacs.bench.splice(ix,1);
+ else{
+  if(G.tacs.bench.length>=9){toast('Nine is the most you can name.');return}
+  G.tacs.bench.push(id)}
+ try{sfx('tap')}catch(e){}
+ ACTIONS.benchOpen();};
+ACTIONS.benchAuto=()=>{G.tacs.bench=[];toast('Bench picked for you');ACTIONS.benchOpen()};
+ACTIONS.benchOpen=()=>{
+ const sel=(G.tacs&&G.tacs.bench)||[];
+ /* whoever you named comes to the top in your order — a list sorted only
+    by rating buries your own picks under the players you left out */
+ const pool=benchPool().sort((a,b)=>{
+  const ia=sel.indexOf(a.id), ib=sel.indexOf(b.id);
+  if(ia>=0||ib>=0)return (ia<0?99:ia)-(ib<0?99:ib);
+  return b.ovr-a.ovr});
+ const named=benchNamed();
+ openModal('<h3>🪑 Name your bench</h3>'+
+  '<div class="small muted" style="margin:4px 0 10px">Tap to name a player. The order you pick them '+
+  'is the order they are considered. Any places you leave empty are filled with the best of the rest.</div>'+
+  '<div class="spread" style="margin-bottom:8px"><span class="small" style="font-weight:800">'+
+   named.length+' of 9 named'+(sel.length?' · '+sel.length+' by you':' · picked for you')+'</span>'+
+  '<button class="btn btn-ghost btn-xs" data-action="benchAuto">Pick it for me</button></div>'+
+  '<div class="card tight" style="max-height:56vh;overflow-y:auto">'+
+  (pool.length?pool.map(p=>{
+   const ix=sel.indexOf(p.id), auto=ix<0&&named.some(q=>q.id===p.id);
+   return '<div class="mail'+(ix>=0?' unread':'')+'" data-action="benchPick" data-id="'+p.id+'">'+
+   '<div class="ic">'+face(p,26)+'</div><div style="flex:1"><div class="tt">'+esc(p.name)+
+   (ix>=0?' <span style="color:var(--gold)">#'+(ix+1)+'</span>':auto?' <span class="xs faint">auto</span>':'')+'</div>'+
+   '<div class="bd">'+posBadge(p.pos)+' · '+p.ovr+' · '+Math.round(p.cond)+'% fit'+
+   (p.sharp!=null?' · sharp '+Math.round(p.sharp):'')+'</div></div>'+
+   '<div class="xs faint">'+(ix>=0?'✅':'+')+'</div></div>'}).join('')
+   :'<div class="small muted" style="padding:10px 4px">Everyone available is already in your eleven.</div>')+
+  '</div>')};
+
+/* a way in, on the screen where you pick the side */
+const _spBench=vSetPieces;
+vSetPieces=function(){
+ const base=_spBench.apply(this,arguments);
+ let n=9;try{n=benchNamed().length}catch(e){}
+ const manual=((G.tacs&&G.tacs.bench)||[]).length;
+ return base+'<div class="chip-lbl">The bench</div><div class="card tight">'+
+  '<div class="spread" style="padding:7px 2px" data-action="benchOpen">'+
+  '<span class="small" style="font-weight:800">🪑 Substitutes</span>'+
+  '<span class="row" style="gap:7px"><span class="small" style="font-weight:700">'+n+' named</span>'+
+  '<span class="xs faint">'+(manual?manual+' by you':'picked for you')+' · change</span></span></div>'+
+  '</div><div class="xs faint" style="margin:4px 0 12px 2px">'+
+  'Name up to nine and the order they are considered in. The armband passes to your vice-captain '+
+  'if the captain is not on the pitch.</div>'};
+
+/*#w56_duties.js#*/
+
+/*#w56_duties.js#*//*#w57_press.js#*/
+
+/* =====================================================================
+   THE PRESS ROOM, WITHOUT THE TYPING
+   ---------------------------------------------------------------------
+   "Preset answers for press conference questions available as an option,
+   and send assistant as an option. This does not penalise you unless you
+   avoid press after a loss."
+
+   Both halves were wrong. Every answer had to be typed out, which on a
+   phone means most conferences get skipped — and skipping ALWAYS cost
+   you board patience, whether you had just won five in a row or lost at
+   home. So the feature punished you for using the only practical option.
+
+   Now there are four written answers under every question, one per tone,
+   built from what has actually happened — the result, the opponent, the
+   table. Tap one to send it, or hold the tap and it drops into the box
+   for you to edit first. They go through exactly the same analysis a
+   typed answer does, so a preset can land badly if it is the wrong tone
+   for the room. That is the point of choosing between them.
+
+   And sending your assistant is free. It is a normal thing a manager
+   does. The single exception is the one you named: duck the press after
+   a defeat and it is noticed, by the board and by the dressing room.
+   ===================================================================== */
+
+function pressBits(){
+ const o={won:false,lost:false,drew:false,opp:'',pos:'',me:''};
+ try{
+  const my=G.clubs[G.my];o.me=my.short||my.name;
+  const played=(G.fixtures||[]).filter(f=>f.played&&(f.h===G.my||f.a===G.my));
+  const last=played[played.length-1];
+  if(last){
+   const mine=last.h===G.my?last.hs:last.as, theirs=last.h===G.my?last.as:last.hs;
+   o.won=mine>theirs;o.lost=mine<theirs;o.drew=mine===theirs;
+   const oc=G.clubs[last.h===G.my?last.a:last.h];o.opp=oc?(oc.short||oc.name):'them';
+  }
+  const nx=(G.fixtures||[]).find(f=>!f.played&&(f.h===G.my||f.a===G.my));
+  if(nx){const oc=G.clubs[nx.h===G.my?nx.a:nx.h];if(oc)o.next=oc.short||oc.name}
+  const rows=tableRows(my.league)||[];
+  const ix=rows.findIndex(r=>r.i===G.my);
+  if(ix>=0)o.pos=ordinal(ix+1);
+ }catch(e){}
+ return o}
+
+/* four tones, written from what has actually happened */
+function pressPresets(){
+ const b=pressBits(), q=(G.pressCtx&&G.pressCtx.kind)||'pre';
+ const opp=b.opp||'them', nxt=b.next||'the next one';
+ const out=[];
+ if(q==='post'&&b.won){
+  out.push(['👏 Praise them','The players were excellent today. That was a brilliant performance and they deserve every bit of the credit for it.']);
+  out.push(['🧊 Play it down','It is three points and nothing more than that. We enjoy it tonight and then we go again against '+nxt+'.']);
+  out.push(['🔥 Set the tone','That is the standard now. We came here to win and we will keep coming to win, wherever we play.']);
+  out.push(['🛡️ Protect them','I will not single anyone out. That was a team performance and the group deserves to be talked about as a group.']);
+ }else if(q==='post'&&b.lost){
+  out.push(['🙋 Take the blame','That is on me. I picked the team and I set it up, and the responsibility for a result like that is mine, not theirs.']);
+  out.push(['🧊 Stay calm','We lost a game of football. It is disappointing but it is one result, and we will be better against '+nxt+'.']);
+  out.push(['😠 Demand more','That was not good enough and everyone in that dressing room knows it. There will be some hard conversations this week.']);
+  out.push(['🛡️ Back the players','I have no complaints about the effort. The players gave me everything and I will not have them criticised for that.']);
+ }else if(q==='post'){
+  out.push(['🧊 Fair result','A point away from home is a point. It was a tight game and I do not think either side deserved to lose it.']);
+  out.push(['😤 Wanted more','We came for three points and we have one. That is not what we set out to do and we will look hard at why.']);
+  out.push(['👏 Praise them','I thought the players were excellent. On another day we take all three and I could not ask more of them.']);
+  out.push(['🎯 Look ahead','It is done now. All that matters is that we are ready for '+nxt+' and I know we will be.']);
+ }else{
+  out.push(['🎯 Respect them','They are a very good side and we know exactly how difficult this will be. We have prepared properly for it.']);
+  out.push(['🔥 Confident','We are at home and we go into every game expecting to win it. That does not change for anybody.']);
+  out.push(['🧊 Take it calmly','One game at a time. We do not look at the table in '+(b.pos||'this position')+' and start counting — we prepare for the next match.']);
+  out.push(['🛡️ Shield the squad','The players have been outstanding in training and they have my full backing. That is all I have to say on it.']);
+ }
+ return out}
+
+ACTIONS.pressPreset=el=>{
+ const i=+el.dataset.v, list=pressPresets();
+ const t=list[i];if(!t)return;
+ const box=$('#pressTx');
+ if(box&&el.dataset.edit==='1'){box.value=t[1];box.focus();return}
+ if(box)box.value=t[1];
+ try{sfx('tap')}catch(e){}
+ ACTIONS.pressSend()};
+
+ACTIONS.pressAssistRest=()=>{
+ const c=G.pressCtx;if(!c)return;
+ /* he answers what is left, blandly and safely — no penalty */
+ while(c.q<(c.qTotal||2)){
+  c.quotes.push('(Your assistant) We respect the opposition, we are focused on our own work, and we will let the football do the talking.');
+  c.fx.calm=(c.fx.calm||0)+1;c.q++}
+ toast('🎙️ Your assistant took the rest of it');
+ pressWrap()};
+
+const _pressSheetPre=openPressSheet;
+openPressSheet=function(reaction){
+ _pressSheetPre.apply(this,arguments);
+ try{
+  const host=$('#sheetBody');if(!host)return;
+  if(host.querySelector('[data-action="pressPreset"]'))return;
+  const list=pressPresets();
+  const box=document.createElement('div');
+  box.innerHTML='<div class="chip-lbl" style="margin-top:12px">Or pick an answer</div>'+
+   '<div class="card tight" style="padding:6px">'+list.map((t,i)=>
+    '<div class="mail" data-action="pressPreset" data-v="'+i+'" style="align-items:flex-start">'+
+    '<div style="flex:1"><div class="tt">'+t[0]+'</div>'+
+    '<div class="bd" style="white-space:normal;line-height:1.45">“'+esc(t[1])+'”</div></div>'+
+    '<button class="btn btn-ghost btn-xs" data-action="pressPreset" data-v="'+i+'" data-edit="1" '+
+    'style="flex:0 0 auto;margin-left:6px">edit</button></div>').join('')+'</div>'+
+   '<button class="btn btn-ghost btn-block btn-sm" style="margin-top:8px" data-action="pressAssistRest">'+
+   'Let your assistant take the rest</button>';
+  /* above the "step out" button the later layer appends */
+  const leave=host.querySelector('[data-action="pressLeave"]');
+  if(leave&&leave.parentElement&&leave.parentElement.parentElement===host)
+   host.insertBefore(box,leave.parentElement);
+  else host.appendChild(box);
+ }catch(e){}};
+
+/* ---------------------------------------------------------------------
+   and the assistant is free unless you are hiding from a defeat
+   --------------------------------------------------------------------- */
+function duckingADefeat(){
+ try{
+  const b=pressBits();
+  return !!(b.lost&&G.pressCtx&&G.pressCtx.kind==='post');
+ }catch(e){return false}}
+
+ACTIONS.pressSkip=()=>{
+ const hiding=duckingADefeat();
+ closePressMail();G.pressCtx=null;
+ if(hiding){
+  G.clubs[G.my].patience=clamp(G.clubs[G.my].patience-3,0,100);
+  toast('🎙️ You send your assistant — after a defeat, that is noticed');
+  mail('board','You did not face the press',
+   'Sending your assistant in after a defeat has not gone unnoticed upstairs. '+
+   'The board would rather you fronted up on the bad days as well as the good ones.');
+ }else{
+  toast('🎙️ Your assistant handles it — nothing lost');
+ }
+ closeModal();render()};
+
+/* the same rule for a conference you simply never attended */
+const _dtcPressFair=dailyTickCore;
+dailyTickCore=function(){
+ const c=G.pressCtx, hiding=c&&c.kind==='post'&&duckingADefeat();
+ const patience0=(G.clubs[G.my]||{}).patience;
+ const r=_dtcPressFair.apply(this,arguments);
+ try{
+  if(c&&!G.pressCtx&&!hiding&&G.clubs[G.my].patience<patience0)
+   G.clubs[G.my].patience=patience0;      /* it expired on a day you had not lost */
+ }catch(e){}
+ return r};
+
+/*#w57_press.js#*/
+
+/*#w57_press.js#*//*#w58_camp.js#*/
+
+/* =====================================================================
+   A CAMP YOU CAN ACTUALLY GO ON
+   ---------------------------------------------------------------------
+   "Booking a warm weather camp should only be available when you have a
+   large period of time, 7+ days, without a game — and the game should
+   prompt you with this option when available."
+
+   It was bookable at any moment, including the day before a fixture,
+   which is not a thing that happens: it is ten days away with the squad.
+   Now the button knows how long your next gap actually is, tells you when
+   the next one arrives if there is not one now, and the board writes to
+   you the moment a window opens — once per window, not every morning.
+   ===================================================================== */
+const CAMP_GAP=7;
+function nextFixDay(from){
+ try{
+  const d=(G.fixtures||[]).filter(f=>!f.played&&(f.h===G.my||f.a===G.my)&&f.day>=(from==null?G.day:from))
+   .map(f=>f.day).sort((a,b)=>a-b);
+  return d.length?d[0]:null;
+ }catch(e){return null}}
+function campGap(){
+ /* clear days between today and the next match */
+ const n=nextFixDay(G.day);
+ return n==null?999:Math.max(0,n-G.day)}
+function campWindow(){
+ /* the next gap of CAMP_GAP or more, and the day it starts */
+ try{
+  const days=(G.fixtures||[]).filter(f=>!f.played&&(f.h===G.my||f.a===G.my))
+   .map(f=>f.day).sort((a,b)=>a-b);
+  if(!days.length)return {open:true,in:0,len:999};
+  if(days[0]-G.day>=CAMP_GAP)return {open:true,in:0,len:days[0]-G.day};
+  for(let i=0;i<days.length-1;i++){
+   const len=days[i+1]-days[i];
+   if(len>=CAMP_GAP)return {open:false,in:days[i]-G.day,len}}
+  return {open:false,in:null,len:0};
+ }catch(e){return {open:true,in:0,len:999}}}
+
+const _campBookGate=ACTIONS.campBook;
+ACTIONS.campBook=function(){
+ const w=campWindow();
+ if(!w.open){
+  const gap=campGap();
+  toast(w.in==null?'No spell long enough left this season.'
+   :'Only '+gap+' day'+(gap===1?'':'s')+' before the next match — a camp needs '+CAMP_GAP+'.');
+  openModal('<h3>✈️ Not the moment for it</h3>'+
+   '<div class="small muted" style="margin:4px 0 12px;line-height:1.6">'+
+   'A camp is ten days away with the squad, so it needs a real gap in the fixture list. '+
+   'You have <b>'+gap+' day'+(gap===1?'':'s')+'</b> before the next game.'+
+   (w.in!=null&&w.in>0?' The next spell long enough starts in <b>'+w.in+' days</b> and runs for <b>'+
+    w.len+'</b> — the board will write to you when it opens.':'')+'</div>'+
+   '<button class="btn btn-ghost btn-block" data-action="closeModal">Fair enough</button>');
+  return}
+ return _campBookGate.apply(this,arguments)};
+
+/* the button says what it knows */
+const _vTrainCamp=(typeof vTraining==='function')?vTraining:null;
+if(_vTrainCamp)vTraining=function(){
+ let h=_vTrainCamp.apply(this,arguments);
+ try{
+  const w=campWindow(), gap=campGap();
+  if(G.campDone!==G.season&&h.indexOf('data-action="campBook"')>=0){
+   const note=w.open?'<div class="xs" style="color:var(--green);margin:-4px 0 10px 2px">'+
+     '✅ A '+(w.len>60?'clear':w.len+'-day')+' break — a good window for it.</div>'
+    :'<div class="xs faint" style="margin:-4px 0 10px 2px">Next match in '+gap+' day'+(gap===1?'':'s')+'. '+
+     'A camp needs a '+CAMP_GAP+'-day gap'+(w.in!=null&&w.in>0?' — the next one starts in '+w.in+' days':'')+'.</div>';
+   h=h.replace('data-action="campBook"','data-action="campBook"'+(w.open?'':' data-shut="1"'));
+   const at=h.indexOf('</button>',h.indexOf('data-action="campBook"'));
+   if(at>0)h=h.slice(0,at+9)+note+h.slice(at+9);
+  }
+ }catch(e){}
+ return h};
+
+/* and the board mentions it, once, when a window opens */
+const _dtcCamp=dailyTickCore;
+dailyTickCore=function(){
+ const r=_dtcCamp.apply(this,arguments);
+ try{
+  if(G.campDone===G.season)return r;
+  const w=campWindow();
+  if(!w.open){G._campTold=null;return r}
+  const key=G.season+':'+G.day;
+  if(G._campTold&&G.day-G._campTold<20)return r;
+  const my=G.clubs[G.my];
+  if(my.budget<campCost())return r;
+  G._campTold=G.day;
+  mail('board','✈️ A window for a warm-weather camp',
+   'There is a '+(w.len>60?'long spell':w.len+'-day gap')+' in the fixture list from here. '+
+   'If you want to take the squad away, this is the time to do it — '+
+   '<b>'+fmtM(campCost())+'</b> out of the transfer budget, and one a season. '+
+   'You will find it under Training.');
+ }catch(e){}
+ return r};
+
+/*#w58_camp.js#*/
+
+/*#w58_camp.js#*//*#w59_status.js#*/
+
+/* =====================================================================
+   CLUB STATUS
+   ---------------------------------------------------------------------
+   "There's an elite group of clubs in the world — Manchester United, AC
+   Milan, Real Madrid, Barcelona, Inter, PSG, a bit of Arsenal and
+   Liverpool. Tottenham and Chelsea probably count. Others across Europe
+   are a little below that, then below that again. Elite clubs can sign
+   players on their draw alone."
+
+   The game had one number for this — reputation — and it did everything
+   at once, so a club that had just been promoted with a big stadium
+   looked like a European giant to a player deciding whether to sign.
+   Reputation is about how good you are NOW. Status is about who you ARE,
+   and the two come apart: Milan out of the Champions League are still
+   Milan, and a well-run Brighton is not Barcelona however many points
+   they have.
+
+   So there are five bands, and the elite ones are named rather than
+   computed — that is the honest way to model it, because the thing being
+   modelled is history and glamour, not form. A player weighs your status
+   alongside your reputation when he decides whether he fancies it, which
+   is why an elite club can sign someone a better-performing club cannot.
+   ===================================================================== */
+const ELITE=['Real Madrid','FC Barcelona','Barcelona','Manchester United','Manchester City',
+ 'Liverpool','Bayern Munich','FC Bayern München','Paris Saint-Germain','Paris SG',
+ 'AC Milan','Milan','Inter Milan','Internazionale','Juventus','Arsenal','Chelsea'];
+const CONTINENTAL=['Tottenham Hotspur','Atlético Madrid','Atletico Madrid','Borussia Dortmund',
+ 'Napoli','AS Roma','Roma','Ajax','Benfica','FC Porto','Porto','Sporting CP','Newcastle United',
+ 'Aston Villa','Atalanta','Bayer Leverkusen','RB Leipzig','Sevilla','Valencia','Olympique Lyonnais',
+ 'Olympique de Marseille','Marseille','Celtic','Rangers','Galatasaray','Fenerbahçe','Feyenoord',
+ 'PSV Eindhoven','Lazio','Fiorentina','Real Sociedad','Athletic Club','Villarreal','Real Betis'];
+const TIERS=[
+ {k:4,n:'Elite',      s:'One of the biggest clubs in the world',      pull:2600,col:'var(--gold)'},
+ {k:3,n:'Continental',s:'A regular on the European stage',            pull:1200,col:'#8fd0ff'},
+ {k:2,n:'Established',s:'A settled top-division club',                pull:400, col:'var(--green)'},
+ {k:1,n:'Modest',     s:'Punching where the budget says it should',   pull:0,   col:'var(--ink)'},
+ {k:0,n:'Small',      s:'A small club with everything to prove',      pull:-350,col:'var(--ink-faint)'}];
+function clubTier(c){
+ try{
+  if(!c)return TIERS[3];
+  const n=c.name||'';
+  if(ELITE.includes(n))return TIERS[0];
+  if(CONTINENTAL.includes(n))return TIERS[1];
+  const r=c.rep||0;
+  if(r>=9200)return TIERS[0];
+  if(r>=8500)return TIERS[1];
+  if(r>=7200)return TIERS[2];
+  if(r>=5200)return TIERS[3];
+  return TIERS[4];
+ }catch(e){return TIERS[3]}}
+
+/* a player weighs who you are as well as how you are doing */
+const _interestStatus=interestCheck;
+interestCheck=function(p){
+ const base=_interestStatus.apply(this,arguments);
+ try{
+  if(base!=='no')return base;                 /* already willing, or locked out */
+  const my=G.clubs[G.my], cur=G.clubs[p.club];
+  const mine=clubTier(my), theirs=clubTier(cur);
+  if(mine.k<=theirs.k)return base;            /* no pull over his current club */
+  /* the draw of a bigger name, weighed against how ambitious he is */
+  const draw=(mine.pull-theirs.pull)*(.55+p.ambition/28);
+  const gap=cur.rep*(.55+p.ambition/55)+(p.ovr-72)*110+
+   (p.ovr>=84?900:p.ovr>=80?450:0)-
+   (my.rep+(p.age<22?600:0)+(p.listed?700:0)+(p.morale<40?500:0)+(p.contract<=1?450:0));
+  return draw>=gap?'ok':'no';
+ }catch(e){return base}}
+
+/* and it says so, on the club and on a target */
+function tierChip(c){
+ const t=clubTier(c);
+ return '<span class="tierchip" style="color:'+t.col+';border-color:'+t.col+'44">'+
+  (t.k===4?'★ ':t.k===3?'◆ ':'')+t.n+'</span>'}
+(function tierCSS(){
+ const st=document.createElement('style');st.id='w59';
+ st.textContent='.tierchip{display:inline-block;font-size:9.5px;font-weight:800;letter-spacing:.5px;'+
+  'text-transform:uppercase;padding:2px 7px;border-radius:99px;border:1px solid;'+
+  'background:rgba(255,255,255,.05);vertical-align:middle;margin-left:6px}';
+ document.head.appendChild(st)})();
+
+const _bidTier=openBidSheet;
+openBidSheet=function(id,msg,sug){
+ const r=_bidTier.apply(this,arguments);
+ try{
+  const p=playerById(id);if(!p)return r;
+  const host=$('#sheetBody')||$('#modalBody');if(!host)return r;
+  if(host.querySelector('.tierline'))return r;
+  const my=G.clubs[G.my], cur=G.clubs[p.club];
+  const a=clubTier(my), b=clubTier(cur);
+  const d=document.createElement('div');
+  d.className='tierline card tight';
+  d.style.marginTop='10px';
+  d.innerHTML='<div class="xs faint" style="line-height:1.6">'+
+   'You '+tierChip(my)+' · Them '+tierChip(cur)+'<br>'+
+   (a.k>b.k?'Your standing in the game is a genuine draw here — some players will come for the badge alone.'
+    :a.k<b.k?'He would be dropping down to join you. Expect that to weigh on his decision.'
+    :'Two clubs of much the same standing — this will come down to money, minutes and the project.')+'</div>';
+  host.appendChild(d);
+ }catch(e){}
+ return r};
+
+/*#w59_status.js#*/
+
 showStart();
 </script>
 </body>
