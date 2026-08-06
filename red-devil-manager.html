@@ -29879,6 +29879,111 @@ dailyTickCore=function(){
 
 /*#w58_camp.js#*/
 
+/*#w58_camp.js#*//*#w59_status.js#*/
+
+/* =====================================================================
+   CLUB STATUS
+   ---------------------------------------------------------------------
+   "There's an elite group of clubs in the world — Manchester United, AC
+   Milan, Real Madrid, Barcelona, Inter, PSG, a bit of Arsenal and
+   Liverpool. Tottenham and Chelsea probably count. Others across Europe
+   are a little below that, then below that again. Elite clubs can sign
+   players on their draw alone."
+
+   The game had one number for this — reputation — and it did everything
+   at once, so a club that had just been promoted with a big stadium
+   looked like a European giant to a player deciding whether to sign.
+   Reputation is about how good you are NOW. Status is about who you ARE,
+   and the two come apart: Milan out of the Champions League are still
+   Milan, and a well-run Brighton is not Barcelona however many points
+   they have.
+
+   So there are five bands, and the elite ones are named rather than
+   computed — that is the honest way to model it, because the thing being
+   modelled is history and glamour, not form. A player weighs your status
+   alongside your reputation when he decides whether he fancies it, which
+   is why an elite club can sign someone a better-performing club cannot.
+   ===================================================================== */
+const ELITE=['Real Madrid','FC Barcelona','Barcelona','Manchester United','Manchester City',
+ 'Liverpool','Bayern Munich','FC Bayern München','Paris Saint-Germain','Paris SG',
+ 'AC Milan','Milan','Inter Milan','Internazionale','Juventus','Arsenal','Chelsea'];
+const CONTINENTAL=['Tottenham Hotspur','Atlético Madrid','Atletico Madrid','Borussia Dortmund',
+ 'Napoli','AS Roma','Roma','Ajax','Benfica','FC Porto','Porto','Sporting CP','Newcastle United',
+ 'Aston Villa','Atalanta','Bayer Leverkusen','RB Leipzig','Sevilla','Valencia','Olympique Lyonnais',
+ 'Olympique de Marseille','Marseille','Celtic','Rangers','Galatasaray','Fenerbahçe','Feyenoord',
+ 'PSV Eindhoven','Lazio','Fiorentina','Real Sociedad','Athletic Club','Villarreal','Real Betis'];
+const TIERS=[
+ {k:4,n:'Elite',      s:'One of the biggest clubs in the world',      pull:2600,col:'var(--gold)'},
+ {k:3,n:'Continental',s:'A regular on the European stage',            pull:1200,col:'#8fd0ff'},
+ {k:2,n:'Established',s:'A settled top-division club',                pull:400, col:'var(--green)'},
+ {k:1,n:'Modest',     s:'Punching where the budget says it should',   pull:0,   col:'var(--ink)'},
+ {k:0,n:'Small',      s:'A small club with everything to prove',      pull:-350,col:'var(--ink-faint)'}];
+function clubTier(c){
+ try{
+  if(!c)return TIERS[3];
+  const n=c.name||'';
+  if(ELITE.includes(n))return TIERS[0];
+  if(CONTINENTAL.includes(n))return TIERS[1];
+  const r=c.rep||0;
+  if(r>=9200)return TIERS[0];
+  if(r>=8500)return TIERS[1];
+  if(r>=7200)return TIERS[2];
+  if(r>=5200)return TIERS[3];
+  return TIERS[4];
+ }catch(e){return TIERS[3]}}
+
+/* a player weighs who you are as well as how you are doing */
+const _interestStatus=interestCheck;
+interestCheck=function(p){
+ const base=_interestStatus.apply(this,arguments);
+ try{
+  if(base!=='no')return base;                 /* already willing, or locked out */
+  const my=G.clubs[G.my], cur=G.clubs[p.club];
+  const mine=clubTier(my), theirs=clubTier(cur);
+  if(mine.k<=theirs.k)return base;            /* no pull over his current club */
+  /* the draw of a bigger name, weighed against how ambitious he is */
+  const draw=(mine.pull-theirs.pull)*(.55+p.ambition/28);
+  const gap=cur.rep*(.55+p.ambition/55)+(p.ovr-72)*110+
+   (p.ovr>=84?900:p.ovr>=80?450:0)-
+   (my.rep+(p.age<22?600:0)+(p.listed?700:0)+(p.morale<40?500:0)+(p.contract<=1?450:0));
+  return draw>=gap?'ok':'no';
+ }catch(e){return base}}
+
+/* and it says so, on the club and on a target */
+function tierChip(c){
+ const t=clubTier(c);
+ return '<span class="tierchip" style="color:'+t.col+';border-color:'+t.col+'44">'+
+  (t.k===4?'★ ':t.k===3?'◆ ':'')+t.n+'</span>'}
+(function tierCSS(){
+ const st=document.createElement('style');st.id='w59';
+ st.textContent='.tierchip{display:inline-block;font-size:9.5px;font-weight:800;letter-spacing:.5px;'+
+  'text-transform:uppercase;padding:2px 7px;border-radius:99px;border:1px solid;'+
+  'background:rgba(255,255,255,.05);vertical-align:middle;margin-left:6px}';
+ document.head.appendChild(st)})();
+
+const _bidTier=openBidSheet;
+openBidSheet=function(id,msg,sug){
+ const r=_bidTier.apply(this,arguments);
+ try{
+  const p=playerById(id);if(!p)return r;
+  const host=$('#sheetBody')||$('#modalBody');if(!host)return r;
+  if(host.querySelector('.tierline'))return r;
+  const my=G.clubs[G.my], cur=G.clubs[p.club];
+  const a=clubTier(my), b=clubTier(cur);
+  const d=document.createElement('div');
+  d.className='tierline card tight';
+  d.style.marginTop='10px';
+  d.innerHTML='<div class="xs faint" style="line-height:1.6">'+
+   'You '+tierChip(my)+' · Them '+tierChip(cur)+'<br>'+
+   (a.k>b.k?'Your standing in the game is a genuine draw here — some players will come for the badge alone.'
+    :a.k<b.k?'He would be dropping down to join you. Expect that to weigh on his decision.'
+    :'Two clubs of much the same standing — this will come down to money, minutes and the project.')+'</div>';
+  host.appendChild(d);
+ }catch(e){}
+ return r};
+
+/*#w59_status.js#*/
+
 showStart();
 </script>
 </body>
