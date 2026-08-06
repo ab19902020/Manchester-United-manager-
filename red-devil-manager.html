@@ -30148,6 +30148,146 @@ function applyWindow26(){
 
 /*#w60_squads26.js#*/
 
+/*#w60_squads26.js#*//*#w61_training.js#*/
+
+/* =====================================================================
+   INDIVIDUAL TRAINING THAT KNOWS WHAT A PLAYER IS
+   ---------------------------------------------------------------------
+   "When I click into one of my players it should show options for
+   individual training programmes, and the programme options should be
+   for each position on the pitch that's relevant. It can help get them
+   to their potential quicker."
+
+   There were six generic focuses on the player card — Finishing,
+   Playmaking, Defending, Physical, Goalkeeping, Balanced — offered to
+   everyone. A goalkeeper was invited to work on his finishing; a centre
+   half on his playmaking. They also barely did anything: 0.09 of an
+   attribute point a week for a young player, one attribute at a time,
+   which over a whole season is worth about a point and a half.
+
+   Now every position has its own programmes, written for that job — a
+   full-back gets overlapping runs and one-v-one defending, a holding
+   midfielder gets screening the back four, a keeper gets shot-stopping
+   and distribution. Only the ones that make sense for him are offered.
+
+   And they matter. A programme works two attributes a week instead of
+   one, it is worth appreciably more to a young player with room to grow
+   than to a thirty-year-old at his ceiling, and good facilities and a
+   good coach both multiply it — so the training ground upgrades finally
+   have somewhere visible to land. The card tells you what each one
+   trains and roughly how fast he will close on his potential.
+   ===================================================================== */
+
+/* [key, label, blurb, attributes] */
+const PROG={
+ GK:[['Shot-stopping','Reflexes, angles and handling the ones he should save',['agility','positioning','decisions']],
+     ['Distribution','Starting attacks with his feet rather than hoofing it',['passing','vision','firstTouch']],
+     ['Command of the area','Coming for crosses and organising the wall',['heading','composure','leadership']]],
+ D: [['One-v-one defending','Staying on his feet and showing them the wrong way',['tackling','positioning','decisions']],
+     ['Aerial dominance','Winning the first ball and attacking set pieces',['heading','strength','aggression']],
+     ['Overlapping runs','Getting beyond his winger and putting it in the box',['pace','stamina','crossing']],
+     ['Playing out','Breaking a press without giving it away',['passing','firstTouch','composure']]],
+ M: [['Screening the back four','Reading it early and killing it before it starts',['positioning','tackling','decisions']],
+     ['Deep-lying playmaking','Setting the tempo and finding the pass nobody saw',['passing','vision','firstTouch']],
+     ['Box-to-box running','Getting there at both ends for ninety minutes',['stamina','workRate','pace']],
+     ['Arriving in the box','Timing the run and finishing what he arrives on',['shooting','composure','positioning']]],
+ A: [['Finishing','Composure in front of goal, both feet, first time',['shooting','composure','firstTouch']],
+     ['Running in behind','Beating the line and the sprint that follows',['pace','acceleration','positioning']],
+     ['Beating his man','Taking people on and getting the cross away',['dribbling','crossing','agility']],
+     ['Leading the line','Holding it up, bringing others in, winning it in the air',['strength','heading','vision']]]};
+
+function progsFor(p){
+ try{return PROG[POSGROUP(p.pos)]||PROG.M}catch(e){return PROG.M}}
+function progByKey(p,k){return progsFor(p).find(x=>x[0]===k)||null}
+
+/* how quickly a programme moves him */
+function progRate(p){
+ try{
+  const my=G.clubs[G.my];
+  const room=Math.max(0,(p.pot||p.ovr)-p.ovr);
+  if(!room)return 0;
+  const age=p.age<21?1.35:p.age<24?1.15:p.age<28?.8:p.age<31?.45:.22;
+  const fac=.8+((my.stad&&my.stad.train)||1)*.14;          /* the training centre upgrade */
+  const coach=.85+(((G.staff&&G.staff.coach&&G.staff.coach.rating)||70)-70)/100;
+  return .115*age*fac*Math.max(.6,coach);
+ }catch(e){return .1}}
+
+ACTIONS.itrain=el=>{
+ const p=playerById(el.dataset.id);if(!p)return;
+ const v=el.dataset.v;
+ p.itrain=(v==='Balanced'||v===p.itrain)?null:v;
+ toast(p.itrain?'🎯 '+p.name+': '+p.itrain:'🎯 '+p.name+' back to the group');
+ openProfile(p.id)};
+
+/* the weekly work — two attributes, and it actually shifts him */
+const _wtProg=weeklyTraining;
+weeklyTraining=function(){
+ _wtProg.apply(this,arguments);
+ try{
+  (G.clubs[G.my].players||[]).forEach(p=>{
+   if(!p.itrain||p.injury||p.loan)return;
+   const prog=progByKey(p,p.itrain);
+   if(!prog)return;                       /* an old generic focus, or a change of position */
+   const rate=progRate(p);
+   if(rate<=0)return;
+   const attrs=prog[2].slice();
+   for(let i=0;i<2;i++){
+    const a=attrs.splice(Math.floor(Math.random()*attrs.length),1)[0];
+    if(p.attrs[a]!=null)p.attrs[a]=clamp(p.attrs[a]+rate,1,20);
+   }
+   p.sharp=clamp((p.sharp||70)+.5,0,100);
+   const nw=Math.round(ovrOf(p));
+   if(nw>p.ovr&&nw<=(p.pot||99)){p.ovr=nw;p.value=valueFor(p)}
+  });
+ }catch(e){}};
+
+/* the card */
+const _profProg=openProfile;
+openProfile=function(pid){
+ _profProg.apply(this,arguments);
+ try{
+  const p=playerById(pid);if(!p)return;
+  if(p.club!==G.my)return;
+  const host=$('#sheetBody')||$('#modalBody');if(!host)return;
+  /* replace the old generic chip row wholesale */
+  const olds=host.querySelectorAll('[data-action="itrain"]');
+  if(olds.length){
+   const row=olds[0].parentElement;
+   const lbl=row.previousElementSibling;
+   if(lbl&&lbl.classList.contains('chip-lbl'))lbl.remove();
+   row.remove();
+  }
+  if(host.querySelector('.progbox'))return;
+  const list=progsFor(p), rate=progRate(p);
+  const room=Math.max(0,(p.pot||p.ovr)-p.ovr);
+  const weeks=rate>0&&room>0?Math.ceil(room/(rate*1.4)):0;
+  const box=document.createElement('div');
+  box.className='progbox';
+  box.innerHTML='<div class="chip-lbl">Individual training · '+esc(p.pos)+'</div>'+
+   '<div class="xs faint" style="margin:-2px 0 8px 2px;line-height:1.5">'+
+   (room?'He has <b>'+room+'</b> to find before his ceiling. On a programme that is roughly <b>'+
+     weeks+' week'+(weeks===1?'':'s')+'</b> of work at your current facilities and coaching.'
+   :'He is at his ceiling — a programme will sharpen him but will not raise him further.')+'</div>'+
+   '<div class="card tight" style="padding:6px">'+
+   list.map(t=>'<div class="mail'+(p.itrain===t[0]?' unread':'')+'" data-action="itrain" '+
+    'data-id="'+p.id+'" data-v="'+esc(t[0])+'" style="align-items:flex-start">'+
+    '<div style="flex:1"><div class="tt">'+esc(t[0])+(p.itrain===t[0]?' ✅':'')+'</div>'+
+    '<div class="bd" style="white-space:normal;line-height:1.45">'+esc(t[2])+'</div>'+
+    '<div class="xs faint" style="margin-top:3px">'+t[3-1].map(a=>ATTR_LABEL[a]||a).join(' · ')+'</div>'+
+    '</div></div>').join('')+
+   '<div class="mail'+(!p.itrain?' unread':'')+'" data-action="itrain" data-id="'+p.id+'" data-v="Balanced">'+
+   '<div style="flex:1"><div class="tt">Train with the group'+(!p.itrain?' ✅':'')+'</div>'+
+   '<div class="bd">No individual programme — he follows the team plan.</div></div></div>'+
+   '</div>';
+  const mm=host.querySelector('[data-action="praise"]');
+  const at=mm?mm.parentElement:null;
+  if(at&&at.previousElementSibling&&at.previousElementSibling.classList.contains('chip-lbl'))
+   host.insertBefore(box,at.previousElementSibling);
+  else host.appendChild(box);
+ }catch(e){}};
+
+/*#w61_training.js#*/
+
 showStart();
 </script>
 </body>
