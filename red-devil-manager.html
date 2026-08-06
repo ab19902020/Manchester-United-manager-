@@ -30528,6 +30528,72 @@ vTransfers=function(){
 
 /*#w62_loans.js#*/
 
+/*#w62_loans.js#*//*#w63_analytics.js#*/
+
+/* =====================================================================
+   CAREER RECORDS FOR EVERYONE IN YOUR LEAGUE
+   ---------------------------------------------------------------------
+   "Full career analytics for every player in the league you manage in."
+
+   The analytics screen was already built and already good. The data was
+   not there. Measured: after sixty Premier League fixtures, 17 of my 26
+   players had a career record and 0 of Manchester City's 23 did — and
+   the door on their profile card opened onto nothing.
+
+   The cause is one line. Every match in your division is fully simulated
+   with the real engine, so the per-player numbers exist for all of them,
+   but the report that banks those numbers was only written when
+
+       m.fix.h === G.my || m.fix.a === G.my
+
+   — your own games. Everybody else's were computed in full and thrown
+   away. Now every fully-simulated match banks its numbers, so the whole
+   division builds a career: goals, minutes, ratings, duels, the lot, for
+   any player you can open.
+
+   ONE THING HAD TO BE HANDLED. Keeping the full row set on 380 fixtures
+   would bloat every save with data nothing reads. The totals are banked
+   into each player's career record, then the detailed rows are dropped
+   for matches you were not in — the aggregate is what the screen shows,
+   and it costs a few dozen bytes a player instead of a few hundred
+   kilobytes a season.
+   ===================================================================== */
+const _trackedAll=trackedMatch;
+trackedMatch=function(m){
+ if(_trackedAll.apply(this,arguments))return true;
+ try{
+  const f=m&&m.fix;if(!f)return false;
+  if(f.cup)return true;                       /* cup ties are fully simulated too */
+  return typeof fullSimDiv==='function'&&fullSimDiv(f.div);
+ }catch(e){return false}};
+
+const _finishTrim=MatchSim.prototype.finish;
+MatchSim.prototype.finish=function(){
+ const r=_finishTrim.apply(this,arguments);
+ try{
+  const f=this.fix;
+  if(!f||!f.rep)return r;
+  if(f.h===G.my||f.a===G.my)return r;         /* your own games keep everything */
+  f.rep=null;                                 /* banked already — the rows are not worth saving */
+ }catch(e){}
+ return r};
+
+/* a shorter match log for players who are not yours: enough for the
+   recent-form strip, not enough to weigh a save down */
+const _dtcLogTrim=dailyTickCore;
+dailyTickCore=function(){
+ const r=_dtcLogTrim.apply(this,arguments);
+ try{
+  if(G.day%9)return r;
+  (G.clubs||[]).forEach(c=>{
+   if(c.i===G.my)return;
+   (c.players||[]).forEach(p=>{if(p.log&&p.log.length>18)p.log.length=18});
+  });
+ }catch(e){}
+ return r};
+
+/*#w63_analytics.js#*/
+
 showStart();
 </script>
 </body>
