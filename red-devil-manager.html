@@ -24606,9 +24606,11 @@ ACTIONS.advance=function(){
  const r=_advHome.apply(this,arguments);
  try{
   if(!optCfg().homeOnContinue)return r;
-  /* not while a decision is holding the day, and not on the way into a
-     match — both of those put you exactly where you need to be already */
-  if(typeof blockingMails==='function'&&blockingMails().length)return r;
+  /* The first cut also bailed out when a decision was outstanding, on the
+     theory that a decision puts you where you need to be. It does the
+     opposite: the inbox IS on the home screen, so a day that ends with a
+     bid to answer is the day you most want taking there. The only thing
+     worth staying on is a match, which has its own screen. */
   const ms=document.getElementById('matchScreen');
   if(ms&&ms.classList.contains('open'))return r;
   if(UI.view!=='home'){UI.view='home';if(typeof render==='function')render()}
@@ -27043,6 +27045,322 @@ ACTIONS.sfxVoicePick=function(){
  return r};
 
 /*#w47_voice.js#*/
+
+
+/*#w47_voice.js#*//*#w48_natplay.js#*/
+
+/* =====================================================================
+   1. CONTINUE REALLY DOES GO HOME
+   ---------------------------------------------------------------------
+   It went home on every ordinary day and stayed put on the days that
+   mattered. The reason was that on a day with a decision outstanding the
+   dock is not the Continue button at all — it becomes "⚠️ 1 decision to
+   make", which fires gotoDecision, and a later layer had replaced that
+   with one which opens the mail in place without touching the view.
+
+   So the one day you most want taking to the home screen — the day
+   there is something in the inbox — was the one day nothing moved.
+
+   It goes home first now, and the mail opens on top of it, which is
+   where the rest of the inbox is.
+   ===================================================================== */
+const _gotoDecHome=ACTIONS.gotoDecision;
+ACTIONS.gotoDecision=function(){
+ try{
+  if(optCfg().homeOnContinue&&UI.view!=='home'){UI.view='home';render()}
+ }catch(e){}
+ return _gotoDecHome.apply(this,arguments)};
+
+/* =====================================================================
+   2. THE INTERNATIONAL MATCH — YOU ACTUALLY MANAGE IT
+   ---------------------------------------------------------------------
+   Taking a country used to mean choosing twenty-three names and then
+   watching the engine play the tournament without you. During an
+   international break your club has no game, so there was nothing to do
+   at exactly the moment the other half of your job was happening.
+
+   Now the break IS the game. Your country plays, and you manage it —
+   the same tactics screen, the same team selection, the same match, the
+   same touchline.
+
+   HOW, WITHOUT A SECOND ENGINE. The match engine works on two entries in
+   G.clubs and reads the user's tactics from G.tacs. So rather than write
+   an international engine, the game briefly becomes a different club:
+   two temporary clubs are built from the national squads, G.my is
+   pointed at yours and G.tacs at the country's own tactics, and every
+   screen in the game — squad, tactics, the pitch, substitutions, the
+   touchline strip — is looking at England without knowing anything has
+   changed.
+
+   Then it is put back. The temporary clubs are spliced out, G.my and
+   G.tacs are restored, and the club save is exactly as it was. The swap
+   is stored so that even a reload mid-break cannot strand you in it.
+   ===================================================================== */
+
+/* The home screen is written for a manager of a league club — it reads
+   DIV_NAMES[myDiv()] and builds a table from divMembers(). Giving the
+   temporary national side a real league would put England in the Premier
+   League table, so it gets a division of its own that only ever holds the
+   two sides playing that night. */
+try{
+ if(typeof DIV_NAMES==='object'&&!DIV_NAMES.INTL)DIV_NAMES.INTL='International';
+ if(typeof LEAGUES==='object'&&LEAGUES&&!LEAGUES.INTL)
+  LEAGUES.INTL={k:'INTL',cc:'ENG',country:'International',name:'International',
+   tier:0,coef:0,size:2,euro:0,repTop:9999,repBot:5000};
+}catch(e){}
+
+function natMode(){return !!(G&&G._natMode)}
+function natTacs(){
+ const j=natJob();if(!j)return null;
+ if(!j.tacs)j.tacs={formation:(G.tacs&&G.tacs.formation)||'4-2-3-1',
+  mentality:'Balanced',tempo:'Normal',press:'Normal',line:'Normal',
+  passStyle:'Mixed',tackling:'Normal',passFocus:'Mixed',xi:[]};
+ return j.tacs}
+
+/* a club-shaped object the rest of the game can treat as a club */
+function natClub(code,players,idx){
+ const n=NAT_BY[code]||{name:code,base:70};
+ return {i:idx,name:n.name,short:code,cc:code,
+  c1:'#1f2a20',c2:'#0d120e',
+  rep:Math.round((n.base||70)*105),
+  budget:0,bank:0,wageCap:1e9,league:'INTL',div:'INTL',
+  stadium:'the national stadium',cap:60000,
+  players:players.slice(),youth:[],form:[],
+  patience:70,stad:{train:3,youth:3},
+  _nat:true,_natCode:code,
+  tacs:null};
+}
+
+/* who your country is playing — of comparable strength, and with enough
+   real players in the world to be worth playing */
+function natOpponent(code){
+ const n=NAT_BY[code];if(!n)return null;
+ const sq=nationSquads();
+ const near=NATIONS.map(x=>x[0]).filter(c=>c!==code);
+ const r=mulberry(hashStr('natopp|'+code+'|'+G.season+'|'+G.day));
+ const mine=nationStrength(code);
+ const deep=near.filter(c=>(sq[c]||[]).length>=14);
+ const sane=deep.filter(c=>Math.abs(nationStrength(c)-mine)<16);
+ const pool=sane.length?sane:(deep.length?deep:near);
+ return pool[Math.floor(r()*pool.length)]}
+
+/* Burkina Faso has three players in this game's world, and a country
+   still has to put eleven out. A short squad is topped up with call-ups
+   generated at the nation's own level, which is what a thin footballing
+   country actually does. They are temporary — they live only inside the
+   temporary club and go when it does. */
+const NAT_FILL_POS=['GK','DR','DC','DC','DL','DM','MC','MC','AMR','AML','ST','GK','DC','MC','ST','DR','DL','AMC'];
+function natSquadFor(code,want){
+ const real=(nationSquads()[code]||[]).slice(0,want);
+ if(real.length>=want)return real;
+ const base=(NAT_BY[code]||{base:66}).base||66;
+ const out=real.slice();
+ const r=mulberry(hashStr('fill|'+code+'|'+G.season));
+ for(let i=out.length;i<want;i++){
+  const pos=NAT_FILL_POS[i%NAT_FILL_POS.length];
+  const ovr=clamp(Math.round(base*0.72+r()*9-4),42,82);
+  const nm=natName(code).split(/[\s&]/)[0]+' '+String.fromCharCode(65+(i%26))+'. '+
+   ['Traoré','Silva','Kowalski','Nakamura','Okafor','Hansen','Rossi','Dubois','Novak','Ali'][i%10];
+  const p=genPlayer([nm,pos,irnd(21,30),ovr],0,900000+hashStr(code+i)%90000);
+  p.nat=code;p._natFill=true;p.club=null;
+  out.push(p)}
+ return out}
+
+function natCompLabel(){
+ const t=(typeof nextTourney==='function')?nextTourney():null;
+ if(t&&t.season===G.season)return t.name+' qualifier';
+ return 'International friendly'}
+
+/* ---------------------------------------------------------------------
+   SCHEDULING — one fixture per international break
+   --------------------------------------------------------------------- */
+function natBreakDay(){
+ try{
+  if(!natJobCode())return false;
+  const s=G.seasonStart||0;
+  const rel=G.day-s;
+  return INT_BREAKS.indexOf(rel)>=0}
+ catch(e){return false}}
+
+function natPending(){
+ const j=natJob();
+ return (j&&j.fix&&j.fix.day===G.day&&!j.fix.played)?j.fix:null}
+
+const _dtcNatPlay=dailyTickCore;
+dailyTickCore=function(){
+ _dtcNatPlay.apply(this,arguments);
+ try{
+  const j=natJob();if(!j)return;
+  if(j.fix&&j.fix.played&&j.fix.day<G.day)j.fix=null;
+  if(!j.fix&&natBreakDay()){
+   const opp=natOpponent(j.code);
+   if(opp)j.fix={day:G.day,opp,comp:natCompLabel(),played:false,home:Math.random()<.5};
+  }
+ }catch(e){}};
+
+/* ---------------------------------------------------------------------
+   ENTERING AND LEAVING
+   --------------------------------------------------------------------- */
+function natEnter(){
+ const j=natJob(),fx=natPending();
+ if(!j||!fx||natMode())return false;
+ const mine=natSquadFor(j.code,20);
+ const theirs=natSquadFor(fx.opp,20);
+ if(mine.length<11||theirs.length<11){toast('Not enough players available for this fixture.');return false}
+ const i0=G.clubs.length;
+ const A=natClub(j.code,mine,i0);
+ const B=natClub(fx.opp,theirs,i0+1);
+ G.clubs.push(A,B);
+ G._natMode={my:G.my,tacs:G.tacs,i0:i0,day:G.day};
+ G.my=i0;
+ G.tacs=natTacs();
+ A.tacs=G.tacs;B.tacs=Object.assign({},G.tacs);
+ /* an XI, if the country has never been picked before */
+ try{
+  const need=!G.tacs.xi||G.tacs.xi.filter(Boolean).length<11;
+  if(need)G.tacs.xi=autoPick(G.my,G.tacs.formation);
+ }catch(e){}
+ /* and a fixture the match screen understands */
+ /* no `neutral` flag: the home screen reads CUP_DEFS[f.cup].venue for a
+    neutral fixture, and an international friendly has no cup, so it threw
+    on undefined. Home and away carry the information anyway. */
+ const f={r:0,day:G.day,h:fx.home?i0:i0+1,a:fx.home?i0+1:i0,
+  played:false,hs:0,as:0,sc:[],div:'INTL',intl:true};
+ G.fixtures.push(f);
+ G._natMode.fix=f;
+ MU.fix=f;
+ return true}
+
+function natLeave(){
+ const s=G&&G._natMode;
+ if(!s)return;
+ try{
+  G.my=s.my;G.tacs=s.tacs;
+  if(s.fix){const ix=G.fixtures.indexOf(s.fix);if(ix>=0)G.fixtures.splice(ix,1)}
+  /* the two temporary clubs are always the last two, so this cannot
+     disturb any real club's index */
+  G.clubs.length=Math.min(G.clubs.length,s.i0);
+ }catch(e){}
+ G._natMode=null;
+ try{if(typeof render==='function')render()}catch(e){}}
+
+/* a reload in the middle of a break must not strand you as England */
+(function natRescue(){
+ const _lsNat=loadSlot;
+ loadSlot=function(){const ok=_lsNat.apply(this,arguments);
+  try{if(ok&&G&&G._natMode)natLeave()}catch(e){}
+  return ok};
+})();
+
+/* ---------------------------------------------------------------------
+   THE MATCHDAY
+   --------------------------------------------------------------------- */
+ACTIONS.natPlay=()=>{
+ if(!natEnter())return;
+ try{sfx('whistle')}catch(e){}
+ UI.view='home';
+ if(typeof render==='function')render();
+ toast('🌍 ' + natName(G.clubs[G.my]._natCode) + ' — pick your side');
+};
+ACTIONS.natGo=()=>{
+ if(!natMode())return;
+ const f=G._natMode.fix;
+ if(!f)return;
+ /* the same door every other match goes through */
+ try{openPreMatch(f)}
+ catch(e){try{MU.fix=f;ACTIONS.kickoff&&ACTIONS.kickoff()}catch(e2){}}};
+ACTIONS.natQuit=()=>{
+ const s=G&&G._natMode;if(!s)return;
+ const j=natJob();
+ if(j&&j.fix&&!j.fix.played){
+  /* you can hand it to the assistant rather than play it */
+  const f=s.fix;
+  try{const m=new MatchSim(f);let g=0;while(!m.done&&g++<400)m.tickOnce();
+   natRecord(f)}catch(e){}
+ }
+ natLeave();
+ toast('Back to '+G.clubs[G.my].name)};
+
+function natRecord(f){
+ const s=G&&G._natMode,j=natJob();
+ if(!s||!j)return;
+ const meHome=(f.h===s.i0);
+ const gf=meHome?f.hs:f.as, ga=meHome?f.as:f.hs;
+ const res=gf>ga?'W':gf<ga?'L':'D';
+ j.record=j.record||{p:0,w:0,d:0,l:0};
+ j.record.p++;j.record[res==='W'?'w':res==='D'?'d':'l']++;
+ j.fix.played=true;
+ const opp=natName(j.fix.opp);
+ mail('match','🌍 '+natName(j.code)+' '+gf+'–'+ga+' '+opp,
+  (res==='W'?'A win for your country. ':res==='D'?'A draw. ':'A defeat. ')+
+  esc(j.fix.comp)+'.<br><br>Record as '+esc(natName(j.code))+' manager: <b>'+
+  j.record.p+' played, '+j.record.w+'W '+j.record.d+'D '+j.record.l+'L</b>.');
+ /* caps for everybody who played */
+ try{(G.clubs[s.i0].players||[]).slice(0,11).forEach(p=>{p.caps=(p.caps||0)+1})}catch(e){}}
+
+/* when the international match finishes, record it and hand the club back */
+const _ftNat=onFT;
+onFT=function(){
+ const r=_ftNat.apply(this,arguments);
+ try{
+  const s=G&&G._natMode;
+  if(s&&MU.m&&MU.m.done&&MU.fix===s.fix){natRecord(MU.fix)}
+ }catch(e){}
+ return r};
+const _matchDoneNat=ACTIONS.matchDone;
+if(typeof _matchDoneNat==='function')ACTIONS.matchDone=function(){
+ const wasNat=natMode();
+ const r=_matchDoneNat.apply(this,arguments);
+ try{if(wasNat)natLeave()}catch(e){}
+ return r};
+
+/* ---------------------------------------------------------------------
+   THE DOOR — the dock, on the day
+   --------------------------------------------------------------------- */
+const _dockNat=renderDock;
+renderDock=function(){
+ const d=$('#continueDock');
+ if(!d)return _dockNat.apply(this,arguments);
+ try{
+  if(natMode()){
+   const c=G.clubs[G.my],o=G.clubs[G._natMode.i0+1];
+   d.innerHTML='<button class="btn btn-gold" data-action="natGo">🌍 Play the international'+
+    '<span class="cd-sub">'+esc(c.name)+' v '+esc(o.name)+' · '+esc((natJob().fix||{}).comp||'')+
+    '</span></button>';
+   return}
+  const fx=natPending();
+  if(fx&&natJobCode()){
+   d.innerHTML='<button class="btn btn-gold" data-action="natPlay">🌍 International duty'+
+    '<span class="cd-sub">'+esc(natName(natJobCode()))+' v '+esc(natName(fx.opp))+' · '+
+    esc(fx.comp)+'</span></button>';
+   return}
+ }catch(e){}
+ return _dockNat.apply(this,arguments)};
+
+/* a banner so you always know whose team you are looking at */
+const _renderNatBanner=render;
+render=function(){
+ const r=_renderNatBanner.apply(this,arguments);
+ try{
+  const old=document.getElementById('natBanner');
+  if(old)old.remove();
+  if(!natMode())return r;
+  const c=G.clubs[G.my];
+  const v=$('#view');if(!v)return r;
+  const d=document.createElement('div');
+  d.id='natBanner';
+  d.style.cssText='background:linear-gradient(90deg,rgba(251,225,34,.16),rgba(251,225,34,.05));'+
+   'border:1px solid rgba(251,225,34,.45);border-radius:12px;padding:9px 12px;margin-bottom:12px;'+
+   'display:flex;align-items:center;gap:10px';
+  d.innerHTML='<span style="font-size:18px">'+ccFlag(c._natCode)+'</span>'+
+   '<div style="flex:1;min-width:0"><div class="small" style="font-weight:800">On international duty</div>'+
+   '<div class="xs faint">You are managing '+esc(c.name)+'. Your club is waiting.</div></div>'+
+   '<button class="btn btn-ghost btn-xs" data-action="natQuit">Leave</button>';
+  v.insertBefore(d,v.firstChild);
+ }catch(e){}
+ return r};
+
+/*#w48_natplay.js#*/
 
 showStart();
 </script>
