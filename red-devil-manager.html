@@ -28441,6 +28441,269 @@ paintTacticsPitch=function(){
 
 /*#w52_unblock.js#*/
 
+
+/*#w52_unblock.js#*/ACTIONS.sugPick=el=>{
+ if(UI.selSlot==null)return;
+ G.tacs.xi[UI.selSlot]=+el.dataset.id;
+ UI.selSlot=null;
+ try{sfx('swap')||sfx('tap')}catch(e){}
+ render()};
+
+/*#w53_faces.js#*/
+
+/* =====================================================================
+   THE BEARDS THAT LOOKED LIKE MASKS
+   ---------------------------------------------------------------------
+   They looked like masks because they were behaving like masks. The old
+   full beard was one fixed path:
+
+     M11.4 16.6c.3 6.2 3.4 10.8 8.6 10.8s8.3-4.6 8.6-10.8
+     c.6 7.8-2.2 13.4-8.6 13.4s-9.2-5.6-8.6-13.4z
+
+   A crescent — an outer arc minus an inner one — filled with near-black
+   hair colour at 82% opacity, and drawn AFTER the mouth. So it was an
+   opaque dark band strapped across the lower face with the lips hidden
+   underneath it. It also ignored the jaw entirely: the same path was
+   used for all five head shapes, so on a wide or a long jaw it sat off
+   the face altogether.
+
+   THE FIX IS A CLIP. Facial hair is now drawn inside a clipPath of the
+   player's own jaw silhouette, which means it is physically incapable of
+   leaving the face. That in turn allows generous, simple shapes — the
+   jaw does the trimming — so a beard follows the head it is on rather
+   than being a decal applied over it.
+
+   Then the order was wrong too. Beard, then nose and eyes, then the
+   mouth ON TOP, because on a real face you see the lips through the
+   beard, not the beard over the lips.
+
+   And there are proper styles now — stubble, moustache, goatee,
+   chinstrap and full — instead of one shape at two opacities. Facial
+   hair is tinted from the hair colour but lightened and softened at the
+   edge, because a beard is thousands of separate hairs over skin, and
+   what made the old one read as plastic was that it was a single flat
+   silhouette.
+   ===================================================================== */
+
+const BEARDS=['none','none','none','stubble','stubble','moustache','goatee','chinstrap','full','full'];
+
+/* the beard's own colour: hair, but warmed toward the skin and never
+   pure black, which is what made the old one look like a cut-out */
+function beardInk(H,S){
+ try{return shade(H.b,1.34)}catch(e){return H.b}}
+
+/* Every shape below is drawn inside a clip of the jaw, so it only has to
+   be roughly right — the silhouette does the rest. */
+function faceHair(kind,H,S,uid){
+ if(!kind||kind==='none')return '';
+ const ink=beardInk(H,S);
+ const clip=' clip-path="url(#jw'+uid+')"';
+ /* the mass of a beard: everything below a line that runs high at the
+    sideburns and dips under the cheeks */
+ const full='M5 12 C6.5 19, 9.5 22.4, 13.5 23.4 C16 22.6, 18 22.2, 20 22.2 '+
+            'C22 22.2, 24 22.6, 26.5 23.4 C30.5 22.4, 33.5 19, 35 12 L35 36 L5 36 Z';
+ const chin='M12.5 22.5 C14.5 21.6, 17 21.2, 20 21.2 C23 21.2, 25.5 21.6, 27.5 22.5 '+
+            'L28.5 30 C26 32, 22.5 32.6, 20 32.6 C17.5 32.6, 14 32, 11.5 30 Z';
+ /* a moustache, not a smudge: the first cut was 2.2 units deep at nearly
+    full opacity and sat straight on the lip, so it read as a dark blob and
+    swallowed the mouth. Thinner, a shade higher, and with a parting under
+    the nose, which is what makes it read as hair rather than a shape. */
+ const tash='M16.5 21.35 C17.6 20.5, 18.75 20.15, 20 20.15 C21.25 20.15, 22.4 20.5, 23.5 21.35 '+
+            'C22.5 21.85, 21.3 22.1, 20 22.1 C18.7 22.1, 17.5 21.85, 16.5 21.35 Z';
+ /* a chinstrap is a narrow line following the jaw, and the first version
+    was wide enough to read as a full beard */
+ const strap='M5 13 C6.2 19.5, 9 23.4, 13.2 24.6 C15.8 23.9, 17.9 23.6, 20 23.6 '+
+             'C22.1 23.6, 24.2 23.9, 26.8 24.6 C31 23.4, 33.8 19.5, 35 13 L35 15.4 '+
+             'C33.6 21.2, 31 24.9, 27.4 26.1 C24.9 25.5, 22.5 25.2, 20 25.2 '+
+             'C17.5 25.2, 15.1 25.5, 12.6 26.1 C9 24.9, 6.4 21.2, 5 15.4 Z';
+ let g='';
+ if(kind==='stubble'){
+  g+='<path d="'+full+'" fill="'+ink+'" opacity=".34"'+clip+'/>';
+  g+='<path d="'+full+'" fill="'+ink+'" opacity=".16" transform="translate(0,-1)"'+clip+'/>';
+ }else if(kind==='moustache'){
+  g+='<path d="'+tash+'" fill="'+ink+'" opacity=".78"/>';
+ }else if(kind==='goatee'){
+  g+='<path d="'+chin+'" fill="'+ink+'" opacity=".80"'+clip+'/>';
+  g+='<path d="'+tash+'" fill="'+ink+'" opacity=".74"/>';
+ }else if(kind==='chinstrap'){
+  g+='<path d="'+strap+'" fill="'+ink+'" opacity=".70"'+clip+'/>';
+ }else{ /* full */
+  g+='<path d="'+full+'" fill="'+ink+'" opacity=".80"'+clip+'/>';
+  /* a softer collar above the beard line so it fades into the cheek
+     instead of stopping dead, which is the other half of the mask look */
+  g+='<path d="'+full+'" fill="'+ink+'" opacity=".22" transform="translate(0,-1.6)"'+clip+'/>';
+  g+='<path d="'+tash+'" fill="'+ink+'" opacity=".80"/>';
+ }
+ return g}
+
+/* ---------------------------------------------------------------------
+   the spec gains a real beard style, kept stable per player
+   --------------------------------------------------------------------- */
+const _specBeard=faceSpec;
+faceSpec=function(p){
+ const s=_specBeard.apply(this,arguments);
+ try{
+  const r=mulberry(hashStr('bd3|'+p.id+'|'+p.name));
+  /* a named face keeps whatever it was given; everyone else is redrawn
+     from a proper set of styles rather than none/stubble/full */
+  if(!MUN_FACES[p.name]){
+   s.beard=BEARDS[Math.floor(r()*BEARDS.length)];
+   if(p.age<=19&&s.beard!=='none'&&r()<.7)s.beard=r()<.5?'none':'stubble';
+  }else if(s.beard==='full'&&r()<.35)s.beard='goatee';
+ }catch(e){}
+ return s};
+
+/* ---------------------------------------------------------------------
+   and the portrait itself, rebuilt in the right order
+   --------------------------------------------------------------------- */
+const _faceOld=face;
+face=function(p,sz){
+ try{
+  sz=sz||28;
+  const sp=faceSpec(p);
+  const S=SKIN2[sp.sk]||SKIN2.light;
+  const H=HAIR2[sp.hr]||HAIR2.brown;
+  const c=(G.clubs&&G.clubs[p.club])||{c1:'#333',c2:'#111'};
+  const kit=p.pos==='GK'?'#f0d040':c.c1;
+  const kit2=(c.c2&&c.c2!==c.c1)?c.c2:'#0d0d12';
+  const jaw=JAWS[sp.jaw]||JAWS.oval;
+  const uid='g'+(p.id||0)+'_'+Math.abs(hashStr(p.name))%9999;
+  const bald=sp.cut==='bald';
+  const iris=(sp.sk==='pale'||sp.sk==='fair')?'#4a6b52':'#33231a';
+  return '<svg width="'+sz+'" height="'+sz+'" viewBox="0 0 40 40" '+
+   'style="border-radius:9px;flex-shrink:0;display:block">'+
+  '<defs>'+
+   '<linearGradient id="bg'+uid+'" x1="0" y1="0" x2="0" y2="1">'+
+    '<stop offset="0" stop-color="#26362e"/><stop offset="1" stop-color="#0a110e"/></linearGradient>'+
+   '<linearGradient id="sh'+uid+'" x1="0.15" y1="0" x2="0.9" y2="1">'+
+    '<stop offset="0" stop-color="'+S.l+'"/><stop offset="0.5" stop-color="'+S.b+'"/>'+
+    '<stop offset="1" stop-color="'+S.s+'"/></linearGradient>'+
+   '<linearGradient id="kt'+uid+'" x1="0" y1="0" x2="0" y2="1">'+
+    '<stop offset="0" stop-color="'+kit+'"/><stop offset="1" stop-color="'+shade(kit,.72)+'"/></linearGradient>'+
+   '<clipPath id="cl'+uid+'"><rect width="40" height="40" rx="9"/></clipPath>'+
+   /* THE ONE THAT MATTERS: facial hair is confined to the head */
+   '<clipPath id="jw'+uid+'"><path d="'+jaw+'"/></clipPath>'+
+  '</defs>'+
+  '<g clip-path="url(#cl'+uid+')">'+
+  '<rect width="40" height="40" fill="url(#bg'+uid+')"/>'+
+  '<ellipse cx="20" cy="7" rx="15" ry="11" fill="#ffffff" opacity=".045"/>'+
+  /* shoulders */
+  '<path d="M4.5 40c1.2-7.4 7-10.6 15.5-10.6S34.3 32.6 35.5 40z" fill="url(#kt'+uid+')"/>'+
+  '<path d="M20 29.4c-3 0-4.6 1.6-4.6 4.2 0 .6.2 1.2.5 1.7 1.2-1.6 2.5-2.4 4.1-2.4s2.9.8 4.1 2.4c.3-.5.5-1.1.5-1.7 0-2.6-1.6-4.2-4.6-4.2z" fill="'+kit2+'" opacity=".9"/>'+
+  /* neck */
+  '<path d="M16.9 24.4h6.2v6.2c0 1.2-1.4 2-3.1 2s-3.1-.8-3.1-2z" fill="'+S.s+'"/>'+
+  '<path d="M16.9 26.8c1.9 1.4 4.3 1.4 6.2 0v-2.4h-6.2z" fill="'+S.d+'" opacity=".45"/>'+
+  /* ears */
+  '<ellipse cx="10.8" cy="16.4" rx="'+(sp.ear?1.7:1.4)+'" ry="'+(sp.ear?2.4:2.2)+'" fill="'+S.s+'"/>'+
+  '<ellipse cx="29.2" cy="16.4" rx="'+(sp.ear?1.7:1.4)+'" ry="'+(sp.ear?2.4:2.2)+'" fill="'+S.s+'"/>'+
+  /* head */
+  '<path d="'+jaw+'" fill="url(#sh'+uid+')"/>'+
+  /* FACIAL HAIR — before the features, clipped to the jaw */
+  faceHair(sp.beard,H,S,uid)+
+  /* cheek shading, on top of the beard so the face still has form */
+  '<path d="M13.9 19.4c1.1.7 2.1 1 3.1 1M23.0 19.4c-1.1.7-2.1 1-3.1 1" stroke="'+S.d+
+   '" stroke-width=".55" fill="none" opacity=".28"/>'+
+  /* nose */
+  '<path d="M20 14.4c-.5 2.5-1 4-1.5 4.7.5.5 1 .75 1.5.75s1-.25 1.5-.75c-.5-.7-1-2.2-1.5-4.7z" fill="'+S.s+'" opacity=".78"/>'+
+  '<path d="M18.3 19.5c.5.5 1.1.75 1.7.75s1.2-.25 1.7-.75" stroke="'+S.d+'" stroke-width=".5" fill="none" opacity=".45"/>'+
+  /* eyes */
+  '<ellipse cx="16.2" cy="15.3" rx="2.1" ry="1.42" fill="#fdfaf6"/>'+
+  '<ellipse cx="23.8" cy="15.3" rx="2.1" ry="1.42" fill="#fdfaf6"/>'+
+  '<circle cx="16.4" cy="15.35" r="1.08" fill="'+iris+'"/>'+
+  '<circle cx="23.6" cy="15.35" r="1.08" fill="'+iris+'"/>'+
+  '<circle cx="16.4" cy="15.35" r=".46" fill="#0a0806"/><circle cx="23.6" cy="15.35" r=".46" fill="#0a0806"/>'+
+  '<circle cx="16.86" cy="14.84" r=".31" fill="#fff" opacity=".92"/>'+
+  '<circle cx="24.06" cy="14.84" r=".31" fill="#fff" opacity=".92"/>'+
+  '<path d="M14.1 15.25c.72-1.05 1.42-1.5 2.1-1.5s1.38.45 2.1 1.5M21.7 15.25c.72-1.05 1.42-1.5 2.1-1.5s1.38.45 2.1 1.5" stroke="'+S.d+'" stroke-width=".5" fill="none" opacity=".5"/>'+
+  /* brows */
+  '<path d="M13.6 12.25c1.35-.95 3.2-.95 4.6-.1M21.8 12.15c1.4-.85 3.25-.85 4.6.1" stroke="'+H.b+
+   '" stroke-width="'+(sp.brow==='thick'?'1.55':'1.1')+'" fill="none" stroke-linecap="round"/>'+
+  /* MOUTH — over the beard, because you see lips through a beard */
+  /* a highlight under the lip first, so the mouth still reads on a face
+     covered in dark hair, then the lip line over it */
+  '<path d="M16.9 23.9c1.9 1.0 4.3 1.0 6.2 0" stroke="'+S.l+'" stroke-width="1.15" fill="none" opacity=".38" stroke-linecap="round"/>'+
+  '<path d="M16.8 23.15c1.95 1.3 4.45 1.3 6.4 0" stroke="'+shade(S.d,.8)+
+   '" stroke-width="1.15" fill="none" stroke-linecap="round"/>'+
+  /* hair last, so it sits over the forehead */
+  (bald?'<path d="M11.4 12.6c.7-4.4 3.6-6.8 8.6-6.8s7.9 2.4 8.6 6.8" fill="'+S.s+'" opacity=".5"/>'
+       :hairPath(sp.cut,H,S))+
+  '<ellipse cx="15.5" cy="10.5" rx="6" ry="5" fill="#fff" opacity=".06"/>'+
+  '</g></svg>'}
+ catch(e){return _faceOld.apply(this,arguments)}};
+
+/* =====================================================================
+   SUGGESTED REPLACEMENTS ON THE TACTICS PITCH
+   ---------------------------------------------------------------------
+   Tapping a shirt gave a flat list of everybody who was fit, in one
+   order, with no reference to the man already in the position. The
+   question a manager is actually asking is "is anybody better than him
+   here" — so that is what it answers now: the three best options with
+   the difference against the current player spelled out, then the rest.
+   ===================================================================== */
+function subSuggest(slotName,curId){
+ try{
+  const c=G.clubs[G.my];
+  const xi=(G.tacs&&G.tacs.xi)||[];
+  const cur=curId?playerById(curId):null;
+  const curEff=cur?calcEff(cur,slotName):0;
+  const opts=c.players.filter(p=>!xi.includes(p.id)&&!p.injury&&(p.susp||0)<=0&&!p.loan)
+   .map(p=>({p,eff:calcEff(p,slotName)}))
+   .sort((a,b)=>b.eff-a.eff);
+  return {cur,curEff,opts}}
+ catch(e){return null}}
+
+function suggestHTML(slotName,curId){
+ const s=subSuggest(slotName,curId);
+ if(!s||!s.opts.length)return '';
+ const best=s.opts.slice(0,3);
+ const row=(o,lead)=>{
+  const d=Math.round(o.eff-s.curEff);
+  const dCol=d>0?'var(--green)':d<0?'var(--ink-faint)':'var(--ink)';
+  const fa=(typeof formAvg==='function')?formAvg(o.p):0;
+  const oop=(typeof posPenalty==='function')&&posPenalty(o.p,slotName)>0;
+  /* NOT data-action="benchPick": an earlier layer repaints every element
+     carrying that action with its own bench formatting, which threw away
+     the comparison against the current player — the whole point here. */
+  return '<div class="prow" data-action="sugPick" data-id="'+o.p.id+'">'+
+   pRowInner(o.p,{
+    meta:o.p.age+' · cond '+Math.round(o.p.cond)+'% · sharp '+Math.round(o.p.sharp||0)+'%'+
+      (fa?' · form '+fa.toFixed(1):''),
+    rail:'<span class="num" style="font-weight:800">'+Math.round(o.eff)+'</span>'+
+      '<span class="xs" style="font-weight:800;color:'+dCol+'">'+
+      (d>0?'+'+d+' better':d<0?d+' worse':'level')+'</span>'+
+      (oop?'<span class="xs" style="color:var(--amber);font-weight:800">⚠ natural '+esc(o.p.pos)+'</span>':''),
+    sub:lead?'<span class="xs" style="color:var(--gold);font-weight:800">★ best here</span>':''
+   })+'</div>'};
+ let h='<div class="sec"><div class="t">Suggested for '+esc(slotName)+'</div><div class="ln"></div>'+
+  '<div class="sub">'+(s.cur?'vs '+esc(s.cur.name)+' ('+Math.round(s.curEff)+')':'empty')+'</div></div>'+
+  '<div class="card tight" style="padding:4px 8px"><div class="plist">'+
+  best.map((o,i)=>row(o,i===0&&o.eff>s.curEff+0.5)).join('')+'</div>';
+ if(best.length&&best[0].eff<=s.curEff+0.5)
+  h+='<div class="xs faint" style="padding:7px 3px 3px;line-height:1.6">'+
+   'Nobody on the bench improves this position — '+esc((s.cur&&s.cur.name)||'the current pick')+
+   ' is your best option here.</div>';
+ h+='</div>';
+ return h}
+
+/* slot in above the existing bench list, which stays as the full choice */
+const _vTacSuggest=vTactics;
+vTactics=function(){
+ const h=_vTacSuggest.apply(this,arguments);
+ try{
+  if(UI.selSlot==null)return h;
+  const slots=FORMATIONS[G.tacs.formation]||[];
+  const slot=slots[UI.selSlot];
+  if(!slot)return h;
+  const sug=suggestHTML(slot[0],G.tacs.xi[UI.selSlot]);
+  if(!sug)return h;
+  /* before the "Replace XX" section the base view already emits */
+  const marker='<div class="sec"><div class="t">Replace ';
+  const ix=h.indexOf(marker);
+  return ix>=0?(h.slice(0,ix)+sug+h.slice(ix)):(sug+h);
+ }catch(e){return h}};
+
+/*#w53_faces.js#*/
+
 showStart();
 </script>
 </body>
