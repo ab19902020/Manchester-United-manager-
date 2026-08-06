@@ -26365,6 +26365,324 @@ setTimeout(pinDock,400);
 
 /*#w44_pin.js#*/
 
+
+/*#w44_pin.js#*//*#w45_country.js#*/
+
+/* =====================================================================
+   MANAGING A COUNTRY AS WELL
+   ---------------------------------------------------------------------
+   The international game was already all here — a hundred and sixty
+   nations, squads picked from every player in the world, qualifying with
+   the confederation places the real thing uses, groups seeded into pots,
+   knockouts with penalties, caps and goals recorded against the players
+   who are also in your club side. All of it ran without you.
+
+   Now you can take one. It is a second job, not a replacement: you keep
+   the club, the club keeps paying you, and the two calendars fit
+   together the way they do in life — your country only plays during the
+   six international breaks, which is precisely when your club does not.
+
+   WHAT THE JOB ACTUALLY IS. It is selection. A national manager does not
+   coach anybody for more than a fortnight a year; what he does is decide
+   which twenty-three go. So that is what you do, and it matters, because
+   nationStrength() is computed from the squad — leave your best striker
+   at home and the country is measurably worse in the tournament the
+   engine then simulates.
+
+   WHO WILL HAVE YOU. Not everybody. A nation's association looks at your
+   reputation and your record, and the strongest countries in the world do
+   not hand the job to somebody who has never won anything. Your own
+   nationality helps, as it does in life.
+
+   AND YOU CAN WALK AWAY. Resigning the international job leaves the club
+   job untouched, which is the whole point of it being a second job.
+   ===================================================================== */
+
+function natJob(){return G.natJob||null}
+function natJobCode(){const j=natJob();return j?j.code:null}
+function isNatBoss(code){return natJobCode()===code}
+
+/* ---------------------------------------------------------------------
+   1. WHICH COUNTRIES WOULD HAVE YOU
+   ---------------------------------------------------------------------
+   Reputation buys you a hearing. A big nation wants a big name; a small
+   one will take anybody who has managed at this level at all.
+   --------------------------------------------------------------------- */
+function mgrStanding(){
+ try{
+  const my=G.clubs[G.my];
+  let s=(my.rep||6000)/110;                          // the club you hold
+  s+=Math.min(28,(G.honours||[]).length*7);          // and what you have won
+  s+=Math.min(10,(G.season-1)*1.6);                  // and how long you have lasted
+  return s}
+ catch(e){return 55}}
+
+function natOpenTo(code){
+ const n=NAT_BY[code];if(!n)return false;
+ if(natJobCode())return false;
+ /* a country already has a manager; it is only open if you are good
+    enough that they would move for you */
+ const need=(n.base-58)*2.6;
+ return mgrStanding()>=need}
+
+function natCandidates(){
+ const out=NATIONS.map(n=>n[0]).filter(natOpenTo)
+  .map(c=>({c,s:nationStrength(c),base:(NAT_BY[c]||{}).base||60}));
+ out.sort((a,b)=>b.base-a.base);
+ return out}
+
+/* ---------------------------------------------------------------------
+   2. TAKING IT, AND LEAVING IT
+   --------------------------------------------------------------------- */
+ACTIONS.natOffers=()=>{
+ if(natJobCode())return toast('You already manage a country.');
+ const list=natCandidates();
+ let h='<h3 style="margin:0 0 4px">Take a national job</h3>'+
+  '<p class="small muted" style="margin:0 0 12px">A second job alongside the club. '+
+  'Your country plays only during international breaks, and you can resign from it at any time '+
+  'without touching your club job.</p>';
+ if(!list.length)h+=emptyBox('🌍','No association would appoint you yet',
+  'Win something, or manage a bigger club, and the calls start coming.');
+ else{
+  h+='<div class="card tight" style="padding:4px 9px">';
+  list.slice(0,26).forEach(x=>{
+   const sq=(nationSquads()[x.c]||[]);
+   const mine=sq.filter(p=>p.club===G.my).length;
+   h+='<div class="spread" style="padding:8px 2px;border-bottom:1px solid var(--chalk)">'+
+    '<div class="row" style="gap:9px;min-width:0"><span style="font-size:19px">'+ccFlag(x.c)+'</span>'+
+    '<div style="min-width:0"><div class="small" style="font-weight:800">'+esc(natName(x.c))+'</div>'+
+    '<div class="xs faint">'+((NAT_BY[x.c]||{}).conf||'')+' · strength '+Math.round(x.s)+
+    (mine?' · <span style="color:var(--gold)">'+mine+' of yours</span>':'')+'</div></div></div>'+
+    '<button class="btn btn-primary btn-xs" data-action="natTake" data-v="'+x.c+'">Accept</button></div>'});
+  h+='</div>'}
+ openModal(h)};
+
+ACTIONS.natTake=el=>{
+ const code=el.dataset.v;
+ if(!NAT_BY[code])return;
+ if(natJobCode())return toast('You already manage a country.');
+ G.natJob={code,since:G.season,sinceDay:G.day,picked:null,record:{p:0,w:0,d:0,l:0},honours:[]};
+ closeModal();
+ try{sfx('cheer')}catch(e){}
+ toast(ccFlag(code)+' You are the '+natName(code)+' manager');
+ mail('board','🌍 Appointed by '+natName(code),
+  'You have accepted the '+esc(natName(code))+' job alongside your work at '+
+  esc(G.clubs[G.my].name)+'.<br><br>Your country plays during the six international breaks. '+
+  'Between now and then, the job is selection — pick the squad, and the squad is the team. '+
+  'You may resign the international post at any time and keep your club.');
+ render()};
+
+ACTIONS.natResign=()=>{
+ const code=natJobCode();if(!code)return;
+ openModal('<h3>Resign as '+esc(natName(code))+' manager?</h3>'+
+  '<p class="small muted" style="margin:8px 0 14px">This ends the international job only. '+
+  'You remain manager of '+esc(G.clubs[G.my].name)+'.</p>'+
+  '<div class="grid2"><button class="btn btn-ghost" data-action="closeModal">Stay on</button>'+
+  '<button class="btn btn-danger" data-action="natResignDo">Resign</button></div>')};
+ACTIONS.natResignDo=()=>{
+ const code=natJobCode();if(!code)return;
+ const rec=(natJob()||{}).record||{p:0,w:0,d:0,l:0};
+ G.natPast=(G.natPast||[]).concat([{code,from:G.natJob.since,to:G.season,record:rec}]);
+ G.natJob=null;
+ closeModal();
+ toast('You have resigned as '+natName(code)+' manager');
+ mail('board','You leave the '+natName(code)+' job',
+  'You have stepped down as '+esc(natName(code))+' manager after '+rec.p+' matches ('+
+  rec.w+'W '+rec.d+'D '+rec.l+'L). Your work at '+esc(G.clubs[G.my].name)+' continues.');
+ render()};
+
+/* ---------------------------------------------------------------------
+   3. SELECTION, WHICH IS THE JOB
+   ---------------------------------------------------------------------
+   nationSquads() picks the best twenty-three eligible players in the
+   world. For the country you manage, it uses yours instead — and because
+   nationStrength() reads the squad, a bad selection is a worse team.
+   --------------------------------------------------------------------- */
+function natPool(code){
+ const out=[];
+ eachPlayer(p=>{if(p.age>=17&&!p.youth&&natOf(p)===code)out.push(p)});
+ (G.freeAgents||[]).forEach(p=>{if(p.age>=17&&natOf(p)===code)out.push(p)});
+ return out.sort((a,b)=>b.ovr-a.ovr)}
+
+function natPicked(){
+ const j=natJob();if(!j)return null;
+ if(!j.picked)return null;
+ const byId={};natPool(j.code).forEach(p=>byId[p.id]=p);
+ const sq=j.picked.map(id=>byId[id]).filter(Boolean);
+ return sq.length?sq:null}
+
+const _nationSquadsUser=nationSquads;
+nationSquads=function(){
+ const by=_nationSquadsUser.apply(this,arguments);
+ try{
+  const j=natJob();
+  if(j){const mine=natPicked();if(mine)by[j.code]=mine}
+ }catch(e){}
+ return by};
+
+ACTIONS.natSquad=()=>{
+ const j=natJob();if(!j)return;
+ const pool=natPool(j.code);
+ const picked=new Set((j.picked||nationSquads()[j.code]||[]).map(p=>p.id||p));
+ let h='<h3 style="margin:0 0 3px">'+ccFlag(j.code)+' '+esc(natName(j.code))+' squad</h3>'+
+  '<p class="small muted" style="margin:0 0 10px">Pick up to 23. The squad is the team — '+
+  'strength is computed from who you take, so leaving somebody at home costs you.</p>'+
+  '<div class="row" style="gap:7px;margin-bottom:10px">'+
+  '<button class="btn btn-ghost btn-sm" style="flex:1" data-action="natAuto">⚡ Best available</button>'+
+  '<button class="btn btn-ghost btn-sm" style="flex:1" data-action="natClear">Clear</button></div>'+
+  '<div class="xs faint" style="margin-bottom:8px" id="natCount">'+picked.size+' of 23 selected</div>'+
+  '<div class="plist">';
+ pool.slice(0,70).forEach(p=>{
+  const on=picked.has(p.id);
+  const club=G.clubs[p.club];
+  h+=pRow(p,{
+   meta:(club?esc(club.short||club.name):'Free agent')+' · '+p.age+
+    ((p.caps||0)?' · '+p.caps+' caps':''),
+   rail:'<span class="num" style="font-weight:800;color:'+(on?'var(--green)':'var(--ink-faint)')+'">'+
+    p.ovr+'</span>',
+   sub:'',
+   btns:'<button class="btn '+(on?'btn-gold':'btn-ghost')+' btn-xs" data-action="natToggle" data-id="'+
+    p.id+'">'+(on?'In':'Call up')+'</button>'})});
+ h+='</div>';
+ openModal(h)};
+
+ACTIONS.natToggle=el=>{
+ const j=natJob();if(!j)return;
+ const id=+el.dataset.id;
+ let cur=(j.picked||(nationSquads()[j.code]||[]).map(p=>p.id)).slice();
+ const ix=cur.indexOf(id);
+ if(ix>=0)cur.splice(ix,1);
+ else{if(cur.length>=23)return toast('Twenty-three is the limit.');cur.push(id)}
+ j.picked=cur;
+ NSQ_CACHE=null;NSQ_KEY='';
+ try{sfx('tap')}catch(e){}
+ ACTIONS.natSquad()};
+ACTIONS.natAuto=()=>{
+ const j=natJob();if(!j)return;
+ j.picked=natPool(j.code).slice(0,23).map(p=>p.id);
+ NSQ_CACHE=null;NSQ_KEY='';
+ toast('Best available selected');ACTIONS.natSquad()};
+ACTIONS.natClear=()=>{
+ const j=natJob();if(!j)return;
+ j.picked=[];NSQ_CACHE=null;NSQ_KEY='';
+ ACTIONS.natSquad()};
+
+/* ---------------------------------------------------------------------
+   4. RESULTS, AND BEING JUDGED ON THEM
+   --------------------------------------------------------------------- */
+const _tourneyUser=(typeof runTournament==='function')?runTournament:null;
+if(_tourneyUser)runTournament=function(t,year){
+ const res=_tourneyUser.apply(this,arguments);
+ try{
+  const j=natJob();
+  if(j&&res){
+   const won=res.winner===j.code;
+   const runner=res.runner===j.code;
+   if(won){
+    j.honours=(j.honours||[]).concat([{name:t.name,year}]);
+    G.honours=(G.honours||[]).concat([t.name+' '+year]);
+    mail('board','🏆 '+natName(j.code)+' win the '+t.name+'!',
+     'You have won the <b>'+esc(t.name)+'</b> with <b>'+esc(natName(j.code))+'</b>.'+
+     '<br><br>A national team manager is judged on exactly one thing, and you have just done it.');
+    try{sfx('cheer')}catch(e){}
+   }else if(runner){
+    mail('board','Runners-up at the '+t.name,
+     '<b>'+esc(natName(j.code))+'</b> reached the final of the '+esc(t.name)+' and lost it. '+
+     'Closer than most ever get, and it will not feel like it.');
+   }else{
+    const went=(res.teams||[]).indexOf&&(res.teams||[]).indexOf(j.code)>=0;
+    mail('news',natName(j.code)+' at the '+t.name,
+     went?'<b>'+esc(natName(j.code))+'</b> went out of the '+esc(t.name)+'. '+
+      'The inquest starts tomorrow.'
+     :'<b>'+esc(natName(j.code))+'</b> did not qualify for the '+esc(t.name)+
+      '. That is the question you will be asked all season.');
+   }
+  }
+ }catch(e){}
+ return res};
+
+/* ---------------------------------------------------------------------
+   5. THE SCREEN
+   --------------------------------------------------------------------- */
+function vNatJob(){
+ const j=natJob();
+ if(!j){
+  const n=natCandidates().length;
+  return '<div class="sec"><div class="t">🌍 International management</div><div class="ln"></div>'+
+   '<div class="sub">'+(n?n+' open':'none open')+'</div></div>'+
+   '<div class="card tight" style="padding:12px">'+
+   '<div class="xs faint" style="line-height:1.7;margin-bottom:10px">You can manage a country '+
+   'alongside your club. Your nation plays only during international breaks, so the two never '+
+   'clash, and you can resign the international job at any time without affecting your club.</div>'+
+   '<button class="btn btn-primary btn-block" data-action="natOffers">'+
+   (n?'🌍 See which countries would appoint you':'🌍 Check your standing')+'</button></div>'}
+ const code=j.code;
+ const sq=nationSquads()[code]||[];
+ const mine=sq.filter(p=>p.club===G.my).length;
+ const rec=j.record||{p:0,w:0,d:0,l:0};
+ const rank=NATIONS.map(n=>n[0]).map(c=>({c,s:nationStrength(c)}))
+  .sort((a,b)=>b.s-a.s).findIndex(x=>x.c===code)+1;
+ let h='<div class="sec"><div class="t">'+ccFlag(code)+' '+esc(natName(code))+'</div><div class="ln"></div>'+
+  '<div class="sub">your country</div></div>'+
+  '<div class="grid3" style="margin-bottom:10px">'+
+  '<div class="kpi"><div class="v num" style="font-size:15px">'+(rank||'—')+'</div><div class="l">World rank</div></div>'+
+  '<div class="kpi"><div class="v num" style="font-size:15px">'+Math.round(nationStrength(code))+'</div><div class="l">Strength</div></div>'+
+  '<div class="kpi"><div class="v num" style="font-size:15px">'+sq.length+'</div><div class="l">In the squad</div></div></div>';
+ if(j.honours&&j.honours.length)h+='<div class="card tight" style="padding:9px 11px;margin-bottom:10px">'+
+  '<div class="xs" style="color:var(--gold);font-weight:800">🏆 '+
+  j.honours.map(x=>esc(x.name)+' '+x.year).join(' · ')+'</div></div>';
+ h+='<div class="card tight" style="padding:10px 11px">'+
+  '<div class="xs faint" style="line-height:1.7;margin-bottom:10px">'+
+  'Appointed in season '+j.since+'. '+(mine?'<b style="color:var(--gold)">'+mine+
+  '</b> of your club players are in the squad. ':'')+
+  'The job is selection: strength is computed from who you take.</div>'+
+  '<div class="grid2">'+
+  '<button class="btn btn-primary btn-sm" data-action="natSquad">👥 Pick the squad</button>'+
+  '<button class="btn btn-ghost btn-sm" data-action="natResign">Resign the job</button></div></div>';
+ /* who is actually in it */
+ if(sq.length){
+  h+='<div class="chip-lbl">Current selection</div><div class="card tight" style="padding:4px 9px">';
+  sq.slice(0,23).forEach(p=>{
+   const club=G.clubs[p.club];
+   h+='<div class="spread" data-action="profile" data-id="'+p.id+'" style="padding:6px 2px;border-bottom:1px solid var(--chalk)">'+
+    '<div class="row" style="gap:8px;min-width:0">'+
+    '<span class="xs faint" style="min-width:26px">'+esc(p.pos)+'</span>'+
+    '<span class="small" style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+
+    esc(p.name)+'</span>'+(p.club===G.my?'<span class="xs" style="color:var(--gold)">yours</span>':'')+'</div>'+
+    '<div class="row" style="gap:9px"><span class="xs faint">'+esc(club?(club.short||''):'FA')+'</span>'+
+    '<b class="num small">'+p.ovr+'</b></div></div>'});
+  h+='</div>'}
+ return h}
+
+const _vIntlNat=vIntl;
+vIntl=function(){
+ let head='';
+ try{head=vNatJob()}catch(e){head=''}
+ return head+_vIntlNat.apply(this,arguments)};
+
+/* an offer arrives on its own once you are big enough */
+const _dtcNat=dailyTickCore;
+dailyTickCore=function(){
+ _dtcNat.apply(this,arguments);
+ try{
+  if(natJobCode()||G.natOffered)return;
+  if(G.day%37!==11)return;
+  const list=natCandidates();
+  if(!list.length)return;
+  const pick=list[Math.floor(Math.random()*Math.min(6,list.length))];
+  if(!pick)return;
+  G.natOffered=true;
+  mail('board','🌍 '+natName(pick.c)+' would like to speak to you',
+   'The '+esc(natName(pick.c))+' football association has been in touch. They would like you to '+
+   'take charge of the national team <b>alongside</b> your job at '+esc(G.clubs[G.my].name)+'.'+
+   '<br><br>It is a second job, not a move. Your country plays during international breaks only, '+
+   'and you can walk away from it whenever you like.',
+   [{lbl:'Accept the '+natName(pick.c)+' job',act:'natTake',arg:pick.c},
+    {lbl:'Look at all the offers',act:'natOffers',ghost:1}]);
+ }catch(e){}};
+
+/*#w45_country.js#*/
+
 showStart();
 </script>
 </body>
