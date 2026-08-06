@@ -27624,6 +27624,322 @@ renderMCtl=function(){
  document.head.appendChild(st)})();
 
 
+
+/*#w49_canvasfit.js#*//*#w50_speedvalue.js#*/
+
+/* =====================================================================
+   1. THE CLOCK, AND THE 2x BUTTON THAT WAS 1x
+   ---------------------------------------------------------------------
+   The speed table and the speed buttons had drifted apart:
+
+       MSPEED = {1:6300, 3:2100, 8:760, 6:260}
+       buttons =  0,  1,  2,  6,  9
+
+   There is no key 2. Pressing 2x fell through `MSPEED[MU.speed]||MSPEED[1]`
+   and ran at exactly one times, which is why a faster speed never
+   stuck — it was never applied.
+
+   And one times was 6300ms per minute of football, so a half took four
+   and three quarter minutes of real time.
+
+   A half is now two and a half minutes: 3200ms a minute at 1x, halving
+   at each step. The buttons and the table are built from one list, so
+   they cannot drift apart again.
+
+       1x  3200ms   a half in ~2:30
+       2x  1600ms   ~1:15
+       4x   800ms   ~0:38
+       ⭐   260ms   highlights only
+       ⏭    skip
+
+   THE GOALS THAT DID NOT MATCH THE CLOCK. The loop advances football
+   minutes in a `while` and repaints the score bar once afterwards, so
+   when a single frame consumed several minutes the clock jumped past
+   the minute the goal was actually scored in — the feed said 23' and the
+   bar already read 26'. At 6300ms a minute that happened whenever the
+   game was fast-forwarding. At the new speeds the slowest tick is 260ms
+   against a 90ms frame, so a frame can never swallow more than one
+   minute; the bar is also repainted the moment the feed grows, so the
+   two cannot separate again.
+
+   AND THE SPEED YOU CHOSE IS REMEMBERED. Half time forces a pause, as it
+   should, but resuming used to drop you back to 1x. It now returns you
+   to the speed you were watching at.
+   ===================================================================== */
+/* named SPEED_ROW: the game already has a SPEEDS constant elsewhere */
+const SPEED_ROW=[[0,'⏸'],[1,'1×'],[2,'2×'],[4,'4×'],[6,'⭐'],[9,'⏭']];
+/* 47 minutes of football x 3200ms = 150s, which is the two and a half
+   minute half that was asked for. Measured, not assumed. */
+MSPEED[1]=3200;MSPEED[2]=1600;MSPEED[4]=800;MSPEED[6]=260;
+MSPEED[3]=1600;MSPEED[8]=800;          /* anything that still asks for the old keys */
+
+/* remember what the manager actually chose */
+const _mspeedKeep=ACTIONS.mspeed;
+ACTIONS.mspeed=function(el){
+ const v=+el.dataset.v;
+ if(v>0&&v!==9)MU.userSpeed=v;
+ return _mspeedKeep.apply(this,arguments)};
+
+/* and give it back after half time */
+const _resume2hSpeed=ACTIONS.resume2h;
+ACTIONS.resume2h=function(){
+ const r=_resume2hSpeed.apply(this,arguments);
+ try{
+  const want=MU.userSpeed||1;
+  if(MU.speed!==want&&MU.m&&!MU.m.done){MU.speed=want;renderMCtl()}
+ }catch(e){}
+ return r};
+
+/* the buttons, built from the same list the engine uses */
+const _mctlSpeeds=renderMCtl;
+renderMCtl=function(){
+ const r=_mctlSpeeds.apply(this,arguments);
+ try{
+  const row=document.querySelector('#mCtl .speedrow');
+  if(!row||!MU.m||MU.m.done)return r;
+  row.innerHTML=SPEED_ROW.map(s=>
+   '<button class="chip'+(MU.speed===s[0]?' on':'')+'" data-action="mspeed" data-v="'+s[0]+'">'+
+   s[1]+'</button>').join('');
+ }catch(e){}
+ return r};
+
+/* The score bar follows the goals, not the frame. Repainting on every
+   feed line was tried first and cost enough time per tick to stretch a
+   half from 2:30 to 3:03 — the commentary writes a line most minutes.
+   Only a goal changes the number on the bar, so only a goal needs it. */
+const _tickSync=trackedTick;
+trackedTick=function(){
+ const f=MU&&MU.fix;
+ const before=f?(f.hs+f.as):0;
+ const r=_tickSync.apply(this,arguments);
+ try{
+  if(f&&(f.hs+f.as)!==before&&typeof renderTop==='function')renderTop();
+ }catch(e){}
+ return r};
+
+/* =====================================================================
+   2. WHAT A SUPERSTAR IS WORTH WITH A YEAR LEFT
+   ---------------------------------------------------------------------
+   Vinícius Júnior, one year to run, was £15M.
+
+   The contract was being charged twice. valueFor() cut a player's value
+   by 35% for a short deal, and then askPrice() cut the asking price by a
+   further 38% for the same fact. Measured on Vinícius: £117.7M on five
+   years, £47.4M on one — and once he was listed and unhappy the
+   multipliers compounded down to £20.5M.
+
+   Two corrections.
+
+   A CONTRACT IS NOT A VALUATION. What a player is worth and what his
+   club will accept are different questions; the length of his deal
+   belongs to the second one. valueFor() no longer touches it, so the
+   discount is applied once, in the negotiation, where it belongs. The
+   one-year discount is also softened from 0.62 to 0.78, because a club
+   losing a great player for nothing next summer still does not hand him
+   over.
+
+   AND A STAR HOLDS HIS VALUE. Reputation is a floor. Everything can be
+   wrong — a year left, listed, unsettled, out of form — and Real Madrid
+   still do not sell Vinícius for fifteen million, because thirty clubs
+   would take him tomorrow and they all know it. The floor scales with
+   how good he actually is, so it protects the elite without propping up
+   a squad player who genuinely is available cheaply.
+   ===================================================================== */
+const _valueForCon=valueFor;
+valueFor=function(p){
+ try{
+  const ovr=Math.round(ovrOf(p));
+  let v=Math.pow(Math.max(6,ovr-45),3)*800;
+  const a=p.age;
+  const af=a<=20?1.2:a<=23?1.1:a<=27?1:a<=29?.9:a<=31?.72:a<=33?.5:.3;
+  v*=af*(1+Math.max(0,p.pot-ovr)*.02);
+  /* deliberately NOT discounted for a short contract: that is the
+     selling club's problem, and askPrice() already charges for it */
+  return Math.round(v/50000)*50000}
+ catch(e){return _valueForCon.apply(this,arguments)}};
+
+/* how far below his value a player can be prised away */
+function repFloor(p){
+ const o=p.ovr||0;
+ return o>=90?.62:o>=87?.55:o>=84?.47:o>=80?.38:o>=75?.30:.22}
+
+const _askPriceStar=askPrice;
+askPrice=function(p){
+ try{
+  const c=G.clubs[p.club];
+  if(!c)return _askPriceStar.apply(this,arguments);
+  const top3=[...c.players].sort((a,b)=>b.ovr-a.ovr).slice(0,3);
+  let m=top3.indexOf(p)>=0?1.40:(squadBestAt(c,POSGROUP(p.pos))===p?1.24:1.10);
+  /* the contract, charged once and less brutally than before */
+  if(p.contract<=0)m*=.45; else if(p.contract===1)m*=.78; else if(p.contract===2)m*=.92;
+  const mor=p.morale==null?60:p.morale;
+  if(mor<32)m*=.78; else if(mor<45)m*=.88;
+  if(p.listed)m*=.68;
+  if(p.age>=34)m*=.50; else if(p.age>=32)m*=.68; else if(p.age>=30)m*=.84;
+  if(p.injury)m*=(p.injury.days>60?.70:.85);
+  try{const apps=(p.stats&&p.stats.apps)||0;
+   if(apps>=6&&formAvg(p)&&formAvg(p)<6.2)m*=.90}catch(e){}
+  const v=p.value||valueFor(p);
+  /* however much has gone wrong, a great player is still a great player */
+  const price=Math.max(v*m,v*repFloor(p));
+  return Math.max(Math.round(price/1e5)*1e5,3e5)}
+ catch(e){return _askPriceStar.apply(this,arguments)}};
+
+/* every player already priced under the old curve is repriced */
+(function repriceAgain(){
+ const fix=()=>{try{
+  (G.clubs||[]).forEach(c=>{(c.players||[]).forEach(p=>{p.value=valueFor(p)});
+   (c.youth||[]).forEach(p=>{p.value=valueFor(p)})});
+  (G.freeAgents||[]).forEach(p=>{p.value=valueFor(p)})}catch(e){}};
+ const _ng=newGame;newGame=function(){const r=_ng.apply(this,arguments);fix();return r};
+ const _ls=loadSlot;loadSlot=function(){const ok=_ls.apply(this,arguments);if(ok)fix();return ok};
+})();
+
+/* =====================================================================
+   3. THE BUDGET AS A SLIDER
+   ---------------------------------------------------------------------
+   Three preset buttons were a poor way to answer a continuous question.
+   One slider: drag left for wages, right for transfer money, and both
+   numbers move as you drag, in the same year-long exchange the board
+   would use.
+   ===================================================================== */
+ACTIONS.budSlide=()=>{};
+vTransferBudget=function(){
+ const my=G.clubs[G.my];
+ const o=budOrigin(my);
+ const L=budLimits(my);
+ const bill=squadWage(my);
+ const room=Math.max(0,my.wageCap*1.18-bill);
+ /* the slider's range is how far the board will let the split move,
+    expressed as a lump sum either way */
+ const maxToWage=Math.max(0,Math.min(my.budget-L.feeLo,(L.wageHi-my.wageCap)*WEEKS_IN_YEAR));
+ const maxToFee=Math.max(0,Math.min(L.feeHi-my.budget,
+   (my.wageCap-Math.max(L.wageLo,bill))*WEEKS_IN_YEAR));
+ const moved=my.budget-o.budget;
+ return '<div class="budgetbar">'+
+  '<div class="bb"><div class="bv" id="bbFee" style="color:var(--gold)">'+fmtM(my.budget)+'</div>'+
+   '<div class="bl">Transfer budget</div></div>'+
+  '<div class="bb"><div class="bv" id="bbWage" style="color:'+(room>0?'var(--green)':'var(--danger)')+
+   '">'+fmtW(room)+'</div><div class="bl">Wage room left</div></div></div>'+
+  '<div class="card tight" style="padding:12px 13px">'+
+  '<div class="spread" style="margin-bottom:9px">'+
+  '<span class="chip-lbl" style="margin:0">Rebalance the budget</span>'+
+  (moved?'<button class="chip" data-action="budReset">↺ Reset</button>':'')+'</div>'+
+  '<input type="range" id="budRange" min="-'+Math.round(maxToWage)+'" max="'+Math.round(maxToFee)+
+   '" value="0" step="100000" style="width:100%;accent-color:var(--gold)">'+
+  '<div class="spread xs faint" style="margin-top:5px">'+
+   '<span>← more wages</span><span id="budNote">drag to move money</span><span>more transfers →</span></div>'+
+  '<div class="xs faint" style="line-height:1.6;margin-top:9px">'+
+  'A wage ceiling is weekly and a fee is a lump, so a year is the bridge: '+
+  fmtM(52e5)+' of transfer money is worth '+fmtW(1e5)+' a week. '+
+  'Paying '+fmtW(bill)+' now, ceiling '+fmtW(my.wageCap)+'.</div>'+
+  (moved?'<div class="xs" style="margin-top:8px;color:'+(moved>0?'var(--green)':'var(--gold)')+
+   '">Shifted '+(moved>0?'+':'')+fmtM(moved)+' against the board’s original split.</div>':'')+
+  '</div>'};
+
+/* live while dragging, committed when let go */
+(function budWire(){
+ const preview=(v)=>{
+  try{
+   const my=G.clubs[G.my];
+   const fee=my.budget+v, cap=my.wageCap-Math.round(v/WEEKS_IN_YEAR);
+   const room=Math.max(0,cap*1.18-squadWage(my));
+   const f=document.getElementById('bbFee'),w=document.getElementById('bbWage'),
+         n=document.getElementById('budNote');
+   if(f)f.textContent=fmtM(fee);
+   if(w)w.textContent=fmtW(room);
+   if(n)n.textContent=v===0?'drag to move money':
+    (v>0?'+'+fmtM(v)+' to transfers':'+'+fmtW(Math.round(-v/WEEKS_IN_YEAR))+' a week');
+  }catch(e){}};
+ document.addEventListener('input',e=>{
+  if(e.target&&e.target.id==='budRange')preview(+e.target.value)});
+ const commit=e=>{
+  if(!e.target||e.target.id!=='budRange')return;
+  const v=+e.target.value;
+  if(!v)return;
+  try{
+   const my=G.clubs[G.my];
+   my.budget+=v;my.wageCap-=Math.round(v/WEEKS_IN_YEAR);
+   try{sfx('tap')}catch(err){}
+   toast(v>0?'💷 '+fmtM(v)+' moved to the transfer budget'
+            :'💷 '+fmtW(Math.round(-v/WEEKS_IN_YEAR))+' a week added to the wage ceiling');
+   render();
+  }catch(err){}};
+ document.addEventListener('change',commit);
+})();
+
+/* =====================================================================
+   4. ANSWERING THE PRESS OUT LOUD
+   ---------------------------------------------------------------------
+   The browser can already listen. A microphone on the press conference
+   turns what you say into text and offers it as your answer, which is a
+   far better way to do a press conference than picking from four
+   buttons — and it falls back silently on a browser without it.
+   ===================================================================== */
+function sttAvailable(){
+ return !!(window.SpeechRecognition||window.webkitSpeechRecognition)}
+const STT={rec:null,on:false};
+ACTIONS.pressMic=()=>{
+ if(!sttAvailable())return toast('This browser cannot listen. Try Chrome.');
+ try{
+  if(STT.on&&STT.rec){STT.rec.stop();return}
+  const R=window.SpeechRecognition||window.webkitSpeechRecognition;
+  const r=new R();
+  STT.rec=r;STT.on=true;
+  r.lang='en-GB';r.interimResults=true;r.maxAlternatives=1;
+  const box=document.getElementById('sttOut');
+  if(box)box.textContent='Listening…';
+  const btn=document.querySelector('[data-action="pressMic"]');
+  if(btn){btn.classList.add('on');btn.textContent='⏹ Stop'}
+  let said='';
+  r.onresult=ev=>{
+   said='';
+   for(let i=0;i<ev.results.length;i++)said+=ev.results[i][0].transcript;
+   const b=document.getElementById('sttOut');
+   if(b)b.textContent=said||'Listening…'};
+  r.onerror=()=>{const b=document.getElementById('sttOut');
+   if(b)b.textContent='Could not hear you — check the microphone permission.'};
+  r.onend=()=>{
+   STT.on=false;
+   const b2=document.querySelector('[data-action="pressMic"]');
+   if(b2){b2.classList.remove('on');b2.textContent='🎤 Answer out loud'}
+   const b=document.getElementById('sttOut');
+   if(said){
+    if(sttInto(said)){if(b)b.textContent='✓ added'}
+    else if(b)b.textContent=said}};
+  r.start();
+ }catch(e){toast('Could not start the microphone.')}};
+
+/* The press conference is a free-text box and a "Give your answer"
+   button, so dictation has somewhere obvious to go: the words land in
+   the textarea and the existing machinery does the rest. Nothing about
+   how an answer is judged has to change. */
+function sttInto(said){
+ const tx=document.getElementById('pressTx');
+ if(!tx)return false;
+ tx.value=(tx.value?tx.value.replace(/\s*$/,'')+' ':'')+said;
+ tx.dispatchEvent(new Event('input',{bubbles:true}));
+ return true}
+
+/* the microphone, wherever the press box appears */
+const _openModalMic=openModal;
+openModal=function(html){
+ const r=_openModalMic.apply(this,arguments);
+ try{
+  if(!sttAvailable())return r;
+  const sb=document.getElementById('sheetBody');
+  if(!sb||!sb.querySelector('#pressTx'))return r;
+  if(sb.querySelector('[data-action="pressMic"]'))return r;
+  const tx=sb.querySelector('#pressTx');
+  const d=document.createElement('div');
+  d.style.cssText='margin-top:8px';
+  d.innerHTML='<button class="chip" data-action="pressMic">🎤 Answer out loud</button>'+
+   '<span id="sttOut" class="xs faint" style="margin-left:9px"></span>';
+  tx.parentNode.insertBefore(d,tx.nextSibling);
+ }catch(e){}
+ return r};
+
+
 showStart();
 </script>
 </body>
