@@ -26284,6 +26284,87 @@ paintDugStrip=function(){
 
 /*#w43_dugout.js#*/
 
+
+/*#w43_dugout.js#*//*#w44_pin.js#*/
+
+/* =====================================================================
+   THE DOCK STOPS TRUSTING A CONSTANT
+   ---------------------------------------------------------------------
+   The Continue dock was positioned like this:
+
+       bottom: calc(var(--nav-h) + env(safe-area-inset-bottom) + 6px)
+
+   Every term in that is a guess about somebody else's phone. --nav-h is
+   a hard-coded 62px, but the navigation bar's real height depends on the
+   font that actually loaded, on the label text wrapping, and on the
+   gesture-bar inset the browser decides to report — and env() is only
+   applied where the stylesheet remembers to ask for it. Measured in
+   Chromium the sum comes out right and the button sits eleven pixels
+   above the navigation. On a real Android handset it came out about
+   ninety pixels high, which is a button marooned in the middle of the
+   screen with the squad list still visible underneath it.
+
+   Guessing is the mistake, not the number. The navigation bar is right
+   there in the document and it knows exactly how tall it is, safe-area
+   inset and all. So the dock now measures it and sits four pixels on top
+   of it, and it re-measures whenever anything could have changed: every
+   redraw, every resize, every orientation change, and every movement of
+   the visual viewport — which is what fires when a mobile browser slides
+   its own toolbar in and out.
+
+   The CSS rule stays as the starting position so there is no flash
+   before the first measurement, but from then on the measurement wins.
+   ===================================================================== */
+
+function pinDock(){
+ try{
+  const d=document.getElementById('continueDock');
+  if(!d)return;
+  /* the desktop layout parks the dock in the sidebar, where the bottom
+     navigation does not exist — leave that one alone */
+  if(window.matchMedia&&window.matchMedia('(min-width:1024px)').matches){
+   d.style.bottom='';return}
+  const nav=document.querySelector('.nav');
+  if(!nav){d.style.bottom='';return}
+  const r=nav.getBoundingClientRect();
+  if(!r.height)return;
+  /* how much of the window the navigation occupies from the bottom edge,
+     whatever it is made of */
+  const occupied=Math.max(0,Math.round(window.innerHeight-r.top));
+  const want=(occupied+4)+'px';
+  if(d.style.bottom!==want)d.style.bottom=want;
+ }catch(e){}}
+
+/* after every redraw of the dock, because its contents change height —
+   "Back to the press room" wraps to two lines where "Continue" does not */
+const _dockPin=renderDock;
+renderDock=function(){
+ const r=_dockPin.apply(this,arguments);
+ pinDock();
+ return r};
+
+const _renderPin=render;
+render=function(){
+ const r=_renderPin.apply(this,arguments);
+ pinDock();
+ return r};
+
+/* and whenever the window itself moves under us */
+['resize','orientationchange','load'].forEach(ev=>
+ window.addEventListener(ev,()=>{pinDock();setTimeout(pinDock,120)},{passive:true}));
+if(window.visualViewport){
+ /* a mobile browser sliding its own toolbar away changes the usable
+    height without firing a window resize */
+ window.visualViewport.addEventListener('resize',pinDock,{passive:true});
+ window.visualViewport.addEventListener('scroll',pinDock,{passive:true});
+}
+/* fonts land after first paint and can change the navigation's height */
+try{if(document.fonts&&document.fonts.ready)document.fonts.ready.then(()=>pinDock())}catch(e){}
+setTimeout(pinDock,60);
+setTimeout(pinDock,400);
+
+/*#w44_pin.js#*/
+
 showStart();
 </script>
 </body>
