@@ -28704,6 +28704,359 @@ vTactics=function(){
 
 /*#w53_faces.js#*/
 
+
+/*#w53_faces.js#*//*#w54_stadium.js#*/
+
+/* =====================================================================
+   A STADIUM THAT LOOKS LIKE A STADIUM
+   ---------------------------------------------------------------------
+   The old one was four CSS gradient bars stacked above a green rectangle.
+   It said "Tier 3" and looked identical at Tier 1, because nothing about
+   it was actually drawn from the ground you had built.
+
+   This is drawn instead — a bowl seen from high behind one stand, the
+   angle every televised match opens on. All SVG, no image assets,
+   because the game is one file you can download and open offline. So the
+   stadium is geometry.
+
+   THE THING THAT MAKES IT READ AS A STADIUM AND NOT A RACETRACK is that
+   the pitch sits LOWER in the frame than the top of the bowl. Two
+   ellipses, the inner one dropped down the screen: the far seating comes
+   out as a deep band across the top, the near seating as a thin lip
+   along the bottom. That asymmetry is the whole perspective. Concentric
+   ellipses on a shared centre look like an aerial photograph; offset
+   them and you are suddenly sitting in the gods behind the goal.
+
+   The pitch is on the same projection — a trapezoid, wider at the near
+   touchline than the far one, with every marking pushed through the same
+   transform, so the centre circle, both penalty areas and the mown
+   stripes all agree about where the camera is.
+
+   EVERY NUMBER ON THE SCREEN CHANGES THE PICTURE.
+
+     tier 1        one shallow ring of seating, floodlight pylons
+     tier 2        a second ring, the bowl deepens
+     tier 3        the pylons come down, a roof goes over the far side
+     tier 4        four rings, the full bowl
+     capacity      the size of the ground and how densely it is filled
+     modern        a cool rim light along the roof and a brighter pitch
+     club colours  the seats, speckled in the club's own two colours
+
+   Buy an upgrade and you can see what you bought. That is the point of a
+   picture in a management game: a progress bar you can read at a glance.
+   ===================================================================== */
+
+function stadColours(c){
+ const hex=s=>(typeof s==='string'&&/^#[0-9a-f]{6}$/i.test(s))?s:null;
+ const a=hex(c.c1)||'#8a1020';
+ let b=hex(c.c2);
+ if(!b||b.toLowerCase()===a.toLowerCase())b='#e9e9ec';
+ return {a,b}}
+
+function stadiumSVG(c){
+ const tier=Math.max(1,Math.min(4,(c.stad&&c.stad.tier)||1));
+ const modern=!!(c.stad&&c.stad.modern);
+ const cap=c.cap||30000;
+ const col=stadColours(c);
+ let ix=0;try{ix=Math.max(0,G.clubs.indexOf(c))}catch(e){}
+ const uid='sd'+ix;
+ const VW=400, VH=200, CX=200;
+
+ /* --- the shape of the ground ------------------------------------- */
+ /* THE PITCH IS THE FIXED THING. A football pitch is the same size at
+    Rochdale as it is at the Bernabeu, so it is drawn at one size in one
+    place and the bowl is built outward around it. Tier and capacity set
+    how far out the seating goes — which is what a small ground and a big
+    one actually differ by. Scaling the whole picture instead made a
+    Tier 1 ground look like a Tier 4 one photographed from further away. */
+ const IRX=88, IRY=32;                         /* the wall around the pitch — never moves */
+ const ICY=112;                                /* and where it sits in the frame */
+ const capK=Math.max(.80,Math.min(1.16,Math.pow(cap/55000,.28)));
+ const D=Math.min(.95,(.20+.19*tier)*capK);    /* how deep the seating is, short of the frame edge */
+ const RX=IRX*(1+D), RY=IRY*(1+D);             /* the top rim of the bowl */
+ const DROP=Math.max(9,(RY-IRY)*.62);          /* the pitch dropped down-screen: the perspective */
+ const CY=ICY-DROP;                            /* where that rim sits */
+ const SRX=RX-3.5, SRY=RY-3.5;                 /* seating starts inside the concrete rim */
+ const WALL=15+tier*3.5;                       /* the outside wall below the rim */
+
+ /* how tightly the crowd is packed in */
+ const dense=Math.max(1.9,Math.min(3.1,3.1-(cap-25000)/60000*1.2));
+
+ /* a ring between two ellipses, as one even-odd path */
+ const band=(rx0,ry0,cy0,rx1,ry1,cy1)=>
+  'M'+(CX-rx0).toFixed(1)+' '+cy0.toFixed(1)+
+  'a'+rx0.toFixed(1)+' '+ry0.toFixed(1)+' 0 1 0 '+(rx0*2).toFixed(1)+' 0'+
+  'a'+rx0.toFixed(1)+' '+ry0.toFixed(1)+' 0 1 0 '+(-rx0*2).toFixed(1)+' 0Z'+
+  'M'+(CX-rx1).toFixed(1)+' '+cy1.toFixed(1)+
+  'a'+rx1.toFixed(1)+' '+ry1.toFixed(1)+' 0 1 0 '+(rx1*2).toFixed(1)+' 0'+
+  'a'+rx1.toFixed(1)+' '+ry1.toFixed(1)+' 0 1 0 '+(-rx1*2).toFixed(1)+' 0Z';
+ /* interpolate from the top rim (t=0) down to the pitch rim (t=1) */
+ const at=t=>[SRX+(IRX-SRX)*t, SRY+(IRY-SRY)*t, CY+DROP*t];
+
+ let s='<svg viewBox="0 0 '+VW+' '+VH+'" preserveAspectRatio="xMidYMid meet" '+
+  'role="img" aria-label="'+esc(c.stadium)+'">'+
+ '<defs>'+
+  '<linearGradient id="sky'+uid+'" x1="0" y1="0" x2="0" y2="1">'+
+   '<stop offset="0" stop-color="'+(modern?'#14252f':'#141d1a')+'"/>'+
+   '<stop offset=".62" stop-color="'+(modern?'#0a121a':'#0a100e')+'"/>'+
+   '<stop offset="1" stop-color="#04070a"/></linearGradient>'+
+  '<linearGradient id="wall'+uid+'" x1="0" y1="0" x2="0" y2="1">'+
+   '<stop offset="0" stop-color="#5b636c"/><stop offset=".35" stop-color="#39424a"/>'+
+   '<stop offset="1" stop-color="#161b20"/></linearGradient>'+
+  '<linearGradient id="rim'+uid+'" x1="0" y1="0" x2="0" y2="1">'+
+   '<stop offset="0" stop-color="#6d7681"/><stop offset="1" stop-color="#39424b"/></linearGradient>'+
+  '<linearGradient id="roof'+uid+'" x1="0" y1="0" x2="0" y2="1">'+
+   '<stop offset="0" stop-color="'+(modern?'#48606f':'#3b444c')+'"/>'+
+   '<stop offset="1" stop-color="'+(modern?'#1b2932':'#191e23')+'"/></linearGradient>'+
+  '<linearGradient id="turf'+uid+'" x1="0" y1="0" x2="0" y2="1">'+
+   '<stop offset="0" stop-color="'+(modern?'#256e33':'#22632e')+'"/>'+
+   '<stop offset="1" stop-color="'+(modern?'#3ea355':'#379349')+'"/></linearGradient>'+
+  /* the crowd, in the club's colours: what a full ground looks like from up there */
+  '<pattern id="seat'+uid+'" width="'+dense.toFixed(2)+'" height="'+dense.toFixed(2)+
+   '" patternUnits="userSpaceOnUse">'+
+   '<circle cx="'+(dense*.25).toFixed(2)+'" cy="'+(dense*.27).toFixed(2)+'" r="'+(dense*.155).toFixed(2)+
+    '" fill="'+col.b+'" opacity=".78"/>'+
+   '<circle cx="'+(dense*.70).toFixed(2)+'" cy="'+(dense*.72).toFixed(2)+'" r="'+(dense*.115).toFixed(2)+
+    '" fill="#ffffff" opacity=".34"/>'+
+  '</pattern>'+
+  '<radialGradient id="halo'+uid+'" cx="50%" cy="50%" r="50%">'+
+   '<stop offset="0" stop-color="#dff0ff" stop-opacity="'+(modern?'.26':'.18')+'"/>'+
+   '<stop offset="1" stop-color="#dff0ff" stop-opacity="0"/></radialGradient>'+
+ '</defs>'+
+ '<rect width="'+VW+'" height="'+VH+'" fill="url(#sky'+uid+')"/>'+
+ /* the light a full ground throws into the night */
+ '<ellipse cx="'+CX+'" cy="'+(CY+4)+'" rx="'+(RX*1.30).toFixed(0)+'" ry="'+(RY*1.55).toFixed(0)+
+  '" fill="url(#halo'+uid+')"/>';
+
+ /* --- floodlights: a ground that has not been roofed yet ----------- */
+ if(tier<3){
+  [[CX-RX*.78,CY-RY*.66],[CX+RX*.78,CY-RY*.66],[CX-RX*1.00,CY+RY*.28],[CX+RX*1.00,CY+RY*.28]]
+  .forEach(([x,y],n)=>{
+   const hgt=n<2?34:44;
+   s+='<g opacity="'+(n<2?'.85':'1')+'">'+
+    '<ellipse cx="'+x.toFixed(1)+'" cy="'+(y-hgt-6).toFixed(1)+'" rx="30" ry="19" fill="#fffbe4" opacity=".055"/>'+
+    '<rect x="'+(x-1.1).toFixed(1)+'" y="'+(y-hgt).toFixed(1)+'" width="2.2" height="'+hgt+'" fill="#2c343c"/>'+
+    '<rect x="'+(x-8.5).toFixed(1)+'" y="'+(y-hgt-10).toFixed(1)+'" width="17" height="11" rx="2" fill="#39434d"/>'+
+    '<rect x="'+(x-7).toFixed(1)+'" y="'+(y-hgt-8.6).toFixed(1)+'" width="14" height="8.2" rx="1.3" fill="#fdf6cf" opacity=".92"/>'+
+   '</g>';
+  });
+ }
+
+ /* --- the outside of the ground: rim, then the wall dropping away -- */
+ s+='<ellipse cx="'+CX+'" cy="'+(CY+WALL+8)+'" rx="'+(RX*1.05).toFixed(1)+'" ry="'+(RY*.34).toFixed(1)+
+    '" fill="#000" opacity=".45"/>';               /* it stands on something */
+ s+='<path d="M'+(CX-RX).toFixed(1)+' '+CY+
+    ' A'+RX.toFixed(1)+' '+RY.toFixed(1)+' 0 0 0 '+(CX+RX).toFixed(1)+' '+CY+
+    ' L'+(CX+RX).toFixed(1)+' '+(CY+WALL)+
+    ' A'+RX.toFixed(1)+' '+RY.toFixed(1)+' 0 0 1 '+(CX-RX).toFixed(1)+' '+(CY+WALL)+
+    ' Z" fill="url(#wall'+uid+')"/>';
+ /* structural ribs down the near face */
+ for(let i=1;i<24;i++){
+  const a=Math.PI*(i/24);
+  const x=CX-Math.cos(a)*RX, y=CY+Math.sin(a)*RY;
+  s+='<rect x="'+(x-.9).toFixed(1)+'" y="'+y.toFixed(1)+'" width="1.8" height="'+WALL+
+     '" fill="#000" opacity=".20"/>';
+ }
+ s+='<ellipse cx="'+CX+'" cy="'+CY+'" rx="'+RX.toFixed(1)+'" ry="'+RY.toFixed(1)+
+    '" fill="url(#rim'+uid+')"/>';
+
+ /* --- the seating: one ring per tier, stepping down into the bowl -- */
+ for(let t=0;t<tier;t++){
+  const A=at(t/tier), B=at((t+1)/tier);
+  const p=band(A[0],A[1],A[2],B[0],B[1],B[2]);
+  const lift=.66+.13*t;                           /* the upper tiers sit in shade */
+  s+='<path d="'+p+'" fill-rule="evenodd" fill="'+shade(col.a,lift)+'"/>'+
+     '<path d="'+p+'" fill-rule="evenodd" fill="url(#seat'+uid+')" opacity=".62"/>'+
+     /* the walkway at the front of the tier */
+     /* the concourse at the front of the tier, lit on its top edge */
+     '<ellipse cx="'+CX+'" cy="'+B[2].toFixed(1)+'" rx="'+B[0].toFixed(1)+'" ry="'+B[1].toFixed(1)+
+      '" fill="none" stroke="#080b0e" stroke-width="2.6" opacity=".9"/>'+
+     '<ellipse cx="'+CX+'" cy="'+(B[2]-1.3).toFixed(1)+'" rx="'+B[0].toFixed(1)+'" ry="'+B[1].toFixed(1)+
+      '" fill="none" stroke="#c9d2da" stroke-width=".7" opacity=".22"/>';
+ }
+
+ /* --- a roof, once the ground has been redeveloped ------------------ */
+ if(tier>=3){
+  const LIFT=14, M=at(.46);
+  s+='<path d="M'+(CX-RX*1.02).toFixed(1)+' '+(CY-LIFT).toFixed(1)+
+     ' A'+(RX*1.02).toFixed(1)+' '+(RY*1.02).toFixed(1)+' 0 0 1 '+(CX+RX*1.02).toFixed(1)+' '+(CY-LIFT).toFixed(1)+
+     ' L'+(CX+M[0]).toFixed(1)+' '+(M[2]-LIFT).toFixed(1)+
+     ' A'+M[0].toFixed(1)+' '+M[1].toFixed(1)+' 0 0 0 '+(CX-M[0]).toFixed(1)+' '+(M[2]-LIFT).toFixed(1)+
+     ' Z" fill="url(#roof'+uid+')"/>'+
+     /* without a lit back edge the roof dissolves into the night sky */
+     '<path d="M'+(CX-RX*1.02).toFixed(1)+' '+(CY-LIFT).toFixed(1)+
+     ' A'+(RX*1.02).toFixed(1)+' '+(RY*1.02).toFixed(1)+' 0 0 1 '+(CX+RX*1.02).toFixed(1)+' '+(CY-LIFT).toFixed(1)+
+     '" fill="none" stroke="#8f9aa4" stroke-width="1.1" opacity=".55"/>'+
+     /* the lit front edge of the roof, over the far stand */
+     '<path d="M'+(CX-M[0]).toFixed(1)+' '+(M[2]-LIFT).toFixed(1)+
+     ' A'+M[0].toFixed(1)+' '+M[1].toFixed(1)+' 0 0 1 '+(CX+M[0]).toFixed(1)+' '+(M[2]-LIFT).toFixed(1)+
+     '" fill="none" stroke="'+(modern?'#a9dcff':'#cfd8de')+'" stroke-width="'+(modern?2:1.2)+
+     '" opacity="'+(modern?'.85':'.45')+'"/>'+
+     /* and the shadow it throws down onto the seats behind the goal */
+     '<path d="M'+(CX-M[0]).toFixed(1)+' '+(M[2]+2).toFixed(1)+
+     ' A'+M[0].toFixed(1)+' '+M[1].toFixed(1)+' 0 0 1 '+(CX+M[0]).toFixed(1)+' '+(M[2]+2).toFixed(1)+
+     '" fill="none" stroke="#000" stroke-width="7" opacity=".20"/>';
+ }
+
+ /* --- the pitch, on the same projection as the bowl ----------------- */
+ /* u runs goal to goal, v runs far touchline (-1) to near touchline (+1);
+    the near end is wider, which is the only reason it reads as depth */
+ const HW=IRX*.845, HH=IRY*.80, PSP=.20;
+ const P=(u,v)=>[(CX+u*HW*(1+v*PSP)).toFixed(1),(ICY+v*HH).toFixed(1)];
+ const quad=(a,b,c2,d)=>'M'+P(a[0],a[1]).join(' ')+'L'+P(b[0],b[1]).join(' ')+
+   'L'+P(c2[0],c2[1]).join(' ')+'L'+P(d[0],d[1]).join(' ')+'Z';
+ const line=(a,b)=>'M'+P(a[0],a[1]).join(' ')+'L'+P(b[0],b[1]).join(' ');
+
+ /* the pit the pitch sits in */
+ s+='<ellipse cx="'+CX+'" cy="'+ICY.toFixed(1)+'" rx="'+IRX.toFixed(1)+'" ry="'+IRY.toFixed(1)+
+    '" fill="#10161a"/>'+
+    '<ellipse cx="'+CX+'" cy="'+(ICY-1).toFixed(1)+'" rx="'+(IRX*.97).toFixed(1)+'" ry="'+(IRY*.96).toFixed(1)+
+    '" fill="none" stroke="#e8eef4" stroke-width="1.4" opacity=".16"/>'+
+    '<ellipse cx="'+CX+'" cy="'+ICY.toFixed(1)+'" rx="'+(IRX*.90).toFixed(1)+'" ry="'+(IRY*.88).toFixed(1)+
+    '" fill="#0a1210"/>';
+ const OUT=quad([-1,-1],[1,-1],[1,1],[-1,1]);
+ s+='<clipPath id="pit'+uid+'"><path d="'+OUT+'"/></clipPath>'+
+    '<path d="'+OUT+'" fill="url(#turf'+uid+')"/>'+
+    '<g clip-path="url(#pit'+uid+')">';
+ for(let i=0;i<7;i++){                            /* mown stripes */
+  if(i%2)continue;
+  const u0=-1+i*(2/7), u1=u0+2/7;
+  s+='<path d="'+quad([u0,-1],[u1,-1],[u1,1],[u0,1])+'" fill="#fff" opacity=".055"/>';
+ }
+ /* the far stand throws its shadow over the top of the grass */
+ s+='<path d="'+quad([-1,-1],[1,-1],[1,-.05],[-1,-.05])+'" fill="#000" opacity=".13"/>';
+ s+='</g>';
+ /* markings, pushed through the same transform so they agree with it */
+ s+='<g fill="none" stroke="rgba(255,255,255,.62)" stroke-width="1">'+
+  '<path d="'+quad([-.95,-.93],[.95,-.93],[.95,.93],[-.95,.93])+'"/>'+
+  '<path d="'+line([0,-.93],[0,.93])+'"/>'+
+  '<ellipse cx="'+CX+'" cy="'+ICY.toFixed(1)+'" rx="'+(HW*.155).toFixed(1)+'" ry="'+(HH*.30).toFixed(1)+'"/>'+
+  '<path d="'+quad([-.95,-.52],[-.72,-.52],[-.72,.52],[-.95,.52])+'"/>'+
+  '<path d="'+quad([.95,-.52],[.72,-.52],[.72,.52],[.95,.52])+'"/>'+
+  '<path d="'+quad([-.95,-.25],[-.85,-.25],[-.85,.25],[-.95,.25])+'"/>'+
+  '<path d="'+quad([.95,-.25],[.85,-.25],[.85,.25],[.95,.25])+'"/>'+
+  '</g>'+
+  '<g fill="none" stroke="rgba(255,255,255,.85)" stroke-width="1.6">'+
+  '<path d="'+line([-.96,-.11],[-.96,.11])+'"/>'+
+  '<path d="'+line([.96,-.11],[.96,.11])+'"/></g>';
+
+ return s+'</svg>'}
+
+/* ---------------------------------------------------------------------
+   the hero, laid out the way the reference does it
+   --------------------------------------------------------------------- */
+stadiumArt=function(c){
+ const tier=(c.stad&&c.stad.tier)||1;
+ const modern=!!(c.stad&&c.stad.modern);
+ return '<div class="stadhero">'+stadiumSVG(c)+
+  '<div class="stadhero-t">'+
+   '<div class="sh-name">'+esc(c.stadium)+'</div>'+
+   '<div class="sh-cap"><b>'+(c.cap||0).toLocaleString()+'</b> capacity</div>'+
+  '</div>'+
+  '<div class="stadhero-b">'+
+   '<span class="sh-pill">Tier '+tier+'/4</span>'+
+   '<span class="sh-pill">'+(tier>=3?'Roofed':'Floodlit')+'</span>'+
+   (modern?'<span class="sh-pill on">✨ Modern build</span>':'')+
+  '</div></div>'};
+
+/* ---------------------------------------------------------------------
+   and the numbers under it
+   --------------------------------------------------------------------- */
+function stadStat(lbl,val,sub,col){
+ return '<div class="stadstat"><div class="ss-v" style="color:'+(col||'var(--ink)')+'">'+val+'</div>'+
+  '<div class="ss-l">'+lbl+'</div>'+(sub?'<div class="ss-s">'+sub+'</div>':'')+'</div>'}
+
+function stadQuality(st){
+ return Math.round((((st.tier||1)/4)*54)+(((st.train||1)/5)*23)+(((st.youth||1)/5)*23))}
+
+function stadPanels(my){
+ const jobs=G.projects||[];
+ const seatsJob=jobs.find(p=>p.type==='seats');
+ const qualJob=jobs.find(p=>p.type!=='seats');
+ const st=my.stad;
+ const q=stadQuality(st);
+ const qUp=stadQuality({tier:Math.min(4,(st.tier||1)+1),train:st.train,youth:st.youth});
+ const days=j=>Math.max(0,j.ends-G.day);
+ const bar=j=>{
+  const tot=Math.max(1,(STAD_UP[j.type]||{days:60}).days);
+  const done=Math.max(.02,Math.min(1,1-days(j)/tot));
+  return '<div class="stadbar"><i style="width:'+(done*100).toFixed(0)+'%"></i></div>'};
+
+ let h='<div class="sec"><div class="t">🏟 Capacity</div><div class="ln"></div>'+
+  '<div class="sub">'+(seatsJob?'expanding':'stable')+'</div></div>'+
+  '<div class="card tight" style="padding:12px 13px;margin-bottom:12px">'+
+  '<div class="xs faint" style="line-height:1.6;margin-bottom:10px">'+
+  'A bigger ground takes more supporters through the turnstiles and more money off every matchday.</div>'+
+  '<div class="stadrow">'+
+   stadStat('Seats now',(my.cap||0).toLocaleString(),'','var(--ink)')+
+   stadStat('Next expansion','+8,000','seats','var(--gold)')+
+   stadStat(seatsJob?'Opens in':'Building',seatsJob?days(seatsJob)+'d':'—',
+     seatsJob?'work under way':'nothing booked',seatsJob?'var(--amber)':'var(--green)')+
+  '</div>'+(seatsJob?bar(seatsJob):'')+'</div>';
+
+ h+='<div class="sec"><div class="t">⭐ Quality</div><div class="ln"></div>'+
+  '<div class="sub">'+q+'%</div></div>'+
+  '<div class="card tight" style="padding:12px 13px;margin-bottom:12px">'+
+  '<div class="xs faint" style="line-height:1.6;margin-bottom:10px">'+
+  'Better facilities lift ticket demand, sharpen how quickly players improve and pull in stronger academy intakes.</div>'+
+  '<div class="stadrow">'+
+   stadStat('Overall',q+'%','','var(--ink)')+
+   stadStat('Next tier',(st.tier>=4?'Maxed':qUp+'%'),st.tier>=4?'fully built':'once complete',
+     st.tier>=4?'var(--ink-faint)':'var(--green)')+
+   stadStat('Training','L'+(st.train||1)+'/5','','var(--ink)')+
+   stadStat('Academy','L'+(st.youth||1)+'/5','','var(--ink)')+
+  '</div>'+(qualJob?bar(qualJob):'')+'</div>';
+ return h}
+
+const _vStadNew=vStadium;
+vStadium=function(){
+ try{
+  const my=G.clubs[G.my];
+  const base=_vStadNew.apply(this,arguments);
+  /* the old view opens with stadiumArt(), which is now the hero above;
+     the panels slot in between it and the Upgrades list */
+  const cut=base.indexOf('<div class="sec">');
+  if(cut<0)return base+stadPanels(my);
+  return base.slice(0,cut)+stadPanels(my)+base.slice(cut);
+ }catch(e){return _vStadNew.apply(this,arguments)}};
+
+(function stadCSS(){
+ const st=document.createElement('style');st.id='w54';
+ st.textContent=[
+ '.stadhero{position:relative;border-radius:16px;overflow:hidden;border:1px solid var(--chalk-strong);',
+ ' background:#04070a;box-shadow:0 14px 34px rgba(0,0,0,.45);margin-bottom:12px}',
+ '.stadhero svg{display:block;width:100%;height:auto}',
+ '.stadhero-t{position:absolute;left:0;right:0;top:0;padding:11px 14px 30px;pointer-events:none;',
+ ' background:linear-gradient(180deg,rgba(3,6,8,.82),rgba(3,6,8,.28) 60%,transparent)}',
+ '.sh-name{font-family:var(--disp);font-size:16px;letter-spacing:1.1px;text-transform:uppercase;',
+ ' font-weight:800;line-height:1.1;text-shadow:0 2px 8px rgba(0,0,0,.8)}',
+ '.sh-cap{font-size:11px;color:var(--ink-faint);font-weight:700;margin-top:3px}',
+ '.sh-cap b{color:var(--gold)}',
+ '.stadhero-b{position:absolute;left:0;right:0;bottom:0;padding:26px 12px 10px;display:flex;gap:6px;',
+ ' flex-wrap:wrap;pointer-events:none;background:linear-gradient(0deg,rgba(3,6,8,.88),transparent)}',
+ '.sh-pill{font-size:10px;font-weight:800;letter-spacing:.6px;padding:4px 9px;border-radius:99px;',
+ ' background:rgba(10,14,18,.55);border:1px solid var(--chalk);color:var(--ink-faint)}',
+ '.sh-pill.on{background:rgba(251,225,34,.16);border-color:rgba(251,225,34,.5);color:var(--gold)}',
+ '.stadrow{display:grid;grid-template-columns:repeat(auto-fit,minmax(74px,1fr));gap:8px}',
+ '.stadstat{background:rgba(255,255,255,.045);border:1px solid var(--chalk);border-radius:11px;',
+ ' padding:9px 7px;text-align:center}',
+ '.ss-v{font-family:var(--disp);font-size:15px;font-weight:800;line-height:1.15;',
+ ' font-variant-numeric:tabular-nums}',
+ '.ss-l{font-size:9px;letter-spacing:.6px;text-transform:uppercase;color:var(--ink-faint);',
+ ' font-weight:800;margin-top:4px;line-height:1.2}',
+ '.ss-s{font-size:9px;color:var(--ink-faint);opacity:.7;margin-top:2px;line-height:1.2}',
+ '.stadbar{height:6px;border-radius:4px;background:rgba(255,255,255,.09);overflow:hidden;margin-top:11px}',
+ '.stadbar i{display:block;height:100%;background:linear-gradient(90deg,var(--gold),#ffe95c)}',
+ /* on a desktop the ground would otherwise be stretched to 1500px by the
+    shell's "#view>*" rule, and an id beats a class however late it is
+    written — so this is scoped through #view too */
+ /* and it lines up with the cards below rather than floating in the middle */
+ '@media (min-width:1024px){#view>.stadhero,.stadhero{max-width:760px;margin-left:0}}'
+ ].join('');
+ document.head.appendChild(st)})();
+
+/*#w54_stadium.js#*/
+
 showStart();
 </script>
 </body>
