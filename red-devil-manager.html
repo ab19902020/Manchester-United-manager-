@@ -37076,6 +37076,813 @@ writeSlot=function(slot,quiet){
  return ok};
 
 /*#w80_save.js#*/
+
+
+
+
+/*#w81_manager.js#*/
+
+/* =====================================================================
+   w81_manager — you
+   ---------------------------------------------------------------------
+   "When you start a new career you build your manager. You create a
+   name, his nationality, his age, and then you design his look — ten
+   different hairstyles, skin tones, eye colour, whether he wears a suit
+   or a tracksuit. And that is the manager you are for the game."
+
+   Until now you were the only person in this world without a face. Every
+   one of the four hundred and eighty-three other managers has a name, an
+   age, a reputation and a length of service; the club dossier for your
+   own club said "Manager: You".
+
+   The game already draws proper portraits — a layered SVG with eight skin
+   tones, twelve hair colours, thirteen cuts, six kinds of facial hair and
+   five jaw shapes — for every one of its eleven thousand players. None of
+   that needed inventing. What it needed was a man wearing something other
+   than a football kit, an eye colour you get to choose rather than one
+   inferred from your complexion, and a screen to build him on.
+   ===================================================================== */
+
+/* ---------------------------------------------------------------------
+   1. WHAT A MANAGER IS
+   --------------------------------------------------------------------- */
+const MGR_CUTS=[
+ ['short','Short back and sides'],['crop','French crop'],['quiff','Quiff'],
+ ['taper','Taper fade'],['fade','Skin fade'],['buzz','Buzz cut'],
+ ['mid','Grown out'],['curtains','Curtains'],['curls','Curls'],
+ ['afro','Afro'],['cornrows','Cornrows'],['bun','Top knot'],['bald','Shaved']];
+const MGR_BEARDS=[
+ ['none','Clean shaven'],['stubble','Stubble'],['moustache','Moustache'],
+ ['goatee','Goatee'],['chinstrap','Chinstrap'],['full','Full beard']];
+const MGR_JAWS=[['oval','Oval'],['square','Square'],['long','Long'],
+ ['round','Round'],['wide','Wide']];
+const MGR_EYES=[
+ ['brown','Brown','#4a3122'],['dark','Dark brown','#2b1c12'],
+ ['hazel','Hazel','#7a5a2a'],['green','Green','#3f6b47'],
+ ['blue','Blue','#4a6f92'],['grey','Grey','#6b7379'],
+ ['amber','Amber','#8a5a1e']];
+/* what a manager stands on a touchline in */
+const MGR_WEAR=[
+ ['suit','Suit and tie'],['waistcoat','Waistcoat'],['tracksuit','Club tracksuit'],
+ ['halfzip','Half-zip and coat'],['polo','Club polo']];
+
+function mgrDefault(){
+ const r=mulberry(hashStr('mgr'+Date.now()));
+ const sk=Object.keys(SKIN2), hr=Object.keys(HAIR2);
+ return{
+  name:'',nat:'ENG',age:44,
+  sk:sk[Math.floor(r()*sk.length)],
+  hr:hr[Math.floor(r()*hr.length)],
+  cut:MGR_CUTS[Math.floor(r()*MGR_CUTS.length)][0],
+  beard:MGR_BEARDS[Math.floor(r()*MGR_BEARDS.length)][0],
+  jaw:MGR_JAWS[Math.floor(r()*MGR_JAWS.length)][0],
+  eye:MGR_EYES[Math.floor(r()*MGR_EYES.length)][0],
+  brow:r()<.4?'thick':'straight',ear:r()<.3?1:0,
+  wear:'suit'}}
+
+/* an older manager greys, which is the one thing about him the game gets
+   to decide rather than you */
+function mgrHair(m){
+ const H=HAIR2[m.hr]||HAIR2.brown;
+ if(m.age<46||m.hr==='grey'||m.hr==='platinum')return H;
+ const g=HAIR2.grey;
+ const t=clamp((m.age-46)/22,0,.72);
+ const mix=(a,b)=>{
+  const p=(s)=>[parseInt(s.substr(1,2),16),parseInt(s.substr(3,2),16),parseInt(s.substr(5,2),16)];
+  const A=p(a),B=p(b);
+  return '#'+[0,1,2].map(i=>Math.round(A[i]+(B[i]-A[i])*t).toString(16).padStart(2,'0')).join('')};
+ return{b:mix(H.b,g.b),h:mix(H.h,g.h)}}
+
+/* He is built on the start screen, which is BEFORE there is a G to keep
+   him in — the whole point of the screen is that you decide who you are
+   and then the career begins. So he lives in a draft until newGame has
+   somewhere to put him. */
+let DRAFT_MGR=null;
+function myManager(){
+ if(typeof G!=='undefined'&&G){
+  if(!G.mgr)G.mgr=DRAFT_MGR||mgrDefault();
+  return G.mgr}
+ if(!DRAFT_MGR)DRAFT_MGR=mgrDefault();
+ return DRAFT_MGR}
+
+/* ---------------------------------------------------------------------
+   2. THE PORTRAIT
+   ---------------------------------------------------------------------
+   The same construction the players get — the same jaw shapes, the same
+   hair, the same clipped facial hair — with two differences that matter:
+   the shoulders are wearing clothes rather than a shirt, and the eyes are
+   the colour you asked for instead of one guessed from the skin.
+   --------------------------------------------------------------------- */
+function mgrOutfit(m,uid,c1,c2){
+ const shoulder='M4.5 40c1.2-7.4 7-10.6 15.5-10.6S34.3 32.6 35.5 40z';
+ const w=m.wear||'suit';
+ const dark='#22262e', darker='#171a20';
+ if(w==='tracksuit'){
+  return '<path d="'+shoulder+'" fill="url(#kt'+uid+')"/>'+
+   /* the zip and two stripes down the shoulder, which is what makes a
+      tracksuit read as a tracksuit at thirty pixels */
+   '<path d="M20 29.6v10.4" stroke="'+shade(c1,.55)+'" stroke-width="1.5"/>'+
+   '<path d="M12.4 32.4 10.6 40M27.6 32.4 29.4 40" stroke="'+(c2||'#fff')+
+    '" stroke-width="1.3" opacity=".9" fill="none"/>'+
+   '<path d="M16.4 30.1c1 1.3 2.2 2 3.6 2s2.6-.7 3.6-2" fill="none" stroke="'+
+    shade(c1,.6)+'" stroke-width="1.1"/>'}
+ if(w==='polo'){
+  return '<path d="'+shoulder+'" fill="url(#kt'+uid+')"/>'+
+   '<path d="M16.6 30c1 1.6 2.2 2.4 3.4 2.4s2.4-.8 3.4-2.4l1.6 1.2-5 3.4-5-3.4z" fill="'+
+    (c2||'#fff')+'" opacity=".92"/>'+
+   '<path d="M20 33.4v4.2" stroke="'+shade(c1,.6)+'" stroke-width=".9"/>'}
+ if(w==='halfzip'){
+  return '<path d="'+shoulder+'" fill="'+dark+'"/>'+
+   '<path d="M4.5 40c1.2-7.4 7-10.6 15.5-10.6v10.6z" fill="'+darker+'"/>'+
+   '<path d="M20 29.5v10.5" stroke="'+shade(c1,1.15)+'" stroke-width="1.2"/>'+
+   '<circle cx="20" cy="33.2" r=".85" fill="'+shade(c1,1.3)+'"/>'}
+ /* a suit: jacket, lapels, collar, and a tie unless it is a waistcoat */
+ const tie=(w==='suit');
+ return '<path d="'+shoulder+'" fill="'+(w==='waistcoat'?darker:dark)+'"/>'+
+  /* the shirt showing between the lapels */
+  '<path d="M20 29.4c-2.6 0-4.1 1.2-4.6 3.2L20 40l4.6-7.4c-.5-2-2-3.2-4.6-3.2z" fill="#f2f4f8"/>'+
+  /* lapels */
+  '<path d="M15.4 30.2 20 34.6 15.1 40 12.4 40z" fill="'+shade(dark,1.35)+'"/>'+
+  '<path d="M24.6 30.2 20 34.6 24.9 40 27.6 40z" fill="'+shade(dark,1.35)+'"/>'+
+  /* collar of the shirt */
+  '<path d="M17.2 29.6 20 32.4 22.8 29.6" fill="none" stroke="#cdd4de" stroke-width=".7"/>'+
+  (tie?'<path d="M20 32.2 21.5 34 20 40 18.5 34z" fill="'+shade(c1,.85)+'"/>'+
+       '<path d="M18.7 31.6h2.6l-.6 1.4h-1.4z" fill="'+shade(c1,.6)+'"/>':'')}
+
+function mgrFaceSVG(m,sz,opts){
+ m=m||myManager();
+ sz=sz||96;
+ opts=opts||{};
+ const S=SKIN2[m.sk]||SKIN2.light;
+ const H=mgrHair(m);
+ /* the colours of whoever you work for — or, on the start screen where
+    there is no career yet, of the club whose job you are about to take */
+ let c1='#8a1420',c2='#ffffff';
+ try{
+  let c=null;
+  if(typeof G!=='undefined'&&G&&G.clubs)c=G.clubs[G.my];
+  if(!c&&typeof UI!=='undefined'&&UI.startKey&&typeof rosterByKey==='function')
+   c=rosterByKey(UI.startKey);
+  if(c){c1=c.c1||c1;c2=(c.c2&&c.c2!==c.c1)?c.c2:'#ffffff'}}
+ catch(e){}
+ const jaw=JAWS[m.jaw]||JAWS.oval;
+ const uid='mg'+(opts.uid||Math.abs(hashStr(m.name+m.sk+m.hr+m.cut+m.beard+m.jaw+m.eye+m.wear+(m.age|0)))%99999);
+ const bald=m.cut==='bald';
+ const iris=((MGR_EYES.filter(e=>e[0]===m.eye)[0])||MGR_EYES[0])[2];
+ const rad=opts.round===false?'0':(opts.round||9);
+ return '<svg width="'+sz+'" height="'+sz+'" viewBox="0 0 40 40" '+
+  'style="border-radius:'+(rad==='0'?'0':(rad+'px'))+';flex-shrink:0;display:block'+
+  (opts.style||'')+'">'+
+ '<defs>'+
+  '<linearGradient id="bg'+uid+'" x1="0" y1="0" x2="0" y2="1">'+
+   '<stop offset="0" stop-color="'+(opts.bg1||'#2c3138')+'"/>'+
+   '<stop offset="1" stop-color="'+(opts.bg2||'#0b0d11')+'"/></linearGradient>'+
+  '<linearGradient id="sh'+uid+'" x1="0.15" y1="0" x2="0.9" y2="1">'+
+   '<stop offset="0" stop-color="'+S.l+'"/><stop offset="0.5" stop-color="'+S.b+'"/>'+
+   '<stop offset="1" stop-color="'+S.s+'"/></linearGradient>'+
+  '<linearGradient id="kt'+uid+'" x1="0" y1="0" x2="0" y2="1">'+
+   '<stop offset="0" stop-color="'+c1+'"/><stop offset="1" stop-color="'+shade(c1,.72)+'"/></linearGradient>'+
+  '<clipPath id="cl'+uid+'"><rect width="40" height="40" rx="'+(rad==='0'?0:rad)+'"/></clipPath>'+
+  '<clipPath id="jw'+uid+'"><path d="'+jaw+'"/></clipPath>'+
+ '</defs>'+
+ '<g clip-path="url(#cl'+uid+')">'+
+ '<rect width="40" height="40" fill="url(#bg'+uid+')"/>'+
+ '<ellipse cx="20" cy="7" rx="15" ry="11" fill="#ffffff" opacity=".05"/>'+
+ mgrOutfit(m,uid,c1,c2)+
+ /* neck */
+ '<path d="M16.9 24.4h6.2v6.2c0 1.2-1.4 2-3.1 2s-3.1-.8-3.1-2z" fill="'+S.s+'"/>'+
+ '<path d="M16.9 26.8c1.9 1.4 4.3 1.4 6.2 0v-2.4h-6.2z" fill="'+S.d+'" opacity=".45"/>'+
+ /* ears */
+ '<ellipse cx="10.8" cy="16.4" rx="'+(m.ear?1.7:1.4)+'" ry="'+(m.ear?2.4:2.2)+'" fill="'+S.s+'"/>'+
+ '<ellipse cx="29.2" cy="16.4" rx="'+(m.ear?1.7:1.4)+'" ry="'+(m.ear?2.4:2.2)+'" fill="'+S.s+'"/>'+
+ '<path d="'+jaw+'" fill="url(#sh'+uid+')"/>'+
+ faceHair(m.beard,H,S,uid)+
+ '<path d="M13.9 19.4c1.1.7 2.1 1 3.1 1M23.0 19.4c-1.1.7-2.1 1-3.1 1" stroke="'+S.d+
+  '" stroke-width=".55" fill="none" opacity=".28"/>'+
+ /* the years show around the eyes and mouth, and only past fifty */
+ (m.age>=52?'<path d="M12.6 17.4c.9.5 1.7.8 2.4.9M27.4 17.4c-.9.5-1.7.8-2.4.9" stroke="'+S.d+
+   '" stroke-width=".45" fill="none" opacity=".4"/>'+
+  '<path d="M15.6 21.4c-.4.9-.6 1.7-.6 2.4M24.4 21.4c.4.9.6 1.7.6 2.4" stroke="'+S.d+
+   '" stroke-width=".45" fill="none" opacity=".33"/>':'')+
+ /* nose */
+ '<path d="M20 14.4c-.5 2.5-1 4-1.5 4.7.5.5 1 .75 1.5.75s1-.25 1.5-.75c-.5-.7-1-2.2-1.5-4.7z" fill="'+S.s+'" opacity=".78"/>'+
+ '<path d="M18.3 19.5c.5.5 1.1.75 1.7.75s1.2-.25 1.7-.75" stroke="'+S.d+'" stroke-width=".5" fill="none" opacity=".45"/>'+
+ /* EYES.
+    The player portraits are drawn at twenty-eight pixels, where an eye is
+    three pixels across and reads best as a big white oval with a dot in
+    it. A manager is drawn at a hundred and sixty, where the same shape
+    reads as a cartoon. So this eye is built the other way round: a
+    smaller white, an iris that fills most of it the way a real one does,
+    a lid shadow across the top, and a lash line with weight at the outer
+    corner. */
+ '<ellipse cx="16.2" cy="15.3" rx="1.95" ry="1.28" fill="#f4f0ea"/>'+
+ '<ellipse cx="23.8" cy="15.3" rx="1.95" ry="1.28" fill="#f4f0ea"/>'+
+ /* the corners are always a little darker than the middle of the white */
+ '<ellipse cx="16.2" cy="15.3" rx="1.95" ry="1.28" fill="none" stroke="'+S.d+
+  '" stroke-width=".22" opacity=".45"/>'+
+ '<ellipse cx="23.8" cy="15.3" rx="1.95" ry="1.28" fill="none" stroke="'+S.d+
+  '" stroke-width=".22" opacity=".45"/>'+
+ '<circle cx="16.3" cy="15.32" r="1.16" fill="'+iris+'"/>'+
+ '<circle cx="23.7" cy="15.32" r="1.16" fill="'+iris+'"/>'+
+ /* the iris is darker at its rim, which is what stops it looking flat */
+ '<circle cx="16.3" cy="15.32" r="1.16" fill="none" stroke="'+shade(iris,.55)+
+  '" stroke-width=".26"/>'+
+ '<circle cx="23.7" cy="15.32" r="1.16" fill="none" stroke="'+shade(iris,.55)+
+  '" stroke-width=".26"/>'+
+ '<circle cx="16.3" cy="15.32" r=".44" fill="#080605"/>'+
+ '<circle cx="23.7" cy="15.32" r=".44" fill="#080605"/>'+
+ '<circle cx="16.68" cy="14.86" r=".3" fill="#fff" opacity=".95"/>'+
+ '<circle cx="24.08" cy="14.86" r=".3" fill="#fff" opacity=".95"/>'+
+ /* the lid falls across the top of the iris */
+ '<path d="M14.25 15.3a1.95 1.28 0 0 1 3.9 0z" fill="'+S.d+'" opacity=".26"/>'+
+ '<path d="M21.85 15.3a1.95 1.28 0 0 1 3.9 0z" fill="'+S.d+'" opacity=".26"/>'+
+ /* the lash line, heavier at the outer corner */
+ '<path d="M14.2 14.95c.7-.92 1.36-1.32 2-1.32s1.3.4 2 1.32" stroke="'+shade(S.d,.75)+
+  '" stroke-width=".46" fill="none" stroke-linecap="round"/>'+
+ '<path d="M21.8 14.95c.7-.92 1.36-1.32 2-1.32s1.3.4 2 1.32" stroke="'+shade(S.d,.75)+
+  '" stroke-width=".46" fill="none" stroke-linecap="round"/>'+
+ /* and the crease above it */
+ '<path d="M14.05 13.35c.85-.62 1.6-.92 2.25-.92s1.35.3 2.1.92M21.6 13.35c.85-.62 1.6-.92 2.25-.92s1.35.3 2.1.92" stroke="'+S.d+'" stroke-width=".3" fill="none" opacity=".34"/>'+
+ '<path d="M13.6 12.25c1.35-.95 3.2-.95 4.6-.1M21.8 12.15c1.4-.85 3.25-.85 4.6.1" stroke="'+H.b+
+  '" stroke-width="'+(m.brow==='thick'?'1.55':'1.1')+'" fill="none" stroke-linecap="round"/>'+
+ /* MOUTH: a lower lip catching the light, then the line of the mouth
+    over it. At thumbnail size only the line reads; at portrait size the
+    lip is what stops the face looking like a mask. */
+ '<path d="M16.9 23.55c1.9 1.5 4.3 1.5 6.2 0 .1 1.25-1.35 2.15-3.1 2.15s-3.2-.9-3.1-2.15z" '+
+  'fill="'+S.l+'" opacity=".55"/>'+
+ '<path d="M16.8 23.1c1.95 1.35 4.45 1.35 6.4 0" stroke="'+shade(S.d,.72)+
+  '" stroke-width=".95" fill="none" stroke-linecap="round"/>'+
+ '<path d="M17.6 22.55c1.5.5 3.3.5 4.8 0" stroke="'+S.d+
+  '" stroke-width=".3" fill="none" opacity=".3"/>'+
+ (bald?'<path d="M11.4 12.6c.7-4.4 3.6-6.8 8.6-6.8s7.9 2.4 8.6 6.8" fill="'+S.s+'" opacity=".5"/>'
+      :hairPath(m.cut,H,S))+
+ '<ellipse cx="15.5" cy="10.5" rx="6" ry="5" fill="#fff" opacity=".06"/>'+
+ '</g></svg>'}
+
+/* the one everything else calls */
+function mgrFace(sz,opts){return mgrFaceSVG(myManager(),sz,opts)}
+
+/* =====================================================================
+   3. THE SCREEN YOU BUILD HIM ON
+   ---------------------------------------------------------------------
+   It sits between picking a club and starting the career, because who you
+   are is part of taking the job. Everything on it redraws the portrait as
+   you touch it — there is no preview button, because a preview button
+   means the thing you are looking at is not the thing you are making.
+   ===================================================================== */
+
+const MGRUI={open:false,tab:'who'};
+
+/* NATIONS is a plain table and needs no career to read, but natName is
+   wrapped by a later layer that does */
+function mgrNatName(code){
+ try{const n=NATIONS.filter(x=>x[0]===code)[0];if(n)return n[1]}catch(e){}
+ return code}
+
+function mgrNationList(){
+ try{
+  return NATIONS.slice()
+   .sort((a,b)=>a[1]<b[1]?-1:1)
+   .map(n=>[n[0],n[1]])}
+ catch(e){return [['ENG','England']]}}
+
+function mgrSwatch(kind,key,on,style,label){
+ return '<button class="mgr-sw'+(on?' on':'')+'" data-action="mgrSet" '+
+  'data-k="'+kind+'" data-v="'+esc(key)+'" title="'+esc(label||key)+'" '+
+  'style="'+style+'"></button>'}
+
+function mgrChip(kind,key,on,label){
+ return '<button class="mgr-chip'+(on?' on':'')+'" data-action="mgrSet" '+
+  'data-k="'+kind+'" data-v="'+esc(key)+'">'+esc(label)+'</button>'}
+
+function mgrRow(title,inner,note){
+ return '<div class="mgr-row"><div class="mgr-lbl">'+esc(title)+
+  (note?'<span class="mgr-note">'+esc(note)+'</span>':'')+'</div>'+
+  '<div class="mgr-opts">'+inner+'</div></div>'}
+
+function vMgrCreate(){
+ const m=myManager();
+ let club=null;
+ try{club=(UI.startKey&&rosterByKey(UI.startKey))||null;
+  if(!club&&typeof G!=='undefined'&&G&&G.clubs)club=G.clubs[G.my]}catch(e){}
+ const cname=club?club.name:'your club';
+ const T=MGRUI.tab;
+ let body='';
+
+ if(T==='who'){
+  body=
+   mgrRow('Your name',
+    '<input class="mgr-in" id="mgrName" type="text" maxlength="28" '+
+    'placeholder="Enter your name" value="'+esc(m.name==='The Boss'?'':m.name)+'">')+
+   mgrRow('Nationality',
+    '<select class="mgr-in mgr-sel" id="mgrNat">'+
+    mgrNationList().map(n=>'<option value="'+n[0]+'"'+(n[0]===m.nat?' selected':'')+'>'+
+     esc(n[1])+'</option>').join('')+'</select>')+
+   mgrRow('Age','<div class="mgr-agewrap">'+
+    '<input class="mgr-range" id="mgrAge" type="range" min="28" max="72" value="'+(m.age|0)+'">'+
+    '<div class="mgr-age" id="mgrAgeOut">'+(m.age|0)+'</div></div>',
+    m.age<36?'a young coach with everything to prove'
+     :m.age<48?'in his prime'
+     :m.age<60?'experienced'
+     :'a veteran of the dugout');
+ }else if(T==='face'){
+  body=
+   mgrRow('Skin tone',Object.keys(SKIN2).map(k=>
+    mgrSwatch('sk',k,m.sk===k,'background:'+SKIN2[k].b,k)).join(''))+
+   mgrRow('Hair colour',Object.keys(HAIR2).map(k=>
+    mgrSwatch('hr',k,m.hr===k,'background:'+HAIR2[k].b,k)).join(''))+
+   mgrRow('Eyes',MGR_EYES.map(e=>
+    mgrSwatch('eye',e[0],m.eye===e[0],'background:'+e[2],e[1])).join(''))+
+   mgrRow('Face shape',MGR_JAWS.map(j=>mgrChip('jaw',j[0],m.jaw===j[0],j[1])).join(''))+
+   mgrRow('Brow',['straight','thick'].map(b=>
+    mgrChip('brow',b,m.brow===b,b==='thick'?'Heavy':'Fine')).join(''));
+ }else if(T==='hair'){
+  body=
+   mgrRow('Hairstyle',MGR_CUTS.map(c=>mgrChip('cut',c[0],m.cut===c[0],c[1])).join(''),
+    MGR_CUTS.length+' to choose from')+
+   mgrRow('Facial hair',MGR_BEARDS.map(c=>mgrChip('beard',c[0],m.beard===c[0],c[1])).join(''));
+ }else{
+  body=
+   mgrRow('On the touchline',MGR_WEAR.map(w=>mgrChip('wear',w[0],m.wear===w[0],w[1])).join(''),
+    'in '+(club?club.short:'club')+' colours')+
+   '<div class="mgr-blurb">Whatever you pick, you will be wearing it in the dugout, '+
+   'in the press room and on your own plinth in the trophy room.</div>';
+ }
+
+ return '<div class="mgr-wrap">'+
+  '<div class="mgr-head">'+
+   '<div class="mgr-port" id="mgrPort">'+mgrFaceSVG(m,168,{round:18,uid:'live'})+'</div>'+
+   '<div class="mgr-id">'+
+    '<div class="mgr-k">Your manager</div>'+
+    '<div class="mgr-n" id="mgrNameOut">'+esc(m.name||'The Boss')+'</div>'+
+    '<div class="mgr-sub" id="mgrSubOut">'+esc(mgrNatName(m.nat))+' · '+(m.age|0)+'</div>'+
+    '<div class="mgr-job">Taking the '+esc(cname)+' job</div>'+
+    '<button class="mgr-rand" data-action="mgrRandom">🎲 Surprise me</button>'+
+   '</div>'+
+  '</div>'+
+  '<div class="mgr-tabs">'+
+   [['who','Who you are'],['face','Face'],['hair','Hair'],['kit','Touchline']].map(t=>
+    '<button class="mgr-tab'+(T===t[0]?' on':'')+'" data-action="mgrTab" data-v="'+t[0]+'">'+
+    t[1]+'</button>').join('')+
+  '</div>'+
+  '<div class="mgr-body">'+body+'</div>'+
+  '<div class="mgr-foot">'+
+   '<button class="btn btn-ghost btn-sm" data-action="mgrBack">Back</button>'+
+   '<button class="btn btn-gold mgr-go" data-action="mgrDone">Take the job →</button>'+
+  '</div></div>'}
+
+/* ---------------------------------------------------------------------
+   4. LIVE, WITHOUT REDRAWING THE WHOLE SCREEN
+   Repainting everything on every tap loses the caret in the name box and
+   the thumb on the age slider. Only the portrait and the chip that was
+   pressed actually change, so only those are touched.
+   --------------------------------------------------------------------- */
+function mgrRepaintPortrait(){
+ try{
+  const h=document.getElementById('mgrPort');
+  if(h)h.innerHTML=mgrFaceSVG(myManager(),168,{round:18,uid:'live'});
+  const m=myManager();
+  const n=document.getElementById('mgrNameOut');
+  if(n)n.textContent=m.name||'The Boss';
+  const s=document.getElementById('mgrSubOut');
+  if(s)s.textContent=mgrNatName(m.nat)+' · '+(m.age|0);
+ }catch(e){}}
+
+ACTIONS.mgrSet=el=>{
+ const m=myManager();
+ const k=el.dataset.k,v=el.dataset.v;
+ if(!k)return;
+ m[k]=v;
+ try{
+  /* only the row that changed re-marks itself */
+  const row=el.parentElement;
+  if(row)row.querySelectorAll('[data-action="mgrSet"]').forEach(b=>
+   b.classList.toggle('on',b.dataset.v===v));
+ }catch(e){}
+ mgrRepaintPortrait();
+ try{sfx('tap')}catch(e){}};
+
+ACTIONS.mgrTab=el=>{MGRUI.tab=el.dataset.v;paintMgrCreate();try{sfx('tap')}catch(e){}};
+
+ACTIONS.mgrRandom=()=>{
+ const m=myManager();
+ const keep=m.name, nat=m.nat, age=m.age;
+ const d=mgrDefault();
+ Object.keys(d).forEach(k=>{if(k!=='name'&&k!=='nat'&&k!=='age')m[k]=d[k]});
+ m.name=keep;m.nat=nat;m.age=age;
+ paintMgrCreate();
+ try{sfx('tap')}catch(e){}};
+
+ACTIONS.mgrBack=()=>{closeMgrCreate();};
+
+/* the name and the age are read straight off their controls as they move */
+function mgrBindInputs(){
+ try{
+  const m=myManager();
+  const n=document.getElementById('mgrName');
+  if(n)n.oninput=()=>{m.name=n.value.trim();mgrRepaintPortrait()};
+  const na=document.getElementById('mgrNat');
+  if(na)na.onchange=()=>{m.nat=na.value;mgrRepaintPortrait()};
+  const a=document.getElementById('mgrAge');
+  if(a)a.oninput=()=>{
+   m.age=+a.value;
+   const o=document.getElementById('mgrAgeOut');
+   if(o)o.textContent=m.age;
+   mgrRepaintPortrait()};
+ }catch(e){}}
+
+function paintMgrCreate(){
+ const host=document.getElementById('mgrCreate');
+ if(!host)return;
+ host.innerHTML=vMgrCreate();
+ mgrBindInputs()}
+
+function openMgrCreate(){
+ if(document.getElementById('mgrCreate'))return;
+ myManager();
+ MGRUI.open=true;MGRUI.tab='who';
+ const d=document.createElement('div');
+ d.id='mgrCreate';
+ document.body.appendChild(d);
+ paintMgrCreate();
+ try{document.body.style.overflow='hidden'}catch(e){}}
+
+function closeMgrCreate(){
+ MGRUI.open=false;
+ const d=document.getElementById('mgrCreate');
+ if(d)d.remove();
+ try{document.body.style.overflow=''}catch(e){}}
+
+/* =====================================================================
+   5. WIRING IT INTO STARTING A CAREER
+   ---------------------------------------------------------------------
+   "Take the job" opens the creator; the creator starts the career. The
+   manager is built before newGame runs, so the very first screen of the
+   save already knows who you are.
+   ===================================================================== */
+const _startGameMgr=ACTIONS.startGame;
+ACTIONS.startGame=function(el){
+ /* remember where the button was pointing, because the creator is a
+    different screen and the picker underneath it will not be read again */
+ try{
+  MGRUI.startEl=el;
+  MGRUI.key=(el&&el.dataset&&el.dataset.k)||UI.startKey;
+ }catch(e){}
+ if(MGRUI.done){MGRUI.done=false;return _startGameMgr.apply(this,arguments)}
+ openMgrCreate();
+ return false};
+
+ACTIONS.mgrDone=()=>{
+ const m=myManager();
+ if(!m.name){
+  try{const n=document.getElementById('mgrName');
+   if(n){n.focus();n.classList.add('mgr-bad');
+    setTimeout(()=>n.classList.remove('mgr-bad'),1200)}}catch(e){}
+  try{toast('Give yourself a name first')}catch(e){}
+  return}
+ /* the built manager has to survive newGame, which replaces G wholesale */
+ const built={};for(const k in m)built[k]=m[k];
+ closeMgrCreate();
+ MGRUI.done=true;
+ PENDING_MGR=built;
+ try{sfx('tap')}catch(e){}
+ const el=MGRUI.startEl||{dataset:{k:MGRUI.key}};
+ try{ACTIONS.startGame(el)}
+ finally{MGRUI.done=false;PENDING_MGR=null}};
+
+/* newGame builds a fresh G, so the manager is put back afterwards */
+let PENDING_MGR=null;
+const _newGameMgr=newGame;
+newGame=function(){
+ const keep=PENDING_MGR||(G&&G.mgr)||null;
+ const r=_newGameMgr.apply(this,arguments);
+ try{
+  if(keep&&G){G.mgr={};for(const k in keep)G.mgr[k]=keep[k]}
+  else if(G&&!G.mgr)G.mgr=mgrDefault();
+ }catch(e){}
+ return r};
+
+/* ---------------------------------------------------------------------
+   6. AND HE APPEARS EVERYWHERE THE OTHERS DO
+   Every club in the world has a named man in the dugout. Yours said
+   "You".
+   --------------------------------------------------------------------- */
+const _managerOfMe=managerOf;
+managerOf=function(c){
+ try{
+  if(c&&c.i===G.my){
+   const m=myManager();
+   if(m&&m.name)return m.name}}
+ catch(e){}
+ return _managerOfMe.apply(this,arguments)};
+
+/* the header carries your face, next to the badge of whoever you work for */
+const _renderHdrMgr=renderHdr;
+renderHdr=function(){
+ const r=_renderHdrMgr.apply(this,arguments);
+ try{
+  if(!G||!G.mgr)return r;
+  const bar=document.querySelector('#hdr')||document.querySelector('.hdr');
+  if(!bar)return r;
+  let slot=bar.querySelector('.mgr-hdr');
+  if(!slot){
+   slot=document.createElement('button');
+   slot.className='mgr-hdr';
+   slot.setAttribute('data-action','mgrCard');
+   bar.appendChild(slot)}
+  const sig=G.mgr.sk+G.mgr.hr+G.mgr.cut+G.mgr.beard+G.mgr.wear+G.mgr.eye+G.mgr.jaw+(G.mgr.age|0);
+  if(slot.dataset.sig!==sig){
+   slot.dataset.sig=sig;
+   slot.innerHTML=mgrFace(30,{round:8,uid:'hdr'})}
+ }catch(e){}
+ return r};
+
+/* tapping it shows who you are and what you have done */
+ACTIONS.mgrCard=()=>{
+ const m=myManager();
+ let years=0,clubs=[];
+ try{
+  years=Math.max(1,G.season);
+  clubs=(G.mgrHonours||[]).map(h=>h.club).filter((v,i,a)=>v&&a.indexOf(v)===i);
+ }catch(e){}
+ const hon=(typeof myHonourRows==='function')?myHonourRows():[];
+ openModal(
+  '<div style="display:flex;gap:14px;align-items:center">'+
+   mgrFace(78,{round:14,uid:'card'})+
+   '<div style="flex:1"><h3 style="margin:0 0 2px">'+esc(m.name)+'</h3>'+
+   '<div class="small muted">'+esc(natName(m.nat))+' · '+(m.age|0)+' years old</div>'+
+   '<div class="xs faint" style="margin-top:3px">'+
+    esc((G.clubs[G.my]||{}).name||'')+' · season '+years+'</div></div></div>'+
+  (hon.length
+   ?'<div class="chip-lbl" style="margin-top:14px">What you have won</div>'+
+    '<div class="card tight">'+hon.slice(0,10).map(h=>
+     '<div class="spread" style="padding:5px 2px">'+
+     '<span class="small" style="font-weight:700">'+esc(h.comp)+'</span>'+
+     '<span class="xs faint">'+esc(h.club||'')+' · '+esc(seasonLabel(h.season))+'</span></div>').join('')+
+    '</div>'
+   :'<div class="card" style="margin-top:14px"><div class="small muted">'+
+    'Nothing won yet. The trophy room is waiting.</div></div>')+
+  '<button class="btn btn-ghost btn-block" style="margin-top:12px" data-action="closeModal">Close</button>')};
+
+/* ---------------------------------------------------------------------
+   10. AND HE IS REMEMBERED BETWEEN CAREERS
+   ---------------------------------------------------------------------
+   Building a manager is a minute of work. Starting a second career should
+   not be a minute of doing it again — the creator opens on the man you
+   made last time, ready to be taken as he is or changed.
+   --------------------------------------------------------------------- */
+const MGR_STORE='rdmManager';
+function mgrRemember(m){
+ try{localStorage.setItem(MGR_STORE,JSON.stringify(m))}catch(e){}}
+function mgrRecall(){
+ try{
+  const raw=localStorage.getItem(MGR_STORE);
+  if(!raw)return null;
+  const m=JSON.parse(raw);
+  return (m&&typeof m==='object'&&m.sk)?m:null}
+ catch(e){return null}}
+
+/* the draft starts from whoever you were, if there was one */
+const _openMgrRecall=openMgrCreate;
+openMgrCreate=function(){
+ try{
+  if(!DRAFT_MGR&&(typeof G==='undefined'||!G||!G.mgr)){
+   const old=mgrRecall();
+   if(old)DRAFT_MGR=old}}
+ catch(e){}
+ return _openMgrRecall.apply(this,arguments)};
+
+const _mgrDoneSave=ACTIONS.mgrDone;
+ACTIONS.mgrDone=function(){
+ try{const m=myManager();if(m&&m.name)mgrRemember(m)}catch(e){}
+ return _mgrDoneSave.apply(this,arguments)};
+
+/* =====================================================================
+   7. YOUR OWN HONOURS, AND WHICH CLUB YOU WON THEM AT
+   ---------------------------------------------------------------------
+   "In the trophy room you can have the trophies you won as a manager, and
+   tell me which club you were manager at, at the time."
+
+   G.honours already records what you win. It records the season and the
+   competition and nothing else — so a manager who won the league at
+   Ipswich, moved, and won it again at Manchester United had two identical
+   lines. The club is stamped on every honour from now on, and the ones
+   already in an old save are attributed to wherever you were when it was
+   recorded, which for a single-club career is right and for a career with
+   a move in it is the best the old data can support.
+   ===================================================================== */
+function myHonourRows(){
+ const out=[];
+ try{
+  (G.honours||[]).forEach((h,ix)=>{
+   let code=null;
+   const raw=String(h.comp||'');
+   const bare=raw.replace(/ (champions|winners)$/i,'');
+   for(const k in TROPHY_LABEL){
+    const L=TROPHY_LABEL[k].toLowerCase();
+    if(L===raw.toLowerCase()||L===bare.toLowerCase()){code=k;break}}
+   out.push({season:h.season,comp:bare,code,club:h.club||'',ix})});
+ }catch(e){}
+ return out.slice().sort((a,b)=>b.season-a.season||b.ix-a.ix)}
+
+/* every honour is stamped with the club as it is recorded */
+(function stampHonours(){
+ try{
+  if(!G||!G.honours)return;
+  G.honours.forEach(h=>{if(!h.club)try{h.club=G.clubs[G.my].name}catch(e){}});
+ }catch(e){}})();
+
+/* and from here on, at the moment it happens */
+const _dtcHonour=dailyTickCore;
+dailyTickCore=function(){
+ const r=_dtcHonour.apply(this,arguments);
+ try{
+  const list=G.honours||[];
+  for(let i=list.length-1;i>=0;i--){
+   if(list[i].club)break;
+   list[i].club=G.clubs[G.my].name;
+   list[i].mgr=(G.mgr&&G.mgr.name)||''}}
+ catch(e){}
+ return r};
+
+/* ---------------------------------------------------------------------
+   8. AND HE STANDS IN HIS OWN ROOM
+   ---------------------------------------------------------------------
+   The hall shows every trophy in the game, won or not, which is a record
+   of the competition rather than of you. Your own case is a different
+   thing: only what you have actually lifted, in order, with the badge of
+   the club you were at when you lifted it.
+   --------------------------------------------------------------------- */
+function vMgrHonours(){
+ const m=myManager();
+ const rows=myHonourRows();
+ const byClub={};
+ rows.forEach(r=>{const k=r.club||'—';(byClub[k]=byClub[k]||[]).push(r)});
+ const clubs=Object.keys(byClub);
+ let h='<div class="mgr-case">'+
+  '<div class="mgr-case-hd">'+mgrFace(56,{round:12,uid:'case'})+
+   '<div><div class="mgr-case-n">'+esc(m.name)+'</div>'+
+   '<div class="mgr-case-s">'+esc(natName(m.nat))+' · '+(m.age|0)+' · '+
+    (rows.length?rows.length+' trophy'+(rows.length===1?'':'s'):'no silverware yet')+'</div></div>'+
+  '</div>';
+ if(!rows.length){
+  h+='<div class="mgr-case-empty">Nothing in here yet. Win something and it '+
+     'appears with the badge of the club you were at.</div></div>';
+  return h}
+ clubs.forEach(cn=>{
+  const list=byClub[cn];
+  let c1='#8a1420',short=cn;
+  try{const cl=(G.clubs||[]).filter(x=>x.name===cn)[0];
+   if(cl){c1=cl.c1||c1;short=cl.short||cn}}catch(e){}
+  h+='<div class="mgr-club" style="--cc:'+c1+'">'+
+   '<div class="mgr-club-hd"><span class="mgr-dot"></span>'+esc(cn)+
+   '<span class="mgr-club-n">'+list.length+'</span></div>'+
+   '<div class="mgr-tr">'+list.map(r=>
+    '<div class="mgr-t">'+trophyBadge(r.code||'PL',40,false)+
+    '<div class="mgr-t-n">'+esc(r.comp)+'</div>'+
+    '<div class="mgr-t-s">'+esc(seasonLabel(r.season))+'</div></div>').join('')+
+   '</div></div>'});
+ return h+'</div>'}
+
+/* it goes at the top of the Trophies tab, above the door to the hall,
+   because it is the part that is about you */
+const _vTroomMgr=vTrophyRoomTab;
+vTrophyRoomTab=function(){
+ let base=_vTroomMgr.apply(this,arguments);
+ try{return '<div class="chip-lbl" style="margin-top:0">Your honours</div>'+
+  vMgrHonours()+'<div class="chip-lbl" style="margin-top:16px">The hall</div>'+base}
+ catch(e){return base}};
+
+/* and the hall's own panel says who was in the chair */
+const _hallPanelMgr=(typeof showPanel==='function')?null:null;
+
+/* =====================================================================
+   9. HOW IT LOOKS
+   ---------------------------------------------------------------------
+   A full-bleed sheet with the portrait pinned at the top, because on a
+   phone the thing you are designing must never scroll off the screen
+   while you are designing it.
+   ===================================================================== */
+(function mgrCSS(){
+ const st=document.createElement('style');st.id='w81';
+ st.textContent=
+ '#mgrCreate{position:fixed;inset:0;z-index:8000;background:'+
+  'radial-gradient(1200px 700px at 50% -10%,#1d2530,#0a0d12 62%,#05070a);'+
+  'display:flex;flex-direction:column;overflow:hidden;'+
+  'font-family:inherit;color:var(--ink,#e9edf2)}'+
+ '.mgr-wrap{display:flex;flex-direction:column;height:100%;max-width:720px;'+
+  'width:100%;margin:0 auto}'+
+
+ /* the head: portrait and identity, always visible */
+ '.mgr-head{display:flex;gap:16px;align-items:center;padding:20px 18px 14px;'+
+  'flex:0 0 auto}'+
+ '.mgr-port{flex:0 0 auto;filter:drop-shadow(0 14px 30px rgba(0,0,0,.55))}'+
+ '.mgr-port svg{width:132px;height:132px}'+
+ '@media(min-width:520px){.mgr-port svg{width:168px;height:168px}}'+
+ '.mgr-id{flex:1;min-width:0}'+
+ '.mgr-k{font-size:10px;letter-spacing:2.2px;text-transform:uppercase;'+
+  'color:#8fa0b4;font-weight:800}'+
+ '.mgr-n{font-family:var(--disp,inherit);font-size:26px;font-weight:900;'+
+  'line-height:1.1;margin:3px 0 2px;letter-spacing:.3px;'+
+  'overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'+
+ '.mgr-sub{font-size:12px;color:#9fb0c4;font-weight:700}'+
+ '.mgr-job{font-size:11px;color:#c9a35c;font-weight:800;margin-top:6px;'+
+  'letter-spacing:.3px}'+
+ '.mgr-rand{margin-top:10px;background:rgba(255,255,255,.06);color:#dbe4ee;'+
+  'border:1px solid rgba(255,255,255,.14);border-radius:999px;padding:6px 13px;'+
+  'font-size:11px;font-weight:800;cursor:pointer}'+
+ '.mgr-rand:active{background:rgba(255,255,255,.14)}'+
+
+ /* the tabs */
+ '.mgr-tabs{display:flex;gap:6px;padding:0 14px 10px;flex:0 0 auto;'+
+  'overflow-x:auto;scrollbar-width:none}'+
+ '.mgr-tabs::-webkit-scrollbar{display:none}'+
+ '.mgr-tab{flex:1 0 auto;padding:9px 14px;border-radius:11px;cursor:pointer;'+
+  'background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.09);'+
+  'color:#9fb0c4;font-size:12px;font-weight:800;white-space:nowrap}'+
+ '.mgr-tab.on{background:linear-gradient(180deg,#c9a35c,#a8843f);color:#1a1206;'+
+  'border-color:#d9b877}'+
+
+ /* the controls */
+ '.mgr-body{flex:1 1 auto;overflow-y:auto;padding:4px 16px 16px;'+
+  '-webkit-overflow-scrolling:touch}'+
+ '.mgr-row{margin-bottom:18px}'+
+ '.mgr-lbl{font-size:10px;letter-spacing:1.8px;text-transform:uppercase;'+
+  'color:#7f8fa3;font-weight:800;margin-bottom:8px;display:flex;'+
+  'justify-content:space-between;align-items:baseline;gap:10px}'+
+ '.mgr-note{text-transform:none;letter-spacing:.2px;font-size:11px;'+
+  'color:#5f6d7e;font-weight:600;font-style:italic}'+
+ '.mgr-opts{display:flex;flex-wrap:wrap;gap:8px}'+
+ '.mgr-sw{width:38px;height:38px;border-radius:11px;cursor:pointer;'+
+  'border:2px solid rgba(255,255,255,.10);padding:0;'+
+  'box-shadow:inset 0 -6px 12px rgba(0,0,0,.28)}'+
+ '.mgr-sw.on{border-color:#e8c880;transform:scale(1.06);'+
+  'box-shadow:0 0 0 3px rgba(232,200,128,.22),inset 0 -6px 12px rgba(0,0,0,.28)}'+
+ '.mgr-chip{padding:9px 13px;border-radius:11px;cursor:pointer;'+
+  'background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.10);'+
+  'color:#c2cedb;font-size:12px;font-weight:700}'+
+ '.mgr-chip.on{background:rgba(232,200,128,.18);border-color:#c9a35c;color:#f0dcae}'+
+ '.mgr-in{width:100%;padding:12px 14px;border-radius:12px;font-size:15px;'+
+  'background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);'+
+  'color:#eef3f8;font-weight:700;font-family:inherit;outline:none}'+
+ '.mgr-in:focus{border-color:#c9a35c;background:rgba(255,255,255,.08)}'+
+ '.mgr-in.mgr-bad{border-color:#c0392b;animation:mgrshake .4s}'+
+ '@keyframes mgrshake{0%,100%{transform:translateX(0)}25%{transform:translateX(-5px)}'+
+  '75%{transform:translateX(5px)}}'+
+ '.mgr-sel{appearance:none;-webkit-appearance:none;'+
+  'background-image:linear-gradient(45deg,transparent 50%,#8fa0b4 50%),'+
+  'linear-gradient(135deg,#8fa0b4 50%,transparent 50%);'+
+  'background-position:calc(100% - 19px) 21px,calc(100% - 13px) 21px;'+
+  'background-size:6px 6px,6px 6px;background-repeat:no-repeat}'+
+ '.mgr-sel option{background:#141a21;color:#eef3f8}'+
+ '.mgr-agewrap{display:flex;align-items:center;gap:14px;width:100%}'+
+ '.mgr-range{flex:1;-webkit-appearance:none;appearance:none;height:6px;'+
+  'border-radius:99px;background:linear-gradient(90deg,#c9a35c,#4a5563);outline:none}'+
+ '.mgr-range::-webkit-slider-thumb{-webkit-appearance:none;width:26px;height:26px;'+
+  'border-radius:50%;background:#e8c880;border:3px solid #2a2318;cursor:pointer;'+
+  'box-shadow:0 3px 8px rgba(0,0,0,.5)}'+
+ '.mgr-range::-moz-range-thumb{width:26px;height:26px;border-radius:50%;'+
+  'background:#e8c880;border:3px solid #2a2318;cursor:pointer}'+
+ '.mgr-age{font-family:var(--disp,inherit);font-size:30px;font-weight:900;'+
+  'color:#e8c880;min-width:46px;text-align:right;line-height:1}'+
+ '.mgr-blurb{font-size:12px;color:#8496a9;line-height:1.6;margin-top:4px}'+
+
+ /* the foot */
+ '.mgr-foot{flex:0 0 auto;display:flex;gap:10px;padding:12px 16px '+
+  'calc(14px + env(safe-area-inset-bottom,0px));'+
+  'background:linear-gradient(180deg,rgba(5,7,10,0),rgba(5,7,10,.92) 40%);'+
+  'border-top:1px solid rgba(255,255,255,.07)}'+
+ '.mgr-go{flex:1;font-size:14px;letter-spacing:.4px}'+
+
+ /* the face in the header bar */
+ '.mgr-hdr{background:none;border:0;padding:0 0 0 8px;cursor:pointer;'+
+  'display:flex;align-items:center;flex:0 0 auto}'+
+ '.mgr-hdr svg{box-shadow:0 2px 8px rgba(0,0,0,.4)}'+
+
+ /* your own trophy case on the Trophies tab */
+ '.mgr-case{border-radius:16px;padding:14px;'+
+  'background:linear-gradient(180deg,rgba(30,38,48,.85),rgba(12,16,21,.9));'+
+  'border:1px solid rgba(255,255,255,.09)}'+
+ '.mgr-case-hd{display:flex;gap:12px;align-items:center;margin-bottom:12px}'+
+ '.mgr-case-n{font-family:var(--disp,inherit);font-size:17px;font-weight:900}'+
+ '.mgr-case-s{font-size:11px;color:#8fa0b4;font-weight:700;margin-top:2px}'+
+ '.mgr-case-empty{font-size:12px;color:#7f8fa3;line-height:1.6;padding:4px 2px}'+
+ '.mgr-club{margin-top:12px;border-left:3px solid var(--cc);padding-left:11px}'+
+ '.mgr-club-hd{display:flex;align-items:center;gap:8px;font-size:12px;'+
+  'font-weight:800;color:#dbe4ee;margin-bottom:8px}'+
+ '.mgr-dot{width:9px;height:9px;border-radius:50%;background:var(--cc);'+
+  'box-shadow:0 0 0 2px rgba(255,255,255,.14)}'+
+ '.mgr-club-n{margin-left:auto;font-size:11px;color:#8fa0b4;'+
+  'background:rgba(255,255,255,.06);border-radius:999px;padding:2px 8px}'+
+ '.mgr-tr{display:flex;flex-wrap:wrap;gap:10px}'+
+ '.mgr-t{width:82px;text-align:center;display:flex;flex-direction:column;'+
+  'align-items:center;gap:3px}'+
+ '.mgr-t-n{font-size:9px;font-weight:800;line-height:1.25;color:#cdd8e4;'+
+  'text-transform:uppercase;letter-spacing:.3px}'+
+ '.mgr-t-s{font-size:9px;color:#7f8fa3;font-weight:700}';
+ document.head.appendChild(st)})();
+
+/*#w81_manager.js#*/
 showStart();
 </script>
 </body>
