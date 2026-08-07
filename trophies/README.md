@@ -49,9 +49,9 @@ the season on the plaque.
 | `EURO` | Henri Delaunay — heavy plinth, long slender bowl |
 | `boot` | Golden Boot — sole, upper, tongue, laces, studs |
 | `ballon` | Ballon d'Or — panelled gold ball |
-| `glove` | Golden Glove |
-| `playmaker` | Playmaker — open hand and ball |
 | `young` / `poty` | Rising star |
+| `glove` | Golden Glove — curled fingers, padded palm, strapped cuff |
+| `playmaker` | Playmaker — a panelled ball in a swept crescent |
 | `mgr` | Manager of the Season — tactics board |
 | `ESP` `ITA` `GER` `FRA` `CH` `L1` `L2` `NL` | one shared league cup, tinted per competition |
 
@@ -76,6 +76,12 @@ silver / gold / crystal / malachite / wood set.
 Conventions: build base at `y = 0`, roughly 20 units tall, and **do not add
 lights** — the room supplies them. The hall rescales to `TROPHY_CM`, so the
 units you build in do not matter; only the real measurement does.
+
+## Getting in
+
+The room is a tab in the **club area** — *The club → 🏆 Trophy room*. It was
+reachable only from an honours view that nothing linked to, which meant a room
+built to be walked around was in practice unreachable.
 
 ## Three.js
 
