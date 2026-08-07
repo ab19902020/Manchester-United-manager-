@@ -32933,14 +32933,28 @@ function hallCelebrate(w){
    ===================================================================== */
 
 /* ---- 1. THE DOOR --------------------------------------------------- */
-/* CLUB_GROUPS is a const, so it gets mutated rather than replaced —
-   reassigning it threw on load and took the whole game down with it. */
+/* The club screen does NOT read a static list. A later layer splits the
+   Club and World doors apart, and its useGroups() empties CLUB_GROUPS and
+   refills it from CLUBONLY_GROUPS on every single render — so mutating
+   CLUB_GROUPS once, as the first version did, was wiped before the screen
+   was ever drawn and the tab never appeared. The source list is the one
+   to change. (Reassigning is also out: they are all const.)
+
+   The second half of why it stayed invisible: CLUB_TABS is a whitelist,
+   and vClubFinal resets UI.clubTab to the first allowed tab when the
+   current one is not on it. Even a rendered chip would have bounced you
+   straight back to Staff. */
 (function addTrophyTab(){
  try{
-  const grp=CLUB_GROUPS.find(g=>g[0]==='The club');
-  if(!grp||grp[1].some(x=>x[0]==='trophies'))return;
-  const at=grp[1].findIndex(x=>x[0]==='finances');
-  grp[1].splice(at<0?grp[1].length:at,0,['trophies','\ud83c\udfc6 Trophy room']);
+  const groups=(typeof CLUBONLY_GROUPS!=='undefined')?CLUBONLY_GROUPS:
+               (typeof CLUB_GROUPS!=='undefined'?CLUB_GROUPS:null);
+  if(groups){
+   const grp=groups.find(g=>g[0]==='The club')||groups[0];
+   if(grp&&!grp[1].some(x=>x[0]==='trophies'))
+    grp[1].push(['trophies','Trophies']);
+  }
+  if(typeof CLUB_TABS!=='undefined'&&CLUB_TABS.indexOf('trophies')<0)
+   CLUB_TABS.push('trophies');
  }catch(e){}
 })();
 
