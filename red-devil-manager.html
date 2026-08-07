@@ -31931,35 +31931,83 @@ TB.ballon=function(){
 /* ---- 7. THE GOLDEN GLOVE, PLAYMAKER, YOUNG PLAYER, MANAGER ---------- */
 TB.glove=function(){
  const M=tMaterials(),g=new THREE.Group();
- g.add(tLathe([[4.4,0],[4.4,1.2],[3.4,1.8],[2.8,2.3]],M.dark));
- const palm=new THREE.Mesh(new THREE.BoxGeometry(4.6,5.6,1.7),M.gold);
- palm.position.y=6.0;g.add(palm);
- const pad=new THREE.Mesh(new THREE.BoxGeometry(4.2,5.0,.5),M.goldWarm);
- pad.position.set(0,6.0,1.0);g.add(pad);
- /* four fingers and a thumb */
+ g.add(tLathe([[4.4,0],[4.4,1.2],[3.6,1.7],[3.0,2.2]],M.dark));
+ const band=new THREE.Mesh(new THREE.CylinderGeometry(3.0,3.0,1.1,48),
+  new THREE.MeshStandardMaterial({color:0xf0f2f4,metalness:1,roughness:.2,
+   bumpMap:tEngraveBand(['GOLDEN GLOVE']),bumpScale:.04}));
+ band.position.y=2.75;g.add(band);
+ /* The glove itself, tilted back on its wrist the way the real award is
+    mounted. The first version was a flat box with four rods stuck on the
+    top edge and read as a gold radiator. */
+ const glove=new THREE.Group();
+ glove.position.y=3.3;glove.rotation.x=-.22;glove.rotation.z=.12;
+ /* backhand: a lathe swept into a rounded, slightly domed paddle */
+ const back=new THREE.Mesh(new THREE.SphereGeometry(2.5,24,18),M.gold);
+ back.scale.set(1.0,1.34,.42);back.position.y=5.4;glove.add(back);
+ /* the padded palm, proud of the backhand */
+ const palm=new THREE.Mesh(new THREE.SphereGeometry(2.35,20,16),M.goldWarm);
+ palm.scale.set(.96,1.28,.30);palm.position.set(0,5.3,.62);glove.add(palm);
+ /* four fingers, curled, each tapering and each a different length */
+ const LEN=[2.5,3.0,2.85,2.35];
  for(let i=0;i<4;i++){
-  const f=tCap(.52,3.0,M.gold);
-  f.position.set(-1.65+i*1.1,10.3+(i===1||i===2?.5:0),0);g.add(f)}
- const thumb=tCap(.55,2.4,M.gold);
- thumb.position.set(-2.9,7.4,.3);thumb.rotation.z=.95;g.add(thumb);
- const cuff=new THREE.Mesh(new THREE.CylinderGeometry(2.5,2.7,1.8,28),M.goldWarm);
- cuff.position.y=2.9;g.add(cuff);
+  const fx=-1.62+i*1.08;
+  const pts=[];
+  for(let k=0;k<=8;k++){
+   const t=k/8;
+   pts.push(new THREE.Vector3(fx+t*.16*(i-1.5),8.2+t*LEN[i],
+     t*t*-.75));                       /* curling forward over the top */
+  }
+  const tube=new THREE.Mesh(
+   new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts),16,.46,10,false),M.gold);
+  glove.add(tube);
+  const tip=new THREE.Mesh(new THREE.SphereGeometry(.44,12,10),M.gold);
+  tip.position.set(fx+.16*(i-1.5),8.2+LEN[i],-.75);glove.add(tip)}
+ /* and the thumb, off the side and angled across */
+ const tp=[new THREE.Vector3(-2.3,5.4,.4),new THREE.Vector3(-3.3,6.6,.1),
+           new THREE.Vector3(-3.5,8.0,-.3)];
+ glove.add(new THREE.Mesh(
+  new THREE.TubeGeometry(new THREE.CatmullRomCurve3(tp),14,.5,10,false),M.gold));
+ const tt=new THREE.Mesh(new THREE.SphereGeometry(.48,12,10),M.gold);
+ tt.position.copy(tp[2]);glove.add(tt);
+ /* the cuff, with its strap */
+ const cuff=new THREE.Mesh(new THREE.CylinderGeometry(2.0,2.3,2.2,24),M.goldWarm);
+ cuff.position.y=2.4;glove.add(cuff);
+ const strap=new THREE.Mesh(new THREE.TorusGeometry(2.16,.20,8,32),M.gold);
+ strap.position.y=2.5;strap.rotation.x=Math.PI/2;glove.add(strap);
+ g.add(glove);
  return g};
 
 TB.playmaker=function(){
  const M=tMaterials(),g=new THREE.Group();
- g.add(tLathe([[4.2,0],[4.2,1.2],[3.2,1.8],[2.4,2.3]],M.dark));
- g.add(tLathe([[2.4,2.3],[1.1,3.4],[.6,5.0],[.6,7.0]],M.silverSoft));
- /* an open hand, palm up, offering the ball */
- const palm=new THREE.Mesh(new THREE.SphereGeometry(2.4,32,24),M.silver);
- palm.scale.set(1.25,.42,1.0);palm.position.y=7.6;g.add(palm);
- for(let i=0;i<5;i++){
-  const a=-.7+i*.35;
-  const f=tCap(.3,2.0,M.silver);
-  f.position.set(Math.sin(a)*2.6,8.3,Math.cos(a)*2.6);
-  f.rotation.x=-.5;f.rotation.y=-a;g.add(f)}
- const ball=new THREE.Mesh(new THREE.IcosahedronGeometry(2.3,1),M.gold);
- ball.position.y=10.4;g.add(ball);
+ /* A ball cradled in a swept crescent. The first attempt was an open hand
+    with five fingers poking radially out of a flattened sphere, and at
+    the size a trophy is actually seen it read as a splayed claw. A clean
+    abstract shape survives the scale; a bad hand does not. */
+ g.add(tLathe([[4.2,0],[4.2,1.2],[3.4,1.7],[2.8,2.2]],M.dark));
+ const band=new THREE.Mesh(new THREE.CylinderGeometry(2.8,2.8,1.1,48),
+  new THREE.MeshStandardMaterial({color:0xf0f2f4,metalness:1,roughness:.2,
+   bumpMap:tEngraveBand(['PLAYMAKER OF THE SEASON']),bumpScale:.04}));
+ band.position.y=2.75;g.add(band);
+ g.add(tLathe([[2.4,3.3],[1.0,4.3],[.62,5.6],[.62,6.4]],M.silverSoft));
+ /* the crescent: a tapering blade swept up and around the ball */
+ [0,1].forEach(side=>{
+  const pts=[];
+  for(let k=0;k<=20;k++){
+   const t=k/20, a=(side?-1:1)*(-.35+t*3.0);
+   const r=2.05+Math.sin(t*Math.PI)*1.15;
+   pts.push(new THREE.Vector3(Math.sin(a)*r,6.3+t*5.6,Math.cos(a)*r*.45))}
+  const c=new THREE.CatmullRomCurve3(pts);
+  const blade=new THREE.Mesh(new THREE.TubeGeometry(c,40,.30,10,false),M.silver);
+  g.add(blade)});
+ /* the ball, panelled rather than faceted */
+ const ball=new THREE.Mesh(new THREE.SphereGeometry(2.35,28,22),M.gold);
+ ball.position.y=10.2;g.add(ball);
+ const seam=new THREE.MeshStandardMaterial({color:0x8a6510,metalness:1,roughness:.4});
+ for(let i=0;i<3;i++){
+  const t=new THREE.Mesh(new THREE.TorusGeometry(2.36,.055,6,40),seam);
+  t.position.y=10.2;t.rotation.y=i*Math.PI/3;g.add(t)}
+ const eq=new THREE.Mesh(new THREE.TorusGeometry(2.36,.055,6,40),seam);
+ eq.position.y=10.2;eq.rotation.x=Math.PI/2;g.add(eq);
  return g};
 
 TB.young=function(){
@@ -32870,6 +32918,248 @@ function hallCelebrate(w){
  document.head.appendChild(st)})();
 
 /*#w71_trophyhall.js#*/
+
+
+/* =====================================================================
+   w72_room_and_loans — two things that were buried.
+
+   1. The trophy room had no door. It was reachable only from an honours
+      view that nothing linked to, so a room built to be walked around was
+      effectively unreachable. It is a tab in the club area now.
+
+   2. You could only loan from a curated shortlist. Buying works the other
+      way round — you find any player at any club and ask, and the answer
+      depends on the player and the club. Loans work that way now too.
+   ===================================================================== */
+
+/* ---- 1. THE DOOR --------------------------------------------------- */
+/* CLUB_GROUPS is a const, so it gets mutated rather than replaced —
+   reassigning it threw on load and took the whole game down with it. */
+(function addTrophyTab(){
+ try{
+  const grp=CLUB_GROUPS.find(g=>g[0]==='The club');
+  if(!grp||grp[1].some(x=>x[0]==='trophies'))return;
+  const at=grp[1].findIndex(x=>x[0]==='finances');
+  grp[1].splice(at<0?grp[1].length:at,0,['trophies','\ud83c\udfc6 Trophy room']);
+ }catch(e){}
+})();
+
+function vTrophyRoomTab(){
+ const t=(typeof myTrophies==='function')?myTrophies():[];
+ let h='<div class="troom-door">'+
+  '<div class="troom-door-k">The cabinet</div>'+
+  '<div class="troom-door-n">'+(t.length
+   ?(t.length+' trophy'+(t.length===1?'':'s')+' won')
+   :'Nothing won yet')+'</div>'+
+  '<div class="troom-door-b">Every trophy in the game stands on its own plinth, at its '+
+  'real size against the others. The ones you have not won are there too.</div>'+
+  '<button class="btn btn-gold btn-block" data-action="trophyRoom">'+
+  '🏆 Walk into the trophy room</button></div>';
+ if(t.length){
+  h+='<div class="chip-lbl" style="margin-top:14px">What you have won</div><div class="card tight">'+
+   '<div class="trophycase">'+t.map(x=>
+    '<div class="tc">'+trophyBadge(x.code||'PL',52)+
+    '<div class="tc-n">'+esc(x.comp)+'<br><span style="opacity:.6">S'+x.season+'</span></div></div>').join('')+
+   '</div></div>';
+ }else{
+  h+='<div class="card" style="margin-top:12px"><div class="small muted" style="line-height:1.6">'+
+   'Win something and it appears here, and the room will walk you to it.</div></div>';
+ }
+ return h}
+
+const _vClubRoom=vClubFinal;
+vClubFinal=function(){
+ if((UI.clubTab||'table')==='trophies'){
+  const t='trophies';
+  return '<div class="secnav">'+CLUB_GROUPS.map(g=>
+   '<div style="flex:none"><div class="xs faint" style="margin:0 0 4px 2px;font-weight:800;letter-spacing:.5px">'+
+   g[0].toUpperCase()+'</div><div class="row" style="gap:5px">'+g[1].map(x=>
+    '<button class="chip'+(t===x[0]?' on':'')+'" data-action="clubTab" data-v="'+x[0]+'">'+
+    x[1]+'</button>').join('')+'</div></div>').join('')+'</div>'+vTrophyRoomTab();
+ }
+ return _vClubRoom.apply(this,arguments)};
+vClub=function(){return vClubFinal()};
+
+(function roomDoorCSS(){
+ const st=document.createElement('style');st.id='w72';
+ st.textContent='.troom-door{border-radius:16px;padding:18px 16px;text-align:center;'+
+  'background:linear-gradient(180deg,rgba(46,32,14,.85),rgba(18,13,7,.9));'+
+  'border:1px solid rgba(255,199,90,.28)}'+
+  '.troom-door-k{font-family:var(--disp);font-size:11px;letter-spacing:2.4px;text-transform:uppercase;'+
+  'color:#ffd76a;font-weight:800}'+
+  '.troom-door-n{font-family:var(--disp);font-size:22px;font-weight:800;color:#fff6e2;margin-top:3px}'+
+  '.troom-door-b{font-size:12px;color:#a5937a;line-height:1.6;margin:9px auto 14px;max-width:340px}';
+ document.head.appendChild(st)})();
+
+/* ---- 2. ASK TO LOAN ANYBODY ----------------------------------------
+   Where he stands at his own club is the whole negotiation. A club will
+   loan you a kid behind three others; it will not loan you its captain
+   at any price. */
+function loanStanding(p){
+ const c=G.clubs[p.club];
+ if(!c)return {rank:99,total:99,key:false,lvl:60};
+ const sq=(c.players||[]).slice().sort((a,b)=>b.ovr-a.ovr);
+ const rank=sq.indexOf(p);
+ const lvl=(typeof clubLevel==='function')?clubLevel(c):
+   Math.round(sq.slice(0,11).reduce((s,x)=>s+x.ovr,0)/11);
+ return {rank:rank<0?99:rank,total:sq.length,lvl,
+  key:rank>=0&&rank<11&&p.ovr>=lvl-1}}
+
+/* would they even entertain it, and on what terms */
+function loanTerms(p){
+ const st=loanStanding(p),c=G.clubs[p.club],me=G.clubs[G.my];
+ const myLvl=clubLevel(me);
+ /* how willing the parent club is, 0-100 */
+ let will=8;
+ will+=Math.max(0,st.rank-10)*7;              /* the further down, the freer */
+ if(p.age<=21)will+=26;                        /* they want kids playing */
+ else if(p.age<=23)will+=14;
+ if(p.ovr<st.lvl-4)will+=16;                   /* surplus to them */
+ if(p.injury)will-=40;
+ if(p.listed)will+=22;
+ if(st.key)will-=45;                           /* a first-teamer is not going anywhere */
+ if((c.players||[]).length<=18)will-=18;        /* they cannot afford to thin out */
+ /* they will not strengthen a direct rival */
+ try{if(c.div===me.div&&c.i!==me.i)will-=14}catch(e){}
+ will=clamp(Math.round(will),0,96);
+
+ /* the money: a season's loan is priced off his value and his wage */
+ const fee=Math.max(2e5,Math.round(p.value*.07/1e5)*1e5);
+ /* the share THEY want you to cover — a club subsidises a kid it wants
+    developed, and subsidises nothing for a player it rates */
+ let cover=62;
+ if(p.age<=21)cover-=22;
+ if(p.ovr<st.lvl-4)cover-=8;
+ if(st.key)cover+=25;
+ cover=clamp(Math.round(cover),25,100);
+
+ /* and whether HE fancies it: football is the reason a loan happens */
+ const play=clamp((p.ovr-myLvl)*4,-20,26);
+ const drop=Math.max(0,(p.ovr-myLvl-10))*3;
+ let want=46+play-drop;
+ if(p.age<=22)want+=16;
+ if(st.rank>=14)want+=12;                      /* he is not playing where he is */
+ try{want+=((clubTier(me).k)-2)*6}catch(e){}
+ want=clamp(Math.round(want),3,97);
+
+ const mins=p.ovr>=myLvl+4?'straight into the side':
+            p.ovr>=myLvl-1?'regular football':'squad rotation';
+ return {st,will,fee,cover,want,mins,
+  weekly:Math.round(p.wage*cover/100)}}
+
+function loanWhy(p,t){
+ const out=[];
+ if(t.st.key)out.push(['-','He is in their first eleven — they will not weaken themselves']);
+ else if(t.st.rank>=14)out.push(['+','He is '+ordinal(t.st.rank+1)+' choice there and barely plays']);
+ else if(t.st.rank>=11)out.push(['+','He is on the fringe of their side']);
+ if(p.age<=21)out.push(['+','At '+p.age+' they want him playing football somewhere']);
+ if(p.listed)out.push(['+','He is already transfer-listed']);
+ if(p.injury)out.push(['-','He is injured — nobody loans out a player they cannot assess']);
+ if((G.clubs[p.club].players||[]).length<=18)out.push(['-','Their squad is already thin']);
+ try{if(G.clubs[p.club].div===G.clubs[G.my].div)
+  out.push(['-','You are in the same division — they would be arming a rival'])}catch(e){}
+ return out}
+
+ACTIONS.loanAsk=el=>{
+ const p=playerById(el.dataset.id);if(!p)return;
+ if(p.club===G.my){toast('He already plays for you, boss.');return}
+ if(!windowOpen()){toast('The loan window is closed.');return}
+ if(p.loanIn){toast('He is already out on loan somewhere.');return}
+ const t=loanTerms(p),c=G.clubs[p.club],me=G.clubs[G.my];
+ const willK=t.will>=60?'Open to it':t.will>=32?'Might listen':'Very unlikely';
+ const willC=t.will>=60?'var(--green)':t.will>=32?'var(--amber)':'var(--danger)';
+ openModal('<div class="row" style="gap:10px;margin-bottom:8px">'+face(p,38)+
+  '<div style="flex:1"><h3 style="margin:0">'+esc(p.name)+'</h3>'+
+  '<div class="xs faint">'+esc(c.name)+' · '+p.pos+' · '+p.age+' · '+
+  ordinal(t.st.rank+1)+' choice there</div></div>'+ovrPill(p)+'</div>'+
+  '<div class="stadrow" style="margin-bottom:10px">'+
+   '<div class="stadstat"><div class="ss-v">'+fmtM(t.fee)+'</div><div class="ss-l">Loan fee</div></div>'+
+   '<div class="stadstat"><div class="ss-v">'+fmtW(t.weekly)+'</div><div class="ss-l">You pay weekly</div>'+
+    '<div class="ss-s">'+t.cover+'% of his wage</div></div>'+
+   '<div class="stadstat"><div class="ss-v" style="color:'+willC+'">'+t.will+'%</div>'+
+    '<div class="ss-l">They’d listen</div><div class="ss-s">'+willK+'</div></div>'+
+  '</div>'+
+  '<div class="card tight" style="margin-bottom:10px">'+
+   '<div class="spread" style="margin-bottom:5px"><span class="small" style="font-weight:800">'+
+   'What he would get here</span><span class="small" style="font-weight:800;color:'+
+   (t.want>=60?'var(--green)':t.want>=35?'var(--amber)':'var(--danger)')+'">'+t.want+'% keen</span></div>'+
+   '<div class="xs faint">'+t.mins+' at '+esc(me.short)+'</div></div>'+
+  '<div class="card tight" style="margin-bottom:10px">'+
+   loanWhy(p,t).map(r=>'<div class="xs" style="padding:1px 0"><span style="color:'+
+    (r[0]==='+'?'var(--green)':'var(--danger)')+';font-weight:800">'+r[0]+'</span> '+
+    esc(r[1])+'</div>').join('')+'</div>'+
+  '<div class="small muted" style="margin-bottom:10px">Transfer budget: <b class="num">'+
+   fmtM(me.budget)+'</b></div>'+
+  '<button class="btn btn-primary btn-block" data-action="loanAskDo" data-id="'+p.id+'">'+
+  '🛬 Ask to take him on loan</button>'+
+  '<button class="btn btn-ghost btn-block" style="margin-top:8px" data-action="closeModal">Leave it</button>')};
+
+ACTIONS.loanAskDo=el=>{
+ const p=playerById(el.dataset.id);if(!p)return;
+ const t=loanTerms(p),c=G.clubs[p.club],me=G.clubs[G.my];
+ if(me.budget<t.fee){toast('The fee is beyond your budget.');return}
+ /* they answer first, then he does — same order as real life */
+ if(Math.random()*100>t.will){
+  closeModal();
+  toast('👎 '+esc(c.short)+' say no');
+  mail('transfer',esc(c.short)+' reject your loan approach',
+   'Your enquiry about <b>'+esc(p.name)+'</b> has been turned down. '+
+   (t.st.key?'He is a first-team player there and they have no intention of letting him go.'
+    :(G.clubs[p.club].players||[]).length<=18
+      ?'They say their squad is too thin to let anyone else out.'
+      :'They would rather keep him and assess him themselves this season.'));
+  G.lockouts[p.id]=G.day+21;
+  render();return}
+ if(Math.random()*100>t.want){
+  closeModal();
+  toast('👎 '+p.name+' turns it down');
+  mail('transfer',p.name+' turns down the loan',
+   esc(c.short)+' were willing, but <b>'+esc(p.name)+'</b> has said no. '+
+   (t.want<35?'He does not believe he would play enough here to be worth the move.'
+             :'He would rather stay and fight for his place.'));
+  render();return}
+ me.budget-=t.fee;
+ c.players=c.players.filter(x=>x!==p);
+ p.club=me.i;
+ p.loanIn={from:c.i,share:100-t.cover,fee:t.fee,since:G.day,wage:p.wage};
+ p.wage=Math.round(p.wage*t.cover/100);
+ me.players.push(p);
+ closeModal();
+ toast('🛬 '+p.name+' joins on loan');
+ mail('transfer','🛬 Loan in: '+p.name,
+  '<b>'+esc(p.name)+'</b> joins on loan from <b>'+esc(c.name)+'</b> until the end of the season. '+
+  'Fee <b>'+fmtM(t.fee)+'</b>; you cover <b>'+t.cover+'%</b> of his wages at '+fmtW(p.wage)+
+  ' a week. He cannot play against his parent club.');
+ render()};
+
+/* The button goes in wherever a "Make a bid" button goes, by rewriting
+   the markup on its way into the sheet rather than reaching into the DOM
+   afterwards. Every route to a player — the profile, the sell-him-the-
+   project sheet, the shortlist — renders that same button, so this
+   catches all of them and cannot go stale when one of them changes.
+   (The first version queried `.modal`, which is not the container: the
+   sheet body is #sheetBody, so nothing was ever found and no button
+   appeared anywhere.) */
+const BID_BTN_RE=/<button[^>]*data-action="openBid"[^>]*data-id="([^"]+)"[^>]*>[\s\S]*?<\/button>/;
+const _openModalLoan=openModal;
+openModal=function(html){
+ try{
+  if(typeof html==='string'){
+   const m=html.match(BID_BTN_RE);
+   if(m&&html.indexOf('data-action="loanAsk"')<0){
+    const p=playerById(m[1]);
+    if(p&&p.club!==G.my&&!p.loanIn){
+     html=html.replace(m[0],m[0]+
+      '<button class="btn btn-ghost btn-block" style="margin-top:8px" '+
+      'data-action="loanAsk" data-id="'+p.id+'">\ud83d\udeec Ask to loan him'+
+      (windowOpen()?'':' (window shut)')+'</button>');
+    }
+   }
+  }
+ }catch(e){}
+ return _openModalLoan.call(this,html)};
+
+/*#w72_room_and_loans.js#*/
 
 showStart();
 </script>
