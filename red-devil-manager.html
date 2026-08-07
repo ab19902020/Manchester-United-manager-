@@ -35807,6 +35807,946 @@ openPressSheet=function(reaction){
  catch(e){}};
 
 /*#w77_press_full.js#*/
+
+
+
+
+
+
+
+/*#w78_trophyroom.js#*/
+
+/* =====================================================================
+   w78_trophyroom — pick it up and turn it round
+   ---------------------------------------------------------------------
+   "If I click on a trophy it takes me to the side of it, I can't look at
+   it properly. It should bring the trophy into the 3D space in the room
+   and you can look around the whole thing, looking at the engravings.
+   Every single trophy needs the official engravings they have, all the
+   winners engraved. The plaques need to be forward-facing on their
+   pedestals — currently they are all over the place."
+
+   Three separate things, and all three were real.
+
+   1. THE PLAQUES WERE POINTING THE WRONG WAY, and the maths says exactly
+      how wrong. The plinths stand on a horseshoe centred behind you, and
+      each one was turned by its own angle on that arc:
+
+          position = ( sin a · R , CZ − cos a · R )
+          rotation.y = a
+
+      A yaw of a turns the plinth's front to face ( sin a , cos a ). The
+      direction from that plinth back to the middle of the room is
+      ( −sin a , cos a ). The z components agree, the x components are
+      opposite — so the plaque is correct only where sin a is zero, dead
+      ahead, and swings further away the further round the arc it stands.
+      The sign was wrong. It is −a.
+
+   2. CLICKING WALKED YOU TO IT, WHICH IS NOT LOOKING AT IT. You ended up
+      standing a couple of metres away at eye height, with a glass case in
+      the way and no way to see the back. A trophy is an object you pick
+      up and turn over. So now that is what happens: tap a case and the
+      trophy lifts out of it into the middle of the room, lit on its own,
+      and you drag to spin it on both axes, pinch or scroll to get close
+      enough to read the engraving, and put it back.
+
+   3. THE ENGRAVING WAS TWO TROPHIES DEEP AND SAID NOTHING. Only the FA
+      Cup and the Premier League trophy had a winners' band, both were
+      grey bump maps with no colour, and both read the same list — the
+      champions of your own division — so the FA Cup was engraved with
+      league winners. Every trophy now stands on its own engraved plinth
+      carrying its real inscription and the winners this save has actually
+      produced, competition by competition, and the game keeps the record
+      needed to fill them.
+   ===================================================================== */
+
+/* ---------------------------------------------------------------------
+   1. WHAT IS WRITTEN ON THEM
+   The words that are actually on the real trophies, in the language they
+   are actually on them in.
+   --------------------------------------------------------------------- */
+const TROPHY_INSCRIPTION={
+ PL:  ['THE FOOTBALL ASSOCIATION PREMIER LEAGUE','CHAMPIONS'],
+ CH:  ['THE ENGLISH FOOTBALL LEAGUE','CHAMPIONSHIP'],
+ L1:  ['THE ENGLISH FOOTBALL LEAGUE','LEAGUE ONE'],
+ L2:  ['THE ENGLISH FOOTBALL LEAGUE','LEAGUE TWO'],
+ NL:  ['THE NATIONAL LEAGUE','CHAMPIONS'],
+ FA:  ['THE FOOTBALL ASSOCIATION CHALLENGE CUP'],
+ LC:  ['THE FOOTBALL LEAGUE CUP'],
+ CL:  ['COUPE DES CLUBS CHAMPIONS EUROPÉENS'],
+ EL:  ['UEFA EUROPA LEAGUE'],
+ EC:  ['UEFA EUROPA CONFERENCE LEAGUE'],
+ ESP: ['CAMPEONATO NACIONAL DE LIGA','PRIMERA DIVISIÓN'],
+ ITA: ['COPPA CAMPIONI D’ITALIA','SERIE A'],
+ GER: ['MEISTERSCHALE','DEUTSCHER FUSSBALL-MEISTER'],
+ FRA: ['CHAMPION DE FRANCE','LIGUE 1'],
+ POR: ['CAMPEONATO NACIONAL','PRIMEIRA LIGA'],
+ NED: ['LANDSKAMPIOEN','EREDIVISIE'],
+ SCO: ['SCOTTISH PREMIERSHIP','CHAMPIONS'],
+ BEL: ['CHAMPION DE BELGIQUE'],
+ TUR: ['TÜRKİYE ŞAMPİYONU','SÜPER LIG'],
+ WC:  ['FIFA WORLD CUP'],
+ EURO:['COUPE HENRI DELAUNAY','CHAMPIONNAT D’EUROPE'],
+ ballon:   ['BALLON D’OR'],
+ boot:     ['GOLDEN BOOT','LEADING GOALSCORER'],
+ glove:    ['GOLDEN GLOVE','FEWEST GOALS CONCEDED'],
+ playmaker:['PLAYMAKER OF THE SEASON','MOST ASSISTS'],
+ young:    ['YOUNG PLAYER OF THE SEASON'],
+ poty:     ['PLAYER OF THE SEASON'],
+ mgr:      ['MANAGER OF THE SEASON']};
+
+/* the second line on the plinth of every one of them */
+function trophyInscription(code){
+ const a=TROPHY_INSCRIPTION[code];
+ if(a)return a;
+ const n=(typeof TROPHY_LABEL==='object'&&TROPHY_LABEL[code])||code;
+ return [String(n).toUpperCase()]}
+
+/* ---------------------------------------------------------------------
+   2. KEEPING THE RECORD
+   ---------------------------------------------------------------------
+   Nothing could be engraved because nothing was written down. Cup winners
+   were kept, league champions were kept for your own division only, and
+   the individual awards were overwritten every year by the next set.
+   Three small ledgers fix that, and they cost a handful of bytes a
+   season.
+   --------------------------------------------------------------------- */
+function seasonLabel(s){
+ try{const y=seasonYear(s);return (y-1)+'/'+String(y).slice(2)}
+ catch(e){return 'SEASON '+s}}
+
+/* every division in the world gets its champion recorded, not just yours */
+function rollChampions(){
+ try{
+  G.champRoll=G.champRoll||[];
+  const done={};
+  G.champRoll.forEach(r=>{if(r.season===G.season)done[r.div]=1});
+  const divs={};
+  (G.clubs||[]).forEach(c=>{if(c.league)divs[c.league]=1});
+  Object.keys(divs).forEach(d=>{
+   if(done[d])return;
+   let rows=[];try{rows=tableRows(d)||[]}catch(e){}
+   if(!rows.length)return;
+   const w=G.clubs[rows[0].i];
+   if(!w)return;
+   G.champRoll.push({season:G.season,div:d,club:w.name,short:w.short||w.name})});
+  while(G.champRoll.length>2200)G.champRoll.shift();
+ }catch(e){}}
+
+/* and the individual awards stop being replaced every May */
+function rollAwards(){
+ try{
+  const a=G.lastAwards;if(!a)return;
+  G.awardRoll=G.awardRoll||[];
+  if(G.awardRoll.some(r=>r.season===a.season))return;
+  const nm=p=>p?(p.name+(G.clubs[p.club]?' · '+G.clubs[p.club].short:'')):'';
+  const row={season:a.season};
+  ['ballon','poty','young','boot','glove','playmaker'].forEach(k=>{
+   if(a[k])row[k]=nm(a[k])});
+  if(a.mgr)row.mgr=(typeof a.mgr==='string')?a.mgr:nm(a.mgr);
+  G.awardRoll.push(row);
+  while(G.awardRoll.length>120)G.awardRoll.shift();
+ }catch(e){}}
+
+/* Both are taken at the end of a season, before the rollover moves the
+   world on. rollChampions has to run BEFORE the tables are reset, so it
+   goes in front of the chain rather than behind it. */
+const _endSeasonRoll=endSeason;
+endSeason=function(){
+ try{rollChampions()}catch(e){}
+ const r=_endSeasonRoll.apply(this,arguments);
+ try{rollAwards()}catch(e){}
+ return r};
+
+/* ---------------------------------------------------------------------
+   3. WHO IS ON EACH TROPHY
+   Cups from the cup's own history, leagues from the champions roll,
+   internationals from the tournament log, awards from the award roll.
+   --------------------------------------------------------------------- */
+function trophyWinners(code){
+ const out=[];
+ /* Two forms of every name. The panel has room for "Manchester United";
+    a band eighteen columns wide has not, and shrinking the type until it
+    fits is how the first cut ended up with winners engraved at a size
+    nobody could read. The band gets what a real one gets — the short
+    name — and the panel gets the full one. */
+ const push=(season,who,short)=>{
+  if(!who)return;
+  out.push({season,who:String(who).toUpperCase(),
+   short:String(short||who).toUpperCase()})};
+ const club=ci=>{const c=G.clubs[ci];return c?[c.name,c.short||c.name]:[null,null]};
+ try{
+  /* a cup keeps its own winners already */
+  if(G.cups&&G.cups[code]&&G.cups[code].history)
+   G.cups[code].history.forEach(h=>{
+    const [n,s]=club(h.winner);push(h.season,n,s)});
+
+  /* a league: the world champions roll, and anything in your honours
+     from before the roll existed */
+  if(typeof DIV_NAMES==='object'||true){
+   (G.champRoll||[]).forEach(r=>{if(r.div===code)push(r.season,r.club,r.short)});
+   if(!out.length){
+    const label=(TROPHY_LABEL[code]||'').toLowerCase();
+    (G.honours||[]).forEach(h=>{
+     const m=String(h.comp||'').replace(/ (champions|winners)$/i,'').toLowerCase();
+     if(m===label){const [n,sh]=club(G.my);push(h.season,n,sh)}});
+    /* the old league history had no division on it, so it can only be
+       trusted for the division you were actually in */
+    try{if(!out.length&&G.clubs[G.my].league===code)
+     (G.history||[]).forEach(h=>push(h.season,h.champ,h.champ))}catch(e){}}}
+
+  /* the internationals */
+  if(code==='WC'||code==='EURO'){
+   const want=code==='WC'?'WC':'EU';
+   (G.tourneys||[]).forEach(t=>{
+    if(t.kind!==want)return;
+    const s=(typeof t.year==='number')?(t.year-2026):t.season;
+    push(s,(typeof natName==='function')?natName(t.winner):t.winner,t.winner)})}
+
+  /* the individual awards */
+  if(TROPHY_INSCRIPTION[code]&&/ballon|boot|glove|playmaker|young|poty|mgr/.test(code))
+   (G.awardRoll||[]).forEach(r=>{
+    if(!r[code])return;
+    /* the roll stores "Name · CLUB"; the band only has room for the name */
+    push(r.season,r[code],String(r[code]).split(' · ')[0])});
+ }catch(e){}
+ /* one entry per season, oldest first */
+ const seen={},clean=[];
+ out.sort((a,b)=>a.season-b.season).forEach(r=>{
+  const k=r.season+'|'+r.who;
+  if(seen[k])return;seen[k]=1;clean.push(r)});
+ return clean}
+
+/* the lines that go round the band */
+function trophyEngraveLines(code){
+ const w=trophyWinners(code);
+ if(!w.length)return ['AWAITING ITS FIRST WINNER'];
+ /* the newest fifty, which is as many as will read at this size */
+ return w.slice(-50).map(r=>seasonLabel(r.season)+'   '+(r.short||r.who))}
+
+/* =====================================================================
+   4. THE ENGRAVED PLINTH
+   ---------------------------------------------------------------------
+   Every trophy now stands on one. The band carries the competition's
+   inscription round the top and its winners round the bottom, cut into
+   brushed silver — the texture is used as the colour map and as the bump
+   map at once, so the dark lettering is also the recess, and it catches
+   the plinth lamp exactly the way lettering cut into metal does.
+
+   Two resolutions. The one on the pedestal is small, because twenty-two
+   of them are on screen together and a phone has to draw all of them. The
+   one you get when you pick a trophy up is six times the area and is
+   thrown away when you put it back.
+   ===================================================================== */
+
+const ENGRAVE_CACHE={};
+
+function engraveTex(code,W,H,cols){
+ const lines=trophyEngraveLines(code);
+ const title=trophyInscription(code);
+ const show=lines.slice(-cols);
+ return tCanvas(W,H,(x)=>{
+  /* brushed silver */
+  const g=x.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,'#8e939a');g.addColorStop(.30,'#e8ecf1');
+  g.addColorStop(.55,'#b9c0c8');g.addColorStop(1,'#7d838b');
+  x.fillStyle=g;x.fillRect(0,0,W,H);
+  x.globalAlpha=.10;
+  for(let i=0;i<W;i+=3){
+   x.strokeStyle=(i%9===0)?'#ffffff':'#5c6168';
+   x.beginPath();x.moveTo(i,0);x.lineTo(i,H);x.stroke()}
+  x.globalAlpha=1;
+
+  const TH=Math.round(H*.34);                 /* the inscription strip */
+  /* the inscription, repeated round the band so it is legible from any
+     side — a single copy is invisible from two thirds of the room */
+  const reps=3, slot=W/reps;
+  x.textAlign='center';x.textBaseline='middle';
+  x.fillStyle='#14171b';
+  for(let r=0;r<reps;r++){
+   const cx=slot*r+slot/2;
+   title.forEach((t,i)=>{
+    let sz=Math.round(TH*(title.length>1?(i?.30:.36):.44));
+    x.font='bold '+sz+'px "Helvetica Neue",Arial,sans-serif';
+    while(x.measureText(t).width>slot*.80&&sz>8){
+     sz-=1;x.font='bold '+sz+'px "Helvetica Neue",Arial,sans-serif'}
+    const y=title.length>1?(TH*(i?.68:.34)):TH*.5;
+    x.fillText(t,cx,y)})}
+
+  /* the rule between inscription and winners */
+  x.strokeStyle='rgba(20,24,28,.55)';x.lineWidth=Math.max(1,H*.012);
+  x.beginPath();x.moveTo(0,TH);x.lineTo(W,TH);x.stroke();
+
+  /* the winners, one narrow column each, all the way round */
+  const n=Math.max(1,show.length), cw=W/n;
+  const top=TH+(H-TH)*.06, bodyH=(H-TH)*.88;
+  show.forEach((ln,i)=>{
+   const cx=cw*i+cw/2;
+   const bar=ln.indexOf('   ');
+   const season=bar>0?ln.slice(0,bar):'';
+   const who=bar>0?ln.slice(bar+3):ln;
+   x.fillStyle='#22262b';
+   let s1=Math.round(bodyH*.26);
+   x.font='600 '+s1+'px "Helvetica Neue",Arial,sans-serif';
+   while(season&&x.measureText(season).width>cw*.88&&s1>7){
+    s1-=1;x.font='600 '+s1+'px "Helvetica Neue",Arial,sans-serif'}
+   if(season)x.fillText(season,cx,top+bodyH*.22);
+   x.fillStyle='#101317';
+   let s2=Math.round(bodyH*.40);
+   x.font='bold '+s2+'px "Helvetica Neue",Arial,sans-serif';
+   while(x.measureText(who).width>cw*.92&&s2>7){
+    s2-=1;x.font='bold '+s2+'px "Helvetica Neue",Arial,sans-serif'}
+   x.fillText(who,cx,top+bodyH*(season?.66:.5));
+   /* a hairline between the columns, as they are on the real bands */
+   if(i){x.strokeStyle='rgba(30,34,40,.30)';x.lineWidth=1;
+    x.beginPath();x.moveTo(cw*i,TH+4);x.lineTo(cw*i,H-4);x.stroke()}});
+ })}
+
+/* the small one is shared and kept; the big one belongs to one viewing */
+function engraveTexSmall(code){
+ const k=code+'|'+((G.champRoll||[]).length)+'|'+((G.honours||[]).length);
+ if(ENGRAVE_CACHE[k])return ENGRAVE_CACHE[k];
+ /* the cache is per save state, so drop anything from an earlier one */
+ Object.keys(ENGRAVE_CACHE).forEach(x=>{
+  if(x.split('|')[0]===code){try{ENGRAVE_CACHE[x].dispose()}catch(e){}
+   delete ENGRAVE_CACHE[x]}});
+ return (ENGRAVE_CACHE[k]=engraveTex(code,1024,224,12))}
+function engraveTexBig(code){return engraveTex(code,4096,896,16)}
+
+/* how wide the trophy actually is where it meets the plinth. The bounding
+   box is no use — it is set by the handles, and a plinth built to the
+   handles of the FA Cup would be twice the width of its foot. */
+function footprintRadius(obj){
+ const box=new THREE.Box3().setFromObject(obj);
+ const size=new THREE.Vector3();box.getSize(size);
+ const cut=box.min.y+size.y*.16;
+ let r=0,v=new THREE.Vector3();
+ obj.updateMatrixWorld(true);
+ obj.traverse(o=>{
+  if(!o.isMesh||!o.geometry||!o.geometry.attributes||!o.geometry.attributes.position)return;
+  const p=o.geometry.attributes.position;
+  const step=Math.max(1,Math.floor(p.count/1200));
+  for(let i=0;i<p.count;i+=step){
+   v.fromBufferAttribute(p,i);o.localToWorld(v);
+   if(v.y<=cut)r=Math.max(r,Math.hypot(v.x,v.z))}});
+ if(!r)r=Math.max(size.x,size.z)*.30;
+ return r}
+
+/* the plinth itself: two gold mouldings and an engraved silver band */
+function engravedPlinth(code,rad,ph,big){
+ const M=tMaterials();
+ const g=new THREE.Group();
+ const tex=big?engraveTexBig(code):engraveTexSmall(code);
+ const bandM=new THREE.MeshStandardMaterial({
+  map:tex,bumpMap:tex,bumpScale:big?.020:.010,
+  color:0xffffff,metalness:.92,roughness:.24,envMapIntensity:1.1});
+ const trim=new THREE.MeshStandardMaterial({color:0xd8a63c,metalness:1,
+  roughness:.26,envMapIntensity:1.2});
+ const bandH=ph*.66, trimH=ph*.17;
+ const band=new THREE.Mesh(new THREE.CylinderGeometry(rad,rad,bandH,96,1),bandM);
+ band.position.y=trimH+bandH/2;g.add(band);
+ [[trimH/2,rad*1.09],[trimH+bandH+trimH/2,rad*1.07]].forEach(([y,r])=>{
+  const t=new THREE.Mesh(new THREE.CylinderGeometry(r,r,trimH,64,1),trim);
+  t.position.y=y;g.add(t)});
+ g.userData.tex=tex;g.userData.temp=!!big;
+ g.userData.plinthH=ph;
+ return g}
+
+/* a trophy standing on its engraving, as one object, scaled so the pair
+   together are exactly the height the room asked for */
+function trophyOnPlinth(code,totalH,big){
+ const obj=trophyBuild(code);
+ if(!obj)return null;
+ const grp=new THREE.Group();
+ const box=new THREE.Box3().setFromObject(obj);
+ const size=new THREE.Vector3();box.getSize(size);
+ const ctr=new THREE.Vector3();box.getCenter(ctr);
+ const rad=footprintRadius(obj);
+ /* the plinth is a fixed share of the whole, so a short award and a tall
+    cup both stand on one that looks like it belongs to them */
+ const ph=(size.y||1)*.155;
+ const k=totalH/((size.y||1)+ph);
+ const pl=engravedPlinth(code,rad*1.06,ph,big);
+ pl.scale.setScalar(k);
+ grp.add(pl);
+ obj.scale.setScalar(k);
+ obj.position.set(-ctr.x*k,(-box.min.y+ph)*k,-ctr.z*k);
+ obj.traverse(o=>{if(o.isMesh){o.castShadow=true}});
+ grp.add(obj);
+ grp.userData.plinth=pl;
+ grp.userData.trophy=obj;
+ grp.userData.height=totalH;
+ return grp}
+
+/* =====================================================================
+   5. THE PEDESTAL, WITH THE TROPHY ON ITS ENGRAVING
+   Same plinth as before. What stands on it is the trophy and its band as
+   one piece, so the engraving is part of the collection rather than
+   something you only ever see close up.
+   ===================================================================== */
+hallPedestal=function(row,ix,M){
+ const g=new THREE.Group();
+ const PH=1.14, PW=0.94;
+ const wood=new THREE.MeshStandardMaterial({map:M.woodMap,color:0x8a6238,
+  roughness:.42,metalness:.08,envMapIntensity:.5});
+ const stone=new THREE.MeshStandardMaterial({color:0xe6ddcd,roughness:.5,
+  metalness:.05,envMapIntensity:.35});
+ const body=new THREE.Mesh(new THREE.CylinderGeometry(PW*.60,PW*.66,PH,4,1),wood);
+ body.rotation.y=Math.PI/4;body.position.y=PH/2;
+ body.castShadow=true;body.receiveShadow=true;g.add(body);
+ [[.06,PW*.70],[PH-.05,PW*.66]].forEach(([y,r])=>{
+  const b=new THREE.Mesh(new THREE.CylinderGeometry(r,r,.10,4,1),wood);
+  b.rotation.y=Math.PI/4;b.position.y=y;g.add(b)});
+ const cap=new THREE.Mesh(new THREE.CylinderGeometry(PW*.72,PW*.72,.07,4,1),stone);
+ cap.rotation.y=Math.PI/4;cap.position.y=PH+.03;cap.receiveShadow=true;g.add(cap);
+
+ const FACE=PW*.66/Math.SQRT2+.012;
+ const pl=new THREE.Mesh(new THREE.PlaneGeometry(FACE*1.62,FACE*.92),
+  new THREE.MeshStandardMaterial({map:hallPlaque(row),roughness:.6,
+   metalness:.15,envMapIntensity:.3}));
+ pl.position.set(0,PH*.42,FACE);g.add(pl);
+
+ const trophyH=row.cm/100;
+ let obj=null;
+ try{obj=trophyOnPlinth(row.code,trophyH,false)}catch(e){obj=null}
+ if(obj){obj.position.y=PH+.07;g.add(obj);g.userData.trophyGrp=obj}
+
+ const CW=Math.max(.62,Math.min(1.02,trophyH*.62)),CH=trophyH+.20;
+ const glass=new THREE.Mesh(new THREE.BoxGeometry(CW,CH,CW),
+  new THREE.MeshStandardMaterial({color:0xe6f1fb,transparent:true,opacity:.10,
+   roughness:.02,metalness:.35,envMapIntensity:2.2,side:THREE.DoubleSide}));
+ glass.position.y=PH+.07+CH/2;g.add(glass);
+ const edge=new THREE.LineSegments(
+  new THREE.EdgesGeometry(new THREE.BoxGeometry(CW,CH,CW)),
+  new THREE.LineBasicMaterial({color:0xd8e8f7,transparent:true,opacity:.78}));
+ edge.position.copy(glass.position);g.add(edge);
+
+ const lamp=new THREE.SpotLight(row.count?0xfff2d8:0x9fb4cf,
+  row.count?5.4:2.2,5.0,.50,.5,1.5);
+ lamp.position.set(0,2.7,.40);lamp.target.position.set(0,PH+trophyH*.55,0);
+ if(row.count){lamp.castShadow=true;lamp.shadow.mapSize.set(512,512);
+  lamp.shadow.bias=-.0012}
+ g.add(lamp);g.add(lamp.target);
+
+ const hit=new THREE.Mesh(new THREE.BoxGeometry(PW*1.25,PH+CH+.3,PW*1.25),
+  new THREE.MeshBasicMaterial({transparent:true,opacity:0,depthWrite:false}));
+ hit.position.y=(PH+CH+.3)/2;g.add(hit);
+
+ g.userData.pedIx=ix;
+ [body,glass,cap,hit].forEach(o=>o.userData.pedIx=ix);
+ g.userData.hit=[hit];
+ g.userData.caseTop=PH+.07+CH;
+ return g};
+
+/* =====================================================================
+   6. THE HALL
+   Identical in layout to the version this replaces, with two changes that
+   matter: the plinths face the middle of the room, and tapping one lifts
+   what is on it into your hands.
+   ===================================================================== */
+buildTrophyRoom=function(host){
+ const msg=document.getElementById('troomMsg');
+ const W=host.clientWidth,H=host.clientHeight;
+ const rend=new THREE.WebGLRenderer({antialias:true,alpha:false});
+ TR.rend=rend;TR.on=true;
+ rend.setPixelRatio(Math.min(2,window.devicePixelRatio||1));
+ rend.setSize(W,H);
+ rend.shadowMap.enabled=true;
+ rend.shadowMap.type=THREE.PCFSoftShadowMap;
+ rend.outputEncoding=THREE.sRGBEncoding;
+ rend.toneMapping=THREE.ACESFilmicToneMapping;
+ rend.toneMappingExposure=.86;
+ rend.domElement.className='troom-cv';
+ host.appendChild(rend.domElement);
+
+ const scene=new THREE.Scene();
+ scene.background=new THREE.Color(0x120c07);
+ scene.fog=new THREE.Fog(0x0d0805,13,34);
+ const cam=new THREE.PerspectiveCamera(55,W/H,.05,120);
+
+ const M=tMaterials();
+ M.woodMap=M.wood.map;
+
+ let ENV=null;
+ (function studioEnv(){
+  const c=document.createElement('canvas');c.width=1024;c.height=512;
+  const x=c.getContext('2d');
+  const sky=x.createLinearGradient(0,0,0,512);
+  sky.addColorStop(0,'#2b2118');sky.addColorStop(.55,'#171009');sky.addColorStop(1,'#0a0704');
+  x.fillStyle=sky;x.fillRect(0,0,1024,512);
+  x.fillStyle='#fff8e8';
+  x.fillRect(150,60,140,300);x.fillRect(740,60,140,300);
+  x.fillRect(420,0,190,90);
+  x.fillStyle='#3a2a1a';x.fillRect(0,400,1024,112);
+  const tex=new THREE.CanvasTexture(c);
+  tex.mapping=THREE.EquirectangularReflectionMapping;
+  const pm=new THREE.PMREMGenerator(rend);
+  pm.compileEquirectangularShader();
+  ENV=pm.fromEquirectangular(tex).texture;
+  scene.environment=ENV;
+  tex.dispose();pm.dispose();
+ })();
+
+ const CZ=4, RR=11.5;
+ const wall=new THREE.Mesh(new THREE.CylinderGeometry(RR,RR,6.2,48,1,true),
+  new THREE.MeshStandardMaterial({color:0x7c7161,roughness:.97,metalness:0,
+   side:THREE.BackSide,envMapIntensity:.07}));
+ wall.position.set(0,3.1,CZ);scene.add(wall);
+ const floor=new THREE.Mesh(new THREE.CircleGeometry(RR,48),
+  new THREE.MeshStandardMaterial({map:hallParquet(),roughness:.34,
+   metalness:.12,envMapIntensity:.22,color:0x9a7a55}));
+ floor.rotation.x=-Math.PI/2;floor.position.set(0,0,CZ);
+ floor.receiveShadow=true;scene.add(floor);
+ const ceil=new THREE.Mesh(new THREE.CircleGeometry(RR,48),
+  new THREE.MeshStandardMaterial({color:0x120c07,roughness:1,envMapIntensity:.03}));
+ ceil.rotation.x=Math.PI/2;ceil.position.set(0,6.2,CZ);scene.add(ceil);
+ const corn=new THREE.Mesh(new THREE.TorusGeometry(RR-.1,.16,8,64),
+  new THREE.MeshStandardMaterial({color:0xe4dac6,roughness:.85,envMapIntensity:.2}));
+ corn.rotation.x=Math.PI/2;corn.position.set(0,5.6,CZ);scene.add(corn);
+
+ const crestM=new THREE.Mesh(new THREE.PlaneGeometry(4.4,4.4),
+  new THREE.MeshStandardMaterial({map:hallCrestTex(),transparent:true,
+   roughness:.72,metalness:.1,emissive:0x0d0402,emissiveIntensity:.18,
+   envMapIntensity:.22}));
+ crestM.position.set(0,3.3,CZ-RR+.12);scene.add(crestM);
+
+ const rows=hallRoster();
+ const n=rows.length;
+ const PR=8.6;
+ const SPAN=Math.min(2.15,Math.max(.85,(n*1.5)/(2*PR)));
+ const peds=[];
+ rows.forEach((row,ix)=>{
+  const a=n<=1?0:(-SPAN+2*SPAN*(ix/(n-1)));
+  const p=hallPedestal(row,ix,M);
+  p.position.set(Math.sin(a)*PR,0,CZ-Math.cos(a)*PR);
+  /* THE FIX. A yaw of y turns the plinth's front to (sin y, cos y); the
+     way back to the middle of the room from this plinth is (-sin a,cos a).
+     The old build used +a, which is correct only straight ahead and turns
+     progressively further away round the arc — which is exactly what the
+     plaques were doing. */
+  p.rotation.y=-a;
+  p.userData.row=row;
+  p.userData.angle=a;
+  p.userData.stand=new THREE.Vector3(Math.sin(a)*(PR-2.3),0,CZ-Math.cos(a)*(PR-2.3));
+  scene.add(p);peds.push(p);
+ });
+
+ for(let i=0;i<6;i++){
+  const a=-SPAN+2*SPAN*(i/5);
+  const L=new THREE.PointLight(0xffbf72,.22,8,2.0);
+  L.position.set(Math.sin(a)*(RR-.6),4.3,CZ-Math.cos(a)*(RR-.6));
+  scene.add(L);
+  const sh=new THREE.Mesh(new THREE.SphereGeometry(.13,10,8),
+   new THREE.MeshStandardMaterial({color:0xffe0ab,emissive:0xffb765,
+    emissiveIntensity:1.6}));
+  sh.position.copy(L.position);scene.add(sh)}
+ scene.add(new THREE.AmbientLight(0x4a3c2c,.10));
+ const key=new THREE.DirectionalLight(0xffe6c4,.10);
+ key.position.set(4,8,10);scene.add(key);
+
+ if(msg)msg.remove();
+
+ /* ---- 7. PICKING ONE UP -------------------------------------------
+    A second scene, drawn over the first without clearing it. The room
+    stays where it is behind a dimming pane and the trophy is lit on its
+    own, so it cannot clip a plinth, cannot be shadowed by the case it
+    came out of, and does not depend on where you happen to be standing.
+    -------------------------------------------------------------------- */
+ const iScene=new THREE.Scene();
+ /* Its own environment, and this matters more than the lights. Polished
+    silver is almost entirely reflection, so in the hall's environment —
+    brown walls, warm sconces, a dark ceiling — a silver trophy reflects
+    brown and reads as bronze. Held up on its own it gets a neutral studio:
+    a bright ceiling, two tall softboxes, a grey floor. Silver comes back
+    silver and gold stops looking like toffee. */
+ (function inspectEnv(){
+  const c=document.createElement('canvas');c.width=1024;c.height=512;
+  const x=c.getContext('2d');
+  const sky=x.createLinearGradient(0,0,0,512);
+  sky.addColorStop(0,'#ffffff');sky.addColorStop(.34,'#cfd6de');
+  sky.addColorStop(.58,'#8f97a1');sky.addColorStop(1,'#41464d');
+  x.fillStyle=sky;x.fillRect(0,0,1024,512);
+  x.fillStyle='#ffffff';
+  x.fillRect(96,40,190,330);x.fillRect(700,40,190,330);   /* the softboxes */
+  x.fillRect(340,0,330,120);                               /* the ceiling */
+  x.fillStyle='#22262c';x.fillRect(0,430,1024,82);         /* a dark floor  */
+  const tex=new THREE.CanvasTexture(c);
+  tex.mapping=THREE.EquirectangularReflectionMapping;
+  const pm=new THREE.PMREMGenerator(rend);
+  pm.compileEquirectangularShader();
+  iScene.environment=pm.fromEquirectangular(tex).texture;
+  tex.dispose();pm.dispose();
+ })();
+ const iCam=new THREE.PerspectiveCamera(38,W/H,.02,40);
+ const veil=new THREE.Mesh(new THREE.PlaneGeometry(60,60),
+  new THREE.MeshBasicMaterial({color:0x06070b,transparent:true,opacity:0,
+   depthWrite:false}));
+ veil.position.z=-9;iScene.add(veil);
+ const rig=new THREE.Group();iScene.add(rig);
+ /* a three point rig that travels with the camera, so every face of the
+    trophy is lit as it turns rather than only the one facing the room */
+ const iKey=new THREE.DirectionalLight(0xfff4e2,2.6);iKey.position.set(2.5,3.2,4);
+ const iFill=new THREE.DirectionalLight(0xcddcff,1.1);iFill.position.set(-3.4,.8,2.2);
+ const iRim=new THREE.DirectionalLight(0xffd9a0,2.2);iRim.position.set(-1.2,2.4,-4.2);
+ iScene.add(iKey,iFill,iRim,new THREE.AmbientLight(0xffffff,.30));
+
+ /* FRAMING, WITH THE PANEL TAKEN INTO ACCOUNT.
+    The first pass framed the trophy at 1.9 and filled three quarters of
+    the screen with it, which put the band — the part you came to read —
+    behind the panel. Then the panel moved to the side on a desktop and
+    the same thing happened again on a phone, where it cannot.
+
+    So the screen is treated as having a usable part and a panel, and the
+    trophy is framed inside the usable part. Nothing is moved to achieve
+    it: the camera's axis is dropped below the point of interest by the
+    right number of world units, which raises that point up the screen by
+    exactly the fraction asked for. It works at any zoom and at any aim,
+    because the offset is derived from both.
+
+      off = f · dist · tan(fov/2)
+
+    where f is how far above centre, in half-screens, the subject should
+    sit. On a wide screen the panel is off to the side and f is almost
+    nothing. On a phone it is across the bottom and f is a third. */
+ const sideways=()=>host.clientWidth>=820;
+ const panelFrac=()=>sideways()?.05:.38;
+ const baseD=()=>sideways()?2.45:2.80;
+ const TANH=Math.tan(38*Math.PI/360);
+ const INS={on:false,ix:-1,obj:null,ry:0,rx:0,dist:2.45,spin:1,fade:0,idle:0,
+  aim:0,aimT:0};
+
+ const clearInspect=()=>{
+  if(INS.obj){
+   rig.remove(INS.obj);
+   INS.obj.traverse(o=>{
+    if(o.isMesh){
+     if(o.geometry)try{o.geometry.dispose()}catch(e){}
+     const mm=Array.isArray(o.material)?o.material:[o.material];
+     mm.forEach(m=>{if(!m)return;
+      /* only the big engraving belongs to this viewing; the shared
+         materials are the workshop's and must survive */
+      if(m.userData&&m.userData.temp&&m.map)try{m.map.dispose()}catch(e){}
+      if(m.userData&&m.userData.temp)try{m.dispose()}catch(e){}})}});
+   INS.obj=null}
+  INS.on=false;INS.ix=-1};
+
+ /* ---- the panel ---------------------------------------------------- */
+ const panel=document.createElement('div');
+ panel.className='thall-panel';panel.style.display='none';
+ host.appendChild(panel);
+
+ const showPanel=(row,inspecting)=>{
+  const seasons=row.seasons.length
+   ?row.seasons.map(s=>'<span class="thall-s">'+esc(seasonLabel(s))+'</span>').join('')
+   :'<span class="thall-none">Not won yet</span>';
+  let extra='';
+  if(inspecting){
+   const ins=trophyInscription(row.code).join(' · ');
+   const w=trophyWinners(row.code);
+   const recent=w.slice(-8).reverse();
+   extra='<div class="thall-ins">'+esc(ins)+'</div>'+
+    '<div class="thall-roll">'+(recent.length
+     ?recent.map(r=>'<div class="thall-r"><span>'+esc(seasonLabel(r.season))+
+        '</span><b>'+esc(r.who)+'</b></div>').join('')
+     :'<div class="thall-none">No winner engraved yet</div>')+
+    (w.length>8?'<div class="thall-more">and '+(w.length-8)+' more on the band</div>':'')+
+    '</div>';
+  }
+  panel.innerHTML='<div class="thall-name">'+esc(row.name)+'</div>'+
+   '<div class="thall-count '+(row.count?'is-won':'')+'">'+
+    (row.count?('Won '+row.count+' time'+(row.count>1?'s':'')):'Won 0 times')+'</div>'+
+   '<div class="thall-seasons">'+seasons+'</div>'+extra+
+   '<div class="thall-cm">'+row.cm+' cm tall'+
+    (inspecting?' · drag to turn it · pinch or scroll to get closer':'')+'</div>'+
+   (inspecting?'<div class="thall-views">'+
+     '<button class="thall-v on" data-thall-view="whole">Whole trophy</button>'+
+     '<button class="thall-v" data-thall-view="band">The engraving</button>'+
+     '</div>':'')+
+   '<button class="btn btn-ghost btn-sm thall-back" data-thall-back="1">'+
+    (inspecting?'Put it back':'Back to the hall')+'</button>';
+  panel.className='thall-panel'+(inspecting?' is-inspect':'')+
+   (inspecting&&sideways()?' is-side':'');
+  panel.style.display='';
+ };
+ const hidePanel=()=>{panel.style.display='none'};
+
+ const exitInspect=()=>{
+  clearInspect();hidePanel();
+  pad.style.display='';
+  try{sfx('tap')}catch(e){}};
+
+ /* the two views: the whole thing, or right down on the band. Zooming
+    alone could never reach the engraving — a trophy is tall and the band
+    is at the bottom, so pulling the camera in on its middle simply pushed
+    the band off the screen. */
+ const setView=(v)=>{
+  const btns=panel.querySelectorAll('[data-thall-view]');
+  Array.prototype.forEach.call(btns,b=>
+   b.classList.toggle('on',b.dataset.thallView===v));
+  /* the band sits in the bottom eighth of the object, so the view has to
+     drop almost to the foot of it and come right in — anything less and
+     the lettering is a smudge across a tenth of the screen */
+  if(v==='band'){INS.aimT=-.425;INS.dist=.90;INS.rx=-.10;INS.spin=0;INS.idle=0}
+  else{INS.aimT=0;INS.dist=baseD();INS.rx=0;INS.idle=0}};
+
+ panel.addEventListener('click',e=>{
+  const v=e.target.closest('[data-thall-view]');
+  if(v){setView(v.dataset.thallView);return}
+  if(!e.target.closest('[data-thall-back]'))return;
+  if(INS.on)exitInspect();
+  else{hidePanel();fly={to:new THREE.Vector3(0,0,CZ+2.1),yaw:0,t:0}}});
+
+ /* ---- lifting it out ------------------------------------------------ */
+ const inspect=(ix)=>{
+  const p=peds[ix];if(!p)return;
+  clearInspect();
+  const row=p.userData.row;
+  let o=null;
+  try{o=trophyOnPlinth(row.code,1.0,true)}catch(e){o=null}
+  if(!o){/* nothing sculpted for it — walk there instead */ goTo(ix);return}
+  /* mark everything this viewing owns so it can be thrown away after */
+  o.traverse(m=>{if(m.isMesh&&m.material){
+   const mm=Array.isArray(m.material)?m.material:[m.material];
+   mm.forEach(x=>{if(x&&x.map&&x.bumpMap===x.map){x.userData=x.userData||{};x.userData.temp=true}})}});
+  o.position.y=-.5;                       /* its middle on the rig's origin */
+  rig.add(o);
+  INS.obj=o;INS.on=true;INS.ix=ix;
+  INS.ry=0;INS.rx=0;INS.dist=baseD();INS.spin=1;INS.idle=0;INS.aim=0;INS.aimT=0;
+  rig.rotation.set(0,0,0);
+  showPanel(row,true);
+  pad.style.display='none';
+  try{sfx('tap')}catch(e){}};
+
+ /* ---- 8. BEING IN IT ------------------------------------------------ */
+ const P={x:0,z:CZ+2.1,yaw:0,pitch:-.03};
+ let fly=null;
+ const el=rend.domElement;
+ const keys={};
+ let drag=false,px=0,py=0,moved=0,pd=0,walk=0;
+
+ const clampPos=()=>{
+  const dx=P.x, dz=P.z-CZ, d=Math.hypot(dx,dz);
+  const lim=PR-2.2;
+  if(d>lim){P.x=dx/d*lim;P.z=CZ+dz/d*lim}};
+
+ const ray=new THREE.Raycaster();
+ const pickAt=(cx,cy)=>{
+  const r=el.getBoundingClientRect();
+  const v=new THREE.Vector2(((cx-r.left)/r.width)*2-1,-((cy-r.top)/r.height)*2+1);
+  ray.setFromCamera(v,cam);
+  let hits=[];
+  peds.forEach(p=>{hits=hits.concat(ray.intersectObjects(p.userData.hit,true))});
+  if(!hits.length)return -1;
+  hits.sort((a,b)=>a.distance-b.distance);
+  let o=hits[0].object;
+  while(o&&o.userData.pedIx===undefined)o=o.parent;
+  return o?o.userData.pedIx:-1};
+
+ function goTo(ix){
+  const p=peds[ix];if(!p)return;
+  const s=p.userData.stand;
+  fly={to:s.clone(),yaw:Math.atan2(p.position.x-s.x,-(p.position.z-s.z)),t:0};
+  showPanel(p.userData.row,false);
+  try{sfx('tap')}catch(e){}}
+
+ el.addEventListener('pointerdown',e=>{
+  drag=true;moved=0;px=e.clientX;py=e.clientY;
+  try{el.setPointerCapture(e.pointerId)}catch(x){}});
+ el.addEventListener('pointermove',e=>{
+  if(!drag)return;
+  const dx=e.clientX-px,dy=e.clientY-py;
+  moved+=Math.abs(dx)+Math.abs(dy);
+  if(INS.on){
+   /* the trophy turns, not you */
+   INS.ry+=dx*.010;
+   INS.rx=Math.max(-1.15,Math.min(1.15,INS.rx+dy*.008));
+   INS.spin=0;INS.idle=0;
+  }else{
+   P.yaw-=dx*.0042;
+   P.pitch=Math.max(-.5,Math.min(.45,P.pitch-dy*.0032));
+   fly=null}
+  px=e.clientX;py=e.clientY});
+ el.addEventListener('pointerup',e=>{
+  if(drag&&moved<7){
+   if(INS.on){/* a tap on the room behind the trophy puts it back */
+    const r=el.getBoundingClientRect();
+    const nx=((e.clientX-r.left)/r.width)*2-1, ny=-((e.clientY-r.top)/r.height)*2+1;
+    const rr=new THREE.Raycaster();
+    rr.setFromCamera(new THREE.Vector2(nx,ny),iCam);
+    if(!rr.intersectObject(rig,true).length)exitInspect();
+   }else{
+    const ix=pickAt(e.clientX,e.clientY);
+    if(ix>=0)inspect(ix);else hidePanel();}
+  }
+  drag=false;try{el.releasePointerCapture(e.pointerId)}catch(x){}});
+ el.addEventListener('wheel',e=>{
+  e.preventDefault();
+  if(INS.on){INS.dist=Math.max(.45,Math.min(3.4,INS.dist-e.deltaY*.0016));INS.idle=0;return}
+  fly=null;
+  const s=-e.deltaY*.0016;
+  P.x+=Math.sin(P.yaw)*s;P.z-=Math.cos(P.yaw)*s;clampPos()},{passive:false});
+ el.addEventListener('touchmove',e=>{
+  if(e.touches.length!==2)return;
+  const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,
+                     e.touches[0].clientY-e.touches[1].clientY);
+  if(pd){
+   const s=(d-pd)*.006;
+   if(INS.on){INS.dist=Math.max(.45,Math.min(3.4,INS.dist-s));INS.idle=0}
+   else{fly=null;P.x+=Math.sin(P.yaw)*s;P.z-=Math.cos(P.yaw)*s;clampPos()}}
+  pd=d},{passive:true});
+ el.addEventListener('touchend',()=>{pd=0});
+ const onKey=(e,down)=>{
+  const k=e.key.toLowerCase();
+  if('wasd'.indexOf(k)>=0||k.indexOf('arrow')===0){keys[k]=down;if(down)fly=null;
+   if(k.indexOf('arrow')===0)e.preventDefault()}
+  if(down&&k==='escape'){if(INS.on)exitInspect();else closeTrophyRoom()}};
+ const kd=e=>onKey(e,true),ku=e=>onKey(e,false);
+ window.addEventListener('keydown',kd);window.addEventListener('keyup',ku);
+
+ const pad=document.createElement('div');
+ pad.className='thall-pad';
+ pad.innerHTML='<button class="thall-b" data-w="-1">◀</button>'+
+  '<button class="thall-b thall-go" data-f="1">Walk</button>'+
+  '<button class="thall-b" data-w="1">▶</button>';
+ host.appendChild(pad);
+ pad.addEventListener('pointerdown',e=>{
+  const b=e.target.closest('[data-w],[data-f]');if(!b)return;
+  e.preventDefault();fly=null;
+  if(b.dataset.f)walk=1;else walk=0,keys[b.dataset.w==='1'?'d2':'a2']=true;
+  pad._h=b});
+ const padUp=()=>{walk=0;keys.a2=keys.d2=false;pad._h=null};
+ pad.addEventListener('pointerup',padUp);
+ pad.addEventListener('pointercancel',padUp);
+ pad.addEventListener('pointerleave',padUp);
+
+ const hint=document.createElement('div');
+ hint.className='thall-hint';
+ hint.textContent='Drag to look · walk with W A S D or the pad · tap a case to pick the trophy up';
+ host.appendChild(hint);
+ setTimeout(()=>{try{hint.classList.add('gone')}catch(e){}},6500);
+
+ const onResize=()=>{if(!TR.on)return;
+  const w=host.clientWidth,h=host.clientHeight;
+  cam.aspect=w/h;cam.updateProjectionMatrix();
+  iCam.aspect=w/h;iCam.updateProjectionMatrix();
+  rend.setSize(w,h)};
+ window.addEventListener('resize',onResize);
+
+ /* ---- 9. THE LOOP --------------------------------------------------- */
+ let last=performance.now(),t0=last;
+ const tick=(ts)=>{
+  if(!TR.on){window.removeEventListener('keydown',kd);
+   window.removeEventListener('keyup',ku);
+   window.removeEventListener('resize',onResize);return}
+  TR.raf=requestAnimationFrame(tick);
+  const dt=Math.min(.05,(ts-last)/1000);last=ts;
+
+  if(!INS.on){
+   if(fly){
+    fly.t=Math.min(1,fly.t+dt*1.5);
+    const e=1-Math.pow(1-fly.t,3);
+    P.x+=(fly.to.x-P.x)*e*.22;P.z+=(fly.to.z-P.z)*e*.22;
+    let d=fly.yaw-P.yaw;
+    while(d>Math.PI)d-=Math.PI*2;while(d<-Math.PI)d+=Math.PI*2;
+    P.yaw+=d*e*.22;
+    if(fly.t>=1&&Math.hypot(fly.to.x-P.x,fly.to.z-P.z)<.05)fly=null;
+   }else{
+    const sp=3.1*dt;
+    let f=0,s=0;
+    if(keys.w||keys.arrowup||walk)f+=1;
+    if(keys.s||keys.arrowdown)f-=1;
+    if(keys.d||keys.arrowright||keys.d2)s+=1;
+    if(keys.a||keys.arrowleft||keys.a2)s-=1;
+    if(f||s){
+     P.x+=(Math.sin(P.yaw)*f+Math.cos(P.yaw)*s)*sp;
+     P.z+=(-Math.cos(P.yaw)*f+Math.sin(P.yaw)*s)*sp;
+     clampPos();}}}
+
+  const tsec=(ts-t0)/1000;
+  const ribbons=(o)=>{
+   if(!o.userData||!o.userData.ribbon)return;
+   const pos=o.geometry.attributes.position;
+   for(let i=0;i<pos.count;i++){
+    const y=pos.getY(i),amp=Math.max(0,(0-y)/10)*.15;
+    pos.setZ(i,Math.sin(tsec*1.5+o.userData.phase+y*.5)*amp)}
+   pos.needsUpdate=true;o.geometry.computeVertexNormals()};
+  peds.forEach(p=>p.traverse(ribbons));
+  if(INS.obj)INS.obj.traverse(ribbons);
+
+  cam.position.set(P.x,1.55,P.z);
+  cam.rotation.set(0,0,0);
+  cam.rotateY(P.yaw);cam.rotateX(P.pitch);
+
+  /* the room */
+  rend.autoClear=true;
+  rend.render(scene,cam);
+
+  /* and the thing in your hands over the top of it */
+  const want=INS.on?1:0;
+  INS.fade+=(want-INS.fade)*Math.min(1,dt*7);
+  if(INS.fade>.003){
+   veil.material.opacity=INS.fade*.90;
+   if(INS.on){
+    INS.idle+=dt;
+    if(INS.idle>3.5&&!drag)INS.spin=Math.min(1,INS.spin+dt*.6);
+    INS.ry+=INS.spin*dt*.34;
+   }
+   rig.rotation.y=INS.ry;
+   rig.rotation.x=INS.rx;
+   rig.scale.setScalar(.35+.65*INS.fade);
+   /* the aim slides so that "the engraving" travels down the trophy
+      rather than cutting to it */
+   INS.aim+=(INS.aimT-INS.aim)*Math.min(1,dt*4.5);
+   const off=panelFrac()*INS.dist*TANH*INS.fade;
+   const axis=INS.aim-off;
+   iCam.position.set(0,axis,INS.dist);
+   iCam.lookAt(0,axis,0);
+   rend.autoClear=false;
+   rend.clearDepth();
+   rend.render(iScene,iCam);
+   rend.autoClear=true;
+  }
+ };
+ TR.raf=requestAnimationFrame(tick);
+
+ /* a handle for the test harness — the room is the one screen that
+    cannot be checked by reading the DOM */
+ TR.dbg={peds,cam,scene,iScene,rig,INS,pickAt,inspect,rows,P};
+
+ if(TR.focusCode){
+  const ix=rows.findIndex(r=>r.code===TR.focusCode);
+  TR.focusCode=null;
+  if(ix>=0)setTimeout(()=>{if(TR.on)inspect(ix)},700);
+ }
+};
+
+/* the extra lines the panel grew when you pick something up */
+(function inspectCSS(){
+ const st=document.createElement('style');st.id='w78';
+ st.textContent=
+  '.thall-ins{margin-top:11px;font-size:10px;letter-spacing:1.6px;text-transform:uppercase;'+
+  'color:#c9ad78;font-weight:800;line-height:1.5}'+
+  '.thall-roll{margin-top:9px;border-top:1px solid rgba(255,214,140,.16);padding-top:8px;'+
+  'max-height:132px;overflow-y:auto}'+
+  '.thall-r{display:flex;justify-content:space-between;gap:12px;font-size:11px;'+
+  'padding:2px 2px;color:#bda887}'+
+  '.thall-r b{color:#f2dfb4;font-weight:800;text-align:right}'+
+  '.thall-more{font-size:10px;color:#8a7a63;font-style:italic;margin-top:5px}'+
+  /* holding one: the panel gets out of the way of the thing it describes */
+  '.thall-panel.is-inspect{bottom:14px;max-height:38vh;overflow-y:auto}'+
+  '.thall-panel.is-inspect .thall-roll{max-height:92px}'+
+  '.thall-panel.is-side{left:auto;right:18px;bottom:auto;top:50%;'+
+  'transform:translateY(-50%);width:320px;max-height:76vh}'+
+  '.thall-panel.is-side .thall-roll{max-height:200px}'+
+  '.thall-views{display:flex;gap:7px;justify-content:center;margin-top:11px}'+
+  '.thall-v{flex:1;padding:7px 6px;border-radius:10px;cursor:pointer;'+
+  'border:1px solid rgba(255,214,140,.22);background:rgba(255,214,140,.05);'+
+  'color:#c6ad7d;font-size:11px;font-weight:800;letter-spacing:.4px}'+
+  '.thall-v.on{background:rgba(255,199,90,.20);color:#ffd88a;'+
+  'border-color:rgba(255,199,90,.45)}';
+ document.head.appendChild(st)})();
+
+/*#w78_trophyroom.js#*/
 showStart();
 </script>
 </body>
