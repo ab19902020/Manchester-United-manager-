@@ -30993,6 +30993,130 @@ writeSlot=function(slot,quiet){
 
 /*#w66_savesize.js#*/
 
+/*#w66_savesize.js#*//*#w67_trophies.js#*/
+
+/* =====================================================================
+   A HOME FOR THE TROPHY ASSETS
+   ---------------------------------------------------------------------
+   You are modelling a trophy per competition. This is the plumbing that
+   picks them up, written so that whatever you upload first is useful
+   immediately rather than waiting on the rest.
+
+   THE AWKWARD FACT IT IS BUILT AROUND. Three.js is not in this game.
+   HAS3D tests `typeof THREE` and nothing ever defines it, so the 3D match
+   engine already written in here has never run. Bundling it is a real
+   decision — about 600KB on a 1.6MB file — so it is not made here.
+
+   And even with Three.js, `.glb` loads through fetch, which refuses the
+   `file://` scheme. A downloaded copy of this game would show no
+   trophies at all.
+
+   So the lookup is a ladder, per trophy, first hit wins:
+
+       trophies/trophy-PL.glb   needs Three.js       (later)
+       trophies/trophy-PL.png   needs nothing        works offline
+       the existing 2D art      needs nothing        always
+
+   A PNG goes through an <img> tag, and img does not care about the
+   file:// scheme the way fetch does. So a PNG render uploaded today
+   shows up everywhere today, including for someone who downloaded the
+   file. The .glb slots in above it the moment Three.js is bundled,
+   without any of this changing.
+   ===================================================================== */
+
+const TROPHY_DIR='trophies/';
+const TROPHY_LABEL={
+ FA:'FA Cup',LC:'League Cup',CL:'Champions League',EL:'Europa League',EC:'Conference League',
+ PL:'Premier League',CH:'Championship',L1:'League One',L2:'League Two',NL:'National League',
+ ESP:'La Liga',ITA:'Serie A',GER:'Bundesliga',FRA:'Ligue 1',POR:'Primeira Liga',
+ NED:'Eredivisie',SCO:'Scottish Premiership',BEL:'Belgian Pro League',TUR:'Süper Lig',
+ WC:'World Cup',EURO:'European Championship',
+ ballon:'Ballon d\'Or',poty:'Player of the Season',young:'Young Player of the Season',
+ boot:'Golden Boot',glove:'Golden Glove',playmaker:'Playmaker of the Season',
+ mgr:'Manager of the Season'};
+
+/* what we have found, so a missing file is asked for once and not again */
+const TROPHY_ART={};
+function trophyArt(code){
+ if(!code)return null;
+ if(TROPHY_ART[code]!==undefined)return TROPHY_ART[code];
+ TROPHY_ART[code]=null;                       /* assume not there until it loads */
+ try{
+  const img=new Image();
+  img.onload=()=>{TROPHY_ART[code]=TROPHY_DIR+'trophy-'+code+'.png';
+   try{document.querySelectorAll('[data-trophy="'+code+'"]').forEach(el=>{
+    el.style.backgroundImage='url("'+TROPHY_ART[code]+'")';
+    el.classList.add('has-art')})}catch(e){}};
+  img.onerror=()=>{TROPHY_ART[code]=null};
+  img.src=TROPHY_DIR+'trophy-'+code+'.png';
+ }catch(e){}
+ return TROPHY_ART[code]}
+
+/* the badge the rest of the game can drop anywhere */
+function trophyBadge(code,size,label){
+ const s=size||46;
+ const art=trophyArt(code);
+ const lbl=label!==false?(TROPHY_LABEL[code]||code):'';
+ return '<span class="trophy'+(art?' has-art':'')+'" data-trophy="'+esc(code)+'" '+
+  'title="'+esc(lbl)+'" style="width:'+s+'px;height:'+s+'px'+
+  (art?';background-image:url(\''+art+'\')':'')+'">'+
+  (art?'':'<span class="trophy-fb">🏆</span>')+'</span>'}
+
+/* every trophy this manager has actually won, newest first */
+function myTrophies(){
+ const out=[];
+ try{
+  (G.honours||[]).forEach(h=>{
+   let code=null;
+   for(const k in TROPHY_LABEL)
+    if(TROPHY_LABEL[k].toLowerCase()===String(h.comp||'').toLowerCase()){code=k;break}
+   if(!code){
+    /* league titles are recorded as "<name> champions" */
+    const m=String(h.comp||'').replace(/ champions$/i,'');
+    for(const k in TROPHY_LABEL)if(TROPHY_LABEL[k].toLowerCase()===m.toLowerCase()){code=k;break}
+   }
+   out.push({season:h.season,comp:h.comp,code});
+  });
+ }catch(e){}
+ return out.reverse()}
+
+(function trophyCSS(){
+ const st=document.createElement('style');st.id='w67';
+ st.textContent='.trophy{display:inline-flex;align-items:center;justify-content:center;'+
+  'background-size:contain;background-repeat:no-repeat;background-position:center;'+
+  'border-radius:10px;vertical-align:middle;flex:0 0 auto}'+
+  '.trophy .trophy-fb{font-size:22px;line-height:1;filter:saturate(.9)}'+
+  '.trophy.has-art .trophy-fb{display:none}'+
+  '.trophycase{display:flex;flex-wrap:wrap;gap:10px;padding:4px 2px}'+
+  '.trophycase .tc{display:flex;flex-direction:column;align-items:center;gap:4px;'+
+  'width:74px;text-align:center}'+
+  '.trophycase .tc-n{font-size:9px;font-weight:800;letter-spacing:.4px;line-height:1.2;'+
+  'color:var(--ink-faint);text-transform:uppercase}';
+ document.head.appendChild(st)})();
+
+
+/* the honours list becomes a cabinet, and shows the art when it is there */
+if(typeof vHonours==='function'){
+ const _vHon=vHonours;
+ vHonours=function(){
+  try{
+   const t=myTrophies();
+   if(!t.length)return _vHon.apply(this,arguments);
+   return '<div class="chip-lbl">Trophy cabinet</div><div class="card tight">'+
+    '<div class="trophycase">'+t.map(x=>
+     '<div class="tc">'+trophyBadge(x.code||'PL',52)+
+     '<div class="tc-n">'+esc(x.comp)+'<br><span style="opacity:.6">S'+x.season+'</span></div></div>').join('')+
+    '</div></div>';
+  }catch(e){return _vHon.apply(this,arguments)}}}
+
+/* NO EAGER PROBING. The first cut asked for all twenty-seven PNGs on the
+   first render, which put thirty 404s in the console before the manager
+   had won anything — the same mistake the audio pack made, where
+   nineteen probes fired at boot. trophyArt() is called from trophyBadge
+   and nowhere else, so the only files ever requested are the trophies
+   you have actually won, once each, for the life of the page. */
+/*#w67_trophies.js#*/
+
 showStart();
 </script>
 </body>
