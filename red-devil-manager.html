@@ -36747,6 +36747,335 @@ buildTrophyRoom=function(host){
  document.head.appendChild(st)})();
 
 /*#w78_trophyroom.js#*/
+/*#w79_dupes.js#*/
+
+/* =====================================================================
+   w79_sweep — the same button, twice
+   ---------------------------------------------------------------------
+   "You can knock down the stadium and rebuild it, and it is listed on
+   there twice in the same place."
+
+   It is, and it is worth explaining how, because it is not a typo — it
+   is a hazard this file creates for itself and there was a second one
+   sitting next to it that nobody had noticed.
+
+   The game is built in layers. A layer takes the function that draws a
+   screen, keeps a reference to it, and returns a new one that calls the
+   old and appends something:
+
+       const _v=vStadium;
+       vStadium=function(){ return _v()+theRebuildCard() };
+
+   That is fine until the screen the layer is decorating grows the same
+   thing for itself. And that is exactly what happened here, with a twist
+   that made it invisible to anyone reading top to bottom: the base
+   vStadium is a FUNCTION DECLARATION four hundred lines BELOW the layer
+   that wraps it. Declarations hoist, so by the time the wrapper runs,
+   `vStadium` is already the later, fuller version — the one that draws
+   the rebuild card itself. The wrapper then draws it again. Reading the
+   file in order, the wrapper appears to be adding something that does
+   not exist yet.
+
+   The finances screen has the identical bug for the identical reason:
+   "Request more transfer funds" is appended by the Club screen's
+   dispatcher AND by a later wrapper on vFinances.
+
+   Rather than patch two call sites and wait for the third, the Club
+   screen is now checked for repeats as it is drawn. A control counts as
+   a repeat only when its action, its value and its visible label are all
+   identical to one already on the page and it carries nothing to tell it
+   apart — no player id, no key, no slot. A list of forty players sharing
+   one action is not a repeat; two "Break ground — £380M" buttons are.
+   ===================================================================== */
+
+function sweepDupes(html){
+ try{
+  const d=document.createElement('div');
+  d.innerHTML=html||'';
+  const seen={};
+  const kill=[];
+  d.querySelectorAll('[data-action]').forEach(el=>{
+   const a=el.dataset.action||'';
+   const v=el.dataset.v===undefined?'':el.dataset.v;
+   const t=(el.textContent||'').replace(/\s+/g,' ').trim();
+   if(!t)return;
+   /* anything that identifies a particular row is a list, not a repeat */
+   if(el.dataset.id!==undefined||el.dataset.k!==undefined||
+      el.dataset.slot!==undefined||el.dataset.pid!==undefined||
+      el.dataset.mid!==undefined)return;
+   const key=a+''+v+''+t;
+   if(!seen[key]){seen[key]=1;return}
+   kill.push(el)});
+  if(!kill.length)return html;
+  kill.forEach(el=>{
+   /* a button that is the only control in its card takes the card with
+      it — otherwise the heading and the description are left behind
+      with nothing to press */
+   const card=el.closest('.card');
+   if(card&&card.querySelectorAll('[data-action]').length===1&&card.parentNode)
+    card.remove();
+   else el.remove()});
+  return d.innerHTML;
+ }catch(e){return html}}
+
+const _vClubSweep=vClubFinal;
+vClubFinal=function(){
+ return sweepDupes(_vClubSweep.apply(this,arguments))};
+vClub=function(){return vClubFinal()};
+
+/*#w79_dupes.js#*/
+
+
+
+
+/*#w80_save.js#*/
+
+/* =====================================================================
+   w80_save — a career that cannot be saved
+   ---------------------------------------------------------------------
+   Found by playing eight seasons with nobody watching and then trying to
+   save. It does not work. Not "it is slow" — writeSlot returns false, the
+   trimmed retry fails, clearing the other two slots fails, and the game
+   tells you storage is full. Every autosave on the way there had failed
+   the same way, silently, because autosave passes quiet=true.
+
+   The blob at that point is fourteen megabytes. A browser gives a page
+   about five. So from roughly the fifth season on, this game quietly
+   stops being able to remember anything, which for a career game is as
+   bad as a bug gets.
+
+   TWO CAUSES, AND THE FIRST ONE IS EMBARRASSING BECAUSE IT WAS ALREADY
+   FIXED ONCE.
+
+   1. THE NUMBERS ARE WRITTEN AT FULL FLOAT PRECISION. Attributes drift by
+      repeated multiplication — training multiplies by 1.004, the growth
+      cap by 0.996 — so a tackling of 14 becomes 14.785995325591776, and
+      that is eighteen characters where four would do. Nineteen attributes
+      a player, ten thousand nine hundred players.
+
+      An earlier layer spotted this and added a rounding replacer to
+      saveBlob. A later layer then rewrote saveBlob to pack players into
+      arrays — a good change, a real saving — and in doing so dropped the
+      replacer. The two fixes were never in the file at the same time.
+
+   2. EVERY PLAYER IN THE WORLD CARRIES HIS FULL CAREER. The narrative
+      arrays — hist and log — come to about 1KB a player, which is
+      megabytes of prose about the fourth-choice left-back at Woking that
+      nobody will ever open. Your own players keep theirs, your division
+      keeps enough to fill a profile, and the rest of the world keeps
+      none.
+
+   3. AND THE CAREER TOTALS ARE THIRTY KEY NAMES ON EVERY PLAYER. p.car
+      is the same thirty counters for everybody, written out in full ten
+      thousand times. The packer already does exactly the right thing
+      with p.stats — store the key names once, the values as a bare row —
+      and p.car was simply never given the same treatment. It is now, and
+      the numbers come back identical.
+
+   Both are applied only to what is written to disk. Nothing changes about
+   the running game, and a save from before this loads exactly as it did.
+   ===================================================================== */
+
+/* two decimals is more than the game can display and more than it uses */
+function saveRound(k,v){
+ return (typeof v==='number'&&isFinite(v)&&!Number.isInteger(v))
+  ? Math.round(v*100)/100 : v}
+
+/* How much of a player's story is worth keeping, by how close he is to
+   you. Your own squad keeps all of it. The division you play in keeps
+   enough to fill a profile, because those are the men you scout, sign and
+   read about. The other four hundred and sixty clubs keep none: nobody
+   has ever opened the career history of the fourth-choice left-back at a
+   mid-table club in Portugal, and between them they were most of a save
+   file that no browser would accept. */
+const KEEP_MINE=24, KEEP_DIV=4, KEEP_REST=0;
+
+function trimCareers(){
+ const undo=[];
+ try{
+  const myDivision=(G.clubs[G.my]||{}).league;
+  (G.clubs||[]).forEach(c=>{
+   const keep=(c.i===G.my)?KEEP_MINE:(c.league===myDivision?KEEP_DIV:KEEP_REST);
+   ['players','youth'].forEach(f=>{
+    (c[f]||[]).forEach(p=>{
+     /* hist and log are lists of events and can be shortened. car is
+        NOT a list — it is the career totals, packed positionally just
+        below, and slicing it silently rearranged every number in it. */
+     ['hist','log'].forEach(k=>{
+      const a=p[k];
+      if(!Array.isArray(a)||!a.length)return;
+      if(a.length<=keep)return;
+      undo.push([p,k,a]);
+      p[k]=keep?a.slice(-keep):undefined})})})});
+ }catch(e){}
+ return ()=>{try{undo.forEach(([p,k,a])=>{p[k]=a})}catch(e){}}}
+
+/* ---------------------------------------------------------------------
+   AND THE CAREER TOTALS, WHICH ARE THE SAME THIRTY KEYS ON EVERY PLAYER
+   ---------------------------------------------------------------------
+   p.car is career apps, minutes, goals, passes attempted, passes
+   completed, tackles won, aerials won — thirty-odd counters. The packer
+   already turns p.stats into a bare array against a shared key list and
+   saves the key names once instead of ten thousand times. p.car was
+   never given the same treatment, so every player in the world carried
+   the word "duelW" and twenty-nine of its friends. That was the single
+   largest thing in the file, and squeezing it costs nothing at all: the
+   numbers are identical coming back.
+   --------------------------------------------------------------------- */
+function carKeys(){
+ const seen={},out=[];
+ try{
+  (G.clubs||[]).forEach(c=>['players','youth'].forEach(f=>
+   (c[f]||[]).forEach(p=>{
+    if(!p.car||typeof p.car!=='object'||Array.isArray(p.car))return;
+    for(const k in p.car)if(!seen[k]){seen[k]=1;out.push(k)}})));
+ }catch(e){}
+ return out}
+
+function packCareers(ck){
+ const undo=[];
+ if(!ck.length)return ()=>{};
+ try{
+  (G.clubs||[]).forEach(c=>['players','youth'].forEach(f=>
+   (c[f]||[]).forEach(p=>{
+    const car=p.car;
+    if(!car||typeof car!=='object'||Array.isArray(car))return;
+    undo.push([p,car]);
+    const row=ck.map(k=>{const v=car[k];
+     return typeof v==='number'?Math.round(v*10)/10:(v===undefined?null:v)});
+    let n=row.length;while(n>0&&(row[n-1]===null||row[n-1]===0))n--;
+    p.car=row.slice(0,n)})));
+ }catch(e){}
+ return ()=>{try{undo.forEach(([p,car])=>{p.car=car})}catch(e){}}}
+
+/* and back again on the way in */
+function unpackCareers(g,ck){
+ if(!g||!ck||!ck.length)return g;
+ try{
+  (g.clubs||[]).forEach(c=>['players','youth'].forEach(f=>
+   (c[f]||[]).forEach(p=>{
+    if(!Array.isArray(p.car))return;
+    const o={};
+    for(let i=0;i<ck.length;i++)o[ck[i]]=p.car[i]==null?0:p.car[i];
+    p.car=o})));
+ }catch(e){}
+ return g}
+
+/* ---------------------------------------------------------------------
+   AND THE SCORERS OF MATCHES THAT ARE NOT YOURS
+   Every played fixture in the world keeps the list of who scored in it.
+   For your own games that is the record of your season. For the other
+   nine thousand it is a list nothing ever reads.
+   --------------------------------------------------------------------- */
+function trimFixtures(){
+ const undo=[];
+ try{
+  (G.fixtures||[]).forEach(f=>{
+   if(!f.played||f.h===G.my||f.a===G.my)return;
+   if(f.sc&&f.sc.length){undo.push([f,'sc',f.sc]);f.sc=undefined}
+   if(f.ev&&f.ev.length){undo.push([f,'ev',f.ev]);f.ev=undefined}});
+ }catch(e){}
+ return ()=>{try{undo.forEach(([f,k,v])=>{f[k]=v})}catch(e){}}}
+
+/* the packer stays — it is a real saving — it just writes rounded numbers
+   now, and writes them for a world that is not carrying its whole past */
+const _saveBlobLean=saveBlob;
+saveBlob=function(){
+ const ck=carKeys();
+ const undoCar=packCareers(ck);
+ const undoFix=trimFixtures();
+ const restore=trimCareers();
+ try{
+  const P=packG(G);
+  return JSON.stringify({v:5,t:Date.now(),
+   club:G.clubs[G.my].name,short:G.clubs[G.my].short,crest:G.clubs[G.my].c1,
+   season:G.season,day:G.day,date:fmtDate(G.day),pos:leaguePos(G.my),
+   div:DIV_NAMES[myDiv()],pts:(tableRows().find(r=>r.i===G.my)||{}).pts||0,
+   fans:Math.round(G.fans==null?60:G.fans),
+   pk:P.pk,ak:P.ak,sk:P.sk,ck:ck,G:P.g},saveRound)}
+ catch(e){
+  /* if the packer ever fails, an unpacked save is better than none */
+  try{return JSON.stringify({v:3,t:Date.now(),
+   club:G.clubs[G.my].name,short:G.clubs[G.my].short,crest:G.clubs[G.my].c1,
+   season:G.season,day:G.day,date:fmtDate(G.day),
+   G:G},saveRound)}
+  catch(e2){return _saveBlobLean()}}
+ finally{restore();undoFix();undoCar()}};
+
+/* a save written this way has to be read back the same way */
+const _readSlotCar=readSlot;
+readSlot=function(slot){
+ const st=_readSlotCar.apply(this,arguments);
+ try{if(st&&st.G&&st.ck)unpackCareers(st.G,st.ck)}catch(e){}
+ return st};
+
+/* the exported file gets the same treatment — it was the workaround the
+   game suggested when storage was full, and it was writing the same
+   fourteen megabytes */
+const _expLean=ACTIONS.exportSave;
+ACTIONS.exportSave=function(){
+ const restore=trimCareers();
+ try{return _expLean.apply(this,arguments)}
+ finally{restore()}};
+/* an imported file may or may not have been packed; unpackCareers only
+   touches a car that is an array, so running it either way is safe */
+const _impCar=ACTIONS.importSave;
+if(typeof _impCar==='function')ACTIONS.importSave=function(){
+ const r=_impCar.apply(this,arguments);
+ try{unpackCareers(G,carKeys())}catch(e){}
+ return r};
+
+/* ---------------------------------------------------------------------
+   MAKING ROOM IN THE RIGHT ORDER
+   ---------------------------------------------------------------------
+   When a write fails, the recovery already clears other slots and tries
+   again — but it clears slots 3 and 2 and never touches ":auto", which is
+   the one save in the file that is always the largest, always the most
+   recent, and always about to be rewritten anyway. With four slots at
+   four and a half megabytes each and a browser offering five, that meant
+   the recovery reliably freed the wrong thing and then gave up.
+
+   The autosave goes first now, and a manual save is never the thing that
+   gets thrown away to make room for an automatic one.
+   --------------------------------------------------------------------- */
+const _writeSlotRoom=writeSlot;
+writeSlot=function(slot,quiet){
+ if(_writeSlotRoom.apply(this,arguments))return true;
+ try{
+  /* the autosave is rewritten on the next day that passes */
+  if(String(slot)!=='auto'){
+   try{localStorage.removeItem(SAVE_KEY+':auto')}catch(e){}
+   if(_writeSlotRoom.apply(this,arguments))return true}
+  /* then any slot that is not the one being written */
+  ['auto','3','2','1'].forEach(s=>{
+   if(String(s)!==String(slot)){try{localStorage.removeItem(SAVE_KEY+':'+s)}catch(e){}}});
+  return _writeSlotRoom.apply(this,arguments);
+ }catch(e){return false}};
+
+/* ---------------------------------------------------------------------
+   AND IF IT STILL WILL NOT FIT, SAY SO WHILE IT CAN STILL BE HELPED
+   ---------------------------------------------------------------------
+   An autosave that fails says nothing, by design — it is quiet so it does
+   not interrupt. The result was a game that had stopped saving weeks ago
+   and never mentioned it. It mentions it now, once, rather than every
+   time.
+   --------------------------------------------------------------------- */
+const _writeSlotWarn=writeSlot;
+writeSlot=function(slot,quiet){
+ const ok=_writeSlotWarn.apply(this,arguments);
+ try{
+  if(ok){G._saveWarned=false;return ok}
+  if(!G._saveWarned){
+   G._saveWarned=true;
+   mail('board','⚠️ The game cannot save',
+    'This browser has run out of room and your career could not be written to '+
+    'slot '+esc(String(slot))+'.<br><br>Use <b>Export save file</b> on the Save screen to '+
+    'keep a copy on your device. Clearing an unused slot may also free enough space.');
+   try{toast('⚠️ Save failed — storage full')}catch(e){}}}
+ catch(e){}
+ return ok};
+
+/*#w80_save.js#*/
 showStart();
 </script>
 </body>
