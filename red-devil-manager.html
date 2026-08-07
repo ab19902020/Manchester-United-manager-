@@ -33799,6 +33799,2014 @@ fastForward=function(){
  try{onFT()}catch(e){}};
 
 /*#w76_skip.js#*/
+
+/*#w77_press_full.js#*/
+
+/* =====================================================================
+   w77_press — answers that belong to the question
+   ---------------------------------------------------------------------
+   "The preset answers must correlate to the question they have asked.
+   Currently it is the same four preset answers for every single question."
+
+   Exactly right, and worth saying why. The room went to real trouble: a
+   bank of well over a thousand questions that read the table, the squad,
+   the run, the window, the takeover, the weather and the referee, and
+   picks one that fits the week. Underneath it sat four answers that knew
+   only two things — whether it was before or after a match, and whether
+   you had won. So a reporter could ask what you make of your goalkeeper
+   and the only thing you could say back was "it is three points and
+   nothing more than that".
+
+   Every question in this game comes out of a rule with a name — 'keeper',
+   'expiring', 'race-title', 'tko-live' — and the rule is remembered on the
+   conference the moment the question is asked. That name is the hook. So
+   there is now an answer set written for each one, and for the open
+   questions, which change subject line by line, one written for each
+   individual line.
+
+   Around two hundred and eighty sets. Roughly eleven hundred answers.
+
+   THREE THINGS EACH SET DOES
+
+   1. IT ANSWERS THE ACTUAL QUESTION. Asked how long you are without your
+      centre-half, you can say six weeks. Asked whether the boy is ready,
+      you can say he is ready. Nothing generic is offered where something
+      specific can be.
+
+   2. IT NAMES THE MAN THEY NAMED. The question is built from your squad,
+      and so is the answer — the same player, the same scoreline, the same
+      position in the table, the same opponent.
+
+   3. IT OFFERS A REAL CHOICE. Not four ways of saying the same thing:
+      four different decisions, with different consequences. Back him or
+      hang him. Play it down or put a target on your own back. Take the
+      blame yourself or put it on the dressing room. They run through the
+      identical analysis a typed answer does — the words carry the tone,
+      so a preset can still land badly, and picking the right one for the
+      room is the whole point.
+
+   Anything the bank does not have an answer for — a question added later,
+   a rule from a future update — falls through to a classifier that reads
+   the question text itself, and only then to the old four.
+   ===================================================================== */
+
+/* ---------------------------------------------------------------------
+   WHICH QUESTION IS ON THE TABLE
+   The chooser stamps the rule it drew on the conference. Reading it back
+   is how an answer knows what it is answering.
+   --------------------------------------------------------------------- */
+function pressQID(){
+ try{
+  const c=G.pressCtx;if(!c)return '';
+  // make sure a question has actually been drawn for this slot
+  if(!c._qCache||c._qCache.i!==c.q){try{pressQuestion()}catch(e){}}
+  const a=c._asked||[];
+  return a.length?String(a[a.length-1]):''}
+ catch(e){return ''}}
+function pressRule(){return pressQID().split('#')[0]}
+function pressLine(){const p=pressQID().split('#');return p.length>1?+p[1]:0}
+
+/* the words the room hears, without the framing */
+function pressText(){
+ try{const c=G.pressCtx;return (c&&c._qCache&&c._qCache.t)||''}catch(e){return ''}}
+
+/* ---------------------------------------------------------------------
+   SMALL HELPERS SO THE ANSWERS READ LIKE SENTENCES
+   --------------------------------------------------------------------- */
+function pnm(p){return (p&&p.name)||'him'}
+function psur(p){try{return surname(p.name)}catch(e){return pnm(p)}}
+function pOpp(F){return (F&&F.opp&&(F.opp.short||F.opp.name))||'them'}
+function pOppFull(F){return (F&&F.opp&&F.opp.name)||'them'}
+function pNext(F){
+ try{const nf=F.nextFix;if(!nf)return 'the next one';
+  const o=G.clubs[nf.h===G.my?nf.a:nf.h];return (o&&(o.short||o.name))||'the next one'}
+ catch(e){return 'the next one'}}
+function pWeeks(p){
+ try{const d=(p&&p.injury&&(p.injury.d||p.injury.days))||0;
+  if(!d)return 'a little while';
+  if(d<=10)return 'a couple of weeks';
+  if(d<=28)return 'about a month';
+  if(d<=70)return 'a couple of months';
+  return 'a long time'}
+ catch(e){return 'a little while'}}
+
+/* =====================================================================
+   THE ANSWER BANK
+   ---------------------------------------------------------------------
+   Keyed on the name of the rule that asked. Four answers, four different
+   decisions, each written for that subject and using the same facts the
+   question was built from.
+   ===================================================================== */
+const PANS={};
+
+/* ---------------- the match just gone ---------------- */
+PANS['win-basic']=F=>[
+ ['👏 Credit the players','I thought they were excellent from the first whistle. That was a proper performance and every bit of the credit belongs to them.'],
+ ['🧊 Play it down','It is three points against '+pOpp(F)+' and nothing more than that. We enjoy tonight, then the focus goes straight onto '+pNext(F)+'.'],
+ ['🔥 Set the standard','That is the level now. We came here to win it and we will keep coming to win, whoever we are playing and wherever it is.'],
+ ['🎯 Point out the work','There is still plenty to improve in that. We were good, but I have already got two or three things I want to work on this week.']];
+
+PANS['loss-basic']=F=>[
+ ['🙋 Take the blame','That is my responsibility. I picked the side, I set it up that way, and when it goes like that the blame sits with me and not with them.'],
+ ['🧊 Keep perspective','We lost a game of football. It is disappointing, but it is one result and we will move on and be better against '+pNext(F)+'.'],
+ ['😠 Demand more','That was not good enough and every man in that dressing room knows it. There will be some very direct conversations this week.'],
+ ['🛡️ Defend them','I have no argument with the effort. They gave me everything they had and I am not having them pulled apart for one result.']];
+
+PANS['draw-basic']=F=>[
+ ['🧊 A fair result','It is a point. It was tight, both sides had a spell, and I do not think either of us did enough to deserve to win it.'],
+ ['😤 Two dropped','We came for three and we have got one. That is not what we set out to do and we will look very hard at why.'],
+ ['👏 Back the effort','The character was there, and against a good side that counts. On another day we take all three and I could not ask more of them.'],
+ ['🎯 On to the next','It is gone now. All that matters is that we are ready for '+pNext(F)+', and I know we will be.']];
+
+PANS['thrashing']=F=>[
+ ['👏 Rave about them','That was as good as I have seen them. Brilliant from the first minute, and to do it '+F.gf+'–'+F.ga+' at this level is special.'],
+ ['🧊 Keep their feet down','It is still three points. The scoreline flatters us a little and the work does not change because we scored '+F.gf+'.'],
+ ['🔥 Send a message','That is what this team can do to anybody when we get it right. The rest of the division can make of it what they like.'],
+ ['🛡️ Spare the opposition','I will not gloat. Football does that to everybody and I have had nights the other way round — I have too much respect for them.']];
+
+PANS['hammered']=F=>[
+ ['🙋 Carry it myself','Conceding '+F.ga+' is my fault. The shape was mine, the selection was mine, and I take responsibility for a night like that.'],
+ ['😠 Say it plainly','That was unacceptable. Nowhere near the level this club demands, and I will not stand here and pretend otherwise.'],
+ ['🧊 Refuse the panic','One heavy defeat does not tell you what a team is. We look at it calmly, we work on it, and we go again.'],
+ ['🛡️ Shield the squad','They are hurting more than anybody. I will deal with it inside the building, and I would ask people to trust that.']];
+
+PANS['clean-sheet']=F=>[
+ ['👏 Praise the back line','Outstanding from the whole unit. '+(F.gk?psur(F.gk)+' was excellent behind them, but':'The keeper was excellent, but')+' that is eleven men defending together.'],
+ ['🧊 Foundation first','That is the base. Keep it tight, stay calm, and the goals look after themselves — we keep working at that end.'],
+ ['🔥 Build on it','Clean sheets win you leagues. If we keep the door shut like that we will beat most sides in this division.'],
+ ['🎯 Credit the shape','That was the plan working. We drilled it all week and I am delighted they trusted it for ninety minutes.']];
+
+PANS['late-winner']=F=>[
+ ['👏 That is character','That is the character in this group. They kept believing when a lot of teams would have settled, and they got what they deserved.'],
+ ['🧊 Take the luck','We will take it. You need a bit of fortune across a season and today it fell for us — we will not read too much into it.'],
+ ['🔥 Winners win late','Good sides score late because they keep going. That is a habit and I want it to become our habit.'],
+ ['🎯 Do not need the drama','I would rather we had settled it earlier, honestly. We made hard work of that and we will look at why.']];
+
+PANS['late-loss']=F=>[
+ ['🛡️ Pick them up','They are devastated in there. My job this week is to get their heads up, because the performance did not deserve that.'],
+ ['😠 Concentration','You cannot switch off for one moment at this level. That was a soft way to lose a game and it is on us.'],
+ ['🙋 My responsibility','I could have changed it, I could have shut it down, and I did not. That one is my responsibility.'],
+ ['🧊 Move on quickly','It hurts, but we recover, we work, and we make sure we are right for '+pNext(F)+'. There is no time to sit in it.']];
+
+PANS['comeback']=F=>[
+ ['👏 Spirit','That is the spirit of this group. Going behind here and coming back to win it takes real character and I am proud of them.'],
+ ['🧊 We should not need it','I am delighted with the response, but I would rather not keep giving ourselves that much to do. We will work on the starts.'],
+ ['🔥 They never think it is gone','Nobody in that dressing room thought it was lost. That belief is worth points and it will win us more.'],
+ ['🎯 What I told them','I told them to keep doing the right things and stay calm. The football was there — we just had to trust it.']];
+
+PANS['hat-trick']=F=>[
+ ['👏 He was brilliant','Three goals speaks for itself. He was brilliant today and he deserves every headline he gets tomorrow.'],
+ ['🧊 Keep him grounded','He will get the match ball and then he will be back in on Monday like everybody else. That is how he stays this good.'],
+ ['🔥 Best in the league','On that evidence there is nobody in this division playing better. I would not swap him for anyone.'],
+ ['🛡️ It is a team game','He finished them, but somebody made all three. I want the players who created those goals talked about as well.']];
+
+PANS['motm']=F=>[
+ ['👏 Man of the match','He was, yes. Outstanding — the best player on the pitch by a distance and he has been building to that.'],
+ ['🧊 One good day','He was very good. He knows the level has to be there every week, and he is the first to say it.'],
+ ['🔥 He can be elite','He can go as high as he wants. There is no ceiling on that boy if he keeps working the way he does.'],
+ ['🛡️ Not just him','He caught the eye, but that was a team performance and I am not picking one man out of eleven who were all excellent.']];
+
+PANS['red-ours']=F=>[
+ ['😠 No excuse','It cost us. Whatever the decision, you cannot leave your team-mates with ten and he knows that better than anyone.'],
+ ['🛡️ Back the player','I have not seen it back and I am not hanging one of my players out in here. I will speak to him privately.'],
+ ['🧊 Deal with it inside','It is done. We look at it calmly, we learn from it, and it stays in the building.'],
+ ['⚔️ Question it','I thought it was a very harsh call, and I think everyone in the ground thought the same. It changed the game.']];
+
+PANS['red-theirs']=F=>[
+ ['🎯 We should have won it','Against ten for that long, yes, we should have made it count. We were not clinical enough and that is the work.'],
+ ['🧊 It is not that simple','Ten men can be harder to break down. They dropped in and made it awkward, and we have to be more patient.'],
+ ['🛡️ No complaints from me','I am not going to sit here talking about their sending off. We deal with our own performance.'],
+ ['👏 We stayed at it','I thought we kept our shape and kept believing. That is a good sign in a game that could have frustrated us.']];
+
+PANS['own-scorer']=F=>[
+ ['👏 Great finish','Fantastic goal, and he has earned that. He has been excellent in training and that is his reward.'],
+ ['🎯 Off the training ground','That is exactly what we work on. The movement, the timing, the finish — that is a coached goal and I am delighted with it.'],
+ ['🧊 Downplay it','It was an important moment, but the whole afternoon was a team effort and I would not single out one goal.'],
+ ['🔥 More where that came from','He has got goals in him. If he keeps getting into those positions he will score a lot this season.']];
+
+PANS['no-goals']=F=>[
+ ['🎯 The chances were there','We created enough. That is the encouraging part — get the same chances next week and we score. We keep working.'],
+ ['😠 Not good enough','Not good enough in the final third. At this club you have to punish teams and we did not lay a glove on them.'],
+ ['🛡️ Back the forwards','The forwards will score. They always do. I am not going to add to the noise around them after one blank afternoon.'],
+ ['💬 Hint at the market','It is fair to say we could do with more quality in that area, and the club know exactly where I stand on it.']];
+
+/* ---------------- the table and the run ---------------- */
+PANS['pos-top']=F=>[
+ ['🧊 Not saying it','No. We are top and it is a nice place to be, but it is one game at a time and I will not start counting anything.'],
+ ['🔥 Say it','If you are top of the league you are in the title race. I am not going to insult anybody by pretending otherwise.'],
+ ['👏 Credit them','They have been outstanding to get us here. It is the players who have earned that position, not me.'],
+ ['🎯 It means nothing yet','The table in '+(F.pos?ordinal(F.pos):'this position')+' means nothing. Ask me in May and I will give you a proper answer.']];
+
+PANS['pos-euro']=F=>[
+ ['🎯 Europe is the target','Europe is what we are chasing and I have never hidden that. It is where this club belongs and we are working towards it.'],
+ ['🧊 One game at a time','We are '+(F.pos?ordinal(F.pos):'where we are')+' because of the work, and the work is the only thing I am focused on.'],
+ ['🔥 Close the gap','The gap is closeable. We are good enough to catch anybody in front of us if we keep this standard up.'],
+ ['💬 Be honest about it','Honestly, it is about right for where we are in the project. I would like more, but I am not going to pretend we are the finished article.']];
+
+PANS['pos-mid']=F=>[
+ ['💬 Not acceptable','No, it is not acceptable for a club this size, and I will not stand here and dress it up. We are short of where we should be.'],
+ ['🧊 A season of building','It is a transition, and transitions are uncomfortable. We are improving in the things I can measure even if the table does not show it yet.'],
+ ['😠 Say what has to change','What has to change is the level of performance week to week. Too many players are nowhere near what they can do.'],
+ ['🛡️ Back the group','This group is better than '+(F.pos?ordinal(F.pos):'mid-table')+' and they will prove it. I trust them completely.']];
+
+PANS['pos-bad']=F=>[
+ ['🧊 No panic','Worried is the wrong word. Concerned, yes — and that is why we keep working. Panic never solved a football problem.'],
+ ['💬 Call it what it is','We are in a fight. There is no point pretending otherwise, and the sooner everybody accepts it the sooner we get out of it.'],
+ ['🙋 It is on me','The league position is my responsibility. I have not got enough out of this group and I know that.'],
+ ['🔥 Still the right man','Yes, I am the right man, and I will show you why. I have never run from a job in my life and I am not starting now.']];
+
+PANS['vs-expect']=F=>(F.pos<F.expect?[
+ ['👏 Credit the players','They have been brilliant. Nobody outside this building expected '+(F.pos?ordinal(F.pos):'this')+' and that is down to the work they have put in.'],
+ ['🧊 Nothing is won','It is pleasing, but nothing is won in the middle of a season. We keep our heads down and keep working.'],
+ ['🔥 Raise the bar','Why should it not be sustainable? If we are good enough to be here we are good enough to stay here.'],
+ ['🎯 Reset the target','It changes the conversation with the board, I would say. When you are ahead of plan you should be ambitious about it.']
+]:[
+ ['🙋 On me','It is on me. The board set a target, I have not hit it, and that is my responsibility rather than anybody else’s.'],
+ ['🧊 Explain the gap','There are reasons — injuries, a squad in transition — but I am not hiding behind them. We improve or the position does not change.'],
+ ['😠 Blame the level','The performances have not been good enough often enough. That is the whole explanation and everyone inside knows it.'],
+ ['🛡️ Ask for time','This is a rebuild and rebuilds are not linear. I would ask people for patience, because I can see the work landing.']]);
+
+PANS['streak-w']=F=>[
+ ['👏 The work clicked','Belief, mostly. They are playing with real confidence and it has come from the work on the training ground.'],
+ ['🧊 It will not last forever','Runs end. Ours will end at some point too, and when it does the work stays exactly the same.'],
+ ['🔥 This is the level','This is the level, not a purple patch. I would not have taken this job if I did not think we could sustain it.'],
+ ['🎯 Nowhere near the ceiling','There is more in them. That is the exciting part — we are winning and we are still nothing like our best.']];
+
+PANS['streak-l']=F=>[
+ ['🛡️ Not losing them','Absolutely not. I see them every day and they are with me — the effort in training has not dropped an inch.'],
+ ['😠 Something has to give','Three defeats is not acceptable here and I have told them so. Somebody has to take responsibility on the pitch.'],
+ ['🙋 It is my job to fix','It is my responsibility to stop it. That is what I am paid for and I will do it.'],
+ ['🧊 The next one','It comes from doing the basics right and staying calm. We keep working and it turns — it always turns.']];
+
+PANS['streak-d']=F=>[
+ ['🎯 We need a killer edge','We are hard to beat and not ruthless enough. That is the honest answer and it is what we are working on.'],
+ ['🧊 Take the positives','Drawing games is better than losing them. The platform is solid and the wins will come from it.'],
+ ['🔥 We will gamble more','You will see us take more risks. I would rather lose chasing a win than keep collecting points nobody remembers.'],
+ ['😠 Too safe','We are too cautious in the final third, yes. Some of that is on me and some of it is on the decisions they make.']];
+
+PANS['form-poor']=F=>[
+ ['💬 I know exactly why','I do, yes. There are two or three specific things and they are being addressed on the training ground this week.'],
+ ['🧊 A blip','It is a blip. Every season has one. We stay calm, we keep working, and it corrects itself.'],
+ ['😠 A pattern','If I am honest it is becoming a pattern, and that is more concerning than one poor afternoon.'],
+ ['🛡️ Back them publicly','This group has earned some credit in the bank. They will be fine and I will keep saying that.']];
+
+/* ---------------- the opponent ---------------- */
+PANS['opp-mgr']=F=>[
+ ['🤝 Respect him','He has done a terrific job there. I have a lot of respect for how his teams play and it will be a very difficult afternoon.'],
+ ['🎯 How you beat them','You have to be brave against his sides. Sit off and they will pass around you all day, so we will go and press.'],
+ ['🧊 Give nothing away','I focus on my own team. What he does is his business and I am sure he says the same about me.'],
+ ['⚔️ Add some needle','There is no history as far as I am concerned. If he wants to talk about us, he can — we will do our talking on the pitch.']];
+
+PANS['opp-form']=F=>((F.oppStreak&&F.oppStreak.r==='W')?[
+ ['🤝 They are a good side','They are flying and they deserve to be. It is a brilliant test and one we are looking forward to.'],
+ ['🧊 It changes nothing','We prepare the same way for everybody. Form is form — it does not play the game for you.'],
+ ['🔥 Better time to catch them','Teams on runs get comfortable. We will be right in their faces and we will see how much they enjoy it.'],
+ ['🎯 The plan is the plan','We know exactly how they hurt teams and we have worked all week on stopping it. That is the job.']
+]:[
+ ['🤝 No blood in the water','A side in that position is dangerous, not weak. They will be desperate and we have to respect that completely.'],
+ ['🔥 Go and win it','You have to take advantage of teams when they are low. We will go there to win the game, simple as that.'],
+ ['🧊 Our own game','I am not interested in their run. If we do our jobs properly the result looks after itself.'],
+ ['🛡️ Careful with the words','I will not say a word about another club going through a difficult time. That is not how I want to be talked about.']]);
+
+PANS['opp-danger']=F=>{
+ const d=(F.danger&&F.danger[0]&&F.danger[0].p)||null;
+ const n=d?psur(d):'him';
+ return[
+ ['🎯 We have a plan','We know all about '+n+' and we have worked on him all week. It will not be one man on him — it is the whole unit.'],
+ ['🤝 Praise him','He is a top player. Genuinely excellent, and if we let him play we will lose the game — it is as simple as that.'],
+ ['🧊 We worry about us','I do not build a team around stopping one player. We focus on what we do and make them worry about us.'],
+ ['⚔️ Downplay him','He is a good player in a good side. Take that side away from him and I am not sure he is anything special.']]};
+
+PANS['opp-pos']=F=>((F.oppPos>F.pos)?[
+ ['🎯 We have to win it','Yes. If we are serious about where we want to finish, these are the games you take three points from.'],
+ ['🤝 No easy games','There is no such thing as a side you should beat. They will be organised and they will fancy it.'],
+ ['🧊 Same preparation','We prepare identically for every game. The table does not come into it on a Saturday afternoon.'],
+ ['💬 Admit the danger','Honestly, these frighten me more than the big ones. Everyone expects it, and expectation is heavier than pressure.']
+]:[
+ ['🎯 A measuring stick','It is exactly that. You find out where you are against sides like this and I want to know the answer.'],
+ ['🔥 We fear nobody','We are not going there to admire them. We fear nobody and we will go and have a proper go at it.'],
+ ['🤝 Respect the gap','They are ahead of us for a reason and I am not going to pretend otherwise. Our job is to close it.'],
+ ['🧊 Free hit','There is no pressure on us. We go and play, we keep our shape, and we see where it takes us.']]);
+
+PANS['derby']=F=>[
+ ['🧊 Keep them calm','You take the emotion out of it in the week and you put it back in on the day. Preparation is the same as any other game.'],
+ ['🔥 Feed off it','You cannot pretend it is normal. The crowd will be at it from the first minute and I want my players to enjoy that.'],
+ ['🎯 Talk to the young ones','I tell a young player to trust what he has done all week. The occasion is noise — the football is the same football.'],
+ ['⚔️ Fire a shot','They have had it their way for a while. That does not last forever, and it will not last forever.']];
+
+PANS['cup']=F=>[
+ ['🎯 Serious about it','We are taking it seriously. I will freshen one or two, but nobody here is treating a cup tie as a night off.'],
+ ['🔥 Chasing the trophy','I want to win a trophy at this club. The history in this competition matters here and we are going for it.'],
+ ['🧊 League first','The league is our bread and butter. I will make changes and I will not apologise for protecting the players.'],
+ ['👏 A chance for others','It is a brilliant opportunity for the ones who have not played. They have earned a chance to show me something.']];
+
+PANS['opp-absent']=F=>[
+ ['🤝 Makes no difference','Sides like that have squads. Whoever plays will be a good player and we prepare for all of them.'],
+ ['🎯 More reason to be ready','If they are short we have to be at our very best to punish it. That is the message, not complacency.'],
+ ['🧊 Not my business','Their team news is their business. I have got enough to think about with my own.'],
+ ['🔥 Take advantage','You have to be ruthless when a chance like this comes. We are going there to win the game.']];
+
+/* ---------------- your squad ---------------- */
+PANS['injuries']=F=>[
+ ['🧊 Bad luck','It is bad luck, and anyone who has worked in football knows these things come in threes. We will get through it.'],
+ ['💬 Question the schedule','When you play this many games with this little recovery, this is what happens. I have said it before and I will keep saying it.'],
+ ['🙋 Look at ourselves','We are looking at how we load them, yes. If something in our work is contributing then that is my responsibility to fix.'],
+ ['👏 Chance for somebody','It opens a door for someone else and I am excited to see who takes it. That is how careers start.']];
+
+PANS['injury-key']=F=>{
+ const p=(F.injured||[]).filter(x=>x.ovr>=78).sort((a,b)=>b.ovr-a.ovr)[0]||null;
+ const n=p?psur(p):'him';
+ return[
+ ['💬 Give them the news','We are looking at '+pWeeks(p)+' with '+n+'. It is a blow, there is no point saying anything else.'],
+ ['👏 Back the replacement','Somebody gets a chance now, and I have got real belief in the players in that area. It is an opportunity, not a crisis.'],
+ ['🧊 No excuses','We will not use it as an excuse. Every club deals with injuries and we get on with the work.'],
+ ['🎯 It changes the window','It changes the thinking, yes. We were already looking at that area and this has sharpened it.']]};
+
+PANS['suspensions']=F=>{
+ const n=(F.susp&&F.susp[0])?psur(F.susp[0]):'him';
+ return[
+ ['😠 Self-inflicted','It is self-inflicted and that is the disappointing part. You cannot keep leaving your team-mates short.'],
+ ['🛡️ Back him','He plays on the edge because that is what makes him the player he is. I will take that with the odd suspension.'],
+ ['🧊 Deal with it','We will deal with it in-house. Discipline is something we work on and it will improve.'],
+ ['🎯 Somebody steps in','It gives somebody else a run of games and I trust whoever comes in for '+n+' completely.']]};
+
+PANS['unhappy']=F=>{
+ const p=(F.unhappy&&F.unhappy[0])||null,n=p?psur(p):'him';
+ return[
+ ['🛡️ Deny it publicly','There is no problem. '+n+' has trained brilliantly, and I am not going to feed a story that does not exist.'],
+ ['💬 Be honest','He is not enjoying it and I understand why — he wants to play. That is a conversation for us, not for in here.'],
+ ['😠 Draw a line','Nobody is bigger than this football club. If he is unhappy, my door is open, but the standards do not move for anyone.'],
+ ['🤝 Handle it privately','I speak to my players face to face. Whatever is going on with '+n+' will be sorted between him and me.']]};
+
+PANS['expiring']=F=>{
+ const p=(F.expiring&&F.expiring[0])||null,n=p?psur(p):'him';
+ return[
+ ['🎯 We want him to stay','We want '+n+' here. The club know that, he knows that, and I am confident it gets done.'],
+ ['🧊 Club business','Contracts are not for the press room. Those conversations happen upstairs and they happen properly.'],
+ ['💬 Admit the risk','No club can afford to lose a player of his quality for nothing. That is exactly why it needs resolving.'],
+ ['🛡️ No pressure on him','He is focused on his football and I want it to stay that way. He will not hear a word about it from me.']]};
+
+PANS['kid']=F=>{
+ const p=(F.kids&&F.kids[0])||null,n=p?psur(p):'him';
+ return[
+ ['👏 He is ready','He is ready. I would not put him in if he was not — his mentality is outstanding for a boy of that age.'],
+ ['🛡️ Protect him','My job is to protect him from all this. He is a young lad and he needs to be allowed to develop without the noise.'],
+ ['🧊 Step by step','Step by step. He will get his chances when he earns them and not a moment before, and that is how it should be.'],
+ ['🔥 A special talent','I will say it — '+n+' is special. In two or three years people will be talking about him a lot more than they are now.']]};
+
+PANS['old']=F=>{
+ const p=(F.olds&&F.olds[0])||null,n=p?psur(p):'him';
+ return[
+ ['👏 Plenty left','Plenty. He looks after himself better than the young ones and he is still one of the first names I write down.'],
+ ['🧊 Season by season','We take it season by season, and he is the first to say that. He is fit, he is playing, and that is enough.'],
+ ['🤝 What he gives you','He gives you calm. When it is going against you in the last ten minutes you want people like '+n+' on the pitch.'],
+ ['💬 Manage the minutes','He will not play every game and he understands that. Managing him properly is how we get the best of him.']]};
+
+PANS['top-scorer']=F=>{
+ const n=F.top?psur(F.top):'him';
+ return[
+ ['👏 He is on fire','He is in the best form of his career. Twenty is achievable and I would not put any number past him.'],
+ ['🎯 Not a one-man team','His goals are important, but we are not a one-man team. Plenty of others are contributing.'],
+ ['🔥 He is not for sale','He is going nowhere. Whoever calls in January will be told the same thing — he is not for sale at any price.'],
+ ['🧊 Keep him level','He knows there is work to do. Strikers live off confidence and my job is to keep him level, not to hype him.']]};
+
+PANS['dry']=F=>{
+ const p=(F.dry&&F.dry[0])||null,n=p?psur(p):'him';
+ return[
+ ['🛡️ Back him','He will score. His all-round game has been excellent and I judge a forward on more than the goal column.'],
+ ['🎯 It is confidence','It is confidence and it is a bit of luck. He is getting into the right positions, which is the hard part.'],
+ ['😠 He knows','He knows it is not good enough for a forward at this club. He has been told and he has taken it the right way.'],
+ ['💬 It becomes my problem','It becomes my problem the moment it costs us points, and that is a decision I will make when I have to.']]};
+
+PANS['best']=F=>{
+ const n=F.best?psur(F.best):'him';
+ return[
+ ['👏 Massively underrated','Hugely underrated outside this building. Ask anybody who plays against him — they all know exactly how good he is.'],
+ ['🎯 The unseen work','What the numbers miss is the work he does without the ball. He makes everybody around him better.'],
+ ['🧊 Keep him hungry','He has been very good. He will hear from me about the two per cent he is not doing, because that is my job.'],
+ ['🔥 Best in the division','I would put him up against anybody in this league. There is nobody I would rather have.']]};
+
+PANS['worst']=F=>{
+ const n=F.worst?psur(F.worst):'him';
+ return[
+ ['🛡️ He has my backing','He has my full backing. He is a top player going through a difficult spell and he will come out of it.'],
+ ['💬 It is not fair','Getting on a player’s back has never helped anybody. I would ask our supporters to lift him instead.'],
+ ['😠 He has to improve','He is not at the level he can be. He knows it, we have spoken about it, and it is on him to put it right.'],
+ ['🧊 Nothing to say','I am not going to discuss one individual’s form in a press conference. That is between him and me.']]};
+
+PANS['bench']=F=>{
+ const n=(F.bench&&F.bench[0])?psur(F.bench[0]):'him';
+ return[
+ ['💬 Honest with them','No, it is not sustainable, and I am honest with them about it. Some of them will want to move and I understand that.'],
+ ['🎯 It is on them','Nobody has a right to play. The eleven that starts is the eleven training the best and that will not change.'],
+ ['🛡️ They are important','They are not bit-part players to me. You do not get through a season with eleven men and they all know their value.'],
+ ['🧊 A squad game','It is a squad game now. '+n+' will play plenty before May and he is professional enough to know that.']]};
+
+PANS['captain']=F=>{
+ const n=F.capt?psur(F.capt):'him';
+ return[
+ ['👏 He is everything','What you do not see is the bit that matters. He sets the standard every single day and the young ones follow him.'],
+ ['🎯 Right man','He is absolutely the right captain. There was never a decision to make on that.'],
+ ['🧊 Leadership is shared','He wears it, but we have four or five leaders in there. I do not believe in one man carrying it all.'],
+ ['💬 Under review','The armband is earned every week, like a shirt. Nobody has it for life and he would tell you the same.']]};
+
+PANS['keeper']=F=>{
+ const n=F.gk?psur(F.gk):'him';
+ return[
+ ['👏 He is my number one','He is my number one. He has been excellent and there is no debate to be had about that position.'],
+ ['🎯 Earn it weekly','Every position is earned weekly, goalkeeper included. He knows there is a good keeper pushing him.'],
+ ['🧊 Settled','We are settled there and it is the one area I have not had to think about. That is a compliment to him.'],
+ ['💬 Keep them guessing','I never announce my team in here, and I am not going to start with the goalkeeper.']]};
+
+PANS['retrain']=F=>{
+ const p=(F.retrain&&F.retrain[0])||null,n=p?psur(p):'him';
+ return[
+ ['🎯 A long-term plan','It is long-term. He has the attributes for it and I think in a year people will wonder why nobody did it sooner.'],
+ ['💬 Necessity','I will be honest, it started as a fix for a problem. But he has taken to it and now it is genuinely exciting.'],
+ ['🧊 Early days','Early days. We are working on it quietly and I would rather not make a thing of it until he is comfortable.'],
+ ['👏 His attitude','What impresses me is that he said yes. A lot of players would not — that tells you about his character.']]};
+
+PANS['depth']=F=>[
+ ['💬 We need bodies','We are short and everybody can see it. I have made that clear internally and I will make it clear here.'],
+ ['👏 Trust the academy','I would rather give a kid a chance than sign somebody for the sake of it. There are boys in that building ready.'],
+ ['🧊 Get on with it','We work with what we have got. Complaining about the size of a squad has never won anybody a football match.'],
+ ['🎯 Quality over numbers','I do not want numbers, I want the right one. I would rather be short than sign a player who is not an improvement.']];
+
+/* ---------------- the club ---------------- */
+PANS['board']=F=>[
+ ['🧊 Not spoken','Nobody has said a word to me and I would not expect them to. I get on with my job and they get on with theirs.'],
+ ['🔥 Not going anywhere','I am not thinking about it for a second. I am here to build something and I intend to be here to see it.'],
+ ['🙋 It is on results','It is a results business and my results have not been good enough. That is my responsibility to change.'],
+ ['💬 Ask them','That is a question for upstairs, not for me. What I can tell you is that I turn up every day and work.']];
+
+PANS['board-good']=F=>[
+ ['🧊 Nothing to announce','There is nothing to announce and I have not asked for anything. I am happy doing the job.'],
+ ['👏 Grateful for it','It makes a huge difference. When you are trusted you can make brave decisions, and that shows on the pitch.'],
+ ['🎯 It raises the bar','Backing raises expectation, and it should. If they are behind me then I have to deliver — that is the deal.'],
+ ['💬 Keep it professional','My relationship with the board is good and it is professional. Beyond that it stays inside the club.']];
+
+PANS['fans']=F=>[
+ ['🤝 I understand them','I understand completely. They pay their money and they have every right to expect more than we have given them.'],
+ ['🙋 That is on me','They are not angry at the players, they are angry at the results, and the results are my responsibility.'],
+ ['🎯 Ask for unity','I would only ask that we stick together. Turning on each other now helps nobody, least of all the team.'],
+ ['😠 Push back','Everybody is entitled to an opinion, but abusing young players is not supporting a football club.']];
+
+PANS['fans-good']=F=>[
+ ['👏 It means everything','It is special. Those supporters have been through a lot and to hear that from them is something I will not forget.'],
+ ['🎯 It is worth points','It is worth points. Genuinely — this crowd drags us over the line in games we have no right to win.'],
+ ['🧊 Stay humble','It is lovely, and I know exactly how quickly it changes. That is football and you stay humble.'],
+ ['🛡️ It is for the players','Sing about them, not me. They are the ones putting their bodies on the line every week.']];
+
+PANS['money']=F=>[
+ ['🧊 Nothing close','There is nothing close. We are working, we have targets, and when there is something to say we will say it.'],
+ ['🎯 Right player or nobody','Money does not make you good. If the right player is available we will move, and if he is not we will wait.'],
+ ['🔥 We will be busy','Yes, we will be doing business. I want this squad stronger and the club are backing me to do it.'],
+ ['💬 The squad needs more than money','Some of what this squad needs cannot be bought. The mentality has to be built and that takes work, not cash.']];
+
+PANS['nomoney']=F=>[
+ ['🧊 Work with it','My hands are not tied, they are just full. Every club has constraints and you coach your way round them.'],
+ ['💬 Say it plainly','If you are asking whether we can compete with the spending around us, the honest answer is not on money alone.'],
+ ['👏 Backed in other ways','I am supported in the ways that matter. The staff, the facilities, the trust — that is worth more than a budget line.'],
+ ['🎯 Recruit smarter','We have to be cleverer. Find them earlier, coach them better — that is the only route open to us and I am fine with it.']];
+
+PANS['wages']=F=>[
+ ['💬 Somebody has to go','Realistically, yes. The bill is at the ceiling and that is arithmetic, not opinion.'],
+ ['🧊 Club business','That is a question for the people who run the finances. I coach the team.'],
+ ['🎯 It has to be fixed','The structure needs work and it is being addressed. You cannot pay for the past and build a future at the same time.'],
+ ['🛡️ Not the players’ fault','Nobody signed a contract they were not offered. I am not going to have players criticised for what a club agreed to.']];
+
+PANS['listed']=F=>{
+ const n=(F.listed&&F.listed[0])?psur(F.listed[0]):'him';
+ return[
+ ['💬 The door is open','If the right offer comes he can go with our blessing. There is nothing personal in it — that is football.'],
+ ['🛡️ Never say never','He is still my player and if I need him he will play. Nothing has been decided.'],
+ ['🎯 Clearing the decks','You cannot build a squad without space. Yes, moving one or two on is a priority for me.'],
+ ['🧊 Not in here','Transfer business is not something I discuss publicly. When there is news you will get it from the club.']]};
+
+PANS['academy']=F=>[
+ ['👏 A duty','It is a duty here. This club was built on young players and I would be embarrassed to go a season without picking one.'],
+ ['🎯 Only on merit','Only on merit. Playing a kid to make a point does him no favours at all — he plays when he is good enough.'],
+ ['🧊 Watching closely','I am over there regularly and there are two or three catching my eye. I will not name them and put pressure on them.'],
+ ['💬 The pathway matters','If a boy cannot see a route to that first team he will go somewhere he can. Keeping that pathway open is part of my job.']];
+
+/* ---------------- you ---------------- */
+PANS['you-new']=F=>[
+ ['👏 The people','The people, honestly. The staff here work incredibly hard and that has been the nicest surprise.'],
+ ['🧊 Learning it','I am still learning the building. You do not change a football club in a few weeks and I am not trying to.'],
+ ['🎯 Stamp is coming','You will see more of what I want as we go. It takes a pre-season to really put your own stamp on a group.'],
+ ['💬 Harder than expected','It is a bigger job than it looks from outside, and I mean that as a compliment to whoever did it before me.']];
+
+PANS['you-long']=F=>[
+ ['🧊 Not thinking about it','I do not think about the end. You would go mad in this job if you did.'],
+ ['👏 Still love it','I love it. The day I stop enjoying a Tuesday on the training ground is the day I walk away.'],
+ ['💬 It changes you','It changes everybody. You get harder in some ways and softer in others, and you learn what actually matters.'],
+ ['🎯 More to do','There is unfinished business here. That is the only reason I am still standing in this room.']];
+
+PANS['you-claim']=F=>[
+ ['🔥 Stand by it','Every word. I meant it when I said it and I have not changed my mind since.'],
+ ['🧊 Move on from it','It was said, it is out there, and I am not going to spend a press conference relitigating a sentence.'],
+ ['💬 Explain it','What I said was for my players more than for anybody else. Sometimes you say things in here that are aimed inside.'],
+ ['🙋 Regret it','If I am honest it was a mistake. I got carried away and that is on me — my job is to protect the players, not add to it.']];
+
+PANS['title-talk']=F=>[
+ ['🔥 No regrets','No regrets at all. If you cannot say you want to win the league at a club like this then you are in the wrong job.'],
+ ['🧊 Deflect the weight','The weight is on me, not on them. I said it, so if it goes wrong you can come to me about it.'],
+ ['👏 They believe it','I said it because I believe in them. Look at that dressing room — why would I say anything else?'],
+ ['💬 Temper it','I said we would go for it, and I stand by the ambition. Whether we manage it is a different question.']];
+
+PANS['legacy']=F=>[
+ ['🎯 Building something','I want people to say we built something that lasted longer than I did. That matters more to me than any one season.'],
+ ['🔥 Trophies','Honestly? Trophies. This club is measured in silverware and I will be measured the same way.'],
+ ['🧊 One week at a time','I am not thinking about legacies. I am thinking about Saturday, and I will be thinking about Saturday until I am not here.'],
+ ['👏 The players','That I made players better. If half a dozen of them go on and have careers because of the work here, that will do me.']];
+
+/* ---------------- the game itself ---------------- */
+PANS['shape']=F=>{
+ const f=(F.tac&&F.tac.formation)||'this shape';
+ return[
+ ['🎯 It suits the players','The shape fits the players I have got. If I had different players I would play a different way — that is coaching.'],
+ ['🧊 It is only a number','A formation is a starting point. What matters is the distances between them and the decisions they make.'],
+ ['🔥 Make them worry','I will always set up to make the opposition worry about us. I have never changed a system out of fear.'],
+ ['💬 Nothing is fixed','I would change it tomorrow if the game demanded it. Being stubborn about a shape has cost a lot of managers.']]};
+
+PANS['mentality']=F=>[
+ ['🎯 It is a philosophy','It is what I believe in. I have played this way everywhere and I am not going to start apologising for it.'],
+ ['🧊 It is a response','It is a reaction to the group, if I am honest. You coach the players you have, not the ones you would like.'],
+ ['🔥 We go and win','We set up to win games. I have never sent a team out to hang on and I do not intend to.'],
+ ['💬 Depends on the day','It depends who we play. Anyone who sets up the same way every week is making it very easy for the opposition.']];
+
+PANS['weather']=F=>{
+ const w=(F.wx&&F.wx.k)?String(F.wx.k).toLowerCase():'the forecast';
+ return[
+ ['🧊 It suits nobody','It is the same for both teams. We prepare for the football, not for '+w+'.'],
+ ['🎯 It changes the plan','It does change things. You have to be more direct and more secure in possession, and we have worked on that.'],
+ ['🔥 We will enjoy it','We will enjoy it. A night like that suits a team that wants to run and fight, and that is exactly what we are.'],
+ ['💬 A leveller','It is a leveller and I would be lying if I said otherwise. It takes some of the quality out of the game.']]};
+
+PANS['ref']=F=>[
+ ['🤝 No issue','No thoughts at all. He has a very difficult job and I have always found him fair.'],
+ ['🧊 Never mention him','I never talk to my players about the referee. The moment you do, you have given them an excuse.'],
+ ['🎯 Discipline','We talk about our own discipline, not about him. Keep eleven on the pitch and referees are never the story.'],
+ ['⚔️ A pointed word','I would just say we have not had a lot of luck with the big calls this season. I will leave it there.']];
+
+PANS['rest']=F=>[
+ ['💬 Not fair on them','No, it is not fair. Nobody who has ever played the game would design a calendar like this.'],
+ ['🎯 Rotation is compulsory','It makes rotation compulsory, not optional. If I ask the same eleven to do that, I will break them.'],
+ ['🧊 Get on with it','Every club deals with it. We recover properly, we train smart, and we do not moan about it.'],
+ ['👏 They are ready','They are in brilliant condition. The work the sports science staff do here means we handle it better than most.']];
+
+PANS['travel']=F=>[
+ ['🎯 Same team anywhere','We try to be the same side wherever we play. If your football changes with the postcode you have a mentality problem.'],
+ ['🧊 Away days are different','They are different and you would be naive to say otherwise. You have to be more patient on the road.'],
+ ['🔥 We go to win','We go to every ground to win the game. Nobody in this squad has ever heard me talk about a point away from home.'],
+ ['💬 It needs improving','Our away form is not where I want it. It is something we have talked about a lot and it has to improve.']];
+
+PANS['home']=F=>[
+ ['👏 The crowd is huge','It is worth a goal. When this ground is behind us it is a genuinely intimidating place to come.'],
+ ['🎯 Handle the expectation','There is an expectation here and the players have to embrace it rather than shrink from it. That is the job.'],
+ ['🔥 Nobody enjoys coming here','I want teams to hate coming here. That is the atmosphere we are trying to build and it is getting there.'],
+ ['🧊 Same preparation','The pitch is the same size. We prepare exactly the same way home or away.']];
+
+/* ---------------- the awkward ones ---------------- */
+PANS['awkward-job']=F=>[
+ ['🔥 Absolutely','Yes. Without a shred of doubt. I know exactly what I am building here and I intend to finish it.'],
+ ['🧊 Not my call','That is not for me to answer. I turn up, I work, and other people make those decisions.'],
+ ['🙋 Fair question','It is a fair question and I would be asking it too. The results are my responsibility and I have to change them.'],
+ ['💬 I read everything','Of course I read it. Anyone who says they do not is not telling the truth. You just cannot let it change what you do.']];
+
+PANS['awkward-players']=F=>[
+ ['🛡️ Do not go there','I am not having that. They care — I see them every day and I will not let that be the story.'],
+ ['🙋 Take it on myself','If you want somebody to blame, blame me. I picked them, I prepared them, and the responsibility is mine.'],
+ ['😠 Some of them','Some of them, yes. And some of them were nowhere near it, and they will hear that from me on Monday.'],
+ ['🧊 Answer it straight','It is a fair question after that. I will give you a proper answer when I have watched it back and calmed down.']];
+
+PANS['awkward-money']=F=>[
+ ['💬 Be candid','Some of it has been spent badly, and not all of that was on my watch. We are trying to correct years of it.'],
+ ['🧊 Not looking back','I am not going to spend my time auditing decisions made before I got here. It is not useful to anybody.'],
+ ['🎯 It is my recruitment','The players who have come in since I arrived are players I wanted. I will take responsibility for those.'],
+ ['🛡️ Defend the club','People throw numbers around without any idea what they mean. This club has been run properly and I will say that.']];
+
+PANS['awkward-rival']=F=>[
+ ['💬 Admit the gap','Of course it hurts. Anyone who says it does not is lying. Closing that gap is the whole job.'],
+ ['🔥 It is closing','It is closer than people think, and it will close further. I would not be here if I did not believe that.'],
+ ['🧊 Not measuring ourselves by them','I do not spend my week thinking about another club. We worry about our own work.'],
+ ['⚔️ They are beatable','They have been good. They are not untouchable and they will find that out.']];
+
+/* ---------------- the shape of the squad ---------------- */
+PANS['goals-for']=F=>[
+ ['🎯 By design','It is by design. If you only have one route to goal you are very easy to plan against, and we work hard on that.'],
+ ['👏 Everybody contributes','It tells you about the group. Midfielders scoring, defenders scoring — that is a team playing well together.'],
+ ['🧊 Would still take a twenty-goal man','It is healthy, but I would still love somebody in double figures by Christmas. That is the missing piece.'],
+ ['🔥 Hard to stop','It makes us a nightmare to prepare for. You cannot man-mark a whole team.']];
+
+PANS['one-man']=F=>{
+ const n=F.top?psur(F.top):'him';
+ return[
+ ['💬 It is a worry','It is a concern and I will not pretend otherwise. We need goals from other areas and they know it.'],
+ ['👏 He is that good','When you have a forward in that form you feed him. That is not a weakness, that is having a top striker.'],
+ ['🎯 Working on it','It is exactly what we are working on. The midfield runners have to get into the box more often and they will.'],
+ ['🧊 Depth is there','If '+n+' misses a month somebody else steps up. I have got more belief in the rest than the numbers suggest.']]};
+
+PANS['kids-many']=F=>[
+ ['🎯 By choice','It is by choice. I would rather grow a team than buy one, and this club has always done it that way.'],
+ ['🛡️ Protect them','You have to protect a young dressing room. That is why you need senior men in there, and we have got good ones.'],
+ ['🔥 They are fearless','Young players do not know what they are supposed to be frightened of. That is a weapon, not a problem.'],
+ ['💬 It will cost us games','It will cost us points along the way and I have accepted that. The alternative is never finding out what they are.']];
+
+PANS['old-squad']=F=>[
+ ['🧊 Experience wins games','Experience wins you the tight ones in March. I would not swap those heads for anything right now.'],
+ ['💬 A rebuild is coming','There is a rebuild coming, yes. You cannot let a squad age together and do nothing about it.'],
+ ['👏 They look after themselves','Age is a number. These lads are fitter than players ten years younger and their professionalism is outstanding.'],
+ ['🎯 Already started','It has already started quietly. Look at who is training with us and you can see the direction.']];
+
+PANS['many-listed']=F=>[
+ ['🎯 A clear-out','Call it what you like. The squad needed reshaping and I would rather do it in one window than three.'],
+ ['🛡️ Not personal','Nobody has been thrown out. They are good professionals who need to play, and they will not play enough here.'],
+ ['💬 It is difficult','It is very difficult to keep a man motivated once he knows. That is the part of this job nobody enjoys.'],
+ ['🧊 Not discussing individuals','I am not going through a list of names in here. They deserve better than that.']];
+
+PANS['unbeaten']=F=>[
+ ['👏 The togetherness','Togetherness. They work for each other and that is the thing holding it together, not any system I have drawn up.'],
+ ['🧊 It will end','It will end at some point and we will be fine when it does. The work does not change either way.'],
+ ['🔥 Long may it continue','We are hard to beat and we are getting better. I do not see why it should stop.'],
+ ['🎯 Not comfortable at all','Comfortable is the last word I would use. The moment you feel comfortable in this job you are in trouble.']];
+
+PANS['winless']=F=>[
+ ['🧊 Keep working','It comes from the work. You do not fix a run with a speech — you fix it on the training ground.'],
+ ['💬 It is confidence','It is confidence, and confidence is coachable. You give players clear jobs and you take the thinking away.'],
+ ['😠 Not good enough','It is nowhere near good enough. I have told them and I am telling you — that run has to stop this week.'],
+ ['🛡️ They are with me','The response in training has been excellent. That is what tells me it turns, whatever the results say.']];
+
+PANS['cup-run']=F=>[
+ ['🔥 We can do both','We can do both. Squads win trophies and I trust mine — I am not giving anything up in February.'],
+ ['🧊 The league pays the bills','If you made me choose, the league is the priority. That is the honest answer.'],
+ ['🎯 Momentum matters','A cup run does not tire you out, it lifts you. Winning becomes a habit and it carries into the league.'],
+ ['👏 The fans deserve a day out','A cup run gives supporters a day they remember for twenty years. That is worth something you cannot measure in points.']];
+
+PANS['schedule']=F=>[
+ ['🎯 Real work done','We have actually been able to coach. Shape, pressing triggers, set pieces — the things you never get to in a busy week.'],
+ ['🧊 Rhythm matters more','I would rather play. Players like playing, and rhythm is worth more than rest at this stage of a season.'],
+ ['👏 Bodies recovered','Two or three have got proper treatment and come back looking like themselves. That alone made it worth it.'],
+ ['💬 A bit of both','A break helps the legs and hurts the rhythm. You take what you are given and make the best of it.']];
+
+PANS['gk-form']=F=>{
+ const n=F.gk?psur(F.gk):'him';
+ return[
+ ['👏 Mostly him','A lot of it is him. He has made saves this season that have won us points on their own — he has been outstanding.'],
+ ['🎯 The unit','Clean sheets are earned by the front players first. He would be the first one to tell you that.'],
+ ['🔥 Most improved','I would say he is the most improved player in this division, and I do not say that lightly.'],
+ ['🧊 Do not jinx it','He is doing his job. That is what he is here for and he will not want a fuss made of it.']]};
+
+PANS['motm-run']=F=>{
+ const n=F.best?psur(F.best):'him';
+ return[
+ ['👏 Form of his life','He is playing the best football of his career and it is a joy to watch him every day.'],
+ ['🔥 Not for sale','People can look all they want. He is under contract, he is happy, and he is not going anywhere.'],
+ ['🧊 Keep him level','My job is to keep his feet on the floor. He has had six good weeks in a career that should last fifteen years.'],
+ ['🎯 It is the work','It is not an accident. He has changed how he trains and this is the return on it.']]};
+
+PANS['discipline']=F=>{
+ const p=(F.squad||[]).filter(x=>x.seasonYellows>=5).sort((a,b)=>b.seasonYellows-a.seasonYellows)[0]||null;
+ const n=p?psur(p):'him';
+ return[
+ ['💬 We have spoken','We have spoken about it. He cannot keep putting himself and the team one booking away from a problem.'],
+ ['🛡️ It is who he is','That aggression is why he is in the side. Take it away and you have a different, worse player.'],
+ ['🎯 Smarter, not softer','It is about being cleverer, not softer. There is a way to compete without collecting cards and we are working on it.'],
+ ['😠 It has to stop','It is careless and it has cost us. I have made it very clear that it stops now.']]};
+
+PANS['wage-top']=F=>{
+ const p=(F.squad||[]).slice().sort((a,b)=>(b.wage||0)-(a.wage||0))[0]||null;
+ const n=p?psur(p):'him';
+ return[
+ ['👏 Worth every penny','Absolutely worth it. You pay for the difference between winning and drawing and he is that difference.'],
+ ['🧊 Not my department','What players earn is not something I set and not something I will discuss.'],
+ ['💬 It distorts a dressing room','Big gaps in a wage structure can cause problems, yes. It is one of the harder things to manage.'],
+ ['🎯 He has to earn it','A contract like that comes with expectation. He knows what is asked of him and he accepts it.']]};
+
+PANS['facility']=F=>[
+ ['💬 Raised it','I have raised it, more than once. You cannot ask players to be elite in facilities that are not.'],
+ ['👏 Coaching matters more','Buildings do not coach anybody. Give me good staff and a decent grass pitch and I will take that every time.'],
+ ['🎯 It costs you players','Where it hurts is recruitment. Young players walk round a training ground and make their minds up in ten minutes.'],
+ ['🧊 No complaints','I knew what I was taking on. I am not going to sit here making excuses about a building.']];
+
+PANS['stadium']=F=>[
+ ['👏 A privilege','It is a privilege. Every player who pulls this shirt on should feel lucky to walk out in front of that.'],
+ ['💬 You hear the silence','You hear it when it goes quiet, of course you do. That is the hardest sound in football.'],
+ ['🎯 Use it','It is a weapon if we give them something to shout about. That is on us, not on them.'],
+ ['🧊 It is a weight too','It is both. A crowd that size will lift you and it will find you out, and the players have to handle that.']];
+
+PANS['season-end']=F=>[
+ ['🎯 Nothing changes','Nothing changes. The moment you start treating games differently is the moment you stop doing what got you here.'],
+ ['🧊 Manage the minds','It is more mental than physical now. You keep them fresh by keeping the work sharp and short.'],
+ ['🔥 Everything to play for','There is a lot in front of us and I want them to feel that. This is the part of the season you remember.'],
+ ['💬 Already planning','I would be lying if I said we had not started on the summer. That work never really stops.']];
+
+PANS['season-start']=F=>[
+ ['🧊 Far too early','Far too early. Nobody has ever won or lost anything in August and the table is meaningless at this stage.'],
+ ['🎯 Sharpness is the issue','It is match fitness now. You can do all the running you like in July, it is not the same as ninety minutes.'],
+ ['👏 Pleased with the start','I have been pleased. The signs are there, the group looks fit and the mentality is exactly what I asked for.'],
+ ['💬 Points matter','People say it is early, but the points count the same in August as they do in May. We want them now.']];
+
+PANS['window']=F=>[
+ ['🎯 Expecting business','We are working. I would expect something to happen before it shuts, in both directions.'],
+ ['🧊 Quiet window','I am happy with this group. If nothing happens I will not lose a minute of sleep over it.'],
+ ['💬 Harder to keep them','Keeping them is the hard part now. Signing a player is easy compared with holding on to a good one.'],
+ ['🔥 We want to strengthen','I want us stronger. I have told the club what I need and I trust them to back me.']];
+
+PANS['assist']=F=>{
+ const p=(F.squad||[]).filter(x=>x.stats&&x.stats.assists>=3).sort((a,b)=>b.stats.assists-a.stats.assists)[0]||null;
+ const n=p?psur(p):'him';
+ return[
+ ['👏 The most important','He might be. What he does between the lines is the difference between us being tidy and us being dangerous.'],
+ ['🎯 Creators are undervalued','A creator is worth every bit as much as a scorer. The man who makes it never gets the photograph and that is football.'],
+ ['🧊 Team output','It is a team producing chances and he happens to be the one applying the last pass. I would not isolate it.'],
+ ['🔥 Best in the league at it','There is nobody in this division seeing passes like he sees them. I genuinely believe that.']]};
+
+PANS['apps']=F=>{
+ const p=(F.squad||[]).filter(x=>x.stats&&x.stats.apps>=20).sort((a,b)=>b.stats.apps-a.stats.apps)[0]||null;
+ const n=p?psur(p):'him';
+ return[
+ ['🎯 Managed carefully','He is monitored every single day. The moment the numbers dip he comes out, and he knows that.'],
+ ['👏 He wants to play','Try leaving him out. He would kick my door in — that mentality is why he plays every week.'],
+ ['💬 Yes, and it worries me','If I am honest, yes. I would like to rest him and I have not felt able to, and that is a squad problem.'],
+ ['🧊 Nobody is undroppable','Nobody is undroppable. He will get a rest when the schedule allows it, like everybody else.']]};
+
+PANS['homegrown']=F=>{
+ const p=(F.squad||[]).filter(x=>x.age<=21&&x.stats&&x.stats.apps>=5)[0]||null;
+ const n=p?psur(p):'him';
+ return[
+ ['👏 Brilliantly','He has handled it brilliantly. Not a flicker of nerves, and he has earned every minute he has had.'],
+ ['🎯 A philosophy','It is a philosophy. If a young player is good enough he plays, whatever it says on his birth certificate.'],
+ ['🛡️ Do not build him up','Let him play. The worst thing we can do to a boy that age is decide what he is going to be.'],
+ ['💬 Necessity too','A bit of both, if I am honest. Circumstances opened the door — but he has kicked it down himself.']]};
+
+PANS['nations']=F=>[
+ ['💬 Dread them','I am not going to pretend I enjoy them. You send them away fit and you get them back in bits.'],
+ ['👏 Proud of them','It is a huge honour for the players and for the club. I would never begrudge a boy representing his country.'],
+ ['🎯 Time to work','It is a chance to work with the ones who stay behind. You get two weeks of proper coaching and it is valuable.'],
+ ['🧊 Part of the job','It is the calendar. Every club deals with it and complaining about it changes nothing.']];
+
+PANS['honours']=F=>[
+ ['🧊 Buys nothing','It buys you nothing in this game. You are judged on the next one, always.'],
+ ['👏 A proud day','It was a special day for everybody connected with the club and nobody can take it away from them.'],
+ ['🔥 Want more','One is not enough. I did not come here to win a trophy, I came here to build a team that wins them regularly.'],
+ ['💬 Not the only measure','Trophies are the headline, but a club can go forward without one. Progress is measured in more than silverware.']];
+
+PANS['anniversary']=F=>[
+ ['🔥 This is the year','I believe it is. This group is a year older, a year better, and they know what is expected now.'],
+ ['🧊 Same as any other','Every season starts with everybody saying that. We will do our talking with results.'],
+ ['👏 A different group','The mentality is different. Twelve months ago we were hoping — now they expect, and that is a huge change.'],
+ ['💬 More pressure','More pressure, definitely. That comes with progress and I would rather have it than the alternative.']];
+
+/* ---------------- the takeover ---------------- */
+PANS['tko-live']=F=>[
+ ['🧊 Nobody has told me','Nobody has told me anything, and I have not asked. My job does not change while it goes on.'],
+ ['🎯 Shield the players','The players do not need it in their heads. We have kept the work exactly the same and that is deliberate.'],
+ ['💬 Be honest about it','It is unsettling for everybody in the building, and pretending otherwise would insult people’s intelligence.'],
+ ['🔥 Bring it on','New investment would be exciting. I would relish working with owners who are ambitious about this club.']];
+
+PANS['tko-done']=F=>[
+ ['🔥 Welcome the pressure','Pressure is what you want. If they are ambitious then so am I, and I will not hide from a target.'],
+ ['🧊 Nothing has changed','Nothing has changed for me. Same building, same players, same work on a Tuesday morning.'],
+ ['💬 Realistic about it','Money does not win you a league in one season. There has to be a plan behind it and I have made that point.'],
+ ['🎯 Judge me on the work','Whoever owns the club, I will be judged on the team. That has always been the deal and I am fine with it.']];
+
+PANS['tko-df']=F=>[
+ ['🤝 It works fine','It works well. We talk constantly, we agree on the profile, and the final call on who plays is still mine.'],
+ ['🎯 It is my team','It is my team. I pick it, I set it up, and I answer for it — that has never been in question.'],
+ ['💬 Not comfortable','I would not be honest if I said I loved it. I like to sign players I have watched myself.'],
+ ['🧊 Modern football','It is how the game is run now. You either adapt or you stand on a touchline complaining about it.']];
+
+PANS['tko-dead']=F=>[
+ ['🧊 Relieved','A little, yes. Uncertainty is the enemy of a football club and at least we know where we stand now.'],
+ ['💬 Disappointed','I would be lying if I said it was not a blow. Investment would have accelerated everything we are trying to do.'],
+ ['🎯 Same plan','The plan does not change. We recruit smart, we develop our own, and we get better every window.'],
+ ['🔥 We do not need them','We do not need anybody riding in. What is here is good enough if we work hard enough at it.']];
+
+/* ---------------- the calendar ---------------- */
+PANS['pre-summer']=F=>[
+ ['🔥 Set a target','This is a season to go and win something. I am not interested in consolidating and neither are the supporters.'],
+ ['🧊 Improve on last','We improve on last year. That is the honest target and everything else follows from it.'],
+ ['🎯 The one thing','The one thing is consistency. Talent was never the issue — turning up every week was.'],
+ ['👏 Excited by them','I am genuinely excited by this group. The summer work has been outstanding and they look ready.']];
+
+PANS['pre-signings']=F=>{
+ const s=(F.signings&&F.signings[0])||null,n=s?psur(s):'him';
+ return[
+ ['👏 Delighted with him','Delighted to get him. He gives us something we did not have and he has settled in brilliantly.'],
+ ['🧊 Give them time','New players need time. I will not throw them in and then blame them when it takes a few weeks.'],
+ ['🎯 Ready to start','He is ready. He came back fit, he knows what I want, and he will be in the side.'],
+ ['💬 Still more to do','It is a good start, not a finished job. There is another area I would still like to strengthen.']]};
+
+PANS['pre-nosignings']=F=>[
+ ['🧊 By choice','Partly by choice. I did not want to sign somebody for the sake of a headline and weaken what we have.'],
+ ['💬 Be straight with them','The supporters are entitled to expect more and I understand the frustration completely. It is being worked on.'],
+ ['👏 Trust this group','I trust this group. Some of the best signings you make are the players already in the building improving.'],
+ ['🎯 The money is there','The money is available for the right player. We have not found him yet and we will not panic.']];
+
+PANS['pre-tour']=F=>[
+ ['👏 Went well','It went very well. Minutes into legs, a good look at the young ones, and the group came back together.'],
+ ['💬 Travel costs you','The travel takes something out of you, no question. You are chasing that back for a fortnight.'],
+ ['🎯 What I learned','I learned who can play in more than one position, which matters more to me than any of the results.'],
+ ['🧊 It is a business trip','It is commercial as much as football and everybody knows that. We made the best of the football side of it.']];
+
+PANS['pre-young']=F=>{
+ const p=(F.kids&&F.kids[0])||null,n=p?psur(p):'him';
+ return[
+ ['👏 He is ready','He is ready. He has trained with the men all summer and never once looked out of place.'],
+ ['🧊 Nearly there','Nearly. He needs a bit more physically and then he will be in and around it.'],
+ ['🎯 They will get a chance','If they are good enough they will play. I have never held a young player back on age.'],
+ ['🛡️ No pressure on him','I would rather not put his name in the paper before he has kicked a ball. Let him work quietly.']]};
+
+PANS['opening-early']=F=>[
+ ['🧊 Far too early','Far too early to read anything into it. Ask me again after ten games and it starts to mean something.'],
+ ['🎯 Signs are good','What I have learned is that the shape is holding and they trust it. That is what I wanted from the first few weeks.'],
+ ['💬 Starts matter','The starts do set a tone. Get through the opening month well and the whole season feels different.'],
+ ['😠 Not started well enough','If I am honest we have not started well enough. That is on the performances and it has to improve quickly.']];
+
+PANS['race-title']=F=>[
+ ['🔥 We are in it','We are in it. There is no point in false modesty — we are '+(F.gapTop||0)+' points off with '+(F.left||0)+' to play and we intend to win it.'],
+ ['🧊 Refuse the word','We are chasing the next three points. That is the only race I am interested in this week.'],
+ ['👏 They are ready for it','This group is ready for it. The character they have shown all season tells me they will not fold.'],
+ ['🎯 Nobody in particular','I do not fear anybody. You worry about your own results because that is all you can control.']];
+
+PANS['race-drop']=F=>[
+ ['💬 Call it a fight','It is a fight. Pretending otherwise would be insulting to the supporters, who can see the table perfectly well.'],
+ ['🔥 We will get out','We will get out of it. I have absolute belief in that and so does that dressing room.'],
+ ['🎯 The plan','Six weeks of hard, simple football. Keep it tight, take our chances, and win the games against those around us.'],
+ ['🧊 Been here before','I have been in these before. You do not win them with speeches — you win them by staying calm and working.']];
+
+PANS['runin']=F=>[
+ ['🎯 Finish properly','Pride and position. How you finish a season tells you a lot about what you will be next year.'],
+ ['🔥 Still chasing','There is plenty still to play for and I will not let anybody in that building think otherwise.'],
+ ['💬 Eyes on the summer','I would be lying if I said we were not planning. The work on next season started weeks ago.'],
+ ['👏 Reward the fans','They have followed us everywhere. The least we owe them is a proper finish to the season.']];
+
+PANS['cup-final']=F=>[
+ ['🎯 Treat it normally','You keep the week as normal as you possibly can. The occasion looks after itself on the day.'],
+ ['🔥 Tell them the truth','I tell them the truth — days like this do not come round often and they should go and grab it.'],
+ ['👏 It would mean everything','It would mean everything. To this club, to these supporters, and yes, personally, it would mean a great deal.'],
+ ['🧊 Just a game of football','It is eleven against eleven and a ball. The moment you make it bigger than that you tighten up.']];
+
+PANS['cup-semi']=F=>[
+ ['🎯 Strongest side','Strongest team available. There is no rotation in a semi-final — you never know when the next one comes.'],
+ ['💬 Worst one to lose','It is the worst game in football to lose. Nobody remembers a losing semi-finalist and the players know it.'],
+ ['🧊 No nerves','No nerves. Excitement, if anything. This is exactly why you work all year.'],
+ ['👏 They have earned it','They have earned the right to be here and I want them to enjoy it rather than fear it.']];
+
+PANS['window-open']=F=>[
+ ['🎯 Expecting business','We are working hard on it and I would expect movement before it closes.'],
+ ['🧊 Happy as we are','I am happy with the group. We will not sign for the sake of it.'],
+ ['💬 Some will go','One or two need to play and cannot play here. If the right thing comes up for them I will not stand in the way.'],
+ ['🔥 Strengthen','I want us stronger, not just settled. There is a difference and the club know which one I am asking for.']];
+
+PANS['window-expiring']=F=>{
+ const p=(F.expiring&&F.expiring[0])||null,n=p?psur(p):'him';
+ return[
+ ['🎯 We are talking','Talks are ongoing and they are positive. I would be very surprised if he was not here next season.'],
+ ['🧊 Not in public','Contract negotiations do not belong in a press conference. It will be resolved between the club and the player.'],
+ ['💬 Uncomfortable with it','I am not comfortable letting anybody run a contract down. It is bad business and it is bad for the dressing room.'],
+ ['🛡️ It will not affect him','Whatever happens, it will not affect how he plays. He is too good a professional for that.']]};
+
+/* =====================================================================
+   THE OPEN QUESTIONS
+   ---------------------------------------------------------------------
+   Fourteen rules, ten lines each, and every line is a different subject —
+   the fitness of the group, what you say to a debutant, whether money is
+   ruining the game. Keying these on the rule alone would put us straight
+   back where we started, so each individual line has its own answers.
+   ===================================================================== */
+const POPEN={};
+const OA=(id,a,b,c,d)=>{POPEN[id]=[a,b,c,d]};
+
+/* ---- open-1: the week ---- */
+OA('open-1#0',
+ ['👏 Buoyant','The mood is excellent. They are a good group to be around and the spirit in there has been brilliant all week.'],
+ ['🧊 Business as usual','Same as every week. Heads down, focus on the work, and let the football do the talking on Saturday.'],
+ ['😠 Not comfortable','It is not a comfortable place at the moment, and it should not be. Nobody should be relaxed after recent results.'],
+ ['🎯 Quietly determined','Determined, I would say. They know what needs fixing and there has been a real edge to the training.']);
+OA('open-1#1',
+ ['💬 Give them something','I can tell you we will be without one or two, and that a couple of the young lads are travelling with us.'],
+ ['🤐 Nothing at all','Nice try. You will find out at two o clock like everybody else.'],
+ ['👏 Good news','Good news, actually — we have got bodies back on the grass and the group is close to full strength.'],
+ ['🎯 Straight answer','No fresh injuries, nobody suspended, and everybody trained. That is as much as I am giving you.']);
+OA('open-1#2',
+ ['👏 Excellent','Outstanding. Sharp, competitive, one or two arguments — which is exactly what you want to see.'],
+ ['🧊 Normal week','Normal. We do the same work every week and I am not going to pretend there was anything special about it.'],
+ ['🎯 Hard','Hard. There were a few things from the weekend that needed addressing and we have addressed them.'],
+ ['💬 Not good enough Monday','Monday was poor and I told them so. Since then it has been much better.']);
+OA('open-1#3',
+ ['💬 Almost','Almost everybody. One or two are touch and go and we will give them until the morning.'],
+ ['👏 Full squad','Everyone is fit and available, which is the first time I have been able to say that this season.'],
+ ['🎯 We are short','We are short in one area, but I have got total trust in whoever comes in.'],
+ ['🤐 Not saying','I will not be giving out team news in here, but nothing has changed since the weekend.']);
+OA('open-1#4',
+ ['🔥 Go and win it','Go and win the game. That is the message, and it is the same message every single week.'],
+ ['🧊 Do your job','Do your job properly. If eleven men do their individual jobs the result normally takes care of itself.'],
+ ['👏 Enjoy it','Enjoy it. They are playing football for a living in front of a full house — that should be a joy, not a burden.'],
+ ['🎯 Be brave','Be brave on the ball. The mistakes I can live with are the ones that come from trying to play.']);
+OA('open-1#5',
+ ['👏 The young ones','The young lads have been outstanding in training. Nobody outside the building sees that and they deserve a mention.'],
+ ['🎯 The details','The detail work. Pressing triggers, restarts, the boring things that decide games and nobody ever writes about.'],
+ ['🧊 Nothing dramatic','Nothing you would find interesting, honestly. It is a training ground, not a film set.'],
+ ['💬 The senior players','How the senior players have handled a difficult spell. That has impressed me more than anything on a Saturday.']);
+OA('open-1#6',
+ ['🔥 Upwards','Upwards, and quickly. I would not be here if I did not think this side could compete at the very top.'],
+ ['🧊 One step at a time','In the right direction, step by step. I am not going to make predictions about where it ends.'],
+ ['🎯 A clear plan','We know exactly where we want to be and what it will take. That clarity is worth more than any prediction.'],
+ ['💬 Honest assessment','Honestly, there is a lot of work to do. We are better than we were and we are not close to where we need to be.']);
+OA('open-1#7',
+ ['🔥 Three points','Three points. That is what a good week looks like and anything else is a consolation prize.'],
+ ['🎯 Progress on the grass','Good work, everybody fit on Friday, and a performance I recognise. The result usually follows from that.'],
+ ['🧊 No setbacks','No injuries and no distractions. At this stage of a season that is a good week.'],
+ ['👏 Improvement','Somebody getting better. If one player takes a step forward, that is a week well spent.']);
+OA('open-1#8',
+ ['💬 A position','I would take another body in one area, yes. The club know exactly where and we are working on it.'],
+ ['🎯 Ruthlessness','Not a player — a habit. We need to be more ruthless when we are on top, and that is coaching, not shopping.'],
+ ['🛡️ Nothing','Nothing. I would not change one of them and I mean that — they have given me everything.'],
+ ['🧊 Not in public','If I wanted to send a message about the squad I would send it upstairs, not through a microphone.']);
+OA('open-1#9',
+ ['💬 You do not','You do not, really. You get an hour here and there and the rest of it is always somewhere in your head.'],
+ ['👏 Family','Family. Walk in the door, put the phone down, and be a normal person for a couple of hours.'],
+ ['🧊 Routine','Routine helps. You work, you sleep, you get up and do it again. That is the calm in it.'],
+ ['🎯 Watching more football','Badly. I switch off from our football by watching somebody else’s, which my wife tells me is not switching off.']);
+
+/* ---- open-2: the craft ---- */
+OA('open-2#0',
+ ['👏 Very settled','Completely settled. It felt like home very quickly and the staff here have made that easy.'],
+ ['🧊 Still learning','You are never fully settled in this job. There is always something about a club you are still learning.'],
+ ['🎯 Settled enough to be hard','Settled enough to start making the difficult decisions, which is really what the first year is for.'],
+ ['💬 Honest about it','There have been days it has felt like a very big club and a very small office. That is normal.']);
+OA('open-2#1',
+ ['👏 Name one','One or two have surprised me with how quickly they have taken things on. Their attitude has been outstanding.'],
+ ['🧊 Not really','Not really. I did my homework before I came in, so I knew broadly what I was getting.'],
+ ['🎯 The professionals','What surprised me is how professional the group is. That is not always the case and it is worth saying.'],
+ ['💬 In both directions','Some have surprised me and one or two have not been what I expected. That is football and it stays inside.']);
+OA('open-2#2',
+ ['🎯 Sharp and short','Short, sharp and competitive. If it is dragging by the third exercise you have got it wrong as a coach.'],
+ ['👏 Arguments','A bit of niggle. When they are falling out with each other in a small-sided game, you know they care.'],
+ ['🧊 Repetition','Repetition, honestly. The unglamorous truth is that good weeks look boring from the sideline.'],
+ ['💬 Learning something','A good week is one where they have learned something they can use on Saturday. Anything else is just running.']);
+OA('open-2#3',
+ ['🎯 Watch it back','Always watch it back. What you see live is emotion — the video tells you what actually happened.'],
+ ['🧊 Both','Both. I trust my eyes for the feel of a game and the video for the detail.'],
+ ['💬 Twice','Twice, usually. Once angry on the coach, and once properly on the Sunday when I can be calm about it.'],
+ ['👏 With them','I watch it with them. Making players see it for themselves is worth more than me telling them.']);
+OA('open-2#4',
+ ['💬 Mostly people','Eighty per cent people. Anyone can draw a shape on a board — getting eleven human beings to run it is the job.'],
+ ['🎯 You need both','You cannot separate them. The best tactical idea in the world fails if the player does not believe in it.'],
+ ['🧊 Tactics get talked about more','Tactics get all the attention because they are the easy bit to write about. The real work is in the conversations.'],
+ ['👏 It is why I love it','It is the people part that keeps me in it. Improving somebody is the best feeling in this job.']);
+OA('open-2#5',
+ ['👏 My staff','My staff. I have got people around me who have been with me a long time and they are worth everything.'],
+ ['🧊 Nobody','You handle it yourself, mostly. That is the job and you knew that when you took it.'],
+ ['💬 Family','My family, if I am honest. They get the worst of me and they never complain about it.'],
+ ['🎯 The work','The work. When it is going badly the only thing that has ever helped me is going back to the training ground.']);
+OA('open-2#6',
+ ['💬 Name the game','There is one, yes. I got the selection wrong and it cost us — I would take that one again tomorrow.'],
+ ['🧊 No point','You cannot play them again. I look at them once, I learn from them, and then I let them go.'],
+ ['🙋 One is on me','There is one where the responsibility is entirely mine. I have not forgotten it and I will not.'],
+ ['👏 A good one','I would play the best one again, just to watch it. There was a performance this season I could watch all day.']);
+OA('open-2#7',
+ ['💬 Telling players no','Telling a good professional he is not playing. That never gets easier and it happens every single week.'],
+ ['🎯 The volume of decisions','The sheer number of decisions. Fifty a day, and any one of them can be the one people talk about for a month.'],
+ ['🧊 The loneliness','It is a lonely job. There is a moment before every game where it is entirely on you and nobody can help.'],
+ ['👏 Nothing to complain about','I would not complain about any of it. It is a privilege and there are harder jobs in the world.']);
+OA('open-2#8',
+ ['🎯 Both','Both. Every player here has two or three individual targets, and they are reviewed properly, not just written down.'],
+ ['🧊 Team first','The team target is the only one that matters. Individual numbers can flatter a player in a side that is losing.'],
+ ['👏 It motivates them','Players love a target. Give a full-back a number to chase and you will be amazed what happens to his training.'],
+ ['💬 Careful with them','Targets can make players selfish if you are not careful. I use them, but I watch for that.']);
+OA('open-2#9',
+ ['🎯 Training tells you','Training tells you. When he stops looking like a boy among men in the eleven-a-side, he is ready.'],
+ ['👏 Character first','It is character more than football. Plenty are good enough at seventeen — very few can handle what comes with it.'],
+ ['🧊 Later than they think','Later than they think and earlier than their agent thinks. Somewhere in the middle is usually right.'],
+ ['💬 You never know','You never really know. At some point you have to be brave and find out, and sometimes you get it wrong.']);
+
+/* ---- open-3: the profession ---- */
+OA('open-3#0',
+ ['👏 Several','Several. You steal from everybody in this game — anybody who says they invented it all themselves is fibbing.'],
+ ['🎯 One in particular','There is one I worked under who taught me that the standard you walk past is the standard you accept.'],
+ ['🧊 My own way','I have taken bits from a lot of people but I have never tried to be anybody else. That never works.'],
+ ['💬 The bad ones too','You learn as much from the bad ones. I know exactly the manager I do not want to be.']);
+OA('open-3#1',
+ ['💬 Dread it','Dread it. Nothing good happens to a squad in a transfer window — it unsettles people who were perfectly happy.'],
+ ['👏 Enjoy it','I love it. It is the one part of the year where you can genuinely change what your team is.'],
+ ['🎯 It is work','It is neither. It is a job with a deadline, and you prepare for it like you prepare for anything else.'],
+ ['🧊 It is out of my hands','Most of it is out of my hands. I say what I need and other people go and try to get it.']);
+OA('open-3#2',
+ ['🎯 Their build-up','How they start with the ball. Everything else follows from where their first two passes go.'],
+ ['🧊 Their weaknesses','Where they can be hurt. I look at what we can do to them long before I worry about what they do to us.'],
+ ['👏 Their best player','Their best player and what makes him tick. Take that away and most sides look very ordinary.'],
+ ['💬 Set pieces','Restarts. A third of the goals in this league come from them and half the teams still do not respect that.']);
+OA('open-3#3',
+ ['💬 Completely honest','Completely. Tell him the truth and he might hate you for a fortnight — lie to him and he will never trust you again.'],
+ ['🛡️ Gently','Honestly, but kindly. There is a way to tell a man he is not playing that does not take his legs away.'],
+ ['🎯 With a route back','I always give them the route back. It is not "you are not playing", it is "this is what gets you playing".'],
+ ['🧊 Not everyone gets a conversation','Not everybody wants one. Some would rather see the team sheet and get on with it, and you learn who.']);
+OA('open-3#4',
+ ['👏 A virtue','A virtue, always. This game would be better with more of it and I have never regretted being loyal to anybody.'],
+ ['💬 It has cost me','It is a virtue that has cost me. I have stayed with players too long out of loyalty and it has hurt the team.'],
+ ['🎯 Loyalty to the club','My loyalty is to the football club. That is the only one that never gets you into trouble.'],
+ ['🧊 A luxury','It is a luxury in modern football. Results decide everything and results do not care who you are loyal to.']);
+OA('open-3#5',
+ ['💬 The calendar','The calendar. There is too much football, everybody in the game knows it, and nobody who decides anything cares.'],
+ ['🎯 Give managers time','I would give managers time. Nothing good has ever been built in eighteen months and clubs keep expecting it.'],
+ ['🧊 Nothing','It is a great game. I would rather spend my energy coaching than complaining about how it is run.'],
+ ['👏 Look after the young ones','More protection for young players. We ask sixteen-year-olds to handle things grown men would struggle with.']);
+OA('open-3#6',
+ ['🤝 They understand plenty','They understand more than they are given credit for. Supporters at this club know their football.'],
+ ['💬 Not really','Not entirely, and that is not their fault. They see ninety minutes out of a week that has a hundred and sixty-eight hours.'],
+ ['🎯 Not their job to','It is not their job to understand it. Their job is to turn up and demand better, and I would not want that to change.'],
+ ['🛡️ Nor should they have to','They pay a lot of money. If they want to be angry after a defeat, they have earned that right.']);
+OA('open-3#7',
+ ['👏 The people','The people. Everybody from the kit staff up genuinely cares about this club and you feel it walking in.'],
+ ['💬 The size of it','The scale of it. You know it is a big club and then you get inside and realise you had underestimated it.'],
+ ['🎯 The standards','How much needed fixing, honestly. There were habits here that had gone unchallenged for a long time.'],
+ ['🧊 Nothing much','Not really. I did my homework and it is broadly what I expected.']);
+OA('open-3#8',
+ ['👏 Excellent','Very good. It is a happy building and that is not something you can fake — you can feel it the moment you walk in.'],
+ ['🧊 Focused','Quiet and focused. Big week, big game, and everybody knows what they are doing.'],
+ ['💬 Tense','Tense, and it should be. When results are like that the building should not feel comfortable.'],
+ ['🎯 Determined','There is an edge to it that I like. They are angry about the weekend and they want to put it right.']);
+OA('open-3#9',
+ ['👏 Absolutely','Completely. You can see it in how they play when it gets difficult — they trust it and they trust each other.'],
+ ['🎯 Getting there','They are getting there. Belief comes from evidence, and we are building the evidence week by week.'],
+ ['💬 Not all of them','Not all of them, no, and that is my job to fix. Some are further down the road than others.'],
+ ['🧊 Ask them','You would have to ask them. What I can tell you is that they carry it out, and that is what I can control.']);
+
+/* ---- open-4: the squad and the season ---- */
+OA('open-4#0',
+ ['💬 Name the area','Yes, there is an area we are light in, and the club know precisely what I have asked for.'],
+ ['🧊 Not in public','I am not going to name a position and tell everybody in the country where we are weak.'],
+ ['🛡️ Happy as we are','I would not change anybody. The players I have got are good enough to do what I am asking.'],
+ ['🎯 Quality anywhere','I would take a top player in any position. You never turn down quality — you find a way to fit him in.']);
+OA('open-4#1',
+ ['💬 You cannot','You cannot keep them all happy, and a manager who tries ends up pleasing nobody.'],
+ ['🎯 Honesty','Honesty. Tell them where they stand and what gets them in, and most professionals will accept it.'],
+ ['👏 Make them feel part of it','You make the twenty-five feel like they won it, not the eleven. That is a culture thing and we work at it.'],
+ ['🧊 It is their job','They are extremely well paid to compete for a shirt. A bit of unhappiness is healthy.']);
+OA('open-4#2',
+ ['👏 Very strong','It is a strong division. There are no easy afternoons and anybody who thinks there are gets found out.'],
+ ['🎯 Wide open','It looks more open than it has for years, which makes it a brilliant season to be involved in.'],
+ ['🧊 No comment on others','I do not spend much time assessing other people’s teams. I have got plenty to think about here.'],
+ ['💬 Honest about it','Honestly? A bit below what it has been. That is an opportunity for a side like ours and we should say so.']);
+OA('open-4#3',
+ ['💬 I look','Of course I look. Anyone who tells you they do not look at the table is not telling the truth.'],
+ ['🧊 Avoid it','Not until March. Before that it tells you nothing and it only puts things in players’ heads.'],
+ ['🎯 Look at the performances','I look at the performance data before the table. The table is the outcome — the performances are the cause.'],
+ ['👏 It is a good read at the moment','I am enjoying looking at it, I will be honest. That does not mean it changes anything we do.']);
+OA('open-4#4',
+ ['🔥 Challenging','Challenging at the top. That is the ambition and there is no point pretending it is anything else.'],
+ ['🎯 Better and clearer','A team that anybody in the ground can describe in one sentence. That is what twelve months should give you.'],
+ ['🧊 Improved','Better than we are now. I am not going to put a position on it and hand you a headline.'],
+ ['👏 With our own players in it','I want two or three of our own boys established in it. That would mean more to me than a league position.']);
+OA('open-4#5',
+ ['👏 Yes, one','There is one, and they know which. That is the level, that is the benchmark, and they have all seen it back.'],
+ ['🎯 Not yet','Not yet. There have been good halves and good spells. The full ninety minutes is still in front of us.'],
+ ['🧊 I do not do that','I do not hold performances up. You chase the last good day and you stop looking at the next one.'],
+ ['💬 Away from home','The away performance was the one. Doing it in that atmosphere is what told me about this group.']);
+OA('open-4#6',
+ ['👏 Encourage it','I want them to disagree. A dressing room where nobody challenges you is a dressing room that has stopped thinking.'],
+ ['🎯 In private','In private, any time. In front of the group, never — and they know exactly where that line is.'],
+ ['🧊 They can disagree','They can disagree all they want. Then we do it my way, because somebody has to decide.'],
+ ['💬 It has happened','It has happened and it was a good conversation. I came out of it having changed my mind, actually.']);
+OA('open-4#7',
+ ['🧊 Fair enough','Broadly fair. You will write what you write and I have never lost sleep over it.'],
+ ['💬 Not always','Not always, no. But that is the deal and I am not going to stand here feeling sorry for myself about it.'],
+ ['😠 No','Honestly, no. Some of what has been written about this group has been lazy and it has been unfair on them.'],
+ ['👏 Good relationship','I have got no complaints. The people in this room do a job, same as I do.']);
+OA('open-4#8',
+ ['💬 Patience','That I am not as patient as I thought I was. This job finds that out about you very quickly.'],
+ ['🎯 Trust my instincts','That my first instinct is usually right, and that I have got into trouble the times I have talked myself out of it.'],
+ ['👏 How much I enjoy it','That I love it more than I realised. Even the hard weeks — I would not want to be doing anything else.'],
+ ['🧊 Not much','Not much I did not already know. You find out about yourself long before you get a job this size.']);
+OA('open-4#9',
+ ['🙋 Yes, one','Yes. There is a substitution I made that I would not make again, and it cost us points. That is my responsibility.'],
+ ['🧊 No regrets','No. I make the decision with what I know at the time and I do not spend my life relitigating it.'],
+ ['💬 A few','A few. If a manager tells you he would not change anything he has either had a perfect season or a short memory.'],
+ ['🎯 Selection','A selection, more than a decision in a game. I picked for the occasion instead of for the football.']);
+
+/* ---- open-5: the week's work ---- */
+OA('open-5#0',
+ ['🎯 Our own game','Our own game. Ninety per cent of our week is about us and what we want to do to them.'],
+ ['💬 The weekend','The weekend, mostly. There were things that needed saying and they have been said.'],
+ ['👏 Positive stuff','Good conversations. When it is going well the training ground is a brilliant place to be.'],
+ ['🧊 Not for public consumption','What is said on that grass stays on that grass. That is how you keep a dressing room.']);
+OA('open-5#1',
+ ['🎯 A lot','A lot. They get a clear picture of the opposition because information takes the guesswork away.'],
+ ['🧊 Very little','Very little. Overload a player with what the other team does and he stops playing his own game.'],
+ ['👏 Only the useful bits','Three things, no more. Give a footballer three clear jobs and he will do them — give him ten and he will do none.'],
+ ['💬 Depends who we play','It depends. Some sides need a lot of explaining and some you just go and play against.']);
+OA('open-5#2',
+ ['🎯 Completely different','Totally different. Breaking down a low block is the hardest thing in football and it needs specific work.'],
+ ['👏 Patience is coached','Yes — and the thing you coach most is patience. Sides get impatient and that is when they lose those games.'],
+ ['🧊 Same principles','The principles do not change. Move them, find the space, be brave. The shape of the opponent does not alter that.'],
+ ['💬 It is where we struggle','If I am honest it is where we have been weakest, and it is exactly what we have been working on.']);
+OA('open-5#3',
+ ['🎯 We work on them','Every week, both boxes. Set pieces are free chances and it is negligent not to work on them.'],
+ ['👏 We have specialists','We have a coach who does nothing else and the improvement this season has been outstanding.'],
+ ['🧊 Trust the players','I trust the deliverers and the runners. You can over-coach a set piece until nobody is thinking for themselves.'],
+ ['💬 Not well enough','Not well enough, clearly. Our record from them is not good and that is on the coaching staff, me included.']);
+OA('open-5#4',
+ ['👏 A lot of say','A great deal. If your senior players are not driving the standards, you are doing all the work yourself.'],
+ ['🎯 On some things','They have a voice on how we live, not on how we play. That is a distinction I keep very clear.'],
+ ['🧊 It is not a committee','They can say what they like. I pick the team and I decide how we play — it is not a democracy.'],
+ ['💬 It has to be earned','The ones who have earned it have plenty of say. That is not about age, it is about what you give the group.']);
+OA('open-5#5',
+ ['👏 Several','Several, thankfully. I would be worried if there were not — a manager surrounded by agreement is in trouble.'],
+ ['🎯 My assistant','My assistant, constantly. That is precisely why he is here and why we have worked together so long.'],
+ ['🧊 Not often enough','Probably not often enough, and that is a fair challenge. It is something I have to watch.'],
+ ['💬 The players','The players do, and I want them to. If a senior man tells me he thinks I have got it wrong, I will listen.']);
+OA('open-5#6',
+ ['🤝 Very good','Very good, genuinely. We speak regularly, we disagree occasionally, and it has always been respectful.'],
+ ['🧊 Professional','It is professional. They run the club, I run the team, and it works because we both stick to that.'],
+ ['💬 Honest about the strain','It has been tested this season and it would be strange if it had not been. That is normal at any club.'],
+ ['🎯 They back me','They have backed every decision I have asked them to back. I cannot ask for more than that.']);
+OA('open-5#7',
+ ['🎯 Very involved','Very. I want to have watched a player live before he signs — reports tell you what he does, not who he is.'],
+ ['🧊 I trust the department','We have good people doing that work and I am not going to duplicate their job badly.'],
+ ['👏 It is a partnership','It is a joint thing. They find them, I decide whether he fits, and neither of us signs anybody alone.'],
+ ['💬 More than I would like','More than I should, probably. There are only so many hours and coaching has to come first.']);
+OA('open-5#8',
+ ['🎯 The work, not the result','By whether we got better at something. You can lose on Saturday and still have had a good week.'],
+ ['🔥 Points','Points. I am not going to dress it up — a good week is one where we win the game.'],
+ ['👏 The mood','By the mood on Friday. If they cannot wait to play, the week has gone well.'],
+ ['💬 By what they show me','By what I see on the pitch at three o clock. Everything before that is a rehearsal.']);
+OA('open-5#9',
+ ['🔥 Yes, one','There is one, and everybody in that dressing room knows which one it is.'],
+ ['🧊 All of them','They are all circled. Start picking games out and you have already lost one you were not concentrating on.'],
+ ['🎯 The next one','The next one. That is not a line, it is genuinely how you have to think in this job.'],
+ ['💬 A run of them','It is a run rather than a game. There is a month coming up that will tell us a lot about ourselves.']);
+
+/* ---- open-6: the club and the crowd ---- */
+OA('open-6#0',
+ ['🔥 Bravery','Bravery. I want them to see a team that goes and takes the game to people, home or away.'],
+ ['👏 Effort','Effort, first and always. They will forgive a bad performance — they will not forgive a lack of running.'],
+ ['🎯 An identity','I want them to be able to describe us. If a supporter can tell you how we play, we are doing something right.'],
+ ['🧊 Results','Honestly? Wins. Supporters say they want entertainment and what they really want is to go home happy.']);
+OA('open-6#1',
+ ['👏 Yes, a duty','It is a duty here. This club has a way of playing and there is an obligation to honour it.'],
+ ['🎯 Winning is the duty','The duty is to win. Do that often enough and everybody remembers it as entertaining.'],
+ ['🧊 A balance','You need both, and the balance changes depending on what your team is capable of.'],
+ ['💬 It is a luxury','Entertaining football is a luxury you earn. Get the results first and then you get to be beautiful about it.']);
+OA('open-6#2',
+ ['👏 Completely','Absolutely. That connection is one of the strongest things about this club and you can hear it every week.'],
+ ['🎯 Getting there','It is being rebuilt. Trust between a crowd and a team takes time and it is coming back.'],
+ ['💬 Not entirely','Not at the moment, and that is understandable. Performances have to repair it, not words.'],
+ ['🧊 Not for me to say','That is a question for the supporters. All I can do is send out a team that gives them something to get behind.']);
+OA('open-6#3',
+ ['👏 Everything','Everything. Those people spend a fortune following us and the players feel it — it drags you through games.'],
+ ['🎯 We owe them','It is a debt. When you see that corner full at eight o clock on a Tuesday you have to give them a performance.'],
+ ['🧊 They are professionals','The players should perform regardless. The support is a lift, not a requirement.'],
+ ['💬 The best in the country','I have said it before — our away following is as good as anything in this country and I do not say that lightly.']);
+OA('open-6#4',
+ ['👏 Yes and it is a privilege','There is pressure here that does not exist anywhere else, and that is exactly why people want the job.'],
+ ['🎯 It is manageable','It is real, but it is manageable if you keep the group focused on the work rather than the noise.'],
+ ['🧊 Pressure is pressure','Every club has pressure. A manager fighting relegation at the bottom feels it just as much.'],
+ ['💬 It changes players','It finds players out. Some arrive and grow six inches, and some shrink, and you cannot tell in advance.']);
+OA('open-6#5',
+ ['👏 Yes and rightly so','They are high and they should be. This club has a history that demands it and I would not want it any other way.'],
+ ['💬 Not quite','Honestly, no. The expectation is set by a version of this club that existed a long time ago.'],
+ ['🎯 We will meet them','Whether they are realistic or not, they are the ones we have. Our job is to meet them.'],
+ ['🧊 Not my concern','I cannot control what people expect. I can control what we do on the training ground.']);
+OA('open-6#6',
+ ['🎯 That we are defensive','That we sit back. Look at the numbers — nobody presses higher than us and the perception has not caught up.'],
+ ['👏 That it is one player','That we rely on one man. This is a very good team and the individual gets all the attention.'],
+ ['💬 That there is a crisis','That there is chaos behind the scenes. It is a calm, well-run building and nobody ever writes that.'],
+ ['🧊 No idea','I genuinely do not know what people think of us. I would not have time to worry about it if I did.']);
+OA('open-6#7',
+ ['🎯 Both at once','Both, and that is the job. You cannot mortgage Saturday for next season or you will not be here for it.'],
+ ['🔥 Saturday','Saturday. Managers who plan three years ahead usually get two years to find out they were wrong.'],
+ ['👏 Building something','I am building something. I would not have taken this on if I only cared about the next result.'],
+ ['💬 Circumstances decide','It depends what the table looks like. When you are safe you plan, and when you are not you survive.']);
+OA('open-6#8',
+ ['🔥 Win ugly','Win ugly. Every single time. Nobody has ever engraved a performance on a trophy.'],
+ ['👏 Win well','I want to win well. It is the way you win that makes people fall in love with a team.'],
+ ['🎯 Depends on the day','In August, win well. In April, win ugly. Any manager who says otherwise has not been in a run-in.'],
+ ['💬 Losing well is still losing','There is no such thing as losing well. That is a phrase invented to make defeats easier to talk about.']);
+OA('open-6#9',
+ ['💬 Be honest','The players who are not playing. That is the thing that goes round my head at two in the morning.'],
+ ['🎯 The next game','The next game, always. You go through it about forty times before it kicks off.'],
+ ['🧊 Nothing','I sleep fine. If you cannot sleep in this job you will not last in this job.'],
+ ['👏 Excitement','Honestly, it is more excitement than worry at the moment. That is a nice place to be.']);
+
+/* ---- open-7: the wider game ---- */
+OA('open-7#0',
+ ['💬 One that got away','There is one I still think about. We should have won it and I have never fully let it go.'],
+ ['👏 A good memory','There is a day that still makes me smile. That is what you play for and it lasts a lifetime.'],
+ ['🎯 It shaped me','There is a defeat that made me a better coach. You learn nothing from the good ones.'],
+ ['🧊 Long time ago','That was a different life. I am far more interested in what this group does on Saturday.']);
+OA('open-7#1',
+ ['👏 Enjoy it','I tell him to enjoy it. He has worked his whole life for that day and it goes past very quickly.'],
+ ['🎯 Do the simple things','Do the simple things well for twenty minutes and the rest of it will come to you.'],
+ ['🛡️ Nothing at all','Not much. The worst thing you can do is make a big speech and turn it into an event.'],
+ ['💬 The truth','I tell him he is playing because he has earned it, not because of an injury. That matters to a young lad.']);
+OA('open-7#2',
+ ['🧊 None','None. They have a job to do and it has nothing to do with what happens in this building.'],
+ ['💬 Some','You hear it. You would have to live in a cave not to, and some of it is very fair.'],
+ ['😠 It can be lazy','Some of it is lazy and it is unfair on young players who cannot answer back.'],
+ ['👏 They know the game','A lot of them played at a high level and they know exactly what they are talking about. I have no issue.']);
+OA('open-7#3',
+ ['💬 Not enough','Not really. It rewards managers who survive, and survival and bravery are not the same thing.'],
+ ['🔥 It does','It does, and that is why I will keep being brave. The sides that are remembered here went for it.'],
+ ['🎯 It rewards clarity','It rewards clarity more than bravery. Know what you are and do it well and this league will treat you fairly.'],
+ ['🧊 The table decides','The league rewards points. Everything else is a conversation for a television studio.']);
+OA('open-7#4',
+ ['👏 Name my staff','Every one of them. My staff do work nobody sees and they deserve far more credit than they get.'],
+ ['🎯 The academy coaches','The academy coaches. They produce the players everybody else takes the credit for.'],
+ ['💬 The medical department','The medical staff. Nobody thanks them when a player is fit and everybody blames them when he is not.'],
+ ['🧊 Everybody does their job','Everyone here does their job well. I am not going to start handing out individual awards.']);
+OA('open-7#5',
+ ['🎯 The bodies','The medical report. Before anything else I need to know who I have got to work with.'],
+ ['💬 The performance data','The running numbers. They tell you who has emptied himself and who has hidden.'],
+ ['👏 The mood','Their faces. You learn more walking through the canteen on a Monday than you do from any spreadsheet.'],
+ ['🧊 The next opponent','The next game. Saturday is gone by Monday morning, whatever happened.']);
+OA('open-7#6',
+ ['🤝 Yes','We have spoken, yes. He was very good with me and I appreciated it.'],
+ ['🧊 No','No. Nothing personal in that — he has moved on and so have I.'],
+ ['👏 He deserves credit','He left me things I have benefited from and I have said that publicly before.'],
+ ['💬 It is awkward','It is not an easy relationship for anybody in football. That is just the nature of the job.']);
+OA('open-7#7',
+ ['💬 Much bigger','Much bigger from the inside. You have no idea how many people this club employs and depends on.'],
+ ['👏 Warmer','Warmer than it looks. It is a family business in a very big building.'],
+ ['🎯 Harder','Harder. Everything takes longer and everything is looked at, and you have to accept that on day one.'],
+ ['🧊 About the same','Broadly what I expected. I had a good idea what I was walking into.']);
+OA('open-7#8',
+ ['💬 One in particular','The one that stops a game for two minutes while somebody looks at a screen. It has taken the joy out of goals.'],
+ ['🎯 Something practical','I would let managers use their substitutions differently. That is a small change that would help players.'],
+ ['🧊 None','I would leave it alone. Everybody has a rule they hate and the game survives all of us.'],
+ ['👏 Protect the players','Anything that reduces the number of games. Everything else is detail next to that.']);
+OA('open-7#9',
+ ['👏 Much better','Much better. You learn more in a bad season than you do in five good ones and I have had both.'],
+ ['🎯 In specific ways','Better at some things and no better at others. I am more patient and I am still a terrible loser.'],
+ ['🧊 For others to say','That is not for me to judge. Ask the players — they will give you a more honest answer than I would.'],
+ ['💬 I hope so','I would be worried if I was not. The day you stop improving is the day you should get out.']);
+
+/* ---- open-8: management on the day ---- */
+OA('open-8#0',
+ ['🎯 Do the job','Do the job I ask, every time, without the ball. Everything else is negotiable.'],
+ ['👏 Train like it matters','Show me it every day on the training ground. Nobody has ever surprised me on a Saturday having hidden on a Tuesday.'],
+ ['💬 Be reliable','Reliability. I would take a seven every week over a nine and a four, and most managers would say the same.'],
+ ['🔥 Want it more','I want to see somebody who is furious about not playing. That hunger is the thing I cannot coach.']);
+OA('open-8#1',
+ ['👏 Character','Character. Ability gets you into a squad and character keeps you in a team.'],
+ ['🎯 Decision-making','How quickly he decides. The best players in the world are not the fastest, they are the ones who know first.'],
+ ['💬 Bravery on the ball','Bravery. Wanting the ball when the crowd is groaning is a rarer quality than any amount of technique.'],
+ ['🧊 It depends on the position','It changes by position. What I need from a centre-half is not what I need from a winger.']);
+OA('open-8#2',
+ ['🎯 The right amount','Enough to make a point and no more. Twenty minutes with three clips beats an hour with thirty.'],
+ ['🧊 Not much','Less than people imagine. Football is played at speed and you cannot coach that from a chair.'],
+ ['👏 Individually','A lot, but individually. Group video is for principles — the real work is one player and one screen.'],
+ ['💬 They ask for it','They ask for more than I give them. This generation of players study the game properly and it is a credit to them.']);
+OA('open-8#3',
+ ['🎯 Both','Both, and when they disagree I go with my eyes. The data tells you what happened, not what is about to.'],
+ ['💬 Data protects you','The numbers stop you fooling yourself. It is very easy to like a player and not see what he is not doing.'],
+ ['👏 The eyes','My eyes, every time. I have watched footballers for thirty years and I trust that more than a spreadsheet.'],
+ ['🧊 Load first','On loading. If the running numbers say he is empty, he comes out, however well he is playing.']);
+OA('open-8#4',
+ ['🎯 Change the shape','Change something structural first. Moving one player usually fixes more than shouting at eleven.'],
+ ['🧊 Do nothing','Wait. The temptation is always to do something and the discipline is knowing when not to.'],
+ ['🔥 Go for it','Get another attacker on. If a game is drifting I would rather lose it going forward than draw it standing still.'],
+ ['💬 Talk to them','Get a message on. Nine times out of ten a game drifts because two players are in the wrong positions.']);
+OA('open-8#5',
+ ['🔥 Absolutely','Without hesitation. If it is not working after forty-five minutes, waiting until seventy is cowardice.'],
+ ['🎯 If it is right','If the evidence is there, yes. I will not make a change at half time just to look decisive.'],
+ ['🛡️ Careful with players','You have to think about the man as well. Hooking someone at half time can stay with him for weeks.'],
+ ['🧊 Rarely','Rarely. I would rather give them ten minutes of the second half to put it right themselves.']);
+OA('open-8#6',
+ ['🙋 Yes','Yes, one. I took the wrong player off, we conceded within five minutes, and that is my responsibility.'],
+ ['🧊 No','No. Some have not worked, but I would make the same call again with the same information.'],
+ ['💬 Several','More than one. That is management — you make a decision in ten seconds and get judged on it for a week.'],
+ ['🎯 They are calculated','Every change is a calculated risk. Some do not come off and I have no problem living with that.']);
+OA('open-8#7',
+ ['💬 Difficult','It is a difficult one. You do it early in the week in your head and you still dread it on the day.'],
+ ['🤝 Respectful','You look him in the eye and you tell him why. A captain of all people deserves that.'],
+ ['🧊 He understands','He is a professional. It has never been an issue and it never will be with the group I have got.'],
+ ['🎯 It sends a message','Sometimes it is deliberate. If the captain can be taken off, nobody is untouchable, and that is a useful message.']);
+OA('open-8#8',
+ ['🎯 In detail','In detail. Who takes them, in what order, and what we do in the two minutes before. It is far too important to improvise.'],
+ ['👏 The players know','We rehearse them. The players know exactly who is on the list and it takes the fear out of it.'],
+ ['🧊 Not beforehand','I try not to. Plan for extra time and you can talk yourself into settling for ninety minutes.'],
+ ['💬 Fitness planning','It affects the substitutions more than anything. You keep something back and that is a decision made on Thursday.']);
+OA('open-8#9',
+ ['🎯 A lot','A great deal. The first fifteen sets the tone and we script it more than people would believe.'],
+ ['🔥 Start fast','We work on it constantly. I want us three yards higher and ten per cent quicker than them for that first period.'],
+ ['🧊 Not scripted','Not really. Give footballers a script and they stop reacting to what is actually in front of them.'],
+ ['💬 It depends where','More for away games. At home the crowd does the first fifteen for you.']);
+
+/* ---- open-9: recruitment ---- */
+OA('open-9#0',
+ ['💬 Inherited','Mostly inherited, and I have said that from day one. It takes three windows to make a squad your own.'],
+ ['🎯 A bit of both','It is becoming mine. There is a core here I chose and a core I did not, and they are blending well.'],
+ ['👏 Mine now','It is my team. Whoever signed them, they play the way I ask and that makes them mine.'],
+ ['🧊 It does not matter','It makes no difference to me. They are the players I have got and my job is to get the best out of all of them.']);
+OA('open-9#1',
+ ['👏 Name one','One of them has been outstanding. Better than I even hoped, and I had high hopes.'],
+ ['🎯 The quiet one','The one nobody talked about. Best business we have done and hardly anybody noticed at the time.'],
+ ['🧊 Too early','It is too early to judge any of them. Give a player a full season before you decide.'],
+ ['💬 All of them so far','I have been pleased with all of them, and I would say that even if I had not, so make of that what you like.']);
+OA('open-9#2',
+ ['💬 Yes','There is one who has not settled the way we hoped. It happens, and we will keep working with him.'],
+ ['🛡️ Not naming anybody','I am not going to stand here and name a player as a failure. That would be a disgraceful thing to do.'],
+ ['🎯 Too early to say','Some need longer. Written off after six months, brilliant after eighteen — I have seen it a dozen times.'],
+ ['🙋 That is on me','If a signing has not worked then that is on the people who signed him, and I am one of them.']);
+OA('open-9#3',
+ ['🎯 I watch them live','I watch them live. You cannot judge a player’s body language from a highlights reel.'],
+ ['👏 Trust the scouts','I trust our scouts completely. They watch more football in a month than I could in a year.'],
+ ['💬 Both, and a phone call','Reports, my own eyes, and then I ring somebody who has worked with him. That last call decides it.'],
+ ['🧊 Not my department','Recruitment is a department, not a hobby. I say what I need and I trust them to find it.']);
+OA('open-9#4',
+ ['👏 You look at his eyes','You meet him. Ten minutes in a room and you have a fair idea whether the noise here will frighten him.'],
+ ['🎯 His history','You look at what he has already handled. If he has played in a big derby somewhere, he will cope here.'],
+ ['💬 You do not','You never really know. This club has broken players who looked bulletproof and it is the biggest gamble we take.'],
+ ['🧊 We do the work','We do a lot of background work on character. It is as thorough as the football side and probably more important.']);
+OA('open-9#5',
+ ['🔥 Yes','Yes, if he is good enough. Most so-called difficult players just want to be told the truth by somebody.'],
+ ['🧊 No','No. I have been burned by it and a dressing room is far more fragile than people realise.'],
+ ['🎯 With conditions','It depends what the reputation is for. Somebody who argues, fine. Somebody who lets team-mates down, never.'],
+ ['💬 It has to be worth it','He would have to be exceptional. The bar for a difficult character is much higher than for a good one.']);
+OA('open-9#6',
+ ['👏 Character wins','Character, every time. Give me eleven who will run for each other over eleven who are individually better.'],
+ ['🎯 You need both','At the top level you need both. Character alone will get you beaten by better players who also have it.'],
+ ['💬 Ability opens the door','Ability gets him in the building. Character decides whether he is still here in three years.'],
+ ['🧊 Depends on the player','It depends what you are asking him to do. Some roles need a personality and some need a technician.']);
+OA('open-9#7',
+ ['🎯 You make them','You make them. Leadership is a skill and it can be coached like any other — we work at it deliberately.'],
+ ['👏 You look for them','You look for them. There is a type who walks into a dressing room and it changes, and you cannot manufacture that.'],
+ ['💬 Both','Both. You need one or two born with it and then you build the rest around them.'],
+ ['🧊 It emerges','It shows itself when things go badly. That is the only reliable test and you cannot run it on purpose.']);
+OA('open-9#8',
+ ['👏 Yes','There is. This club has always loved a player who runs — and this crowd will forgive almost anything else.'],
+ ['🎯 Brave ones','Brave players. You need to want the ball here when it is not going well, and plenty do not.'],
+ ['💬 Not really','I do not believe in it, honestly. Good players succeed everywhere and the rest is storytelling.'],
+ ['🧊 It has changed','It used to be true. Football has changed and the idea of a club type is a bit romantic now.']);
+OA('open-9#9',
+ ['💬 Experience of winning','Somebody who has won something. You cannot buy that feeling and you cannot coach it either.'],
+ ['🎯 Ruthlessness','A killer edge. We create plenty and we do not punish teams, and no signing fixes that on its own.'],
+ ['👏 Nothing','Nothing. I look at that group and I genuinely believe everything we need is already in the building.'],
+ ['🧊 Time','Time. That is the one thing you cannot sign, and it is the one thing every squad in transition needs.']);
+
+/* ---- open-10: the man in the job ---- */
+OA('open-10#0',
+ ['🛡️ Completely','Completely. Anything that needs saying to a player gets said to his face, not through a microphone.'],
+ ['🎯 Publicly always','In public, always. In private they get the truth, and they would tell you it is not always comfortable.'],
+ ['💬 Within reason','I protect them, but I am not going to insult people by defending the indefensible.'],
+ ['🧊 It is my job','It is part of the job. I stand here so they do not have to and that is how it should be.']);
+OA('open-10#1',
+ ['🧊 Never','Never. Nothing good has ever come from a manager criticising his own player in a press conference.'],
+ ['💬 If it was needed','If a player let this club down badly, people would hear about it. It has not happened and I hope it does not.'],
+ ['🎯 Collectively','I will criticise a performance. I will not criticise a person, and there is a big difference.'],
+ ['👏 They get it inside','They get plenty of criticism. It just happens in a room with the door shut, which is where it belongs.']);
+OA('open-10#2',
+ ['💬 It is a lot','It is a lot. Two of these a week alongside everything else is more than most jobs would ask.'],
+ ['🤝 It is fair enough','It is part of the deal. Supporters are entitled to hear from the manager and I have no complaint.'],
+ ['🎯 It has a use','It is useful, actually. It makes you order your own thinking and I have talked myself into decisions in here.'],
+ ['🧊 I do not mind it','It does not bother me either way. Twenty minutes and then I get back to the football.']);
+OA('open-10#3',
+ ['💬 Yes','There is one. And you have all asked it three times this season, so I will let you work out which.'],
+ ['🧊 Not really','No. It is your job to ask and mine to answer — you would be doing it badly if I liked all of them.'],
+ ['🎯 About my future','Anything about my future. I have got a game on Saturday and that is genuinely as far ahead as I think.'],
+ ['👏 Happy to be asked','If people are asking questions about this club it means they care about it. That is a good sign.']);
+OA('open-10#4',
+ ['👏 They are brilliant','They are brilliant. They keep me normal and they have followed me around the country without complaining once.'],
+ ['💬 They suffer more','They take it harder than I do. They read everything and they cannot do anything about it, which is worse.'],
+ ['🧊 Private','My family are not part of this and I would rather keep them out of it entirely.'],
+ ['🎯 They keep me level','They do not care what happened on Saturday, which is exactly what you need when you walk through the door.']);
+OA('open-10#5',
+ ['💬 Yes','Every night. Anyone who tells you they leave it at the training ground is not doing the job properly.'],
+ ['🧊 I try not to','I try hard not to. It is not fair on the people at home and I have got better at it over the years.'],
+ ['🎯 Only the problems','Only when something is unresolved. If I have made the decision, I can put it down.'],
+ ['👏 Less than I used to','Much less than I did. You learn that worrying at midnight has never solved a football problem.']);
+OA('open-10#6',
+ ['💬 Badly','Badly. I do not sleep, I watch it back at two in the morning, and I am no use to anybody until Monday.'],
+ ['🎯 Work','Work. The quickest way out of a defeat is the next session, and I am usually in early the following day.'],
+ ['🧊 It passes','You get used to it. This job is mostly disappointment and you learn to hold it lightly.'],
+ ['👏 The players first','I worry about them before I worry about me. Getting eleven heads back up is more urgent than my mood.']);
+OA('open-10#7',
+ ['👏 Yes','Two or three. There is a group of us who have been through it and we speak more often than people think.'],
+ ['🎯 My old staff','People I have worked with rather than famous names. They know me and they will tell me the truth.'],
+ ['🧊 No','Not really. You make your own decisions in this job and phoning round rarely helps.'],
+ ['💬 Outside football','Somebody outside the game, actually. The best advice I have had this year came from a man who has never coached.']);
+OA('open-10#8',
+ ['👏 Coaching kids','Coaching somewhere, at some level. I would be on a pitch on a Sunday morning if nobody paid me at all.'],
+ ['💬 Something quieter','Something with fewer cameras. I would probably be much happier and much more bored.'],
+ ['🧊 No idea','No idea. I have never had a plan B and I would not recommend one to anybody.'],
+ ['🎯 Still in the game','In the game somewhere — scouting, academy work. This is the only thing I have ever been any good at.']);
+OA('open-10#9',
+ ['🔥 Not for a second','Not for one second. I am building something here and I intend to be around to see it finished.'],
+ ['💬 Everybody does','Every manager feels that. It is a job with a clock on it and pretending otherwise is naive.'],
+ ['🧊 It does not change the work','If I am, the work is the same today as it would be otherwise. That is all I can control.'],
+ ['🎯 Time is earned','You buy time with performances. If we perform, the clock stops mattering.']);
+
+/* ---- open-11: the team news ---- */
+OA('open-11#0',
+ ['👏 Excellent','The group is in excellent condition. The work in pre-season is paying off and the numbers are the best I have had.'],
+ ['🎯 Managed carefully','Good, and carefully managed. At this stage it is about keeping them fresh rather than making them fitter.'],
+ ['💬 One or two heavy legs','There are a couple carrying heavy legs after a run of games. We will manage them through the week.'],
+ ['🧊 No issues','No issues to report. Everybody trained and everybody is available.']);
+OA('open-11#1',
+ ['👏 Good news','Yes, we have had one or two back out on the grass, which is a real lift for everybody.'],
+ ['🎯 Close','A couple are close. I will not rush anybody back and risk losing them for another month.'],
+ ['💬 Not yet','Nobody new, unfortunately. It has been a frustrating few weeks in the treatment room.'],
+ ['🤐 Nothing to add','I will let the club release the medical updates. That is how we do it here.']);
+OA('open-11#2',
+ ['💬 Be straight','There is one carrying something, and we will make a decision on him on Friday.'],
+ ['🤐 Say nothing','If there were, I would hardly announce it to the team we are playing on Saturday.'],
+ ['👏 Everyone is fine','Nobody. Cleanest bill of health we have had all season and long may it last.'],
+ ['🎯 They all carry something','At this point in a season everybody is carrying something. That is normal and they get on with it.']);
+OA('open-11#3',
+ ['🎯 Improving','It is emptying, slowly. Two back in full training and another one on the grass this week.'],
+ ['💬 Still busy','Busier than I would like. It has been a difficult period and we are working through it.'],
+ ['👏 The staff have been superb','Our medical staff have been outstanding. Some of these turnarounds have been quicker than anybody expected.'],
+ ['🧊 Standard','Nothing out of the ordinary for this stage of the season.']);
+OA('open-11#4',
+ ['🤐 You will see','You will find out on Saturday, same as everybody else.'],
+ ['🎯 Some changes','There will be one or two changes. Anybody who deserves to keep his shirt will keep it.'],
+ ['🧊 Unlikely to change much','I do not change for the sake of it. If a side has done well it usually stays together.'],
+ ['💬 Fresh legs','With the schedule we have got, there will have to be freshness in there. That is not rotation, it is arithmetic.']);
+OA('open-11#5',
+ ['🎯 More or less','More or less. There is a core that picks itself and two or three positions that are genuinely open.'],
+ ['🧊 There is no best eleven','I do not believe in a best eleven. There is a best eleven for Saturday, and it changes.'],
+ ['👏 Good problems','I have got selection problems, which is exactly what you want. Some very good players will miss out.'],
+ ['💬 Not yet','Not yet, no, and that is a fair observation. We are still finding the balance of this team.']);
+OA('open-11#6',
+ ['🎯 On the day','On the day. Tell them the night before and half of them do not sleep.'],
+ ['💬 Day before','The day before, so they can prepare properly. I think players deserve that.'],
+ ['👏 They mostly know','They usually know from the work in the week. There are very few surprises by Friday afternoon.'],
+ ['🧊 It varies','It depends on the game and it depends on the player. There is no rule.']);
+OA('open-11#7',
+ ['🎯 Yes','There is something we have been working on. Whether it appears on Saturday is another matter.'],
+ ['🤐 Nice try','If we were, I would hardly announce it in here.'],
+ ['🧊 No secrets','No secrets. We work on the same principles every week and we get better at them.'],
+ ['💬 Flexibility','We have been working on changing shape inside a game. That is a big part of modern football and we were behind on it.']);
+OA('open-11#8',
+ ['🎯 Some of it','Some of it. I will always account for the opposition — I just will not build my whole week around them.'],
+ ['🔥 Very little','Very little. Make them worry about us. That is how I have always worked and I am not changing now.'],
+ ['💬 More than I would like','More than I would like, sometimes. When you play the very best sides you have to respect what they do.'],
+ ['🧊 It varies by game','It changes game to game. Being rigid about that is how managers get found out.']);
+OA('open-11#9',
+ ['👏 Very happy','I am happy with it. There is a good mix of legs and experience and it looks like a proper team now.'],
+ ['🎯 One area to fix','There is one area of the pitch where I want more balance, and we know exactly what that is.'],
+ ['💬 Not quite right','Not yet. We are a little heavy in one area and light in another, and that is a job for the summer.'],
+ ['🧊 It is what it is','You work with the balance you have got. Every squad in the league has the same conversation.']);
+
+/* ---- open-12: direction ---- */
+OA('open-12#0',
+ ['🔥 Absolutely','Absolutely. You can see it on the pitch and you can feel it in the building — this club is going forward.'],
+ ['🎯 Yes, slowly','Yes, though not as fast as anybody would like. Proper progress is rarely dramatic.'],
+ ['💬 In some areas','In some areas yes, in others there is a long way to go. I would not paint it as rosier than it is.'],
+ ['🧊 Ask me in May','Ask me at the end of the season. Direction is something you judge over a year, not a month.']);
+OA('open-12#1',
+ ['🔥 Silverware','A trophy. That is what success looks like at this football club and I am not going to lower the bar.'],
+ ['🎯 A clear target','Finishing where the club asked, and playing a way people recognise. Both of those, not one or the other.'],
+ ['👏 Progress on last year','Better than last season, with two or three of our own boys established. That would be a good year.'],
+ ['💬 Depends on the run','If I am honest it depends what happens between now and Christmas. Targets have to be real.']);
+OA('open-12#2',
+ ['🎯 Yes','There is a side we look at, yes. Not to copy — to measure the distance and work out how you close it.'],
+ ['👏 Our own standard','We measure ourselves against ourselves. Chasing somebody else is how you end up being a worse version of them.'],
+ ['💬 The ones above us','The teams above us in the table. That is not complicated and it is not a secret.'],
+ ['🧊 Not helpful','Benchmarking is a boardroom word. I look at Saturday.']);
+OA('open-12#3',
+ ['💬 A long way','Further than people think. There is real work still to do and I would rather say that than pretend.'],
+ ['🔥 Closer than you think','Closer than most people believe. One or two additions and this becomes a very different conversation.'],
+ ['🎯 Measurable','It is measurable now, and it was not when I arrived. That is the progress.'],
+ ['🧊 Not a distance','It is not a distance, it is a habit. You get there by winning consistently, not by covering ground.']);
+OA('open-12#4',
+ ['💬 Not much','Historically? Not a great deal, and everybody in football knows that about this club.'],
+ ['👏 They have been patient','They have been very patient with me and I appreciate it. That is not the case everywhere.'],
+ ['🎯 It has to be earned','Patience is earned with performances. You cannot demand it and I would never ask for it.'],
+ ['🧊 Not my concern','That is a question for the board, not for me.']);
+OA('open-12#5',
+ ['🤝 Yes','Broadly, yes. It is a results business, I know the rules, and I have no complaints about how I am judged.'],
+ ['💬 Not entirely','Not always. The context of where this club was when I walked in gets forgotten quite quickly.'],
+ ['🎯 Judge the whole thing','Judge me on the squad in two years, not on one afternoon. That is all I would ask.'],
+ ['🧊 It does not matter','Fair or not, it does not change what I do on Monday morning.']);
+OA('open-12#6',
+ ['🎯 Standards','The daily standards. What was accepted here when I arrived was not good enough and that took months to shift.'],
+ ['💬 Confidence','Belief. This group had forgotten how to win and that is far harder to fix than any tactical problem.'],
+ ['👏 The mood','The mood in the building. It was a heavy place and it is not any more, and I am proud of that.'],
+ ['🧊 Fitness','Physical condition, honestly. That was the first thing and everything else followed from it.']);
+OA('open-12#7',
+ ['💬 Yes','There are things I would not have chosen, and I have had to make the best of them. That is every job.'],
+ ['🧊 No point saying','What would be the point? I took the job with my eyes open and I knew what came with it.'],
+ ['🎯 The contracts','The contract situation, if you want a straight answer. It has limited what we can do and it takes years to unwind.'],
+ ['👏 Mostly good','Genuinely, I inherited more good than bad. There are some excellent people here.']);
+OA('open-12#8',
+ ['🎯 A real one','A proper one. You need a plan or you just react to results, and reacting to results is how clubs go backwards.'],
+ ['💬 Less than you think','Less than anybody admits. You plan for three years and get eighteen months, and everybody knows it.'],
+ ['👏 The plan is the culture','The plan is not a document, it is how people behave when nobody is watching. That survives managers.'],
+ ['🧊 Week to week','You plan and then football happens. Anybody who says otherwise has not managed for very long.']);
+OA('open-12#9',
+ ['💬 Depends on Saturday','Sundays are entirely decided on Saturday. A good one is the best day of the week and a bad one is unbearable.'],
+ ['👏 Family day','I try to make it a family day. It is the one morning I am not in the building.'],
+ ['🧊 A work day','Sunday is a work day. Watch it back, plan the week, and get ahead of it.'],
+ ['🎯 The best day','Sunday after a win is why you do it. There is nothing like it and it lasts about four hours.']);
+
+/* ---- open-13: the state of the game ---- */
+OA('open-13#0',
+ ['🤝 No complaints','No complaints. He had a difficult afternoon and I thought he handled it well.'],
+ ['🧊 Not going there','I am not going to talk about officials. It never helps and it usually costs you money.'],
+ ['⚔️ Be pointed','I thought two big decisions went against us. I will leave it there and you can draw your own conclusions.'],
+ ['💬 It is a hard job','Refereeing is the hardest job in the game and it is getting harder. I have a lot of sympathy.']);
+OA('open-13#1',
+ ['🎯 Fairer','Fairer, yes. More decisions are right than were right before and that is what it was for.'],
+ ['💬 Not better','Fairer and worse. The game has lost something and I am not sure the trade was worth it.'],
+ ['👏 Protects players','It protects players from bad tackles being missed, and that alone justifies it for me.'],
+ ['🧊 It is here to stay','It is not going anywhere, so there is little point in me having an opinion about it.']);
+OA('open-13#2',
+ ['💬 Far too much','Far too much. Ask any player and any physio in the country and you will get the same answer.'],
+ ['🎯 It is the density','It is not the number, it is the spacing. Three games in six days is what breaks people.'],
+ ['🧊 Nobody is forcing us','We are all very well paid to play it. I am careful about complaining too loudly.'],
+ ['👏 The players love playing','Players want to play. It is the recovery between the games that needs looking at, not the games themselves.']);
+OA('open-13#3',
+ ['💬 It is unworkable','It is close to unworkable. Something will give and it will be a player’s body.'],
+ ['🎯 Needs rethinking','It needs the people who make it to speak to the people who live it. That does not happen enough.'],
+ ['🧊 It is what it is','It is the calendar. We plan around it and we get on with it.'],
+ ['👏 More games, more chances','More football means more chances for young players. There is an upside people ignore.']);
+OA('open-13#4',
+ ['💬 Constantly','Constantly. And they are right, which is the uncomfortable part.'],
+ ['🎯 We manage it together','We talk about loading openly. They know their numbers and they are part of the decision.'],
+ ['🧊 They get on with it','They are professionals. They play, they recover, and they do not moan about it.'],
+ ['👏 Proud of them','What I would say is that they never use it as an excuse, and that is to their enormous credit.']);
+OA('open-13#5',
+ ['🎯 Yes','Yes. The people who actually work with players should have a voice in how many games they play.'],
+ ['💬 It would not change much','It would be nice. I am not naive enough to think it would change any decision that had money behind it.'],
+ ['🧊 We have enough to do','I have got a team to pick. Running the game is somebody else’s job and I am happy for it to stay that way.'],
+ ['👏 Players first','If anybody should have more say it is the players, not the managers.']);
+OA('open-13#6',
+ ['💬 Not ruining it','It is changing it rather than ruining it. The football on the pitch is better than it has ever been.'],
+ ['😠 It is a problem','The gap between the top and the rest is unhealthy and it is getting worse. That is a real problem.'],
+ ['👏 It funds everything','That money pays for academies, facilities and hundreds of jobs. It is easy to forget that.'],
+ ['🧊 Above my pay grade','That is way above my pay grade. I coach a football team.']);
+OA('open-13#7',
+ ['👏 Be yourself','Be yourself. Every young coach copies somebody and players spot it in about a week.'],
+ ['🎯 Learn the people','Learn how to talk to people. The tactical side you can study — the human side you have to practise.'],
+ ['💬 Be ready for the loneliness','Be ready for how lonely it is. Nobody tells you that and it is the biggest shock.'],
+ ['🔥 Go and do it','Get on a pitch. You learn more in one session with a group of players than in a year of courses.']);
+OA('open-13#8',
+ ['👏 All of them','As much as I can. There are ideas everywhere and it would be arrogant to think we have them all here.'],
+ ['🎯 For specific things','I watch for specific reasons — a way of pressing, a set piece routine. Not for entertainment.'],
+ ['🧊 Not much time','Honestly, not much. By the time I have watched our games and the next opponent, the week has gone.'],
+ ['💬 The lower leagues','I watch a lot of football below this level. That is where you find players and where you find honest coaching.']);
+OA('open-13#9',
+ ['👏 Name a league','There are two or three leagues playing outstanding football at the moment and we would be daft not to look at them.'],
+ ['🔥 Here','Right here. I genuinely believe this is the most competitive league in the world and I am not just saying that.'],
+ ['🎯 In the academies','The most interesting football is in academies. That is where the ideas start before anybody sees them.'],
+ ['🧊 No opinion','I have not got the hours to have an opinion on that.']);
+
+/* ---- open-14: the last word ---- */
+OA('open-14#0',
+ ['🔥 Give them one','You can write that we are going there to win. We are not going for a point and we never have been.'],
+ ['🧊 Nothing doing','You will have to make your own back page. I have not got one for you.'],
+ ['👏 Praise a player','Write about the young lad. He has been outstanding and he deserves the column inches far more than I do.'],
+ ['🎯 Something useful','Write that this group works harder than any I have had. That is the story, whether it sells papers or not.']);
+OA('open-14#1',
+ ['😠 Yes','Since you ask — some of what has been written about this team has been lazy, and the players deserve better.'],
+ ['🧊 Nothing','Nothing at all. I am very content, thank you.'],
+ ['🛡️ Defend the group','Only that people should get behind this team. They are giving me everything and that deserves support.'],
+ ['💬 Be honest','Only that we are not as far away as the table says. I will leave it at that.']);
+OA('open-14#2',
+ ['👏 The staff','You never ask about the staff. They work every hour going and nobody outside this building knows their names.'],
+ ['🎯 The young players','Nobody has asked about the academy. There is a group over there who will be worth your time in two years.'],
+ ['💬 The truth','You could have asked whether I am enjoying it. The answer is yes, more than any job I have had.'],
+ ['🧊 No','No, you have been thorough. You always are.']);
+OA('open-14#3',
+ ['👏 Positive','Productive. Good work, good mood, and everybody available — I will take that every week.'],
+ ['🎯 Focused','Businesslike. We had a job to do this week and we have done it.'],
+ ['💬 Difficult','Difficult, and I am not going to pretend otherwise. But we are through it and we go again.'],
+ ['🔥 Building','Exciting. Something is coming together here and I can feel it.']);
+OA('open-14#4',
+ ['👏 We hear them','That we hear them. Every away following, every song when it is going badly — the players know and it matters.'],
+ ['🔥 We are going for it','That we are going for it. Whatever happens, nobody will accuse this team of being frightened.'],
+ ['🎯 Trust the work','That there is a plan. It will not always look pretty but it is deliberate and it is going somewhere.'],
+ ['💬 Be patient','That it takes time. I know that is not what anybody wants to hear, and it is the truth.']);
+OA('open-14#5',
+ ['🔥 Cannot wait','Cannot wait. This is why you do the job — big game, full house, everything to play for.'],
+ ['🎯 Focused on it','I am focused on it. Looking forward to it is a luxury you get after the final whistle.'],
+ ['👏 We are ready','We are ready. The week has been excellent and I have no concerns going into it.'],
+ ['🧊 Same as any other','It is the next game. I look forward to all of them equally.']);
+OA('open-14#6',
+ ['🔥 Give a score','We will win. I am not going to give you a scoreline but I am confident we win the game.'],
+ ['🧊 Refuse','I have never predicted a score in my life and I am not starting for you.'],
+ ['🎯 Deflect neatly','Whatever it is, I will take a win by one goal. That is all any manager wants.'],
+ ['💬 Careful','If I predict it and it goes wrong you will have it on a graphic for a month. So, no.']);
+OA('open-14#7',
+ ['🔥 Nothing less than a win','A win. I would not settle for anything else and neither would anybody in that dressing room.'],
+ ['🧊 A performance','A performance I recognise. Get that right often enough and the results look after themselves.'],
+ ['👏 Everybody fit','Everybody coming through it fit, honestly. At this stage of the season that is worth a lot.'],
+ ['💬 A point would do','If you are asking me honestly, a point at that place would not be the end of the world.']);
+OA('open-14#8',
+ ['🔥 Yes','It is a big week. There is no point pretending otherwise and the players know exactly what is in front of them.'],
+ ['🧊 Same as the rest','They are all big weeks here. That is what you sign up for at this football club.'],
+ ['🎯 An important one','It is important, yes. Not decisive — important. There is a difference and it matters how you frame it to players.'],
+ ['💬 Bigger for others','It is a big week for the club. Whether it is a big week for me is somebody else’s question.']);
+OA('open-14#9',
+ ['🔥 On trophies','On what we win. That is how this club has always judged people and I would not want it any other way.'],
+ ['🎯 On the whole thing','On where this club is when I leave compared with where it was when I arrived. That is the only fair measure.'],
+ ['👏 On the players','On the players. If they are better footballers and better professionals, I will have done my job.'],
+ ['🧊 However you like','Judge me however you want. It will not change how I work tomorrow morning.']);
+
+/* =====================================================================
+   AND THE LINES INSIDE A RULE THAT ARE NOT THE SAME QUESTION
+   ---------------------------------------------------------------------
+   Most rules ask one thing three ways, so one answer set serves them.
+   Some do not. 'race-title' asks whether you can hold on, whether you
+   have spoken to the players, whether this squad knows how to win a
+   league, who you fear, and whether you watch the other results — five
+   genuinely different questions wearing one name. Those lines get their
+   own answers, keyed on the exact line rather than the rule.
+   ===================================================================== */
+
+/* ---- after a defeat ---- */
+OA('loss-basic#2',
+ ['🤝 Speak to them','I would say sorry, and I would say it properly. They travelled a long way and they got nothing back.'],
+ ['🙋 Point them at me','Tell them to come at me, not at the players. The performance is my responsibility.'],
+ ['😠 They are right','They are entitled to be angry. That was not good enough and I am not going to ask them to be patient about it.'],
+ ['🎯 Ask them to stay with us','I would ask them to stay with the team. We need them more on a night like this than on a good one.']);
+OA('loss-basic#3',
+ ['💬 Quality','It was quality, not effort. The lads ran themselves into the ground — we were just not good enough on the ball.'],
+ ['😠 Effort','If I am honest, the effort was not there in the first half. That is the part I will not accept.'],
+ ['🙋 Neither','It was neither. It was a plan that did not work, and the plan was mine.'],
+ ['🛡️ Not doing that','I am not going to stand here and pick between the two and hand you a headline about my players.']);
+OA('win-basic#2',
+ ['👏 Exactly right','Exactly the reaction I wanted. That was a proper response and it tells you about their character.'],
+ ['🧊 Only the start','It is a response, and one response is not a recovery. We have to do it again on Saturday.'],
+ ['😠 It should not need asking','It should not take a defeat to get that. That is the level I expect every single week.'],
+ ['🎯 They deserve the credit','They did it themselves. I said very little — that came from inside the dressing room.']);
+OA('hammered#1',
+ ['🤝 Yes, an apology','Yes. They spent their money and their weekend on that, and they deserve an apology from all of us.'],
+ ['🙋 From me','They will get one from me. Whether they get one from anybody else is between those players and their consciences.'],
+ ['🧊 Words are cheap','An apology is easy. What they deserve is a performance on Saturday, and that is what we will give them.'],
+ ['😠 Nowhere near it','What I would say to them is that it was nowhere near acceptable and it will be dealt with.']);
+OA('hammered#2',
+ ['🔥 Not at all','No. I have got a job to do and I will do it. Nights like that make you more determined, not less.'],
+ ['💬 It is a results business','You would be naive not to think about it. It is a results business and that was a bad result.'],
+ ['🙋 It is on me','If somebody has to answer for that, it is me. I would not hide from that for a second.'],
+ ['🧊 Not my decision','That is not for me to worry about. I will keep working until somebody tells me otherwise.']);
+OA('no-goals#2',
+ ['🎯 Taking them','We are creating enough. It is the finishing, and finishing is confidence as much as coaching.'],
+ ['💬 Creating them','If I am honest, we are not making enough. That is a bigger problem and it sits with the coaching.'],
+ ['👏 Neither, long term','Both will come. There is a pattern of play developing and the goals follow the pattern.'],
+ ['😠 It is both','Both, and that is not good enough at this football club. It has to improve quickly.']);
+OA('comeback#2',
+ ['👏 Kept it calm','I told them nothing was wrong with the football and to keep believing. They did, and they were brilliant.'],
+ ['😠 Told them straight','I told them the first half was unacceptable and that they had forty-five minutes to put it right.'],
+ ['🎯 A tactical fix','It was not a speech, it was a change. We moved two players and the game changed with them.'],
+ ['🧊 Nothing much','Very little, honestly. Sometimes the best thing you can do at half time is stay calm and say nothing.']);
+OA('late-winner#2',
+ ['👏 With them','On the touchline, going mad with everybody else. You do this job for those thirty seconds.'],
+ ['🧊 Already thinking','Thinking about the restart, if I am honest. There were still two minutes to see out.'],
+ ['🔥 Loved it','I enjoyed that as much as anything this season. To see this crowd like that is what it is all about.'],
+ ['🎯 Watching the shape','Watching where everybody was. You can lose a game in the thirty seconds after you win it.']);
+
+/* ---- the table ---- */
+OA('pos-top#2',
+ ['💬 Very different','It is different. Chasing is easier than leading and anyone who has done both will tell you the same.'],
+ ['🔥 We enjoy it','We enjoy it. If you cannot handle being top of the league you should not be in this job.'],
+ ['🧊 Same pressure','Pressure is pressure. It felt exactly the same when we were tenth.'],
+ ['👏 They are handling it','What has pleased me is how calmly they have taken it. That is a group with the right mentality.']);
+OA('pos-mid#1',
+ ['🎯 Transition','It is a transition and I said that in August. You cannot rebuild and finish top four in the same year.'],
+ ['💬 Underachievement','It is underachievement. There is more in this squad than the table says and I include myself in that.'],
+ ['🧊 Somewhere between','A bit of both. Some of it is circumstance and some of it is us not being good enough.'],
+ ['🛡️ Nor either','I would not use either word. It is a season that is not finished and I will judge it in May.']);
+OA('board#2',
+ ['🔥 As long as I need','As long as I need. I am not walking away from something I have started.'],
+ ['🧊 Not my call','You would have to ask them. I do not spend my day counting.'],
+ ['💬 Not long','Realistically, not long. That is the job and I knew it when I signed.'],
+ ['🎯 Judge the work','I would ask them to look at the work rather than the last three results. That is all any manager can ask.']);
+OA('fans#1',
+ ['🤝 Seen them','I have seen them. They are entitled to make their feelings known and I would never criticise them for it.'],
+ ['🙋 Aimed at me','They should be aimed at me. I would just rather they were not aimed at the players.'],
+ ['🧊 Not looking','I do not look up there. My job is on the grass and that is where my eyes stay.'],
+ ['😠 Not helpful','Everybody is entitled to protest. I would only say that it makes a hard job harder for young players.']);
+
+/* ---- the cup ---- */
+OA('cup#2',
+ ['👏 It is a privilege','The history is a privilege, not a weight. Every player here should want to add to it.'],
+ ['🎯 It motivates','It gives you something to aim at. You walk past those pictures every day and it should mean something.'],
+ ['🧊 We live now','History does not win you a football match. This group will be judged on what it does, not what came before.'],
+ ['🔥 We want our own day','I want these players to have their own day in that competition. That is what we are chasing.']);
+OA('nations#1',
+ ['💬 A lot of them','We have got a number away, which is a compliment to the club and a headache for me.'],
+ ['👏 Proud of them','Several, and I am delighted for every one of them. Representing your country is the highest honour there is.'],
+ ['🎯 Work with the rest','Enough to change the session. It means the ones who stay get proper individual work, which is valuable.'],
+ ['🧊 Only a few','Not many, which suits me fine at this stage of the season.']);
+OA('season-end#1',
+ ['🎯 Shorter and sharper','Less volume, more quality. You cannot flog them in April — the work gets shorter and much sharper.'],
+ ['👏 Keep it enjoyable','You keep it fun. Tired players need to enjoy training or you lose them in the last month.'],
+ ['💬 Manage the minds','It is the heads, not the legs. The physical side is manageable — keeping them switched on is the job.'],
+ ['🧊 Nothing changes','We do what we have done all year. Changing the routine in April is how you unsettle people.']);
+
+/* ---- pre-season ---- */
+OA('pre-summer#1',
+ ['👏 Got what we wanted','We got most of it. The work was excellent, the group is fit, and the additions have settled quickly.'],
+ ['💬 Not everything','Not everything, no. There is one area I wanted addressed and it has not been, and I have said so internally.'],
+ ['🎯 Fitness first','What I wanted was a base. We have got that, and now it is about ideas rather than running.'],
+ ['🧊 Ask me in December','Ask me at Christmas. Nobody has ever won anything in July.']);
+OA('pre-summer#2',
+ ['🔥 Much stronger','Stronger, yes. Better balanced, fitter, and a year of experience on top — I have no doubts about that.'],
+ ['🎯 Better, not bigger','It is a better squad rather than a bigger one. That was deliberate.'],
+ ['💬 Not yet','Honestly, not yet. We have lost as much as we have gained and there is work still to do.'],
+ ['🧊 The table decides','You find out in May. Squads look strong in July and get found out in November.']);
+OA('pre-summer#3',
+ ['🔥 Be brave','Top four. If you are not aiming for that at this club then you are in the wrong building.'],
+ ['🎯 Improve on last','Better than last season. I am not going to give you a number to hang round my neck in March.'],
+ ['🧊 No predictions','I have never predicted a finish in my life and I am not starting in a pre-season press conference.'],
+ ['💬 Realistic','Realistically we are building. If we are in the mix at Christmas I will be pleased with that.']);
+OA('pre-summer#4',
+ ['🎯 Consistency','Consistency. The talent was never the problem — turning up every week was, and that is the whole job this year.'],
+ ['😠 The away form','The away form. It was not good enough and it cost us far more than any injury did.'],
+ ['👏 Scoring more','We have to score more goals. Everything else about last season was respectable.'],
+ ['💬 The mentality','The mentality when it goes against us. We folded twice last year and that will not happen again.']);
+OA('pre-summer#5',
+ ['🎯 Yes, deliberately','We have changed some things. You will see us play higher and take more risks in the build-up.'],
+ ['🧊 Same principles','The principles are the same. What changes is how well we execute them.'],
+ ['👏 More flexible','The big change is flexibility. This group can now play two ways inside a game and that is a year of work.'],
+ ['💬 Forced to','Some of it is forced. You lose a certain type of player and you have to adapt around what is left.']);
+OA('pre-summer#6',
+ ['💬 Yes, one area','Yes, and the club know exactly where. I will not name it and tell the rest of the division.'],
+ ['🧊 We are fine','I am comfortable with the group. If nothing else happens I will work with what I have got.'],
+ ['🎯 Depth, not starters','It is depth rather than a starter. One injury in that area and we are very thin.'],
+ ['🔥 Always room','There is always room for a top player. Show me one and I will find him a shirt.']);
+OA('pre-summer#7',
+ ['🎯 Mostly ideas','Fitness is a fortnight. The rest of it is ideas, and that is the part I actually enjoy.'],
+ ['👏 Both matter','You cannot separate them. A tired player cannot carry out an instruction, so the running buys you the coaching.'],
+ ['💬 More running than people think','More physical than people would like to hear. Modern football is brutal and you have to build for it.'],
+ ['🧊 It depends on the group','It depends what came back. Some of them arrive ready and some need three weeks of hard work.']);
+
+/* ---- the opening weeks ---- */
+OA('opening-early#1',
+ ['👏 Encouraged','I have learned they will run for each other. That is the foundation and everything else can be coached.'],
+ ['🎯 The shape holds','That the shape holds under pressure. That was the question in July and it has been answered.'],
+ ['💬 We are fragile','That we are fragile when we concede first. That is the thing to fix and it will take longer than a fortnight.'],
+ ['🧊 Not enough yet','Not enough to draw conclusions from. Ask me after ten games.']);
+OA('opening-early#2',
+ ['🎯 They do','They do. Get through the first month well and the whole season feels different — I have seen it both ways.'],
+ ['🧊 Not really','Not in my experience. Plenty of seasons are decided by what happens in February.'],
+ ['👏 Momentum matters','Momentum is real. Winning early makes players brave, and brave players win more games.'],
+ ['💬 It can trap you','A good start can hide problems. Some of the worst seasons I have had started brilliantly.']);
+OA('opening-early#3',
+ ['🧊 No','No. It is meaningless in August and everybody in football knows it.'],
+ ['💬 I look anyway','I look at it, of course I do. I just do not let anybody see me looking.'],
+ ['🎯 Points, not places','The points count from day one even if the positions do not. That is what I say to them.'],
+ ['👏 Enjoy it while it is nice','It is a pleasant read at the moment, and I will take that for what it is worth — which is nothing.']);
+
+/* ---- the title race ---- */
+OA('race-title#1',
+ ['🎯 Yes, directly','We have spoken about it plainly. Pretending it is not there would insult their intelligence.'],
+ ['🧊 Not a word','Not a word, and I will not. The moment you name it, players start thinking about May instead of Saturday.'],
+ ['👏 They raised it','They raised it with me, actually. This group is more ready for this than people think.'],
+ ['🔥 Told them to go for it','I have told them these chances do not come round. Go and take it.']);
+OA('race-title#2',
+ ['👏 Yes','I believe they do. There is a core in there who have won things and it shows in the tight games.'],
+ ['💬 They are learning','They are learning it now, in real time. That is uncomfortable and it is also how you find out.'],
+ ['🎯 It is not mystical','Winning a league is doing the ordinary things every week. There is no secret to it.'],
+ ['🧊 We will find out','We will find out together. That is what makes it worth watching.']);
+OA('race-title#3',
+ ['🤝 Name the rivals','The teams above us and the teams behind us. Everybody in this division can beat anybody.'],
+ ['🎯 Ourselves','Ourselves. The only way we lose this is by dropping points we should not, and that is in our hands.'],
+ ['🔥 Nobody','Nobody. I am not going to sit here and tell another club that we are frightened of them.'],
+ ['💬 The fixtures','The schedule more than any team. There is a week coming up that worries me far more than any opponent.']);
+OA('race-title#4',
+ ['💬 Every one','Every result. Anybody who says they do not watch is not telling the truth.'],
+ ['🧊 Never','I do not. It does not change one thing about what we have to do on Saturday.'],
+ ['👏 The players do','The players watch them all. I would rather they did not, but you cannot stop it.'],
+ ['🎯 Afterwards','I look on Sunday morning, once ours is done. Before that it is noise.']);
+
+/* ---- the relegation fight ---- */
+OA('race-drop#1',
+ ['🔥 Absolutely','They believe it. You can see it in how they train and I have not seen one head drop.'],
+ ['💬 Some do','Some of them do and some need convincing. That is my job over the next six weeks.'],
+ ['🎯 Belief comes from points','Belief comes from winning a game. We get one and you will see a different group.'],
+ ['👏 They have not given up','Nobody has downed tools. Whatever else happens, I will not have anyone say that about these players.']);
+OA('race-drop#3',
+ ['👏 Yes','I have, and you learn that panic is the enemy. Calm heads and simple football get you out.'],
+ ['💬 Not like this','Not one quite like this. Every one is different and anybody who says otherwise is guessing.'],
+ ['🎯 It is why I am here','I have been in them and I have got out of them. That experience is part of why I got this job.'],
+ ['🧊 It does not matter','What I have done before does not win us a point. The next game does.']);
+OA('race-drop#4',
+ ['🔥 Yes','There is one, and everybody in that dressing room knows which. Win it and everything changes.'],
+ ['🎯 All of them','They are all circled. Start picking games out and you lose the ones you were not concentrating on.'],
+ ['💬 The home games','The home games. If we look after this ground we will be fine, and that is where our season is.'],
+ ['🧊 The next one','The next one. That is not a cliché in this situation, it is genuinely the only way to think.']);
+
+/* ---- the final ---- */
+OA('cup-final#1',
+ ['🔥 It changes everything','It changes everything. A trophy is how seasons are remembered and how careers are remembered.'],
+ ['🎯 It should not','It should not, but it does. That is football and there is no point arguing with it.'],
+ ['👏 For the supporters','It would change it for them more than for us. That is the part I keep thinking about.'],
+ ['💬 Not the whole story','It would be the headline. It would not change whether the work underneath it was right.']);
+OA('cup-final#2',
+ ['💬 The truth','You tell them the truth. They are grown men and they know exactly what is at stake.'],
+ ['🧊 Just another game','You keep it as normal as you can. The occasion will find them without any help from me.'],
+ ['🔥 Make it big','I want them to feel it. Days like this should feel enormous — that is why you play.'],
+ ['👏 Remind them how they got here','I remind them what they have already done to get here. That settles a dressing room more than anything.']);
+OA('cup-final#3',
+ ['🎯 Kept it short','Very little. Whatever needs saying should have been said by Wednesday.'],
+ ['👏 About them','I will talk about them and what they have given each other this season. Not about me.'],
+ ['🔥 Go and take it','Three words, probably. Go and take it. Anything longer and they stop listening.'],
+ ['💬 Still working on it','I have not decided, honestly. You feel the room and then you know.']);
+OA('cup-final#4',
+ ['👏 Everything','It would mean an enormous amount. You do the job for these days and there are not many of them.'],
+ ['🎯 More for them','More for the players and the supporters than for me. That is not modesty, it is genuinely how I feel.'],
+ ['🧊 Think about it after','I will think about what it means afterwards. Before it, it is a job.'],
+ ['💬 Honest about it','I would be lying if I said I had not thought about it. Of course I have.']);
+OA('cup-semi#1',
+ ['💬 The worst','It is the worst game in football to lose and everybody in that dressing room knows it.'],
+ ['🎯 Do not think that way','You cannot go into it fearing the loss. Play to win it and the fear looks after itself.'],
+ ['🔥 Then we win it','Then we had better not lose it. Simple as that.'],
+ ['🧊 One of many','It is ninety minutes of football. Making it bigger than that is how sides freeze.']);
+OA('cup-semi#2',
+ ['🎯 Strongest side','Strongest available team. There is no rotation in a semi-final.'],
+ ['💬 With one eye on Saturday','Almost. There is a league game three days later and I would be foolish to ignore that completely.'],
+ ['👏 The ones who got us here','The ones who have got us this far deserve to be involved. Loyalty counts on a night like that.'],
+ ['🤐 Not saying','You will find out when the sheet goes up.']);
+
+/* ---- the takeover ---- */
+OA('tko-live#1',
+ ['🧊 Not spoken','I have not spoken to anybody and it would be inappropriate for me to.'],
+ ['💬 Briefly','There has been a conversation, yes. It was polite and it was short.'],
+ ['🎯 Not my job','My job is the team. Whoever owns the club will find me on the training ground either way.'],
+ ['🔥 I would welcome it','I would happily sit down with them. Anybody who wants to invest in this club is worth listening to.']);
+OA('tko-live#2',
+ ['🎯 We have managed it','We have. The training ground has been a very calm place and that is the staff’s doing as much as mine.'],
+ ['💬 It is difficult','It is difficult. People in this building do not know what happens to their jobs and that is a real thing.'],
+ ['🧊 Football is football','The football does not change. Same pitch, same session, same time on Saturday.'],
+ ['🛡️ They are shielded','I have kept it away from the players entirely. That is deliberate and it will stay that way.']);
+OA('tko-live#3',
+ ['💬 Constantly','They ask. Of course they do — it is their futures as much as anybody’s.'],
+ ['🧊 Not really','Not one of them. They are professionals and they know it is above all of us.'],
+ ['👏 They are focused','Once or twice, and then straight back to work. Their focus has been outstanding through it.'],
+ ['🎯 I told them not to','I told them at the start that we would not discuss it, and they have respected that.']);
+OA('tko-live#4',
+ ['🔥 Bring it on','I would relish it. Ambitious owners and a manager who wants to build — that is a good combination.'],
+ ['🧊 Not my decision','Whether it happens is not up to me. I will work for whoever owns this football club.'],
+ ['💬 Depends on the plan','It depends entirely what they want to do. Money without a plan makes clubs worse, not better.'],
+ ['🎯 Stability first','What this club needs is stability. If a takeover brings it, good — if it brings chaos, less good.']);
+OA('tko-done#1',
+ ['🔥 Fair enough','It is fair. If you put that money in you are entitled to be ambitious and I would not want it any other way.'],
+ ['💬 Not in one year','Ambition is fine. Expecting it in one season is not how football works and I have said that to them.'],
+ ['🎯 Judge the direction','Judge us on whether we are closer in twelve months. That is a fair target and I will accept it.'],
+ ['🧊 Targets do not bother me','Every manager at this club has been expected to win the league. Nothing has changed.']);
+OA('tko-done#2',
+ ['🎯 Enough','Enough to do what we need. I have been given a clear picture and I am comfortable with it.'],
+ ['🧊 That is club business','What the budget is stays inside the club. You will find out when we sign somebody.'],
+ ['💬 Less than the headlines','Less than the numbers you have all printed. That is normally how it works.'],
+ ['👏 They have backed me','They have backed me on every player I have asked for so far. I cannot ask for more than that.']);
+OA('tko-done#3',
+ ['🔥 Not worried','Not for a second. I will do the job as well as I can and let other people worry about names.'],
+ ['💬 Everybody thinks it','Every manager in the country thinks about it when a club changes hands. It would be strange not to.'],
+ ['🎯 Do the work','The only answer to that is results. Win enough and nobody replaces you.'],
+ ['🧊 Out of my hands','That is entirely out of my hands, so I do not spend a minute on it.']);
+OA('tko-done#4',
+ ['👏 For the better','It has, and mostly for the better. There is investment in things that were neglected for years.'],
+ ['🧊 Not day to day','Not on the training ground. Same people, same work — the changes are further up the building.'],
+ ['💬 Yes, and not all good','It has changed. Some of it is exciting and some of it I am still getting used to.'],
+ ['🎯 Too early','It is too early to say. Ask me at the end of the season and I will give you a proper answer.']);
+
+/* ---- the derby, the second time ---- */
+OA('derby#1',
+ ['👏 It means everything','It means everything to them and I use that. These people wait all year for this fixture.'],
+ ['🎯 Carefully','You use it, but carefully. Emotion wins you the first twenty minutes and loses you the last twenty.'],
+ ['🧊 It is about football','I keep the players on the football. What it means outside is real and it does not win the game.'],
+ ['🔥 We owe them','We owe them a performance in this fixture. That is the message and they have heard it all week.']);
+OA('derby#2',
+ ['🎯 Some things','You adjust for any opponent. What does not change is how we want to play.'],
+ ['🧊 Nothing','Nothing at all. The moment you change everything for one fixture you are telling them you are worried.'],
+ ['🔥 We go at them','If anything we will be more aggressive. You cannot sit back in a game like this.'],
+ ['💬 Personnel','The shape stays and one or two players change. There are games that need a certain type of character.']);
+OA('derby#3',
+ ['💬 It is a long week','It is a very long week if you lose it. Everybody in this city knows exactly what that feels like.'],
+ ['🔥 We will not lose it','We are not going into it thinking about losing. That is a good way to make sure you do.'],
+ ['🎯 It is three points','It is three points in a long season. Painful ones, but three points.'],
+ ['🛡️ Do not put that on them','I am not going to put that in my players’ heads the day before a game.']);
+
+/* =====================================================================
+   WHEN THE BANK HAS NOTHING
+   ---------------------------------------------------------------------
+   A question added by a future update will not have a set written for
+   it. Rather than fall straight back to the old four, the words of the
+   question are read and sorted into a subject, so even an unknown
+   question gets answers that are at least about the right thing.
+   ===================================================================== */
+const PRESS_TOPICS=[
+ ['injury',/injur|treatment room|fit|fitness|knock|carrying|available|out for|back on the grass/i,F=>[
+  ['💬 Give an update','We are hopeful it is not as bad as it looked. We will know more in a day or two and we will not rush anybody.'],
+  ['🎯 Somebody steps up','It opens a door for somebody else, and I have got real belief in the players waiting for a chance.'],
+  ['🧊 No excuses','Every club deals with injuries. We will not use it as an excuse and nobody in there would want us to.'],
+  ['🛡️ Protect them','I am not going to give a running commentary on players’ bodies. They are people, not a fixture list.']]],
+ ['team',/team news|name the same|selection|line-up|eleven|who plays|rotate|rest anyone/i,F=>[
+  ['🤐 Give nothing','You will find out on Saturday, the same as everybody else.'],
+  ['🎯 Some changes','There will be changes. Anybody who has earned his shirt will keep it and the rest have to convince me.'],
+  ['👏 Selection problems','I have got good problems. Some very good players are going to be disappointed this week.'],
+  ['🧊 Settled','I do not change for the sake of it. If a team has done the job it usually stays together.']]],
+ ['opponent',/them tomorrow|opposition|their side|their manager|how do you stop|danger|beat a/i,F=>[
+  ['🤝 Respect them','They are a good side with a good manager and we know exactly how difficult it will be.'],
+  ['🎯 We have a plan','We have worked all week on what they do. The players will go out clear about their jobs.'],
+  ['🔥 Worry about us','I would rather they worried about us. We go into every game intending to win it.'],
+  ['🧊 Focus on ourselves','We focus on our own work. What they do is their business.']]],
+ ['table',/table|position|league|top of|relegation|europe|title|finish/i,F=>[
+  ['🧊 One game at a time','The table sorts itself out in May. We look at the next game and nothing beyond it.'],
+  ['🔥 Aim high','We are ambitious and I will not apologise for that. This club should be looking upwards.'],
+  ['🎯 Focus on performance','I look at performances, not positions. Get the football right and the table follows.'],
+  ['💬 Be honest','Honestly, we are not where we should be, and I am not going to pretend otherwise.']]],
+ ['form',/run|form|streak|unbeaten|winless|defeats in a row|wins on/i,F=>[
+  ['👏 Credit the group','It comes from the players. The work they have put in has been excellent and this is the return on it.'],
+  ['🧊 Stay level','Runs come and go. The work stays exactly the same either way and that is how you stay consistent.'],
+  ['😠 Not good enough','It is not good enough and everybody inside that building knows it. It has to change this week.'],
+  ['🎯 Keep working','You fix it on the training ground, not in a press conference. That is where our week has gone.']]],
+ ['money',/transfer|window|sign|budget|money|spend|wages|contract|fee/i,F=>[
+  ['🧊 Club business','That is club business and it will be dealt with properly, not through a microphone.'],
+  ['🎯 Right player or nobody','We will move for the right player. If he is not available we will wait rather than waste it.'],
+  ['🔥 We want to strengthen','I want this squad stronger and I have made that very clear internally.'],
+  ['💬 Not just money','Some of what this group needs cannot be bought. It has to be built and that takes work.']]],
+ ['job',/your job|right man|board|sacked|position|pressure on you|how long/i,F=>[
+  ['🔥 Not going anywhere','I am the right man and I am not going anywhere. I know exactly what I am building here.'],
+  ['🙋 Results are on me','The results are my responsibility. If they do not improve then the questions are fair.'],
+  ['🧊 Not for me','Those decisions are made by other people. I turn up and I work — that is all I control.'],
+  ['💬 Fair question','It is a fair question and I would be asking it too. I would just ask people to look at the whole picture.']]],
+ ['fans',/supporter|fan|crowd|stand|banner|atmosphere|sing/i,F=>[
+  ['🤝 I understand','I understand them completely. They pay their money and they are entitled to expect more.'],
+  ['👏 They are magnificent','They have been magnificent. This club has the best support in the country and I mean that.'],
+  ['🎯 Ask for unity','I would only ask that we stay together. Turning on each other helps nobody, least of all the players.'],
+  ['🛡️ Protect the players','Criticise me all you like. I would just ask that people go easy on the young lads.']]],
+ ['youth',/young|academy|kid|teenager|boy|debut|graduate/i,F=>[
+  ['👏 Back the youngster','He is ready. I would not put him anywhere near it if I did not believe that completely.'],
+  ['🛡️ Protect him','Let him breathe. The worst thing we can do to a young player is decide what he is going to be.'],
+  ['🎯 Merit only','He will play when he is good enough and not a day before. That is fair on him and fair on everybody else.'],
+  ['🔥 A real talent','He is a special talent. People will be talking about him a lot more in two years than they are now.']]],
+ ['tactics',/formation|shape|system|mentality|press|set piece|tactic|style|play/i,F=>[
+  ['🎯 It fits the players','The system fits the players I have got. You coach what is in front of you, not what you would like.'],
+  ['🔥 We go forward','We set up to win football matches. I have never sent a side out to hang on and I never will.'],
+  ['🧊 It is only a shape','A formation is a starting point. What matters is the distances and the decisions inside it.'],
+  ['💬 It has to improve','We are not good enough in one area of the pitch and it is exactly what we are working on.']]],
+ ['ref',/referee|official|var|decision|penalty|whistle|card/i,F=>[
+  ['🤝 No complaints','No complaints. It is a very hard job and I thought he handled a difficult afternoon well.'],
+  ['🧊 Not going there','I am not going to talk about officials. It has never won anybody a football match.'],
+  ['⚔️ Make a point','I thought a couple of the big calls went against us. I will leave it at that.'],
+  ['🎯 Our discipline','I worry about our own discipline. Keep eleven on the pitch and referees are never the story.']]],
+ ['personal',/you ever|your family|switch off|sleep|enjoy|yourself|career|advice/i,F=>[
+  ['👏 I love it','I love it. Hard weeks and all, there is nothing else I would rather be doing.'],
+  ['💬 Be candid','It is a harder job than it looks and it takes something out of you. That is the deal and I accepted it.'],
+  ['🧊 Keep it private','That side of my life stays my own, if you do not mind.'],
+  ['🎯 Back to the work','It all comes back to the training ground. That is where I am happiest and where the answers are.']]],
+ ['result',/today|out there|went wrong|pleased you|point gained|dropped|scoreline|performance/i,F=>[
+  ['👏 Credit them','I thought they were excellent. That is a proper performance and the credit belongs to the players.'],
+  ['🙋 Take responsibility','That is my responsibility. I picked the team and set it up, so the blame sits with me.'],
+  ['🧊 Move on','It is one result. We look at it calmly, we learn from it, and we go again.'],
+  ['😠 Demand more','That was not good enough and they know it. There will be some hard conversations this week.']]]];
+
+function pressFallback(F){
+ const t=pressText()||'';
+ for(let i=0;i<PRESS_TOPICS.length;i++){
+  try{if(PRESS_TOPICS[i][1].test(t))return PRESS_TOPICS[i][2](F)}catch(e){}}
+ return null}
+
+/* =====================================================================
+   AND THE ANSWERS THE ROOM ACTUALLY GETS
+   ===================================================================== */
+const _pressPresetsOld=pressPresets;
+pressPresets=function(){
+ let out=null;
+ try{
+  const F=pqFacts();
+  if(F){
+   const full=pressQID(), rule=full.split('#')[0];
+   if(POPEN[full])out=POPEN[full];
+   if(!out&&PANS[rule]){try{out=PANS[rule](F)}catch(e){out=null}}
+   if(!out)out=pressFallback(F);
+  }}
+ catch(e){out=null}
+ if(!out||!out.length)out=_pressPresetsOld.apply(this,arguments);
+ /* every answer must be a pair of strings, or the sheet breaks */
+ try{out=out.filter(x=>x&&x.length>=2&&x[0]&&x[1])}catch(e){}
+ return (out&&out.length)?out:_pressPresetsOld.apply(this,arguments)};
+
+/* ---------------------------------------------------------------------
+   AND THE SHEET SAYS WHAT THE ANSWERS ARE FOR
+   The panel used to be headed "Or pick an answer", which was true and
+   not much help. A line under it now tells you the thing that actually
+   matters: these are not four ways of saying the same thing, and the
+   room will react to the one you choose.
+   --------------------------------------------------------------------- */
+const _pressSheetLbl=openPressSheet;
+openPressSheet=function(reaction){
+ _pressSheetLbl.apply(this,arguments);
+ try{
+  const host=$('#sheetBody');if(!host)return;
+  const lbl=Array.prototype.filter.call(host.querySelectorAll('.chip-lbl'),
+   e=>/Or pick an answer/i.test(e.textContent||''))[0];
+  if(lbl&&!lbl.dataset.rdmNote){
+   lbl.dataset.rdmNote='1';
+   const n=document.createElement('div');
+   n.className='xs faint';n.style.margin='0 0 6px 2px';
+   n.textContent='Four different answers to this question. They are read exactly like a typed one — the tone you pick is the decision.';
+   if(lbl.parentNode)lbl.parentNode.insertBefore(n,lbl.nextSibling)}}
+ catch(e){}};
+
+/*#w77_press_full.js#*/
 showStart();
 </script>
 </body>
