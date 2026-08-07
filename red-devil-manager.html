@@ -30922,6 +30922,77 @@ dailyTickCore=function(){
 
 /*#w65_harden.js#*/
 
+/*#w65_harden.js#*//*#w66_savesize.js#*/
+
+/* =====================================================================
+   THE SAVE THAT WOULD HAVE STOPPED FITTING
+   ---------------------------------------------------------------------
+   Found by measuring the twenty-season run rather than by reading, and
+   it is the most serious thing the soak turned up.
+
+       a fresh career          3.30 MB
+       after one season        4.71 MB
+       what the soak recorded  7.07 MB
+
+   localStorage gives a page about 5 MB. So a career stops being saveable
+   somewhere in its second season, and writeSlot's last-resort path could
+   not help: leanState(true) trims repLog, archive, gossip, the coach pool
+   and the fan log, which together are twenty kilobytes. Measured, the
+   "deep" trim took 4.71 MB down to 4.70 MB. It was never going to work,
+   because the weight is not in those arrays — it is in the players.
+
+   AND I MADE IT WORSE. Giving every player in your division a career
+   record and a match log — which is what you asked for — is what pushed
+   the growth to roughly a megabyte a season. The analytics are worth
+   keeping; what is not worth keeping is writing all of it to a slot.
+
+   So the trim now sheds what can be rebuilt or lived without, in order:
+
+     normal   the match log of anybody who is not yours. It drives the
+              recent-form strip on their profile, and it comes back on
+              its own as soon as they play again.
+     deep     their career totals too, and every form array in the game
+              down to the last three.
+
+   Your own players keep everything, always. Exported save files are
+   untouched — this only applies to what goes into a browser slot.
+   ===================================================================== */
+function shedForSlot(deep){
+ const stash=[];
+ try{
+  (G.clubs||[]).forEach(c=>{
+   if(c.i===G.my)return;                      /* your squad keeps the lot */
+   (c.players||[]).forEach(p=>{
+    if(p.log&&p.log.length){stash.push([p,'log',p.log]);p.log=[]}
+    if(deep&&p.car){stash.push([p,'car',p.car]);p.car=null}
+    if(deep&&p.form&&p.form.length>3){stash.push([p,'form',p.form]);p.form=p.form.slice(-3)}
+   });
+  });
+ }catch(e){}
+ return stash}
+function unshedForSlot(stash){
+ try{stash.forEach(([p,k,v])=>{p[k]=v})}catch(e){}}
+
+const _leanSize=leanState;
+leanState=function(deep){
+ const stash=shedForSlot(!!deep);
+ try{return _leanSize.apply(this,arguments)}
+ finally{unshedForSlot(stash)}};
+
+/* a slot that still will not take it says so plainly, rather than the
+   career quietly stopping being saveable */
+const _writeSlotSize=writeSlot;
+writeSlot=function(slot,quiet){
+ const ok=_writeSlotSize.apply(this,arguments);
+ try{
+  if(!ok&&!quiet)mail('info','Your save is too large for this browser',
+   'The career has outgrown what this browser will hold in a slot. Nothing is lost — '+
+   'use <b>Export save</b> under Save &amp; load to keep a file of it, which has no size limit.');
+ }catch(e){}
+ return ok};
+
+/*#w66_savesize.js#*/
+
 showStart();
 </script>
 </body>
