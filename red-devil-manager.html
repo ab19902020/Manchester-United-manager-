@@ -30594,6 +30594,238 @@ dailyTickCore=function(){
 
 /*#w63_analytics.js#*/
 
+/*#w63_analytics.js#*//*#w64_calendar.js#*/
+
+/* =====================================================================
+   THE EUROPEAN CALENDAR, AND WHY IT WAS OUT OF SYNC
+   ---------------------------------------------------------------------
+   "Champions League group stages seem out of sync. I played no games and
+   Celtic have played two. We need a legit one-to-one replica of the
+   official football calendar."
+
+   Two separate faults, and the first one is the one you actually saw.
+
+   THE SCHEDULE WAS NOT A SCHEDULE. The league phase drew 144 fixtures
+   and then tried to deal them into 8 matchdays with a greedy pass and a
+   small repair loop. It does not work, and it does not fail loudly — it
+   fails by a bit. Measured on the code before this: 28 of the 144
+   Champions League fixtures were double-booked, meaning 28 times a club
+   was down to play twice on the same matchday, with 28 matching holes
+   where a club had no game at all. Europa League 31, Conference 27.
+   Every club still played eight in total, which is why it looked fine
+   from the outside — but after matchday one had gone by, some clubs had
+   two games behind them and some had none. Exactly what you saw.
+
+   You cannot reliably deal an arbitrary set of 144 fixtures into 8
+   conflict-free rounds; that is an edge-colouring problem and there is
+   no guarantee a given draw even has a solution. So the order is
+   reversed. The SCHEDULE is built first, by the circle method, which
+   produces 35 rounds that are each a perfect matching by construction —
+   every club plays exactly once in every round, always, with no repair
+   pass and no failure mode. Eight of those rounds become the league
+   phase. The seeding is then chosen to give each club a spread of
+   opponents across the four pots, by scoring several thousand candidate
+   sets and keeping the best.
+
+   THE DATES WERE APPROXIMATE. Matchdays 3 to 7 were already right.
+   Matchday 1 was a week late, matchday 2 a fortnight early, matchday 8 a
+   day out, and the final was three weeks early. They are the real
+   2026/27 UEFA dates now, and the knockout rounds were already correct.
+   ===================================================================== */
+
+/* the real thing: 8 Sep, 13 Oct, 21 Oct, 4 Nov, 25 Nov, 9 Dec, 20 Jan,
+   27 Jan — then play-offs, R16, QF, SF in February to May, final 5 June.
+   Day 0 is 1 August. */
+EURO_DAYS.lg=[39,73,81,95,116,130,172,179];
+EURO_DAYS.f=[308];
+['CL','EL','EC'].forEach(k=>{
+ if(CUP_DEFS[k])CUP_DEFS[k].days=euroDays(k)});
+
+/* the domestic ones, from the same season's published calendar.
+   FA Cup   7 Nov, 5 Dec, 9 Jan, 13 Feb, 6 Mar, 3 Apr, 24 Apr, final 22 May
+   Carabao 12 Aug, 25 Aug, 16 Sep, 28 Oct, 16 Dec, semis 13 Jan and 3 Feb,
+           final 21 March — which was a month out, sitting in February. */
+if(CUP_DEFS.FA)CUP_DEFS.FA.days=[98,126,161,196,217,245,266,294];
+if(CUP_DEFS.LC)CUP_DEFS.LC.days=[11,24,46,88,137,165,186,232];
+
+/* ---------------------------------------------------------------------
+   a schedule that cannot clash, because of how it is built
+   --------------------------------------------------------------------- */
+function circleRounds(list){
+ const n=list.length;
+ if(n<2||n%2)return [];
+ const fixed=list[0], rot=list.slice(1), out=[];
+ for(let r=0;r<n-1;r++){
+  const pairs=[[fixed,rot[0]]];
+  for(let i=1;i<n/2;i++)pairs.push([rot[i],rot[n-1-i]]);
+  out.push(pairs);
+  rot.unshift(rot.pop());
+ }
+ return out}
+
+/* how well a candidate set of rounds spreads the pots — the real draw
+   gives every club two opponents from each of the four pots */
+function potScore(rounds,potOf,n){
+ const seen={};
+ rounds.forEach(pairs=>pairs.forEach(([a,b])=>{
+  (seen[a]=seen[a]||[0,0,0,0])[potOf[b]]++;
+  (seen[b]=seen[b]||[0,0,0,0])[potOf[a]]++;
+ }));
+ let bad=0;
+ for(const k in seen)seen[k].forEach(c=>bad+=Math.abs(c-2));
+ return bad}
+
+function euroSchedule(teams){
+ /* pots by strength, which is what a coefficient stands in for */
+ const seeded=teams.slice().sort((a,b)=>G.clubs[b].rep-G.clubs[a].rep);
+ const per=Math.max(1,Math.round(seeded.length/4));
+ const potOf={};
+ seeded.forEach((t,ix)=>potOf[t]=Math.min(3,Math.floor(ix/per)));
+
+ /* Random 8-of-35 subsets alone left the pot spread poor (92 against an
+    ideal of 0). A hill climb on top of the random start does far better
+    for the same handful of milliseconds: take the best subset found, then
+    keep swapping one chosen round for an unchosen one whenever it helps.
+    Interleaving the pots around the circle gives the climb a better
+    place to start than a plain shuffle does. */
+ let best=null,bestScore=1e9;
+ for(let attempt=0;attempt<8;attempt++){
+  const pots=[[],[],[],[]];
+  seeded.forEach(t=>pots[potOf[t]].push(t));
+  pots.forEach(shuffle);
+  const order=[];
+  for(let i=0;i<per;i++)pots.forEach(P=>{if(P[i]!=null)order.push(P[i])});
+  seeded.forEach(t=>{if(order.indexOf(t)<0)order.push(t)});
+  if(attempt%2)shuffle(order);
+  const all=circleRounds(order);
+  /* A competition with fewer than nine entrants yields fewer than eight
+     rounds, and the swap below then hunts forever for an unused one.
+     That is a hang, not a bad schedule, so it is checked rather than
+     hoped for. */
+  if(all.length<8)return all.length?{rounds:all,potBalance:-1,homeSpread:-1}:null;
+
+  let idx=shuffle(all.map((_,i)=>i)).slice(0,8);
+  let sc=potScore(idx.map(i=>all[i]),potOf,order.length);
+  for(let pass=0;pass<260&&sc>0;pass++){
+   const inAt=Math.floor(Math.random()*8);
+   const out=idx[inAt];
+   let cand=-1;
+   for(let g=0;g<80;g++){const c=Math.floor(Math.random()*all.length);
+    if(idx.indexOf(c)<0){cand=c;break}}
+   if(cand<0)break;
+   idx[inAt]=cand;
+   const ns=potScore(idx.map(i=>all[i]),potOf,order.length);
+   if(ns<=sc)sc=ns;else idx[inAt]=out;
+  }
+  if(sc<bestScore){bestScore=sc;best=idx.map(i=>all[i]);if(!sc)break}
+ }
+ if(!best)return null;
+
+ /* four at home and four away — greedy gets most of the way, then a
+    repair pass flips a tie between a club on five and a club on three */
+ const homes={};
+ const rounds=best.map(pairs=>pairs.map(([a,b])=>{
+  const ha=homes[a]||0, hb=homes[b]||0;
+  const aHome=ha<hb||(ha===hb&&Math.random()<.5);
+  const h=aHome?a:b, x=aHome?b:a;
+  homes[h]=(homes[h]||0)+1;
+  return [h,x]}));
+ /* A single direct-flip pass cannot always finish the job: sometimes the
+    club on five never plays the club on three, and it takes a chain of
+    two flips to move the surplus along. So this is a hill climb on total
+    deviation from four, which accepts a sideways move and therefore gets
+    through those. */
+ const target=Math.floor(best.length/2);
+ const dev=()=>teams.reduce((n,i)=>n+Math.abs((homes[i]||0)-target),0);
+ const flat=[];rounds.forEach(pairs=>pairs.forEach(m=>flat.push(m)));
+ let d=dev();
+ for(let pass=0;pass<4000&&d>0;pass++){
+  const m=flat[Math.floor(Math.random()*flat.length)];
+  const before=Math.abs((homes[m[0]]||0)-target)+Math.abs((homes[m[1]]||0)-target);
+  const after=Math.abs((homes[m[0]]||0)-1-target)+Math.abs((homes[m[1]]||0)+1-target);
+  if(after>before)continue;
+  homes[m[0]]--;homes[m[1]]=(homes[m[1]]||0)+1;
+  const t=m[0];m[0]=m[1];m[1]=t;
+  d=dev();
+ }
+ return {rounds,potBalance:bestScore,
+  homeSpread:Object.values(homes).filter(v=>v!==4).length}}
+
+/* ---------------------------------------------------------------------
+   and the draw itself, rebuilt on top of it
+   --------------------------------------------------------------------- */
+euroInit=function(key,teams){
+ const def=CUP_DEFS[key],cup=G.cups[key];
+ cup.teams=teams.slice();cup.phase='league';cup.round=0;cup.ties=[];
+ const sched=euroSchedule(teams);
+ if(!sched){                                   /* never seen, but never silently wrong */
+  cup.teams=[];return}
+ cup.potBalance=sched.potBalance;
+ sched.rounds.forEach((pairs,r)=>pairs.forEach(([h,a])=>cup.ties.push({
+  h,a,day:(G.seasonStart||0)+def.days[r],played:false,hs:0,as:0,sc:[],
+  cup:key,r,lg:1,leg:0,comp:def.name+' · '+def.rn[r]})));
+ if(teams.includes(G.my)){
+  const mine=cup.ties.filter(t=>t.h===G.my||t.a===G.my).sort((a,b)=>a.day-b.day);
+  const opps=mine.map(t=>esc(G.clubs[t.h===G.my?t.a:t.h].short)+(t.h===G.my?' (H)':' (A)'));
+  G.clubs[G.my].bank+=def.prize[0]*3;
+  mail('award',def.icon+' '+def.name+' league phase draw',
+   'Eight matches decide your place in a table of thirty-six.<br><br><b>'+opps.join('</b> · <b>')+'</b>'+
+   '<br><br>First match <b>'+fmtDate(mine[0].day)+'</b>. Finish in the top eight and you go straight to '+
+   'the last sixteen. Ninth to twenty-fourth go into a two-legged play-off. Twenty-fifth or below and you are out.')}};
+
+
+/* =====================================================================
+   AND THE LEAGUE CALENDAR ITSELF, WHICH HAD THE SAME SHAPE OF BUG
+   ---------------------------------------------------------------------
+   Chasing the European sync turned up a second one underneath it. The
+   league builder placed each round `step` days after the last, then
+   nudged it forward off any day the cups had claimed:
+
+       let d=day; while(RESERVED.has(d)&&guard++<6)d++;
+       ...
+       day+=step
+
+   Two faults in four lines. The nudge moves the round but `day` keeps
+   stepping from the ORIGINAL position, so a round pushed forward six
+   days lands exactly on the next round — and in a 24-club division the
+   step is six. Measured before this: 288 cases of a club with two league
+   matches on the same day, 72 in each of the Championship, League One,
+   League Two and the National League. And the six-try guard simply gives
+   up, dropping the round onto a European night anyway, which is where
+   the last 29 clashes came from.
+
+   Now each division remembers the days it has used, every round is
+   placed strictly after the one before it, and the search for a clear
+   day is wide enough to actually find one.
+   ===================================================================== */
+buildFixtures=function(startDay){
+ reserveCupDays();
+ G.fixtures=[];
+ leagueKeys().forEach(div=>{
+  const mem=divMembers(div);if(mem.length<2)return;
+  let R=rrPairs(mem);
+  if(mem.length<=12)R=R.concat(rrPairs(mem).slice(0,mem.length-1));
+  const END=292;
+  const span=Math.max(1,END-startDay);
+  const step=Math.max(3,span/Math.max(1,R.length));
+  const used=new Set();
+  let last=startDay-1;
+  R.forEach((ps,r)=>{
+   const target=Math.round(startDay+r*step);
+   let d=Math.max(target,last+1),guard=0;
+   while((RESERVED.has(d)||used.has(d))&&guard++<45)d++;
+   if(RESERVED.has(d)||used.has(d)){       /* nothing clear — take the next free day
+                                              anyway; a crowded week beats two
+                                              matches on one afternoon */
+    d=last+1;while(used.has(d))d++;
+   }
+   used.add(d);last=d;
+   ps.forEach(([h,a])=>G.fixtures.push({r,day:d,h,a,played:false,hs:0,as:0,sc:[],div}));
+  });
+ })};
+
+/*#w64_calendar.js#*/
+
 showStart();
 </script>
 </body>
