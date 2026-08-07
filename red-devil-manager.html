@@ -33175,6 +33175,630 @@ openModal=function(html){
 
 /*#w72_room_and_loans.js#*/
 
+
+
+
+
+
+
+
+/*#w73_clubkey.js#*/
+
+/* =====================================================================
+   w73_clubkey — you picked West Ham and got Ipswich
+   ---------------------------------------------------------------------
+   The club picker does not build the world to show you a list; that would
+   cost a second every time you opened it. It builds the world once, keeps
+   the list in the browser's storage, and reads it back on every later
+   visit. That much is fine.
+
+   What is not fine is what it kept: each club's POSITION in the array,
+   and nothing else. "West Ham is number 22." Then the game was updated —
+   squads brought up to date, clubs added, a division resized — and every
+   club after the change moved. Number 22 is now somebody else. The stored
+   list still said West Ham, the button still said West Ham, and the game
+   started whoever was standing at 22.
+
+   The cache had a version tag to guard against exactly this, and the tag
+   was a number a human had to remember to change. Nobody did, and nobody
+   ever will, so this stops relying on it:
+
+   1. THE CACHE FINGERPRINTS THE WORLD IT CAME FROM. Not a version anyone
+      has to bump — a hash of every club key the game ships with, computed
+      from the data itself. Add a club, rename one, resize a division, and
+      the fingerprint no longer matches and the list is rebuilt. It cannot
+      go stale without noticing.
+
+   2. NOTHING IS IDENTIFIED BY POSITION ANY MORE. The picker remembers the
+      club's key, the button carries the key, and the key is resolved
+      against the live world at the moment the career starts. Even if a
+      stale list somehow survived, the worst it could do is show you a
+      slightly wrong badge — it could not start the wrong club, because
+      the number is no longer what is being passed.
+   ===================================================================== */
+
+/* ---- 1. a fingerprint taken from the data, not from a version number -- */
+function worldFingerprint(){
+ const parts=[];
+ const tab=(name,arr)=>{
+  try{
+   if(typeof arr==='undefined'||!arr||!arr.length)return;
+   parts.push(name+':'+arr.length+':'+arr.map(r=>
+    Array.isArray(r)?String(r[0]):(r&&(r.k||r.key||r.name))||'').join(','))}
+  catch(e){}};
+ try{tab('DB',DB)}catch(e){}
+ try{tab('CH',CH_DB)}catch(e){}
+ try{tab('L1',L1_DB)}catch(e){}
+ try{tab('L2',L2_DB)}catch(e){}
+ try{tab('NL',NL_DB)}catch(e){}
+ try{tab('EU',EU_DB)}catch(e){}
+ try{tab('E2',EU2_DB)}catch(e){}
+ try{if(typeof W_LG!=='undefined'&&W_LG)parts.push('WLG:'+W_LG.map(L=>L.k+'#'+(L.add||'').length).join(','))}catch(e){}
+ return (hashStr(parts.join('|'))>>>0).toString(36)}
+
+const ROSTER_KEY2='rdmRoster';
+buildRoster=function(){
+ if(ROSTER)return ROSTER;
+ const fp=worldFingerprint();
+ try{
+  const raw=localStorage.getItem(ROSTER_KEY2);
+  if(raw){const j=JSON.parse(raw);
+   if(j&&j.fp===fp&&j.list&&j.list.length>50){ROSTER=j.list;return ROSTER}}}
+ catch(e){}
+ const keep=G,realMail=mail,realToast=(typeof toastQuiet==='function')?toastQuiet:null;
+ try{
+  mail=function(){};
+  if(realToast)toastQuiet=function(){};
+  newGame(0);
+  ROSTER=G.clubs.map(c=>({i:c.i,key:c.key,name:c.name,short:c.short,c1:c.c1,c2:c.c2,
+   rep:c.rep,budget:Math.round(c.budget/1e6),league:c.league,cc:c.cc||'ENG',
+   stadium:c.stadium,cap:c.cap,stars:rosterStars(c)}));
+  try{localStorage.setItem(ROSTER_KEY2,JSON.stringify({fp,list:ROSTER}))}catch(e){}
+  // the old cache is worthless and only takes up room
+  try{localStorage.removeItem('rdmRoster3')}catch(e){}}
+ catch(e){ROSTER=null}
+ finally{G=keep;mail=realMail;if(realToast)toastQuiet=realToast}
+ return ROSTER};
+
+/* ---- 2. the key is what gets carried, and what gets resolved --------- */
+function rosterByKey(k){return (ROSTER||[]).filter(c=>c.key===k)[0]||null}
+function selectedClub(){
+ const list=ROSTER||[];
+ if(!list.length)return null;
+ return (UI.startKey&&rosterByKey(UI.startKey))||list[0]}
+function liveIndexForKey(k){
+ if(!G||!G.clubs)return -1;
+ for(let i=0;i<G.clubs.length;i++)if(G.clubs[i].key===k)return i;
+ return -1}
+
+const _paintStartKey=paintStart;
+paintStart=function(){
+ // keep the old index field in step for anything else that reads it, but
+ // the key is the thing that decides
+ const list=buildRoster()||[];
+ if(list.length){
+  if(!UI.startKey){
+   const cur=list.filter(c=>c.i===UI.startSel)[0]||list[0];
+   UI.startKey=cur.key}
+  const sel=selectedClub();
+  if(sel)UI.startSel=sel.i}
+ const r=_paintStartKey.apply(this,arguments);
+ // re-stamp the grid and the button so every route carries the key
+ try{
+  const host=$('#startBody');if(!host)return r;
+  host.querySelectorAll('[data-action="pickClub"]').forEach(el=>{
+   const c=(ROSTER||[]).filter(x=>x.i===+el.dataset.v)[0];
+   if(c)el.dataset.k=c.key});
+  const sel=selectedClub();
+  const go=host.querySelector('[data-action="startGame"]');
+  if(go&&sel){go.dataset.k=sel.key;go.textContent='Take the '+sel.short+' job'}}
+ catch(e){}
+ return r};
+ACTIONS.pickClub=el=>{
+ const k=el.dataset.k||((ROSTER||[]).filter(x=>x.i===+el.dataset.v)[0]||{}).key;
+ const c=k?rosterByKey(k):null;
+ if(c){UI.startKey=c.key;UI.startSel=c.i;UI.pickCC=c.cc;UI.pickDiv=c.league}
+ paintStart()};
+
+/* newGame will take a club key as readily as a number, and resolves it
+   against the world it has just built rather than trusting a position */
+const _newGameKey=newGame;
+newGame=function(sel){
+ if(typeof sel==='string'){
+  _newGameKey(0);
+  const ix=liveIndexForKey(sel);
+  if(ix>=0&&ix!==G.my){
+   takeOverClub(ix);
+   try{buildAcademies()}catch(e){}
+   try{G.cups=null;initCups()}catch(e){}}
+  return}
+ return _newGameKey(sel)};
+
+let WANT_KEY=null;
+const _startGameKey=ACTIONS.startGame;
+ACTIONS.startGame=function(el){
+ const k=(el&&el.dataset&&el.dataset.k)||UI.startKey;
+ if(k){
+  const c=rosterByKey(k);
+  // pass the key through, not the number
+  UI.startSel=c?c.i:UI.startSel;
+  WANT_KEY=k;
+  const _ng=newGame;
+  newGame=function(){return _ng(k)};
+  try{return _startGameKey.apply(this,arguments)}
+  finally{newGame=_ng;WANT_KEY=null}}
+ return _startGameKey.apply(this,arguments)};
+
+/* ---- 3. the last line of defence -------------------------------------
+   If a career is being started from the picker and the club that ends up
+   in the chair is not the club that was asked for, put it right rather
+   than play on. This only ever looks at a career being started from the
+   picker: takeOverClub is used by other things — a job offer, a career
+   move — and must not be second-guessed there. */
+const _takeOverVerify=takeOverClub;
+takeOverClub=function(idx){
+ const r=_takeOverVerify.apply(this,arguments);
+ try{
+  if(WANT_KEY&&G&&G.clubs[G.my]&&G.clubs[G.my].key!==WANT_KEY){
+   const ix=liveIndexForKey(WANT_KEY);
+   if(ix>=0)_takeOverVerify(ix)}}
+ catch(e){}
+ return r};
+
+/*#w73_clubkey.js#*//*#w74_loans.js#*/
+
+/* =====================================================================
+   w74_loans — the answer "no"
+   ---------------------------------------------------------------------
+   A club writes in asking to take one of your players on loan, and the
+   letter offered you two choices: agree it, or go and look at who else
+   wants him. There was no way to say no. The enquiry sat in the inbox
+   until you gave the player away or ignored it forever.
+
+   Saying no is now a button, and it means something:
+
+   · THE PLAYER HAS A VIEW. A twenty-year-old who has not had a minute
+     all season wanted that move. Blocking it costs you with him — and
+     the more obviously he needed the football, the more it costs. A
+     senior who is perfectly happy in the squad does not mind at all.
+   · THE CLUB TAKES THE HINT for a month, then may try again if he still
+     is not playing.
+   · AND YOU ARE TOLD WHAT IT DID, rather than the letter just vanishing.
+
+   Two other things were wrong with the same letter. It only ever came in
+   for fringe players rated under seventy-eight, so nobody ever asked
+   about the good young player you were keeping back — which is exactly
+   the approach a manager should get to turn down. And the buttons on it
+   were built by hand in one place and read in another, so a refused or
+   agreed enquiry left dead buttons behind.
+   ===================================================================== */
+
+function loanWantsOut(p){
+ /* how badly he wants the move: minutes are almost the whole of it */
+ const apps=(p.stats&&p.stats.apps)||0;
+ const played=(G.day-(G.seasonStart||0))>50;
+ let w=0;
+ if(p.age<=22)w+=34;
+ if(apps===0&&played)w+=40; else if(apps<=2&&played)w+=26; else if(apps<=6)w+=10;
+ const xi=(G.tacs&&G.tacs.xi)||[];
+ if(xi.indexOf(p.id)>=0)w-=45;
+ if(p.morale<45)w+=12;
+ return clamp(w,0,100)}
+
+ACTIONS.loanRefuse=el=>{
+ const p=playerById(el.dataset.id);
+ const cid=el.dataset.c!=null?+el.dataset.c:null;
+ const club=(cid!=null&&G.clubs[cid])?G.clubs[cid]:null;
+ if(!p){closeModal();return}
+ const keen=loanWantsOut(p);
+ G.loanBlock=G.loanBlock||{};
+ G.loanBlock[p.id]=G.day+30;
+ // he finds out, and how he takes it depends on whether he needed to go
+ let note='';
+ if(keen>=60){
+  p.morale=clamp(p.morale-irnd(9,15),1,100);
+  note='<b>'+esc(p.name)+'</b> is not happy. He wanted the football and he knows it.';}
+ else if(keen>=32){
+  p.morale=clamp(p.morale-irnd(3,7),1,100);
+  note='<b>'+esc(p.name)+'</b> would have gone, but he understands the decision.';}
+ else note='<b>'+esc(p.name)+'</b> is content where he is and thinks nothing of it.';
+ mail('transfer','Loan approach turned down: '+p.name,
+  (club?'You have told <b>'+esc(club.name)+'</b> that ':'You have said ')+
+  '<b>'+esc(p.name)+'</b> is going nowhere.<br><br>'+note+
+  (keen>=60?'<br><br>If he still is not playing in a month, expect somebody to ask again.':''));
+ // the letter that asked is finished with
+ try{
+  const mid=el.dataset.mid;
+  const m=(G.inbox||[]).filter(x=>x.id===mid)[0];
+  if(m)m.actions=null;
+  else (G.inbox||[]).forEach(x=>{
+   if(x.actions&&x.actions.some(a=>a.act==='loanDo'&&String(a.arg)===String(p.id)))x.actions=null})}
+ catch(e){}
+ closeModal();
+ toast('🚫 Approach for '+p.name+' rejected');
+ render()};
+
+/* the enquiry now offers all three answers, and asks about the players a
+   club would really ask about */
+loanOfferRound=function(){
+ try{
+  if(typeof windowOpen==='function'&&!windowOpen())return;
+  if(G.day%7!==3)return;
+  const me=G.clubs[G.my];
+  const xi=(G.tacs&&G.tacs.xi)||[];
+  G.loanBlock=G.loanBlock||{};
+  const cand=(me.players||[]).filter(p=>{
+   if(p.loan||p.loanIn||p.injury)return false;
+   if((G.loanBlock[p.id]||0)>G.day)return false;
+   if(xi.indexOf(p.id)>=0)return false;
+   const apps=(p.stats&&p.stats.apps)||0;
+   // anybody out of the side is fair game — including the good young one
+   return apps<=3||p.age<=21});
+  if(!cand.length)return;
+  if(Math.random()>.5)return;
+  const p=pick(cand);
+  const list=loanSuitors(p);
+  if(!list.length)return;
+  const s=list[Math.floor(Math.random()*Math.min(3,list.length))];
+  const mine=loanCost(p,s.share);
+  const keen=loanWantsOut(p);
+  mail('transfer','🛫 Loan enquiry: '+p.name,
+   '<b>'+esc(s.c.name)+'</b> ('+esc((typeof DIV_NAMES==='object'&&DIV_NAMES[s.c.league])||'')+') would like '+
+   '<b>'+esc(p.name)+'</b> on loan until the end of the season. He would be a <b>'+s.mins+'</b> there.<br><br>'+
+   'They will cover <b>'+s.share+'%</b> of his wages, leaving you paying <b>'+fmtW(mine)+'</b> a week.<br><br>'+
+   '<span class="xs faint">'+(keen>=60?'He wants to go — he has barely played.'
+     :keen>=32?'He would consider it.'
+     :'He is happy in the squad and is in no hurry to leave.')+'</span>',
+   [{lbl:'Agree the loan',act:'loanDo',arg:p.id,_c:s.c.i,_s:s.share},
+    {lbl:'See who else wants him',act:'loanSheet',arg:p.id,ghost:true},
+    {lbl:'🚫 Reject the approach',act:'loanRefuse',arg:p.id,_c:s.c.i,ghost:true}]);
+ }catch(e){}};
+
+/* the mail buttons carry their club and share through to whichever action
+   is pressed — before, only the first button was wired up */
+const _mailLoanArgs=ACTIONS.loanRefuse;
+function loanFillArgs(el,actName){
+ try{
+  if(!el||!el.dataset||!el.dataset.mid)return;
+  const m=(G.inbox||[]).filter(x=>x.id===el.dataset.mid)[0];
+  if(!m||!m.actions)return;
+  const a=m.actions.filter(x=>x.act===actName)[0];
+  if(!a)return;
+  if(el.dataset.id===undefined||el.dataset.id==='')el.dataset.id=a.arg;
+  if(a._c!=null&&el.dataset.c===undefined)el.dataset.c=a._c;
+  if(a._s!=null&&el.dataset.s===undefined)el.dataset.s=a._s}
+ catch(e){}}
+ACTIONS.loanRefuse=function(el){loanFillArgs(el,'loanRefuse');return _mailLoanArgs.apply(this,arguments)};
+const _loanDoArgs=ACTIONS.loanDo;
+ACTIONS.loanDo=function(el){loanFillArgs(el,'loanDo');return _loanDoArgs.apply(this,arguments)};
+const _loanSheetArgs=ACTIONS.loanSheet;
+ACTIONS.loanSheet=function(el){loanFillArgs(el,'loanSheet');return _loanSheetArgs.apply(this,arguments)};
+
+/* ---------------------------------------------------------------------
+   AND THE WAY IN IS ON EVERY PLAYER, NOT ONLY THE ONES WITH A BID BUTTON
+   The approach button was injected next to "Make a bid", so a player the
+   game would not sell you had no loan button either — which is precisely
+   the player you would want to ask about.
+   --------------------------------------------------------------------- */
+const _openProfLoanAny=openProfile;
+openProfile=function(pid){
+ _openProfLoanAny.apply(this,arguments);
+ try{
+  const p=playerById(pid);const sb=$('#sheetBody');
+  if(!p||!sb)return;
+  if(p.club===G.my||p.loanIn)return;
+  if(sb.querySelector('[data-action="loanAsk"]'))return;
+  const btn=document.createElement('button');
+  btn.className='btn btn-ghost btn-block';btn.style.marginTop='8px';
+  btn.setAttribute('data-action','loanAsk');btn.setAttribute('data-id',String(p.id));
+  btn.innerHTML='🛬 Ask to loan him'+(windowOpen()?'':' (window shut)');
+  const close=sb.querySelector('[data-action="closeModal"]');
+  if(close&&close.parentNode)close.parentNode.insertBefore(btn,close);
+  else sb.appendChild(btn)}
+ catch(e){}};
+
+/*#w74_loans.js#*//*#w75_growth.js#*/
+
+/* =====================================================================
+   w75_growth — a seventeen-year-old cannot improve eleven points in a week
+   ---------------------------------------------------------------------
+   "There's a 17 year old at Bayern who gained 11 points on his overall
+   within five days of the start of the season."
+
+   Development is spread across a dozen places in this game — weekly
+   training, individual programmes, the pre-season camp, the tour, loan
+   spells, the academy, the season rollover, and whatever an update adds
+   next. Each one is modest on its own. Nothing was watching the total,
+   so on a week where several landed together a teenager could jump a
+   long way, and no single line of code looked wrong.
+
+   Rather than trim each of them and hope, this puts a ceiling on the
+   thing that actually matters — how much better a player gets in a
+   season — and lets the existing systems push against it.
+
+   WHAT A SEASON CAN BE WORTH
+       16-18    up to 10      the exceptional teenage breakthrough
+       19-21    up to  9
+       22-24    up to  7
+       25-27    up to  5
+       28-30    up to  3
+       31+      up to  1      they are going the other way by now
+   And the ceiling is EARNED. A player who has played almost every minute
+   and been good in them gets all of it. One who has not kicked a ball
+   gets a third of it — he is training, but training is not football. The
+   allowance also opens up as the season goes: five days in, nobody has
+   earned anything much, so nobody can have jumped.
+
+   That gives a typical improving player under 28 somewhere between three
+   and seven a year, which is what was asked for, and it makes the
+   ten-point teenager the rare thing it should be rather than a Tuesday.
+   ===================================================================== */
+
+function growCeiling(age){
+ if(age<=18)return 10;
+ if(age<=21)return 9;
+ if(age<=24)return 7;
+ if(age<=27)return 5;
+ if(age<=30)return 3;
+ return 1}
+
+function growSeasonProgress(){
+ const d=Math.max(0,G.day-(G.seasonStart||0));
+ return clamp(d/300,0,1)}
+
+/* how much of the season's allowance he has actually earned */
+function growMerit(p){
+ const apps=(p.stats&&p.stats.apps)||0;
+ const prog=growSeasonProgress();
+ // roughly how many games have been available to him so far
+ const avail=Math.max(1,Math.round(46*prog));
+ const share=clamp(apps/avail,0,1);
+ // and how well he has played when he has
+ const avg=apps>0?((p.stats.rSum||0)/apps):0;
+ const form=apps>0?clamp((avg-6.0)/1.6,-.35,.45):0;
+ // a young player on loan is playing somewhere, even if not for you
+ const onLoan=p.loan?.55:0;
+ /* A full season of good football is worth all of it and no more; the
+    ceiling for the age band is the ceiling, not a suggestion. */
+ return clamp(.25+Math.max(share,onLoan)*.55+form,.25,1)}
+
+function growAllowance(p){
+ const ceil=growCeiling(p.age);
+ // the allowance opens up across the season — it cannot all be had in August
+ const open=Math.max(.18,growSeasonProgress());
+ return ceil*open*growMerit(p)}
+
+/* Pulling him back: his attributes are eased down together until his
+   overall lands on the ceiling. Scaling the whole set keeps him the same
+   player — the shape of him does not change, only the level. */
+function growPullBack(p,target){
+ let guard=0;
+ while(Math.round(ovrOf(p))>target&&guard++<60){
+  for(const a in p.attrs)p.attrs[a]=clamp(p.attrs[a]*.996,1,20)}
+ p.ovr=Math.round(ovrOf(p));
+ try{p.value=valueFor(p)}catch(e){}}
+
+function capGrowth(){
+ try{
+  const season=G.season;
+  eachPlayer(p=>{
+   if(p._gS!==season){p._gS=season;p._gB=p.ovr;return}
+   if(p._gB==null){p._gB=p.ovr;return}
+   const max=growAllowance(p);
+   const target=Math.round(p._gB+max);
+   if(p.ovr<=target)return;
+   growPullBack(p,target)});
+ }catch(e){}}
+
+/* the same for the academy, who are not in eachPlayer */
+/* Everyone in the world, academy included. eachPlayer only walks first
+   teams, and the academy is exactly where the runaway teenagers were. */
+function eachPlayerAndYouth(fn){
+ try{eachPlayer(fn)}catch(e){}
+ try{(G.clubs||[]).forEach(c=>(c.youth||[]).forEach(p=>fn(p,c)))}catch(e){}}
+
+/* An academy player plays academy football, which is football — but it is
+   not first-team minutes, so it is worth about half a season of them. */
+function meritOf(p){return p.youth?.55:growMerit(p)}
+
+function capGrowthYouth(){
+ try{
+  const season=G.season;
+  (G.clubs||[]).forEach(c=>(c.youth||[]).forEach(p=>{
+   if(p._gS!==season){p._gS=season;p._gB=p.ovr;return}
+   if(p._gB==null){p._gB=p.ovr;return}
+   const max=growCeiling(p.age)*Math.max(.18,growSeasonProgress())*meritOf(p);
+   const target=Math.round(p._gB+max);
+   if(p.ovr<=target)return;
+   growPullBack(p,target)}));
+ }catch(e){}}
+
+/* Checked once a week, which is as often as anything can grow, and again
+   whenever the game does something wholesale to everybody. */
+const _wkTrainCap=weeklyTraining;
+weeklyTraining=function(){
+ const r=_wkTrainCap.apply(this,arguments);
+ capGrowth();capGrowthYouth();
+ return r};
+const _campCap=ACTIONS.campGo;
+if(typeof _campCap==='function')ACTIONS.campGo=function(){
+ const r=_campCap.apply(this,arguments);capGrowth();return r};
+const _dtcCap=dailyTickCore;
+dailyTickCore=function(){
+ const r=_dtcCap.apply(this,arguments);
+ // a cheap daily backstop: only the handful who have gone past the line
+ // are ever touched, so this costs a comparison per player
+ if(G.day%3===0){capGrowth();capGrowthYouth()}
+ return r};
+
+/* ---------------------------------------------------------------------
+   THE YEAR'S DEVELOPMENT, SETTLED IN ONE PLACE
+   ---------------------------------------------------------------------
+   A ceiling on its own only ever takes away, and the drip of weekly
+   training on its own never got a good young player anywhere near the
+   three to seven a season he should be making. So the end of the season
+   is where a year of football is actually converted into a player.
+
+   What he gets is his age band's ceiling, multiplied by what he earned:
+   minutes on the pitch and how he played in them. A twenty-year-old who
+   played forty games and was good in them gets most of nine. The same
+   boy on the bench all year gets two. Nobody gets anything they have not
+   got room for — potential is still the wall.
+   --------------------------------------------------------------------- */
+function growPushUp(p,target){
+ const ceilPot=Math.min(target,p.pot||target);
+ let guard=0;
+ while(Math.round(ovrOf(p))<ceilPot&&guard++<80){
+  for(const a in p.attrs)p.attrs[a]=clamp(p.attrs[a]*1.004,1,20)}
+ p.ovr=Math.round(ovrOf(p));
+ try{p.value=valueFor(p)}catch(e){}}
+
+function ageDevFactor(age){
+ if(age<=18)return 1;
+ if(age<=21)return .9;
+ if(age<=24)return .8;
+ if(age<=27)return .58;
+ if(age<=30)return .3;
+ return 0}
+
+function settleSeasonDevelopment(){
+ try{
+  const byId={};
+  eachPlayerAndYouth(p=>{byId[p.id]=p});
+  (G._devPlan||[]).forEach(x=>{
+   const p=byId[x.id]||playerById(x.id);
+   if(!p||p.age>34)return;
+   const room=Math.max(0,(p.pot||p.ovr)-p.ovr);
+   // merit and age scale WITHIN the band's ceiling; they cannot beat it
+   const want=Math.min(x.ceil,Math.round(x.ceil*Math.min(1,x.merit)*x.af));
+   const got=p.ovr-x.base;
+   if(want>got&&room>0)growPushUp(p,Math.min(x.base+want,p.pot||99));
+   else if(got>want)growPullBack(p,x.base+Math.max(0,want));
+  });
+ }catch(e){}
+ G._devPlan=null}
+
+const _endSeasonCap=endSeason;
+endSeason=function(){
+ /* what each player earned has to be read BEFORE the rollover, because
+    the rollover is what wipes the season's appearances */
+ try{
+  const plan=[];
+  eachPlayerAndYouth(p=>{
+   if(p.age>34)return;
+   plan.push({id:p.id,base:(p._gB!=null?p._gB:p.ovr),ceil:growCeiling(p.age),
+    merit:meritOf(p),af:ageDevFactor(p.age)})});
+  G._devPlan=plan}
+ catch(e){}
+ const r=_endSeasonCap.apply(this,arguments);
+ try{settleSeasonDevelopment()}catch(e){}
+ try{capGrowthYouth()}catch(e){}
+ try{
+  eachPlayerAndYouth(p=>{p._gS=G.season;p._gB=p.ovr})}
+ catch(e){}
+ return r};
+
+/* and a new career starts everybody's ledger from scratch */
+const _newGameCap=newGame;
+newGame=function(){
+ const r=_newGameCap.apply(this,arguments);
+ try{
+  eachPlayerAndYouth(p=>{p._gS=G.season;p._gB=p.ovr})}
+ catch(e){}
+ return r};
+
+/*#w75_growth.js#*//*#w76_skip.js#*/
+
+/* =====================================================================
+   w76_skip — skip the half, get a 0-0 and nothing else
+   ---------------------------------------------------------------------
+   "If I skip to the second half, no goal scored, nothing happened. I do
+   it from the second half and the game loads, goals scored again."
+
+   Both halves of that are the same bug, and it is a good one.
+
+   When a goal goes in, the match holds for a couple of seconds so you
+   can see it — the scorer, the replay line, the restart. That is done by
+   stamping a time on the clock and having every tick refuse to run until
+   the clock passes it:
+
+       if(MU._hold && Date.now() < MU._hold && !MU._ffing) return;
+
+   Fast-forwarding the whole match sets MU._ffing, so it steps straight
+   over that. Skipping a half does not. And a skip is a SYNCHRONOUS loop:
+   four hundred ticks back to back, in under a millisecond, without ever
+   returning to the browser. Date.now() does not move while that loop
+   runs — so the moment anything sets a hold, every remaining tick in the
+   skip returns immediately, the guard counter burns out, and the match
+   is left exactly where it was. Nought-nought, no shots, minute zero.
+
+   Then you press "second half", the game goes back to running on a
+   timer, real time passes, the hold expires, and football happens again.
+   Which is precisely what was described.
+
+   A skip now runs the way a fast-forward does: holds off, clock ignored,
+   and cleared afterwards so the watched match still gets its moment. The
+   guard is raised too — four hundred ticks was not far above what a half
+   can legitimately need once stoppages are in.
+   ===================================================================== */
+
+function runWithoutHolds(fn){
+ const wasFF=MU._ffing,wasHold=MU._hold;
+ MU._ffing=true;MU._hold=0;
+ try{return fn()}
+ finally{MU._ffing=wasFF;MU._hold=0}}
+
+const _skipHalfHold=skipHalf;
+skipHalf=function(){
+ if(!MU||!MU.m)return _skipHalfHold.apply(this,arguments);
+ return runWithoutHolds(()=>_skipHalfHold.apply(this,arguments))};
+
+const _fastForwardHold=fastForward;
+fastForward=function(){
+ if(!MU||!MU.m)return _fastForwardHold.apply(this,arguments);
+ return runWithoutHolds(()=>_fastForwardHold.apply(this,arguments))};
+
+/* the skip button itself: keep the speed marked as a skip while it runs,
+   so nothing downstream decides to hold either */
+ACTIONS.mspeed=function(el){
+ const v=+el.dataset.v;
+ MU.hlHold=0;MU.acc=0;MU.last=performance.now();
+ if(v===9){
+  MU.speed=9;
+  runWithoutHolds(()=>{try{skipHalf()}catch(e){}});
+  MU.speed=0;
+  try{renderMCtl();renderTop()}catch(e){}
+  return}
+ MU.speed=v;
+ try{renderMCtl()}catch(e){}};
+
+/* A half is at most ninety minutes of ticks plus stoppages and set
+   pieces; four hundred was close enough to the ceiling that a busy half
+   could hit it. This one cannot be reached by a real match. */
+skipHalf=function(){
+ const m=MU.m;if(!m)return;
+ const before=m.stage;
+ runWithoutHolds(()=>{
+  let guard=0;
+  while(!m.done&&m.stage!=='HT'&&guard++<3000)trackedTick();
+ });
+ MU.speed=0;MU.acc=0;MU.hlHold=0;MU._htPainted=false;
+ try{renderTop();renderMCtl()}catch(e){}
+ try{if(MU.tab==='comm')fillFeed($('#commList'),200);else fillFeed($('#miniFeed'),4)}catch(e){}
+ if(m.done){try{onFT()}catch(e){}}
+ else if(m.stage==='HT'&&before!=='HT'){MU._htPainted=true;try{toast('Half time')}catch(e){}}};
+
+/* and the same guard on the whole-match skip */
+fastForward=function(){
+ const m=MU.m;if(!m)return;
+ runWithoutHolds(()=>{
+  let guard=0;
+  while(!m.done&&guard++<3000){if(m.stage==='HT')m.tickOnce();else trackedTick()}
+ });
+ try{renderTop();if(MU.tab==='comm')fillFeed($('#commList'),200)}catch(e){}
+ try{onFT()}catch(e){}};
+
+/*#w76_skip.js#*/
 showStart();
 </script>
 </body>
