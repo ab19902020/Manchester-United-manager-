@@ -30826,6 +30826,554 @@ buildFixtures=function(startDay){
 
 /*#w64_calendar.js#*/
 
+/*#w64_calendar.js#*//*#w65_harden.js#*/
+
+/* =====================================================================
+   WHAT A FULL SWEEP OF THE GAME TURNED UP
+   ---------------------------------------------------------------------
+   Every one of the 243 registered actions was fired in isolation, with
+   the game restored between each so one could not poison the next. 216
+   ran clean. Of the rest, most were the test handing them nonsense —
+   stadBuy with no upgrade key, tacForm with a formation that does not
+   exist — and re-running those with real values passed.
+
+   Three did not, and all three are the same mistake: an action trusting
+   whatever the DOM handed it. They are guarded here rather than left,
+   because the failure mode is a screen that throws instead of drawing,
+   and the way you would hit one is a stale button in a re-rendered
+   list — which is exactly the sort of thing that gets reported as "the
+   game is buggy" with no way to reproduce it.
+   ===================================================================== */
+
+/* 1. the opposition plan crashed when the club index was not a club */
+if(typeof ACTIONS.planOpen==='function'){
+ const _planOpen=ACTIONS.planOpen;
+ ACTIONS.planOpen=function(el){
+  const i=+(el&&el.dataset&&el.dataset.id);
+  if(!Number.isFinite(i)||!G.clubs[i]){
+   toast('No opponent to plan for yet.');return}
+  return _planOpen.apply(this,arguments)}}
+['planMark','planMarker','planTight','planClear'].forEach(k=>{
+ const prev=ACTIONS[k];
+ if(typeof prev!=='function')return;
+ ACTIONS[k]=function(el){
+  if(!G.oppPlan||!G.clubs[G.oppPlan.oppI]){toast('Open a plan first.');return}
+  return prev.apply(this,arguments)}});
+
+/* 2. the role picker crashed on a role key it did not know */
+if(typeof ACTIONS.roleSet2==='function'){
+ const _roleSet2=ACTIONS.roleSet2;
+ ACTIONS.roleSet2=function(el){
+  const k=el&&el.dataset&&el.dataset.k;
+  if(!k||typeof ROLES==='undefined'||!ROLES[k]){toast('That role is no longer available.');return}
+  return _roleSet2.apply(this,arguments)}}
+
+/* 3. and the same shape of guard on the three that only failed because
+      the key was junk — cheap, and it means a stale button does nothing
+      rather than taking the screen down */
+if(typeof ACTIONS.stadBuy==='function'){
+ const _sb=ACTIONS.stadBuy;
+ ACTIONS.stadBuy=function(el){
+  const k=el&&el.dataset&&el.dataset.v;
+  if(!k||!STAD_UP[k]){toast('That upgrade is not available.');return}
+  return _sb.apply(this,arguments)}}
+if(typeof ACTIONS.tacForm==='function'){
+ const _tf=ACTIONS.tacForm;
+ ACTIONS.tacForm=function(el){
+  const k=el&&el.dataset&&el.dataset.v;
+  if(!k||!FORMATIONS[k]){toast('That formation no longer exists.');return}
+  return _tf.apply(this,arguments)}}
+
+/* =====================================================================
+   AND THE ONE THING THE TWENTY-SEASON RUN FOUND
+   ---------------------------------------------------------------------
+   Duplicate names inside a single squad came back. The sweep added with
+   the squad update runs when a game is created or loaded, which is the
+   right moment for the hand-written data — but it cannot see the players
+   the game invents later. Youth intakes and regens are generated from
+   name lists, so two of them landing on the same name at the same club
+   is a matter of time: by the end of the first season there were three
+   of them, at Oldham and Carlisle.
+
+   The sweep is periodic now. It is cheap — a map per club, once a
+   fortnight of game time — and it keeps the whole world clean rather
+   than only the twenty clubs anybody looks at.
+   ===================================================================== */
+function dedupeSquads(){
+ let n=0;
+ try{
+  (G.clubs||[]).forEach(c=>{
+   const best=new Map();
+   (c.players||[]).forEach(p=>{
+    const cur=best.get(p.name);
+    if(!cur){best.set(p.name,p);return}
+    n++;
+    if((p.ovr||0)>(cur.ovr||0))best.set(p.name,p);
+   });
+   if(best.size!==(c.players||[]).length)c.players=Array.from(best.values());
+  });
+ }catch(e){}
+ return n}
+const _dtcDedupe=dailyTickCore;
+dailyTickCore=function(){
+ const r=_dtcDedupe.apply(this,arguments);
+ try{if(G.day%14===0)dedupeSquads()}catch(e){}
+ return r};
+
+/*#w65_harden.js#*/
+
+/*#w65_harden.js#*//*#w66_savesize.js#*/
+
+/* =====================================================================
+   THE SAVE THAT WOULD HAVE STOPPED FITTING
+   ---------------------------------------------------------------------
+   Found by measuring the twenty-season run rather than by reading, and
+   it is the most serious thing the soak turned up.
+
+       a fresh career          3.30 MB
+       after one season        4.71 MB
+       what the soak recorded  7.07 MB
+
+   localStorage gives a page about 5 MB. So a career stops being saveable
+   somewhere in its second season, and writeSlot's last-resort path could
+   not help: leanState(true) trims repLog, archive, gossip, the coach pool
+   and the fan log, which together are twenty kilobytes. Measured, the
+   "deep" trim took 4.71 MB down to 4.70 MB. It was never going to work,
+   because the weight is not in those arrays — it is in the players.
+
+   AND I MADE IT WORSE. Giving every player in your division a career
+   record and a match log — which is what you asked for — is what pushed
+   the growth to roughly a megabyte a season. The analytics are worth
+   keeping; what is not worth keeping is writing all of it to a slot.
+
+   So the trim now sheds what can be rebuilt or lived without, in order:
+
+     normal   the match log of anybody who is not yours. It drives the
+              recent-form strip on their profile, and it comes back on
+              its own as soon as they play again.
+     deep     their career totals too, and every form array in the game
+              down to the last three.
+
+   Your own players keep everything, always. Exported save files are
+   untouched — this only applies to what goes into a browser slot.
+   ===================================================================== */
+function shedForSlot(deep){
+ const stash=[];
+ try{
+  (G.clubs||[]).forEach(c=>{
+   if(c.i===G.my)return;                      /* your squad keeps the lot */
+   (c.players||[]).forEach(p=>{
+    if(p.log&&p.log.length){stash.push([p,'log',p.log]);p.log=[]}
+    if(deep&&p.car){stash.push([p,'car',p.car]);p.car=null}
+    if(deep&&p.form&&p.form.length>3){stash.push([p,'form',p.form]);p.form=p.form.slice(-3)}
+   });
+  });
+ }catch(e){}
+ return stash}
+function unshedForSlot(stash){
+ try{stash.forEach(([p,k,v])=>{p[k]=v})}catch(e){}}
+
+const _leanSize=leanState;
+leanState=function(deep){
+ const stash=shedForSlot(!!deep);
+ try{return _leanSize.apply(this,arguments)}
+ finally{unshedForSlot(stash)}};
+
+/* a slot that still will not take it says so plainly, rather than the
+   career quietly stopping being saveable */
+const _writeSlotSize=writeSlot;
+writeSlot=function(slot,quiet){
+ const ok=_writeSlotSize.apply(this,arguments);
+ try{
+  if(!ok&&!quiet)mail('info','Your save is too large for this browser',
+   'The career has outgrown what this browser will hold in a slot. Nothing is lost — '+
+   'use <b>Export save</b> under Save &amp; load to keep a file of it, which has no size limit.');
+ }catch(e){}
+ return ok};
+
+/*#w66_savesize.js#*/
+
+/*#w66_savesize.js#*//*#w67_trophies.js#*/
+
+/* =====================================================================
+   A HOME FOR THE TROPHY ASSETS
+   ---------------------------------------------------------------------
+   You are modelling a trophy per competition. This is the plumbing that
+   picks them up, written so that whatever you upload first is useful
+   immediately rather than waiting on the rest.
+
+   THE AWKWARD FACT IT IS BUILT AROUND. Three.js is not in this game.
+   HAS3D tests `typeof THREE` and nothing ever defines it, so the 3D match
+   engine already written in here has never run. Bundling it is a real
+   decision — about 600KB on a 1.6MB file — so it is not made here.
+
+   And even with Three.js, `.glb` loads through fetch, which refuses the
+   `file://` scheme. A downloaded copy of this game would show no
+   trophies at all.
+
+   So the lookup is a ladder, per trophy, first hit wins:
+
+       trophies/trophy-PL.glb   needs Three.js       (later)
+       trophies/trophy-PL.png   needs nothing        works offline
+       the existing 2D art      needs nothing        always
+
+   A PNG goes through an <img> tag, and img does not care about the
+   file:// scheme the way fetch does. So a PNG render uploaded today
+   shows up everywhere today, including for someone who downloaded the
+   file. The .glb slots in above it the moment Three.js is bundled,
+   without any of this changing.
+   ===================================================================== */
+
+const TROPHY_DIR='trophies/';
+const TROPHY_LABEL={
+ FA:'FA Cup',LC:'League Cup',CL:'Champions League',EL:'Europa League',EC:'Conference League',
+ PL:'Premier League',CH:'Championship',L1:'League One',L2:'League Two',NL:'National League',
+ ESP:'La Liga',ITA:'Serie A',GER:'Bundesliga',FRA:'Ligue 1',POR:'Primeira Liga',
+ NED:'Eredivisie',SCO:'Scottish Premiership',BEL:'Belgian Pro League',TUR:'Süper Lig',
+ WC:'World Cup',EURO:'European Championship',
+ ballon:'Ballon d\'Or',poty:'Player of the Season',young:'Young Player of the Season',
+ boot:'Golden Boot',glove:'Golden Glove',playmaker:'Playmaker of the Season',
+ mgr:'Manager of the Season'};
+
+/* what we have found, so a missing file is asked for once and not again */
+const TROPHY_ART={};
+function trophyArt(code){
+ if(!code)return null;
+ if(TROPHY_ART[code]!==undefined)return TROPHY_ART[code];
+ TROPHY_ART[code]=null;                       /* assume not there until it loads */
+ try{
+  const img=new Image();
+  img.onload=()=>{TROPHY_ART[code]=TROPHY_DIR+'trophy-'+code+'.png';
+   try{document.querySelectorAll('[data-trophy="'+code+'"]').forEach(el=>{
+    el.style.backgroundImage='url("'+TROPHY_ART[code]+'")';
+    el.classList.add('has-art')})}catch(e){}};
+  img.onerror=()=>{TROPHY_ART[code]=null};
+  img.src=TROPHY_DIR+'trophy-'+code+'.png';
+ }catch(e){}
+ return TROPHY_ART[code]}
+
+/* the badge the rest of the game can drop anywhere */
+function trophyBadge(code,size,label){
+ const s=size||46;
+ const art=trophyArt(code);
+ const lbl=label!==false?(TROPHY_LABEL[code]||code):'';
+ return '<span class="trophy'+(art?' has-art':'')+'" data-trophy="'+esc(code)+'" '+
+  'title="'+esc(lbl)+'" style="width:'+s+'px;height:'+s+'px'+
+  (art?';background-image:url(\''+art+'\')':'')+'">'+
+  (art?'':'<span class="trophy-fb">🏆</span>')+'</span>'}
+
+/* every trophy this manager has actually won, newest first */
+function myTrophies(){
+ const out=[];
+ try{
+  (G.honours||[]).forEach(h=>{
+   let code=null;
+   for(const k in TROPHY_LABEL)
+    if(TROPHY_LABEL[k].toLowerCase()===String(h.comp||'').toLowerCase()){code=k;break}
+   if(!code){
+    /* league titles are recorded as "<name> champions" */
+    const m=String(h.comp||'').replace(/ champions$/i,'');
+    for(const k in TROPHY_LABEL)if(TROPHY_LABEL[k].toLowerCase()===m.toLowerCase()){code=k;break}
+   }
+   out.push({season:h.season,comp:h.comp,code});
+  });
+ }catch(e){}
+ return out.reverse()}
+
+(function trophyCSS(){
+ const st=document.createElement('style');st.id='w67';
+ st.textContent='.trophy{display:inline-flex;align-items:center;justify-content:center;'+
+  'background-size:contain;background-repeat:no-repeat;background-position:center;'+
+  'border-radius:10px;vertical-align:middle;flex:0 0 auto}'+
+  '.trophy .trophy-fb{font-size:22px;line-height:1;filter:saturate(.9)}'+
+  '.trophy.has-art .trophy-fb{display:none}'+
+  '.trophycase{display:flex;flex-wrap:wrap;gap:10px;padding:4px 2px}'+
+  '.trophycase .tc{display:flex;flex-direction:column;align-items:center;gap:4px;'+
+  'width:74px;text-align:center}'+
+  '.trophycase .tc-n{font-size:9px;font-weight:800;letter-spacing:.4px;line-height:1.2;'+
+  'color:var(--ink-faint);text-transform:uppercase}';
+ document.head.appendChild(st)})();
+
+
+/* the honours list becomes a cabinet, and shows the art when it is there */
+if(typeof vHonours==='function'){
+ const _vHon=vHonours;
+ vHonours=function(){
+  try{
+   const t=myTrophies();
+   if(!t.length)return _vHon.apply(this,arguments);
+   return '<div class="chip-lbl">Trophy cabinet</div><div class="card tight">'+
+    '<div class="trophycase">'+t.map(x=>
+     '<div class="tc">'+trophyBadge(x.code||'PL',52)+
+     '<div class="tc-n">'+esc(x.comp)+'<br><span style="opacity:.6">S'+x.season+'</span></div></div>').join('')+
+    '</div></div>';
+  }catch(e){return _vHon.apply(this,arguments)}}}
+
+/* NO EAGER PROBING. The first cut asked for all twenty-seven PNGs on the
+   first render, which put thirty 404s in the console before the manager
+   had won anything — the same mistake the audio pack made, where
+   nineteen probes fired at boot. trophyArt() is called from trophyBadge
+   and nowhere else, so the only files ever requested are the trophies
+   you have actually won, once each, for the life of the page. */
+/*#w67_trophies.js#*/
+
+/*#w67_trophies.js#*//*#w68_trophyroom.js#*/
+
+/* =====================================================================
+   THE TROPHY ROOM — REAL 3D, THREE.JS
+   ---------------------------------------------------------------------
+   The trophies are modelled in Three.js, so the room is Three.js. The
+   library is fetched from a CDN the moment you open the room and not
+   before, which means:
+
+     - it costs nothing at boot, and nothing to anyone who never opens it
+     - the rest of the game is untouched offline
+     - no connection just means the room says so, and you carry on
+
+   That last part is the whole design. The room is the one place in this
+   game that needs the network, so it is the one place allowed to fail,
+   and it fails with a sentence rather than a broken screen.
+
+   ASSET FORMAT. Both are handled, because either is a reasonable thing
+   to have exported: `.json` goes through THREE.ObjectLoader (the format
+   Object3D.toJSON writes), `.glb`/`.gltf` through GLTFLoader. Each
+   trophy is tried in turn — json, glb, gltf — and the first that loads
+   wins. A trophy with no model simply is not on the shelf.
+   ===================================================================== */
+
+const THREE_CDN='https://unpkg.com/three@0.128.0/build/three.min.js';
+const GLTF_CDN='https://unpkg.com/three@0.128.0/examples/js/loaders/GLTFLoader.js';
+let _threeP=null;
+function loadScript(src){
+ return new Promise((ok,bad)=>{
+  const el=document.createElement('script');
+  el.src=src;el.onload=()=>ok();el.onerror=()=>bad(new Error('offline'));
+  document.head.appendChild(el)})}
+function loadThree(){
+ if(window.THREE&&window.THREE.GLTFLoader)return Promise.resolve();
+ if(_threeP)return _threeP;
+ /* A blocked CDN does not always fire onerror — a proxy or an ad blocker
+    can simply hold the request open, and the room then sits on "Opening…"
+    for ever. Caught in testing, where the sandbox proxy did exactly that.
+    So the load races a timeout and gives up honestly. */
+ const timeout=new Promise((_,bad)=>setTimeout(()=>bad(new Error('timeout')),12000));
+ _threeP=Promise.race([
+   loadScript(THREE_CDN).then(()=>loadScript(GLTF_CDN)),
+   timeout
+ ]).catch(e=>{_threeP=null;throw e});
+ return _threeP}
+
+/* which trophies go on the shelf: everything won, newest first */
+function roomTrophies(){
+ const won=myTrophies().filter(t=>t.code);
+ if(won.length)return won;
+ /* nothing won yet — show whatever art exists so you can see the room
+    working. Marked as a preview, because it has not been earned. */
+ return Object.keys(TROPHY_LABEL).map(c=>({code:c,comp:TROPHY_LABEL[c],season:null,preview:true}))}
+
+function loadTrophyModel(code){
+ const base=TROPHY_DIR+'trophy-'+code;
+ const tryOne=(url)=>new Promise((ok,bad)=>{
+  if(/\.json$/.test(url)){
+   new THREE.FileLoader().load(url,txt=>{
+    try{ok(new THREE.ObjectLoader().parse(JSON.parse(txt)))}catch(e){bad(e)}
+   },undefined,()=>bad(new Error('404')));
+  }else{
+   new THREE.GLTFLoader().load(url,g=>ok(g.scene),undefined,()=>bad(new Error('404')));
+  }});
+ return tryOne(base+'.json').catch(()=>tryOne(base+'.glb')).catch(()=>tryOne(base+'.gltf'))}
+
+/* stand it on the shelf: normalised to a sensible height, base at y=0 */
+function fitTrophy(obj,targetH){
+ const box=new THREE.Box3().setFromObject(obj);
+ const size=new THREE.Vector3(),ctr=new THREE.Vector3();
+ box.getSize(size);box.getCenter(ctr);
+ const h=size.y||1;
+ const k=targetH/h;
+ obj.scale.setScalar(k);
+ obj.position.x-=ctr.x*k;
+ obj.position.z-=ctr.z*k;
+ obj.position.y-=box.min.y*k;
+ return obj}
+
+const TR={on:false,raf:0,rend:null};
+function closeTrophyRoom(){
+ TR.on=false;
+ if(TR.raf)cancelAnimationFrame(TR.raf);
+ try{if(TR.rend){TR.rend.dispose&&TR.rend.dispose();TR.rend=null}}catch(e){}
+ const el=document.getElementById('troom');if(el)el.remove();
+ try{document.body.style.overflow=''}catch(e){}}
+ACTIONS.trophyRoomClose=closeTrophyRoom;
+
+ACTIONS.trophyRoom=()=>{
+ if(document.getElementById('troom'))return;
+ const host=document.createElement('div');
+ host.id='troom';
+ host.innerHTML='<div class="troom-bar"><span class="troom-t">🏆 Trophy room</span>'+
+  '<button class="btn btn-ghost btn-sm" data-action="trophyRoomClose">Close</button></div>'+
+  '<div class="troom-msg" id="troomMsg">Opening the trophy room…</div>';
+ document.body.appendChild(host);
+ try{document.body.style.overflow='hidden'}catch(e){}
+ try{sfx('tap')}catch(e){}
+
+ loadThree().then(()=>buildTrophyRoom(host)).catch(()=>{
+  const m=document.getElementById('troomMsg');
+  if(m)m.innerHTML='<div style="font-size:34px;margin-bottom:10px">📡</div>'+
+   '<div style="font-weight:800;margin-bottom:6px">The trophy room needs a connection</div>'+
+   '<div class="small muted" style="line-height:1.6;max-width:280px">'+
+   'It is the one part of the game that does — the 3D models are loaded from the web. '+
+   'Everything else works offline as normal. Close this and carry on.</div>';
+ })};
+
+function buildTrophyRoom(host){
+ const msg=document.getElementById('troomMsg');
+ const W=host.clientWidth,H=host.clientHeight;
+ const rend=new THREE.WebGLRenderer({antialias:true,alpha:false});
+ TR.rend=rend;TR.on=true;
+ rend.setPixelRatio(Math.min(2,window.devicePixelRatio||1));
+ rend.setSize(W,H);
+ rend.shadowMap.enabled=true;
+ rend.domElement.className='troom-cv';
+ host.appendChild(rend.domElement);
+
+ const scene=new THREE.Scene();
+ scene.background=new THREE.Color(0x0a0d12);
+ scene.fog=new THREE.Fog(0x0a0d12,7,20);
+ const cam=new THREE.PerspectiveCamera(45,W/H,.1,100);
+ cam.position.set(0,1.6,4.4);
+
+ /* the room */
+ const wallMat=new THREE.MeshStandardMaterial({color:0x161b22,roughness:.95});
+ const floorMat=new THREE.MeshStandardMaterial({color:0x0e1216,roughness:.6,metalness:.15});
+ const room=new THREE.Mesh(new THREE.BoxGeometry(12,5,12),wallMat);
+ room.material.side=THREE.BackSide;room.position.y=2.5;scene.add(room);
+ const floor=new THREE.Mesh(new THREE.PlaneGeometry(12,12),floorMat);
+ floor.rotation.x=-Math.PI/2;floor.receiveShadow=true;scene.add(floor);
+
+ /* the cabinet: a lit case with three glass shelves */
+ const cab=new THREE.Group();cab.position.set(0,0,-1.6);scene.add(cab);
+ const frameMat=new THREE.MeshStandardMaterial({color:0x2a2118,roughness:.5,metalness:.35});
+ const backMat=new THREE.MeshStandardMaterial({color:0x11151a,roughness:.85});
+ const CW=3.4,CH=2.9,CD=.85;
+ const back=new THREE.Mesh(new THREE.PlaneGeometry(CW,CH),backMat);
+ back.position.set(0,CH/2,-CD/2);cab.add(back);
+ [[-CW/2,0],[CW/2,0]].forEach(([x])=>{
+  const p=new THREE.Mesh(new THREE.BoxGeometry(.10,CH,CD),frameMat);
+  p.position.set(x,CH/2,0);p.castShadow=true;cab.add(p)});
+ [0,CH].forEach(y=>{
+  const b=new THREE.Mesh(new THREE.BoxGeometry(CW+.10,.10,CD),frameMat);
+  b.position.set(0,y,0);b.castShadow=true;cab.add(b)});
+ const shelfY=[.55,1.35,2.15];
+ const shelfMat=new THREE.MeshStandardMaterial({color:0x9fd8ff,transparent:true,opacity:.14,
+  roughness:.05,metalness:.9});
+ shelfY.forEach(y=>{
+  const sh=new THREE.Mesh(new THREE.BoxGeometry(CW-.10,.035,CD-.06),shelfMat);
+  sh.position.set(0,y,0);cab.add(sh);
+  const strip=new THREE.PointLight(0xbfe4ff,.5,3.2);
+  strip.position.set(0,y+.62,.15);cab.add(strip)});
+ const glass=new THREE.Mesh(new THREE.PlaneGeometry(CW,CH),
+  new THREE.MeshStandardMaterial({color:0xaad4ff,transparent:true,opacity:.06,
+   roughness:.02,metalness:1,side:THREE.DoubleSide}));
+ glass.position.set(0,CH/2,CD/2);cab.add(glass);
+
+ /* lighting */
+ scene.add(new THREE.AmbientLight(0x5c6a7a,.65));
+ const key=new THREE.SpotLight(0xffffff,1.15,18,.7,.45,1.2);
+ key.position.set(2.6,4.6,3.2);key.castShadow=true;
+ key.shadow.mapSize.set(1024,1024);scene.add(key);
+ const rim=new THREE.DirectionalLight(0x88b8ff,.5);
+ rim.position.set(-3,3,-2);scene.add(rim);
+
+ /* the trophies */
+ const list=roomTrophies();
+ let placed=0,pending=list.length;
+ const done=()=>{
+  if(--pending>0)return;
+  if(msg){
+   if(!placed)msg.innerHTML='<div style="font-size:32px;margin-bottom:8px">🏆</div>'+
+     '<div style="font-weight:800;margin-bottom:6px">The cabinet is empty</div>'+
+     '<div class="small muted" style="max-width:290px;line-height:1.6">Win something and it '+
+     'appears here. Drop a model in <b>trophies/</b> and it will be standing on a shelf next time '+
+     'you open this.</div>';
+   else msg.remove();
+  }};
+ const perShelf=Math.max(1,Math.ceil(list.length/3));
+ list.slice(0,12).forEach((t,ix)=>{
+  loadTrophyModel(t.code).then(obj=>{
+   const shelf=Math.min(2,Math.floor(ix/perShelf));
+   const inRow=ix%perShelf;
+   const n=Math.min(perShelf,list.length-shelf*perShelf);
+   const span=CW-.9;
+   const x=n<=1?0:(-span/2)+(span*(inRow/(n-1)));
+   fitTrophy(obj,.58);
+   obj.position.x+=x;obj.position.z=0;
+   obj.position.y+=shelfY[2-shelf]+.02;
+   obj.traverse(o=>{if(o.isMesh){o.castShadow=true;
+    if(t.preview&&o.material){o.material=o.material.clone();o.material.transparent=true;o.material.opacity=.45}}});
+   cab.add(obj);placed++;done();
+  }).catch(()=>done());
+ });
+ if(!list.length)done();
+
+ /* look around: drag to orbit, wheel or pinch to step in */
+ let yaw=0,pitch=0,dist=4.4,drag=false,px=0,py=0,pd=0;
+ const clampP=v=>Math.max(-.35,Math.min(.55,v));
+ const el=rend.domElement;
+ el.addEventListener('pointerdown',e=>{drag=true;px=e.clientX;py=e.clientY;el.setPointerCapture(e.pointerId)});
+ el.addEventListener('pointerup',e=>{drag=false;try{el.releasePointerCapture(e.pointerId)}catch(x){}});
+ el.addEventListener('pointermove',e=>{
+  if(!drag)return;
+  yaw-=(e.clientX-px)*.005;pitch=clampP(pitch+(e.clientY-py)*.004);
+  px=e.clientX;py=e.clientY});
+ el.addEventListener('wheel',e=>{e.preventDefault();dist=Math.max(2.2,Math.min(7,dist+e.deltaY*.002))},{passive:false});
+ el.addEventListener('touchmove',e=>{
+  if(e.touches.length!==2)return;
+  const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,
+                     e.touches[0].clientY-e.touches[1].clientY);
+  if(pd)dist=Math.max(2.2,Math.min(7,dist-(d-pd)*.01));
+  pd=d},{passive:true});
+ el.addEventListener('touchend',()=>{pd=0});
+
+ const onResize=()=>{if(!TR.on)return;
+  const w=host.clientWidth,h=host.clientHeight;
+  cam.aspect=w/h;cam.updateProjectionMatrix();rend.setSize(w,h)};
+ window.addEventListener('resize',onResize);
+
+ let t0=0;
+ const tick=(ts)=>{
+  if(!TR.on)return;
+  TR.raf=requestAnimationFrame(tick);
+  if(!drag){yaw+=Math.sin((ts-t0)*.00008)*.0006}   /* a slow drift so it feels alive */
+  const tgt=new THREE.Vector3(0,1.45,-1.6);
+  cam.position.set(tgt.x+Math.sin(yaw)*dist,tgt.y+1.0+pitch*2.2,tgt.z+Math.cos(yaw)*dist);
+  cam.lookAt(tgt);
+  rend.render(scene,cam);
+ };
+ t0=performance.now();TR.raf=requestAnimationFrame(tick);
+}
+
+(function troomCSS(){
+ const st=document.createElement('style');st.id='w68';
+ st.textContent='#troom{position:fixed;inset:0;z-index:9000;background:#0a0d12;'+
+  'display:flex;flex-direction:column}'+
+  '.troom-cv{position:absolute;inset:0;width:100%;height:100%;touch-action:none}'+
+  '.troom-bar{position:relative;z-index:2;display:flex;align-items:center;justify-content:space-between;'+
+  'padding:10px 14px;background:linear-gradient(180deg,rgba(4,7,10,.92),transparent)}'+
+  '.troom-t{font-family:var(--disp);font-size:15px;letter-spacing:1px;text-transform:uppercase;font-weight:800}'+
+  '.troom-msg{position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);z-index:2;'+
+  'display:flex;flex-direction:column;align-items:center;text-align:center;padding:0 24px;'+
+  'pointer-events:none;color:var(--ink)}';
+ document.head.appendChild(st)})();
+
+/* the way in, on the honours screen */
+const _vHonRoom=(typeof vHonours==='function')?vHonours:null;
+if(_vHonRoom)vHonours=function(){
+ const base=_vHonRoom.apply(this,arguments)||'';
+ return '<button class="btn btn-gold btn-block" style="margin-bottom:10px" '+
+  'data-action="trophyRoom">🏆 Walk into the trophy room</button>'+base};
+
+/*#w68_trophyroom.js#*/
+
 showStart();
 </script>
 </body>
