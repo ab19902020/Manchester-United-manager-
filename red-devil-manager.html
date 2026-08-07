@@ -30826,6 +30826,102 @@ buildFixtures=function(startDay){
 
 /*#w64_calendar.js#*/
 
+/*#w64_calendar.js#*//*#w65_harden.js#*/
+
+/* =====================================================================
+   WHAT A FULL SWEEP OF THE GAME TURNED UP
+   ---------------------------------------------------------------------
+   Every one of the 243 registered actions was fired in isolation, with
+   the game restored between each so one could not poison the next. 216
+   ran clean. Of the rest, most were the test handing them nonsense —
+   stadBuy with no upgrade key, tacForm with a formation that does not
+   exist — and re-running those with real values passed.
+
+   Three did not, and all three are the same mistake: an action trusting
+   whatever the DOM handed it. They are guarded here rather than left,
+   because the failure mode is a screen that throws instead of drawing,
+   and the way you would hit one is a stale button in a re-rendered
+   list — which is exactly the sort of thing that gets reported as "the
+   game is buggy" with no way to reproduce it.
+   ===================================================================== */
+
+/* 1. the opposition plan crashed when the club index was not a club */
+if(typeof ACTIONS.planOpen==='function'){
+ const _planOpen=ACTIONS.planOpen;
+ ACTIONS.planOpen=function(el){
+  const i=+(el&&el.dataset&&el.dataset.id);
+  if(!Number.isFinite(i)||!G.clubs[i]){
+   toast('No opponent to plan for yet.');return}
+  return _planOpen.apply(this,arguments)}}
+['planMark','planMarker','planTight','planClear'].forEach(k=>{
+ const prev=ACTIONS[k];
+ if(typeof prev!=='function')return;
+ ACTIONS[k]=function(el){
+  if(!G.oppPlan||!G.clubs[G.oppPlan.oppI]){toast('Open a plan first.');return}
+  return prev.apply(this,arguments)}});
+
+/* 2. the role picker crashed on a role key it did not know */
+if(typeof ACTIONS.roleSet2==='function'){
+ const _roleSet2=ACTIONS.roleSet2;
+ ACTIONS.roleSet2=function(el){
+  const k=el&&el.dataset&&el.dataset.k;
+  if(!k||typeof ROLES==='undefined'||!ROLES[k]){toast('That role is no longer available.');return}
+  return _roleSet2.apply(this,arguments)}}
+
+/* 3. and the same shape of guard on the three that only failed because
+      the key was junk — cheap, and it means a stale button does nothing
+      rather than taking the screen down */
+if(typeof ACTIONS.stadBuy==='function'){
+ const _sb=ACTIONS.stadBuy;
+ ACTIONS.stadBuy=function(el){
+  const k=el&&el.dataset&&el.dataset.v;
+  if(!k||!STAD_UP[k]){toast('That upgrade is not available.');return}
+  return _sb.apply(this,arguments)}}
+if(typeof ACTIONS.tacForm==='function'){
+ const _tf=ACTIONS.tacForm;
+ ACTIONS.tacForm=function(el){
+  const k=el&&el.dataset&&el.dataset.v;
+  if(!k||!FORMATIONS[k]){toast('That formation no longer exists.');return}
+  return _tf.apply(this,arguments)}}
+
+/* =====================================================================
+   AND THE ONE THING THE TWENTY-SEASON RUN FOUND
+   ---------------------------------------------------------------------
+   Duplicate names inside a single squad came back. The sweep added with
+   the squad update runs when a game is created or loaded, which is the
+   right moment for the hand-written data — but it cannot see the players
+   the game invents later. Youth intakes and regens are generated from
+   name lists, so two of them landing on the same name at the same club
+   is a matter of time: by the end of the first season there were three
+   of them, at Oldham and Carlisle.
+
+   The sweep is periodic now. It is cheap — a map per club, once a
+   fortnight of game time — and it keeps the whole world clean rather
+   than only the twenty clubs anybody looks at.
+   ===================================================================== */
+function dedupeSquads(){
+ let n=0;
+ try{
+  (G.clubs||[]).forEach(c=>{
+   const best=new Map();
+   (c.players||[]).forEach(p=>{
+    const cur=best.get(p.name);
+    if(!cur){best.set(p.name,p);return}
+    n++;
+    if((p.ovr||0)>(cur.ovr||0))best.set(p.name,p);
+   });
+   if(best.size!==(c.players||[]).length)c.players=Array.from(best.values());
+  });
+ }catch(e){}
+ return n}
+const _dtcDedupe=dailyTickCore;
+dailyTickCore=function(){
+ const r=_dtcDedupe.apply(this,arguments);
+ try{if(G.day%14===0)dedupeSquads()}catch(e){}
+ return r};
+
+/*#w65_harden.js#*/
+
 showStart();
 </script>
 </body>
