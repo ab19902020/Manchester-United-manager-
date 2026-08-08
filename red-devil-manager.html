@@ -40689,6 +40689,1319 @@ if(typeof PANS==='object')PANS['mgr-deal']=F=>{
  ['🔥 Put it back on them','If the club want me here they know where I am. That is as much as I will say.']]};
 
 /*#w91_contract.js#*/
+
+
+
+
+
+/*#w92_trophies.js#*/
+
+/* =====================================================================
+   w92_trophies — every trophy to the standard of the Premier League one
+   ---------------------------------------------------------------------
+   The Premier League trophy was sculpted properly: a lathed body carrying
+   a bump-mapped crest, an eight-point crown, two lions modelled out of
+   thirty pieces each, crystal handles with gold trim, an engraved
+   winners' ring and ribbons that move. Everything else in the cabinet was
+   a lathe and a torus. Standing next to it they looked like placeholders,
+   because that is what they were.
+
+   Three things had to happen for the rest to reach it.
+
+   FIRST, A DETAIL GATE. The hall shows twenty-two plinths at once and the
+   set already cost 388,000 triangles, of which the Premier League trophy
+   alone was 74,000 — spent on a shape three hundred pixels tall. Nothing
+   could be added without taking something away. So a trophy now knows
+   whether it is being seen across a room or held up to your face: TDETAIL
+   is 1 in the hall and 2 when you pick one up, and every segment count,
+   bead course and flute reads it. The hall gets cheaper and the thing in
+   your hands gets four times richer.
+
+   SECOND, A WORKSHOP. Beads, fillets, flutes, gadroons, volutes, straps,
+   figures — the vocabulary silverware is actually made from. One good
+   volute written once is worth more than five trophies' worth of tubes.
+
+   THIRD, SILHOUETTE. A cabinet where four leagues are the same cup in
+   four tints is not a cabinet, it is a bug you can see. The Meisterschale
+   is a plate. The Serie A trophy is a spiral. The Hexagoal is a hexagon.
+   You should know which one you are looking at from the far wall, before
+   you can read a word of the plaque.
+   ===================================================================== */
+
+/* ---- 0. HOW CLOSE ARE YOU STANDING ---------------------------------- */
+let TDETAIL=1;
+const tHi=()=>TDETAIL>=2;
+const tS=(lo,hi)=>TDETAIL>=2?hi:lo;
+
+/* the room already knows: it asks for a plinth with big=true only when
+   you have walked up and picked the thing up */
+const _plinthDetail=trophyOnPlinth;
+trophyOnPlinth=function(code,totalH,big){
+ const prev=TDETAIL;
+ TDETAIL=big?2:1;
+ try{return _plinthDetail.apply(this,arguments)}
+ finally{TDETAIL=prev}};
+
+/* ---- 1. THE WORKSHOP ------------------------------------------------- */
+
+/* the original lathe fixed its spline at 40 points and its segments at 48
+   whatever it was drawing. Both scale now. */
+function tLathe2(pts,mat,seg,steps){
+ const v=pts.map(p=>new THREE.Vector2(p[0],p[1]));
+ const smooth=new THREE.SplineCurve(v).getPoints(steps||tS(26,60));
+ return new THREE.Mesh(new THREE.LatheGeometry(smooth,seg||tS(32,88)),mat)}
+
+/* a capsule laid between two points, for arms, legs and handle stock */
+function tLimb(a,b,r,mat){
+ const A=new THREE.Vector3(a[0],a[1],a[2]);
+ const B=new THREE.Vector3(b[0],b[1],b[2]);
+ const d=new THREE.Vector3().subVectors(B,A);
+ const c=tCap(r,d.length(),mat);
+ c.position.copy(A).add(B).multiplyScalar(.5);
+ c.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),d.clone().normalize());
+ return c}
+
+/* A bead course: the ring of little half-spheres round the waist of
+   almost every real cup. It is the cheapest thing on this list and it is
+   the one that stops silver reading as a shaded cylinder. */
+function tBeads(y,r,n,size,mat){
+ const g=new THREE.Group();
+ const N=Math.max(8,Math.round(n*tS(.55,1)));
+ const geo=new THREE.SphereGeometry(size,tS(6,12),tS(5,9));
+ for(let i=0;i<N;i++){
+  const a=i/N*Math.PI*2;
+  const b=new THREE.Mesh(geo,mat);
+  b.position.set(Math.cos(a)*r,y,Math.sin(a)*r);
+  g.add(b)}
+ return g}
+
+/* the small torus that hides the joint where two materials meet */
+function tFillet(y,r,t,mat){
+ const m=new THREE.Mesh(new THREE.TorusGeometry(r,t,tS(6,14),tS(36,96)),mat);
+ m.position.y=y;m.rotation.x=Math.PI/2;return m}
+
+/* fluting (rods standing proud) and reeding (the same, finer and denser) */
+function tFlutes(y,r,len,n,t,mat,lean){
+ const g=new THREE.Group();
+ const N=Math.max(6,Math.round(n*tS(.6,1)));
+ for(let i=0;i<N;i++){
+  const a=i/N*Math.PI*2;
+  const f=tCap(t,len,mat);
+  f.position.set(Math.cos(a)*r,y,Math.sin(a)*r);
+  if(lean){f.rotation.z=Math.cos(a)*lean;f.rotation.x=-Math.sin(a)*lean}
+  g.add(f)}
+ return g}
+
+/* Flutes that follow a lathe wall. The plain version takes a radius and
+   a height and hangs its rods vertically, which is fine on a cylinder
+   and wrong on everything else — on a bowl that flares 24 degrees it
+   leaves a row of silver teeth sticking out of the side. This one is
+   given the two profile points the flutes run between and works out the
+   length and the lean from them. */
+function tWallFlutes(a,b,n,t,mat){
+ const g=new THREE.Group();
+ const N=Math.max(6,Math.round(n*tS(.6,1)));
+ const dr=b[0]-a[0], dy=b[1]-a[1];
+ const len=Math.sqrt(dr*dr+dy*dy);
+ const lean=Math.atan2(dr,dy);
+ const mr=(a[0]+b[0])/2, my=(a[1]+b[1])/2;
+ for(let i=0;i<N;i++){
+  const ang=i/N*Math.PI*2;
+  const f=tCap(t,len,mat);
+  f.position.set(Math.cos(ang)*mr,my,Math.sin(ang)*mr);
+  f.rotation.z=-Math.cos(ang)*lean;
+  f.rotation.x=Math.sin(ang)*lean;
+  g.add(f)}
+ return g}
+
+/* gadrooning: the lobed skirt round the underside of a bowl or a lid */
+function tGadroon(y,r,n,rad,mat,squash){
+ const g=new THREE.Group();
+ const N=Math.max(8,Math.round(n*tS(.6,1)));
+ const geo=new THREE.SphereGeometry(rad,tS(8,16),tS(6,12));
+ for(let i=0;i<N;i++){
+  const a=i/N*Math.PI*2;
+  const b=new THREE.Mesh(geo,mat);
+  b.scale.set(1,squash||1.6,.55);
+  b.position.set(Math.cos(a)*r,y,Math.sin(a)*r);
+  b.rotation.y=-a;
+  g.add(b)}
+ return g}
+
+/* A volute — the scroll a silversmith finishes a handle with. Tube along
+   a spiral that tightens as it turns. Two of these are the difference
+   between a handle and a bent pipe. */
+function tVolute(mat,r,t,turns,dir){
+ const pts=[],T=turns||1.35,D=dir||1;
+ const N=tS(16,34);
+ for(let i=0;i<=N;i++){
+  const u=i/N, a=u*Math.PI*2*T, rr=r*(1-u*.72);
+  pts.push(new THREE.Vector3(Math.cos(a)*rr*D,Math.sin(a)*rr,0))}
+ return new THREE.Mesh(new THREE.TubeGeometry(
+  new THREE.CatmullRomCurve3(pts),tS(24,52),t,tS(7,12),false),mat)}
+
+/* A flat strap, the way the Champions League ears and most modern
+   handles are actually made — a rectangle in section, not a rod. */
+function tStrap(pts,w,th,mat,bevel){
+ const curve=new THREE.CatmullRomCurve3(pts.map(p=>new THREE.Vector3(p[0],p[1],p[2])));
+ const prof=new THREE.Shape();
+ prof.moveTo(-th,-w);prof.lineTo(th,-w);prof.lineTo(th,w);prof.lineTo(-th,w);
+ return new THREE.Mesh(new THREE.ExtrudeGeometry(prof,{
+  extrudePath:curve,steps:tS(40,110),
+  bevelEnabled:bevel!==false,bevelSize:.04,bevelThickness:.04,bevelSegments:tS(1,3)}),mat)}
+
+/* A FLAT PLATE lying in the XY plane.
+
+   tStrap extrudes a rectangle along a path, and ExtrudeGeometry builds
+   its frames from the curve's own normal — which flips through every
+   inflection. The Champions League ear has two, so a sheet 2.6 wide and
+   0.23 thick came out edge-on halfway round and read as a bent pipe.
+   A plate is not a swept rectangle, it is an outline: offset the
+   centreline both ways in 2D, close the loop, extrude straight back in
+   Z. No frames, no twist, and the width is free to taper. */
+function tFlatBand(pts,w,depth,mat){
+ const c=new THREE.SplineCurve(pts.map(p=>new THREE.Vector2(p[0],p[1])));
+ const N=tS(30,68), P=c.getPoints(N);
+ const wf=(typeof w==='function')?w:()=>w;
+ const out=[],inn=[];
+ for(let i=0;i<=N;i++){
+  const a=P[Math.max(0,i-1)], b=P[Math.min(N,i+1)];
+  const t=new THREE.Vector2(b.x-a.x,b.y-a.y);
+  if(t.lengthSq()<1e-9)t.set(0,1);
+  t.normalize();
+  const hw=wf(i/N);
+  out.push([P[i].x-t.y*hw,P[i].y+t.x*hw]);
+  inn.push([P[i].x+t.y*hw,P[i].y-t.x*hw])}
+ const sh=new THREE.Shape();
+ sh.moveTo(out[0][0],out[0][1]);
+ for(let i=1;i<out.length;i++)sh.lineTo(out[i][0],out[i][1]);
+ for(let i=inn.length-1;i>=0;i--)sh.lineTo(inn[i][0],inn[i][1]);
+ sh.closePath();
+ const m=new THREE.Mesh(new THREE.ExtrudeGeometry(sh,{depth:depth,
+  bevelEnabled:true,bevelSize:depth*.34,bevelThickness:depth*.34,
+  bevelSegments:tS(1,3),curveSegments:tS(3,6)}),mat);
+ m.position.z=-depth/2;
+ return m}
+
+/* a five-point star, extruded */
+function tStar(R,r,depth,mat){
+ const s=new THREE.Shape();
+ for(let i=0;i<10;i++){
+  const a=-Math.PI/2+i*Math.PI/5, rr=i%2?r:R;
+  const x=Math.cos(a)*rr,y=Math.sin(a)*rr;
+  i?s.lineTo(x,y):s.moveTo(x,y)}
+ s.closePath();
+ return new THREE.Mesh(new THREE.ExtrudeGeometry(s,{depth:depth,
+  bevelEnabled:true,bevelSize:depth*.5,bevelThickness:depth*.5,bevelSegments:tS(1,3)}),mat)}
+
+/* A small human figure. The World Cup has two of them, the Europa League
+   has one worked into the bowl and Player of the Season is one holding a
+   ball up. They were all tubes. */
+function tFigure(mat,opt){
+ const o=opt||{},g=new THREE.Group();
+ const S=tS(10,20),R=tS(8,16);
+ const ball=(r,x,y,z,sx,sy,sz)=>{
+  const m=new THREE.Mesh(new THREE.SphereGeometry(r,S,R),mat);
+  m.position.set(x,y,z);if(sx)m.scale.set(sx,sy,sz);g.add(m);return m};
+
+ const head=ball(.50,0,7.05,0,.92,1.06,.90);
+ ball(.20,0,6.30,0);                                     /* neck */
+ /* Torso as a lathe alone gave a bottle with limbs on it. A chest mass,
+    a pair of deltoids and a pelvis are what stop it reading as a stick
+    man, and they are four spheres. */
+ g.add(tLathe2([[0,3.00],[.62,3.15],[.72,4.10],[.92,5.30],[.74,6.05],[.34,6.25],[0,6.3]],
+   mat,tS(16,34),tS(16,34)));
+ ball(.62,0,5.25,0,1.42,.86,.72);                        /* chest */
+ ball(.50,0,3.35,0,1.20,.80,.78);                        /* pelvis */
+ ball(.36,.86,5.62,0);ball(.36,-.86,5.62,0);             /* deltoids */
+
+ /* arms: raised, because every figure on a trophy is holding something */
+ const up=o.arms==='down'?0:1;
+ [1,-1].forEach(s=>{
+  const sh=[.88*s,5.62,0];
+  const el=up?[1.62*s,7.05,.10]:[1.20*s,4.30,.15];
+  const wr=up?[1.02*s,8.65,.05]:[1.02*s,2.90,.25];
+  g.add(tLimb(sh,el,.26,mat));
+  g.add(tLimb(el,wr,.21,mat));
+  ball(.24,el[0],el[1],el[2]);
+  ball(.25,wr[0],wr[1],wr[2],1,1.25,.8)});
+ /* legs */
+ [1,-1].forEach(s=>{
+  const hip=[.40*s,3.20,0],kn=[.50*s,1.70,.05],an=[.45*s,.30,-.05];
+  g.add(tLimb(hip,kn,.34,mat));
+  g.add(tLimb(kn,an,.25,mat));
+  ball(.28,kn[0],kn[1],kn[2]);
+  ball(.28,.45*s,.18,.20,.8,.55,1.6)});
+ if(o.scale)g.scale.setScalar(o.scale);
+ return g}
+
+/* a football, panelled with a bump map rather than 8,000 triangles of
+   truncated icosahedron */
+const TBALL={};
+function tBallTex(){
+ if(TBALL.t)return TBALL.t;
+ TBALL.t=tCanvas(1024,512,(x,W,H)=>{
+  x.fillStyle='#9a9a9a';x.fillRect(0,0,W,H);
+  /* pentagons on a staggered grid, hexagon seams between them */
+  const cell=W/8;
+  x.strokeStyle='#1a1a1a';x.lineJoin='round';
+  for(let row=-1;row<7;row++)for(let col=-1;col<10;col++){
+   const cx=col*cell+(row%2?cell/2:0), cy=row*cell*.86+cell*.43;
+   const n=(row+col)%3===0?5:6;
+   const rr=cell*(n===5?.30:.44);
+   x.lineWidth=cell*.055;
+   x.beginPath();
+   for(let i=0;i<n;i++){
+    const a=-Math.PI/2+i*Math.PI*2/n;
+    const px=cx+Math.cos(a)*rr,py=cy+Math.sin(a)*rr;
+    i?x.lineTo(px,py):x.moveTo(px,py)}
+   x.closePath();
+   x.fillStyle=n===5?'#5e5e5e':'#b4b4b4';x.fill();x.stroke()}
+ });
+ TBALL.t.wrapS=TBALL.t.wrapT=THREE.RepeatWrapping;
+ return TBALL.t}
+function tBall(r,mat){
+ const m=new THREE.Mesh(new THREE.SphereGeometry(r,tS(20,40),tS(15,30)),mat);
+ return m}
+
+/* ---- 2. THE ENGRAVING, RECUT ----------------------------------------
+   Every trophy with a winners' band shares this one canvas. It was grey
+   with a line of bold Helvetica on it, which as a bump map gives letters
+   that are flat-bottomed troughs with no edge. Real engraving is a
+   V-cut: a dark floor with a bright lip on the light side. Drawing the
+   same text twice, offset, dark over light, gives exactly that — and
+   because it is one function, recutting it upgrades eleven trophies.  */
+const _engraveOld=tEngraveBand;
+tEngraveBand=function(lines,opt){
+ const o=opt||{};
+ const W=tS(2048,4096),H=tS(256,512);
+ return tCanvas(W,H,(x,w,h)=>{
+  /* the field: silver at mid grey, so cuts can go down and lips can go up */
+  x.fillStyle='#7d7d7d';x.fillRect(0,0,w,h);
+  /* a ruled border, chased in twice */
+  const bd=(inset,dark,lw)=>{
+   x.strokeStyle=dark;x.lineWidth=h*lw;
+   x.strokeRect(h*inset,h*inset,w-h*inset*2,h-h*inset*2)};
+  bd(.085,'#d2d2d2',.020); bd(.105,'#3f3f3f',.016);
+  bd(.900/6,'#c9c9c9',.010);
+
+  const n=Math.max(1,lines.length),slot=w/n;
+  x.textAlign='center';x.textBaseline='middle';
+  /* a cut: light lip up and left, dark floor over it */
+  const cut=(s,cx,cy,font,max)=>{
+   x.font=font;
+   x.fillStyle='#cfcfcf';x.fillText(s,cx-h*.012,cy-h*.014,max);
+   x.fillStyle='#191919';x.fillText(s,cx,cy,max)};
+
+  lines.forEach((s,i)=>{
+   const cx=i*slot+slot/2;
+   if(i){
+    x.strokeStyle='#5c5c5c';x.lineWidth=h*.009;
+    x.beginPath();x.moveTo(i*slot,h*.24);x.lineTo(i*slot,h*.76);x.stroke()}
+   /* 'S7 Arsenal' becomes SEASON 7 over ARSENAL, which is how a winners'
+      ring is actually laid out and reads far better at a glance */
+   const m=String(s).match(/^S(\d+)\s+(.+)$/);
+   if(m&&!o.oneLine){
+    cut('SEASON '+m[1],cx,h*.36,'600 '+Math.round(h*.15)+'px "Helvetica Neue",Arial,sans-serif',slot*.88);
+    cut(m[2].toUpperCase(),cx,h*.62,'bold '+Math.round(h*.235)+'px "Helvetica Neue",Arial,sans-serif',slot*.90);
+   }else{
+    cut(String(s).toUpperCase(),cx,h*.5,
+     'bold '+Math.round(h*.26)+'px "Helvetica Neue",Arial,sans-serif',slot*.90)}
+  });
+ })};
+
+/* a title cut round the shoulder of a body, the way the Premier League
+   trophy carries its crest */
+function tTitleBump(top,bottom,mark){
+ return tCanvas(tS(1024,2048),tS(1024,2048),(x,W,H)=>{
+  x.fillStyle='#808080';x.fillRect(0,0,W,H);
+  x.textAlign='center';x.textBaseline='middle';
+  const cut=(s,cy,size,weight)=>{
+   x.font=(weight||'bold')+' '+size+'px "Helvetica Neue",Arial,sans-serif';
+   x.fillStyle='#c6c6c6';x.fillText(s,W/2-6,cy-7,W*.7);
+   x.fillStyle='#141414';x.fillText(s,W/2,cy,W*.7)};
+  if(mark){
+   x.lineWidth=W*.010;
+   x.strokeStyle='#c6c6c6';x.beginPath();x.arc(W/2-5,H*.235-6,W*.052,0,Math.PI*2);x.stroke();
+   x.strokeStyle='#141414';x.beginPath();x.arc(W/2,H*.235,W*.052,0,Math.PI*2);x.stroke()}
+  if(top)cut(top,H*.325,Math.round(W*.072));
+  if(bottom)cut(bottom,H*.405,Math.round(W*.072));
+ })}
+
+/* ---- 3. RIBBONS ------------------------------------------------------
+   The room already waves anything tagged userData.ribbon, so a trophy
+   only has to bring some. Winners' ribbons in the competition's colours
+   are half of why a photograph of a trophy looks like a trophy. */
+const TRIB={};
+function tRibbonTex(a,b,word){
+ const key=a+'|'+b+'|'+word;
+ if(TRIB[key])return TRIB[key];
+ const t=tCanvas(256,1024,(x,W,H)=>{
+  /* a satin fall-off across the width, so a flat plane reads as cloth
+     with a light down one side of it */
+  const grd=x.createLinearGradient(0,0,W,0);
+  grd.addColorStop(0,b);grd.addColorStop(.34,a);
+  grd.addColorStop(.52,'#ffffff');grd.addColorStop(.56,a);
+  grd.addColorStop(1,b);
+  x.fillStyle=grd;x.fillRect(0,0,W,H);
+  x.globalAlpha=.55;x.fillStyle=a;x.fillRect(0,0,W,H);x.globalAlpha=1;
+  x.textAlign='center';x.textBaseline='middle';
+  for(let y=110;y<H;y+=230){
+   x.strokeStyle='rgba(255,255,255,.9)';x.lineWidth=6;
+   x.beginPath();x.arc(W/2,y-52,28,0,Math.PI*2);x.stroke();
+   x.fillStyle='rgba(255,255,255,.95)';
+   x.font='bold 33px "Helvetica Neue",Arial,sans-serif';
+   x.fillText(word,W/2,y+30,W*.84)}
+ });
+ t.wrapS=t.wrapT=THREE.RepeatWrapping;
+ /* THE ONE THAT MATTERS. The renderer outputs sRGB, so a colour texture
+    that does not declare itself sRGB is decoded as if it were linear and
+    comes out pale and chalky. Every ribbon in the cabinet was rendering
+    as a pastel bookmark for exactly this reason. Bump maps must NOT get
+    this — they are data, not colour. */
+ t.encoding=THREE.sRGBEncoding;
+ TRIB[key]=t;return t}
+
+function tRibbons(g,opt){
+ const o=opt||{};
+ const mat=new THREE.MeshStandardMaterial({
+  map:tRibbonTex(o.a||'#c8102e',o.b||'#8d0b20',o.word||'CHAMPIONS'),
+  roughness:.86,metalness:0,side:THREE.DoubleSide});
+ const R=o.r||5, Y=o.y||14, L=o.len||9, N=tS(4,6);
+ for(let i=0;i<N;i++){
+  const side=i%2?1:-1, k=Math.floor(i/2);
+  const len=L*(1-k*.10);
+  const m=new THREE.Mesh(new THREE.PlaneGeometry(o.w||.62,len,1,tS(16,34)),mat);
+  /* tucked in against the handle rather than floating off the side, and
+     each one hung at its own angle so three of them are not one slab */
+  m.position.set((R-.15)*side+k*.20*side,Y-len/2,(k-1)*.34);
+  m.rotation.y=(side>0?.22:-.22)+(k-1)*.16;
+  m.rotation.z=side*-.05*(k+1);
+  m.userData={phase:i*1.1,noShadow:true,ribbon:true};
+  g.add(m)}
+ return g}
+
+/* ---- 4. MORE MATERIALS ----------------------------------------------- */
+const _matsOld=tMaterials;
+tMaterials=function(){
+ const M=_matsOld.apply(this,arguments);
+ if(!M.pewter){
+  /* the wood and the malachite were drawn on a canvas and handed over
+     without declaring themselves sRGB, so the renderer decoded them as
+     linear: pale wood and a bright mint malachite base under the
+     Premier League trophy. Same fix as the ribbons. */
+  [M.wood.map,M.malachite.map].forEach(t=>{
+   if(t){t.encoding=THREE.sRGBEncoding;t.needsUpdate=true}});
+  /* Perfect mirrors read as grey blobs when there is nothing around them
+     to reflect. Real match-worn silverware is polished but not optical. */
+  M.silver.roughness=.075;
+  M.silverSoft.roughness=.19;
+  M.pewter=new THREE.MeshStandardMaterial({color:0xd7dde3,metalness:1,roughness:.30});
+  M.goldBright=new THREE.MeshStandardMaterial({color:0xffc83a,metalness:1,roughness:.07});
+  M.brass=new THREE.MeshStandardMaterial({color:0xc79a3e,metalness:1,roughness:.30});
+  M.stone=new THREE.MeshStandardMaterial({color:0x14161a,metalness:.15,roughness:.55});
+  M.marble=new THREE.MeshStandardMaterial({
+   map:tCanvas(512,512,(x,W,H)=>{
+    x.fillStyle='#d9c98c';x.fillRect(0,0,W,H);
+    for(let i=0;i<90;i++){
+     x.strokeStyle=['#c3ae66','#efe3ae','#a8905097','#e8dca4'][i%4];
+     x.lineWidth=.6+Math.random()*3.4;x.globalAlpha=.35+Math.random()*.4;
+     x.beginPath();
+     let y=Math.random()*H;x.moveTo(0,y);
+     for(let k=0;k<W;k+=32){y+=(Math.random()-.5)*22;x.lineTo(k,y)}
+     x.stroke()}
+   }),metalness:.05,roughness:.42});
+  M.marble.map.encoding=THREE.sRGBEncoding;
+  M.ruby=new THREE.MeshStandardMaterial({color:0x8e0f22,metalness:.3,roughness:.16});
+  M.sapph=new THREE.MeshStandardMaterial({color:0x11306e,metalness:.3,roughness:.16});
+ }
+ return M};
+
+/* =====================================================================
+   5. THE PREMIER LEAGUE TROPHY, POLISHED
+   ---------------------------------------------------------------------
+   Not rebuilt — it was the good one. What it did not have was the small
+   silversmithing that sits between the big shapes: bead courses top and
+   bottom of the winners' ring, gold fillets where malachite meets
+   silver, reeding under the bowl, jewels set between the crown points,
+   and a finer, recut engraving. It also carried 74,000 triangles into a
+   room that shows it 30cm tall, so the fine work is gated to the moment
+   you actually pick it up.
+   ===================================================================== */
+const _plSculpt=TB.PL;
+TB.PL=function(){
+ const M=tMaterials();
+ const g=_plSculpt();
+
+ /* bead courses framing the winners' ring (ring sits y 1.0–2.0, r 4.1) */
+ g.add(tBeads(0.99,4.16,48,.085,M.gold));
+ g.add(tBeads(2.01,4.16,48,.085,M.gold));
+ /* gold fillets at the two malachite joints */
+ g.add(tFillet(0.52,4.52,.055,M.gold));
+ g.add(tFillet(2.02,4.12,.055,M.gold));
+ g.add(tFillet(3.48,1.82,.05,M.gold));
+
+ if(tHi()){
+  /* a bead course under the collar. The first attempt here was reeding
+     round the belly at r=3.02, which the profile does not reach until
+     y=11 — twenty-six silver rods hung in mid-air outside the bowl. If
+     you decorate a lathe you have to read its profile. */
+  g.add(tBeads(15.02,3.06,44,.075,M.silverSoft));
+  /* jewels set between the crown's eight points */
+  for(let i=0;i<8;i++){
+   const a=(i+.5)/8*Math.PI*2;
+   const j=new THREE.Mesh(new THREE.SphereGeometry(.20,14,12),i%2?M.ruby:M.sapph);
+   j.scale.set(1,.6,1);
+   j.position.set(Math.cos(a)*3.5,16.42,Math.sin(a)*3.5);g.add(j)}
+  /* a bead course round the crown band */
+  g.add(tBeads(16.06,3.56,40,.075,M.goldBright));
+ }
+
+ /* the ribbons were a flat red with two words on them; they are the one
+    part of this trophy you see moving, so they get the recut texture */
+ const rib=[];g.traverse(o=>{if(o.userData&&o.userData.ribbon)rib.push(o)});
+ if(rib.length){
+  const m=new THREE.MeshStandardMaterial({
+   map:tRibbonTex('#e01a2b','#8f0d1c','PREMIER LEAGUE'),
+   roughness:.86,metalness:0,side:THREE.DoubleSide});
+  /* Once the texture stopped being decoded as linear these went from
+     pale pink to a saturated red, and at 0.9 units wide standing off
+     the handles they read as two flags rather than as ribbons. */
+  rib.forEach((o,i)=>{
+   o.material=m;
+   /* they were nearly as long as the trophy is tall — pinned at the
+      handle and running past the malachite. Halved and re-hung from the
+      same point, which means moving the centre up by the length lost. */
+   const L=(o.geometry.parameters&&o.geometry.parameters.height)||13.5;
+   o.scale.set(.62,.50,1);
+   o.position.x*=.90;
+   o.position.y=14.55-L*.25;
+   o.rotation.y=(o.position.x>0?.26:-.26);
+   o.rotation.z=(o.position.x>0?-1:1)*.055*(1+(i%3))})}
+ return g};
+
+/* =====================================================================
+   6. THE FA CUP
+   ---------------------------------------------------------------------
+   The 1911 trophy: a shallow bowl on a short stem, two scrolled handles
+   standing above the rim, and a tall domed lid with a figure on top —
+   the lid is nearly half the trophy and the old sculpt gave it a cone
+   and a ball. Wooden plinth, two engraved silver bands.
+   ===================================================================== */
+TB.FA=function(){
+ const M=tMaterials(),g=new THREE.Group();
+ const S=M.silver, SS=M.silverSoft;
+
+ /* plinth: wood, two engraved bands, gold fillets */
+ g.add(tLathe2([[5.4,0],[5.4,.65],[5.0,.85],[4.9,1.05]],M.wood));
+ const band=new THREE.Mesh(new THREE.CylinderGeometry(4.9,4.9,1.5,tS(64,128)),
+  new THREE.MeshStandardMaterial({color:0xffffff,metalness:1,roughness:.13,
+   bumpMap:tEngraveBand(tChampionLines()),bumpScale:.055}));
+ band.position.y=1.85;g.add(band);
+ g.add(tFillet(1.09,4.94,.07,SS));
+ g.add(tFillet(2.61,4.94,.07,SS));
+ g.add(tLathe2([[4.9,2.65],[4.6,2.95],[3.4,3.35],[2.0,3.85],[1.35,4.5]],M.wood));
+ g.add(tBeads(2.72,4.98,44,.09,SS));
+
+ /* stem: a knop, a collar, and out into the bowl */
+ g.add(tLathe2([[1.35,4.5],[1.05,5.2],[.86,6.1],[1.55,7.0],[.90,7.9],[.86,8.6],
+   [2.5,9.9],[4.7,11.4],[5.8,12.9],[6.05,14.3],[5.6,15.15]],S,tS(40,110)));
+ g.add(tFillet(6.98,1.62,.10,SS));
+ /* gadrooned skirt under the bowl */
+ g.add(tGadroon(10.55,3.92,22,.60,SS,1.9));
+ const rim=new THREE.Mesh(new THREE.TorusGeometry(5.75,.17,tS(12,26),tS(72,140)),SS);
+ rim.position.y=15.2;rim.rotation.x=Math.PI/2;g.add(rim);
+ g.add(tBeads(14.72,5.72,52,.10,SS));
+
+ /* the lid: dome, bead course, gadroons, and a standing figure */
+ g.add(tLathe2([[5.72,15.28],[5.95,15.75],[5.35,16.35],[3.9,17.35],[2.2,18.15],
+   [1.05,18.65],[.55,18.95]],S,tS(40,110)));
+ g.add(tGadroon(16.1,5.48,20,.50,SS,1.5));
+ g.add(tBeads(15.9,5.55,44,.10,SS));
+ const knop=new THREE.Mesh(new THREE.SphereGeometry(.70,tS(14,30),tS(12,24)),SS);
+ knop.scale.y=.62;knop.position.y=19.0;g.add(knop);
+ /* the finial figure, holding a cup of her own up — the joke the real
+    one makes. At scale .30 she was a smudge; she carries the top third
+    of the silhouette, so she is sized to be read. */
+ const fig=tFigure(SS,{scale:.46});
+ fig.position.y=19.25;g.add(fig);
+ const mini=new THREE.Mesh(new THREE.SphereGeometry(.42,tS(10,18),tS(9,15)),M.gold);
+ mini.scale.set(1,.72,1);mini.position.y=23.45;g.add(mini);
+ const miniS=new THREE.Mesh(new THREE.CylinderGeometry(.10,.16,.34,tS(7,12)),M.gold);
+ miniS.position.y=23.05;g.add(miniS);
+
+ /* the handles: S-scroll with a volute at each end */
+ [1,-1].forEach(s=>{
+  g.add(tStrap([[5.3*s,14.55,0],[7.9*s,14.1,0],[8.85*s,12.2,0],
+    [7.5*s,10.55,0],[5.1*s,10.35,0]],.46,.17,S));
+  const top=tVolute(S,.85,.19,1.45,s);
+  top.position.set(8.15*s,14.95,0);top.rotation.y=Math.PI/2*(s>0?0:1);g.add(top);
+  const bot=tVolute(S,.55,.16,1.2,-s);
+  bot.position.set(5.6*s,9.9,0);bot.rotation.y=Math.PI/2*(s>0?0:1);g.add(bot);
+  if(tHi()){
+   /* the leaf where the handle meets the bowl */
+   const leaf=new THREE.Mesh(new THREE.SphereGeometry(.42,14,12),SS);
+   leaf.scale.set(1.5,.7,.5);leaf.position.set(5.15*s,14.4,0);g.add(leaf)}
+ });
+
+ tRibbons(g,{a:'#1b2f6b',b:'#0d1738',word:'THE FA CUP',r:5.5,y:14.5,len:8.4});
+ return g};
+
+/* =====================================================================
+   7. THE LEAGUE CUP
+   ---------------------------------------------------------------------
+   Squat, wide, three handles, and a lid — the lid is the whole reason
+   its silhouette is not the FA Cup's, and the old sculpt left it off.
+   ===================================================================== */
+TB.LC=function(){
+ const M=tMaterials(),g=new THREE.Group();
+ const S=M.silver,SS=M.silverSoft;
+
+ g.add(tLathe2([[5.2,0],[5.2,.75],[4.8,1.0],[4.7,1.25]],M.dark));
+ const band=new THREE.Mesh(new THREE.CylinderGeometry(4.7,4.7,1.5,tS(64,128)),
+  new THREE.MeshStandardMaterial({color:0xf2f4f6,metalness:1,roughness:.16,
+   bumpMap:tEngraveBand(tChampionLines()),bumpScale:.05}));
+ band.position.y=2.05;g.add(band);
+ g.add(tFillet(1.29,4.74,.07,SS));
+ g.add(tFillet(2.81,4.74,.07,SS));
+ g.add(tLathe2([[4.7,2.85],[3.6,3.25],[2.0,3.9],[1.35,4.7]],M.dark));
+
+ g.add(tLathe2([[1.35,4.7],[1.05,5.7],[1.95,6.6],[1.10,7.5],[1.05,8.3],
+   [3.4,10.1],[5.7,12.2],[6.5,14.0],[6.55,15.4]],S,tS(40,110)));
+ g.add(tFillet(6.58,2.02,.10,SS));
+ /* the fluting, running up the wall between two points of the profile */
+ g.add(tWallFlutes([5.02,11.35],[6.48,13.95],26,.155,SS));
+ g.add(tGadroon(10.4,4.35,20,.55,SS,1.7));
+ const rim=new THREE.Mesh(new THREE.TorusGeometry(6.45,.20,tS(12,26),tS(72,140)),SS);
+ rim.position.y=15.4;rim.rotation.x=Math.PI/2;g.add(rim);
+ g.add(tBeads(14.95,6.42,54,.10,SS));
+
+ /* the lid, low and domed, with a ball for a finial */
+ g.add(tLathe2([[6.42,15.45],[6.55,15.8],[5.9,16.4],[4.3,17.2],[2.4,17.8],
+   [1.15,18.1],[.6,18.3]],S,tS(36,96)));
+ g.add(tBeads(16.05,6.05,48,.10,SS));
+ const fin=new THREE.Mesh(new THREE.CylinderGeometry(.34,.5,.6,tS(10,20)),SS);
+ fin.position.y=18.55;g.add(fin);
+ const fb=tBall(.72,new THREE.MeshStandardMaterial({color:0xf6f8fa,metalness:1,
+  roughness:.22,bumpMap:tBallTex(),bumpScale:.045}));
+ fb.position.y=19.5;g.add(fb);
+
+ /* three handles, each finished with a volute */
+ for(let i=0;i<3;i++){
+  const a=i/3*Math.PI*2, dx=Math.cos(a), dz=Math.sin(a);
+  g.add(tStrap([[dx*5.95,11.5,dz*5.95],[dx*8.7,13.3,dz*8.7],[dx*8.3,16.5,dz*8.3],
+    [dx*6.3,17.35,dz*6.3],[dx*5.7,16.1,dz*5.7]],.40,.15,S));
+  if(tHi()){
+   const v=tVolute(S,.62,.15,1.25,1);
+   v.position.set(dx*8.5,14.9,dz*8.5);v.rotation.y=-a+Math.PI/2;g.add(v)}
+ }
+
+ tRibbons(g,{a:'#00a3e0',b:'#00568c',word:'LEAGUE CUP',r:6.2,y:14.6,len:8.0});
+ return g};
+
+/* =====================================================================
+   8. THE CHAMPIONS CUP
+   ---------------------------------------------------------------------
+   The ears are not tubes. They are wide flat silver straps that curl out
+   and back, and their profile from the front is the most recognisable
+   silhouette in the sport. Everything else here serves that: a narrow
+   foot, a heavy ovoid bowl, and the band of stars.
+   ===================================================================== */
+TB.CL=function(){
+ const M=tMaterials(),g=new THREE.Group();
+ const S=M.silver,SS=M.silverSoft;
+
+ /* the foot: a broad splayed disc rising to a very narrow waist */
+ g.add(tLathe2([[4.6,0],[4.6,.55],[4.35,.85],[3.0,1.45],[1.9,1.95],[1.55,2.5]],SS));
+ g.add(tFillet(.58,4.62,.08,S));
+ const ring=new THREE.Mesh(new THREE.CylinderGeometry(4.62,4.62,.62,tS(64,128)),
+  new THREE.MeshStandardMaterial({color:0xffffff,metalness:1,roughness:.15,
+   bumpMap:tEngraveBand(tChampionLines()),bumpScale:.04}));
+ ring.position.y=.30;g.add(ring);
+
+ /* the bowl: deeper and carried higher than the first pass, which sat
+    it so low that the ears had nothing to hang off */
+ g.add(tLathe2([[1.55,2.5],[1.45,3.6],[2.15,4.3],[1.45,5.0],[1.60,5.9],
+   [3.3,7.4],[5.6,9.6],[6.95,12.2],[7.25,14.8],[6.95,16.9],[6.45,17.9],
+   [6.62,18.2]],S,tS(44,120)));
+ g.add(tFillet(4.15,2.22,.09,SS));
+ const rim=new THREE.Mesh(new THREE.TorusGeometry(6.72,.22,tS(14,28),tS(80,150)),SS);
+ rim.position.y=18.15;rim.rotation.x=Math.PI/2;g.add(rim);
+
+ /* THE EARS. Wide flat sheet, rising above the rim and curling out
+    almost as far again as the bowl is across — the most copied
+    silhouette in the sport. Plates, not swept rectangles, and tapering
+    from the wide top down to where they meet the belly. */
+ [1,-1].forEach(s=>{
+  const ear=tFlatBand([[6.30*s,16.9],[9.7*s,18.3],[12.2*s,16.2],
+    [12.7*s,12.0],[10.4*s,8.3],[7.0*s,7.35],[5.15*s,8.8]],
+    t=>1.42-t*.72, .30, S);
+  g.add(ear);
+  if(tHi()){
+   /* the raised lip down the outer edge, which is what stops a plate
+      reading as a cut-out */
+   g.add(tFlatBand([[6.30*s,16.9],[9.7*s,18.3],[12.2*s,16.2],
+     [12.7*s,12.0],[10.4*s,8.3],[7.0*s,7.35],[5.15*s,8.8]],
+     t=>.16, .46, SS))}
+ });
+
+ /* the band of stars round the shoulder */
+ const NST=tS(8,12);
+ for(let i=0;i<NST;i++){
+  const a=i/NST*Math.PI*2;
+  const st=tStar(.58,.24,.11,SS);
+  st.position.set(Math.cos(a)*7.12,13.6,Math.sin(a)*7.12);
+  st.rotation.y=-a+Math.PI/2;
+  g.add(st)}
+ g.add(tBeads(17.55,6.85,tS(30,56),.10,SS));
+
+ tRibbons(g,{a:'#0b1f5c',b:'#050d2c',word:'CHAMPIONS LEAGUE',r:6.3,y:17.0,len:9.4});
+ return g};
+
+/* =====================================================================
+   9. THE EUROPA LEAGUE
+   ---------------------------------------------------------------------
+   Fifteen kilograms of silver on yellow marble, and the bowl is not a
+   solid wall — it is a woven mesh with a footballer worked into it. The
+   old one was a plain amphora with twenty rods glued on.
+   ===================================================================== */
+TB.EL=function(){
+ const M=tMaterials(),g=new THREE.Group();
+ const S=M.silver,SS=M.silverSoft;
+
+ /* the yellow marble base */
+ g.add(tLathe2([[4.8,0],[4.8,1.35],[4.55,1.55],[3.2,1.9],[2.45,2.25]],M.marble));
+ g.add(tFillet(1.42,4.82,.09,S));
+ const band=new THREE.Mesh(new THREE.CylinderGeometry(4.83,4.83,.85,tS(56,112)),
+  new THREE.MeshStandardMaterial({color:0xf6f8fa,metalness:1,roughness:.17,
+   bumpMap:tEngraveBand(tChampionLines()),bumpScale:.04}));
+ band.position.y=.62;g.add(band);
+
+ /* the bowl */
+ const prof=[[2.45,2.25],[2.0,3.2],[3.3,4.5],[4.7,6.5],[5.45,9.0],
+             [5.0,11.6],[4.0,13.4],[3.6,15.0],[4.25,16.5],[4.65,17.1]];
+ g.add(tLathe2(prof,new THREE.MeshStandardMaterial({color:0xffffff,metalness:1,
+   roughness:.09,bumpMap:tTitleBump('EUROPA','LEAGUE',true),bumpScale:.028}),
+   tS(40,110)));
+
+ /* the weave: two sets of helices running opposite ways over the belly */
+ const NW=tS(9,16);
+ for(let d=0;d<2;d++)for(let i=0;i<NW;i++){
+  const pts=[];
+  for(let k=0;k<=tS(9,16);k++){
+   const t=k/tS(9,16), y=3.6+t*12.4;
+   /* follow the profile so the weave sits on the wall, not through it */
+   const r=(2.4+Math.sin(Math.min(1,t*1.25)*Math.PI*.92)*3.25)*1.03;
+   const a=i/NW*Math.PI*2+(d?-1:1)*t*1.35;
+   pts.push(new THREE.Vector3(Math.cos(a)*r,y,Math.sin(a)*r))}
+  g.add(new THREE.Mesh(new THREE.TubeGeometry(
+   new THREE.CatmullRomCurve3(pts),tS(16,34),.105,tS(5,8),false),SS))}
+
+ const rim=new THREE.Mesh(new THREE.TorusGeometry(4.7,.19,tS(12,24),tS(64,128)),SS);
+ rim.position.y=17.1;rim.rotation.x=Math.PI/2;g.add(rim);
+ g.add(tBeads(16.6,4.55,tS(28,52),.09,SS));
+
+ /* the footballer worked into the front of the bowl */
+ if(tHi()){
+  const f=tFigure(SS,{scale:.52,arms:'down'});
+  f.position.set(0,7.1,4.15);f.rotation.x=-.18;f.scale.z=.5;g.add(f);
+  const bl=tBall(.5,new THREE.MeshStandardMaterial({color:0xf0f3f6,metalness:1,
+   roughness:.24,bumpMap:tBallTex(),bumpScale:.05}));
+  bl.position.set(.75,6.6,4.5);g.add(bl)}
+
+ tRibbons(g,{a:'#ff6a00',b:'#8a3400',word:'EUROPA LEAGUE',r:4.5,y:16.3,len:8.0});
+ return g};
+
+/* =====================================================================
+   10. THE CONFERENCE LEAGUE
+   ---------------------------------------------------------------------
+   The odd one out and the only abstract in the room: a cage of tall
+   silver blades that twist as they rise and open into a cup. It was an
+   eight-sided cone with rods on the corners.
+   ===================================================================== */
+TB.EC=function(){
+ const M=tMaterials(),g=new THREE.Group();
+ const S=M.silver,SS=M.silverSoft;
+ g.add(tLathe2([[4.2,0],[4.2,1.1],[3.9,1.3],[2.6,1.7],[2.1,2.1]],M.stone));
+ const band=new THREE.Mesh(new THREE.CylinderGeometry(4.22,4.22,.72,tS(48,96)),
+  new THREE.MeshStandardMaterial({color:0xf2f5f8,metalness:1,roughness:.19,
+   bumpMap:tEngraveBand(tChampionLines()),bumpScale:.04}));
+ band.position.y=.62;g.add(band);
+ g.add(tFillet(1.16,4.24,.08,SS));
+
+ /* The blades. The first pass ran the radius out as t squared, so they
+    kept opening all the way to the top and the thing read as a
+    wastepaper basket. A sine that peaks at four fifths of the way up
+    bellies out and then closes again — a bud, which is the shape. */
+ const NB=tS(10,18);
+ const rad=t=>1.45+Math.sin(t*Math.PI*.82)*3.55;
+ for(let i=0;i<NB;i++){
+  const pts=[];
+  for(let k=0;k<=tS(9,17);k++){
+   const t=k/tS(9,17), y=2.1+t*14.6;
+   const a=i/NB*Math.PI*2+t*.80;
+   pts.push(new THREE.Vector3(Math.cos(a)*rad(t),y,Math.sin(a)*rad(t)))}
+  const c=new THREE.CatmullRomCurve3(pts);
+  g.add(new THREE.Mesh(new THREE.TubeGeometry(c,tS(18,38),.19,tS(5,9),false),S));
+ }
+ /* a hoop where the blades are widest, and a collar where they close */
+ const belly=new THREE.Mesh(new THREE.TorusGeometry(rad(.5)+.02,.13,tS(8,18),tS(48,100)),SS);
+ belly.position.y=2.1+.5*14.6;belly.rotation.x=Math.PI/2;g.add(belly);
+ const rim=new THREE.Mesh(new THREE.TorusGeometry(rad(1)+.02,.17,tS(10,22),tS(48,100)),SS);
+ rim.position.y=16.7;rim.rotation.x=Math.PI/2;g.add(rim);
+ const cap=new THREE.Mesh(new THREE.OctahedronGeometry(1.05,tS(0,1)),SS);
+ cap.position.y=17.9;g.add(cap);
+ /* no ribbons: a bud of blades has no handle and no rim to tie one to,
+    so they hung in the air beside it */
+ return g};
+
+/* =====================================================================
+   11. THE WORLD CUP
+   ---------------------------------------------------------------------
+   Two figures holding the world up. The old sculpt read them as two
+   tubes spiralling round a column, which is a fair description of the
+   silhouette and a poor description of the thing.
+   ===================================================================== */
+TB.WC=function(){
+ const M=tMaterials(),g=new THREE.Group();
+ const gold=new THREE.MeshStandardMaterial({color:0xe0a527,metalness:1,roughness:.15});
+ const gold2=new THREE.MeshStandardMaterial({color:0xf0b93a,metalness:1,roughness:.22});
+
+ /* the malachite base, two gold rings, and its plate of winners */
+ g.add(tLathe2([[3.7,0],[3.7,1.5],[3.6,1.62],[3.6,2.6],[3.5,2.72],[3.5,3.6],[2.7,3.95]],
+  M.malachite));
+ [1.56,2.66].forEach(y=>g.add(tFillet(y,3.66,.11,gold)));
+ if(tHi()){
+  const plate=new THREE.Mesh(new THREE.PlaneGeometry(3.4,.78),
+   new THREE.MeshStandardMaterial({color:0xe6b53d,metalness:1,roughness:.28,
+    bumpMap:tEngraveBand(tChampionLines().slice(-2),{oneLine:true}),bumpScale:.03}));
+  plate.position.set(0,2.1,3.63);g.add(plate)}
+
+ /* the column the two of them rise out of */
+ g.add(tLathe2([[1.7,3.95],[1.1,5.2],[.95,6.8],[1.35,8.6],[2.15,10.3],
+   [2.95,11.7],[3.25,12.6],[2.45,13.0]],gold,tS(36,96)));
+
+ /* the two figures, backs to the column, arms up under the globe */
+ [0,Math.PI].forEach(off=>{
+  const f=tFigure(gold,{scale:.86});
+  f.position.set(Math.cos(off)*1.55,4.35,Math.sin(off)*1.55);
+  f.rotation.y=off+Math.PI/2;
+  f.rotation.z=Math.cos(off)*-.16;
+  f.rotation.x=Math.sin(off)*.16;
+  g.add(f);
+  /* the sweep of the back, which is what turns two figures into one form */
+  const pts=[];
+  for(let i=0;i<=tS(12,22);i++){
+   const t=i/tS(12,22), y=4.0+t*8.6;
+   const r=1.55-1.05*Math.sin(t*Math.PI*.5)+2.5*t*t;
+   const a=off+t*2.2;
+   pts.push(new THREE.Vector3(Math.cos(a)*r,y,Math.sin(a)*r))}
+  g.add(new THREE.Mesh(new THREE.TubeGeometry(
+   new THREE.CatmullRomCurve3(pts),tS(28,56),.34,tS(6,10),false),gold))});
+
+ /* the globe */
+ const globe=new THREE.Mesh(new THREE.SphereGeometry(2.15,tS(20,40),tS(15,30)),gold2);
+ globe.position.y=14.5;g.add(globe);
+ for(let i=-2;i<=2;i++){
+  const f=i*.31,rr=Math.sqrt(Math.max(.03,1-f*f))*2.17;
+  const t=new THREE.Mesh(new THREE.TorusGeometry(rr,.035,tS(5,8),tS(24,44)),M.dark);
+  t.position.y=14.5+f*2.15;t.rotation.x=Math.PI/2;g.add(t)}
+ for(let i=0;i<tS(4,6);i++){
+  const t=new THREE.Mesh(new THREE.TorusGeometry(2.17,.035,tS(5,8),tS(24,44)),M.dark);
+  t.position.y=14.5;t.rotation.y=i*Math.PI/tS(4,6);g.add(t)}
+ return g};
+
+/* =====================================================================
+   12. THE HENRI DELAUNAY
+   ---------------------------------------------------------------------
+   A third of it is plinth, the bowl is deep and almost straight-sided,
+   and on the back of the base there is a boy keeping a ball up. That
+   boy is the only reason anybody can tell this trophy apart from a
+   dozen others, and he was missing.
+   ===================================================================== */
+TB.EURO=function(){
+ const M=tMaterials(),g=new THREE.Group();
+ const sil=new THREE.MeshStandardMaterial({color:0xdfe6ec,metalness:1,roughness:.09});
+ const SS=M.silverSoft;
+
+ g.add(tLathe2([[4.5,0],[4.5,3.2],[4.3,3.42],[2.4,3.62],[2.4,4.0]],SS));
+ const band=new THREE.Mesh(new THREE.CylinderGeometry(4.53,4.53,2.2,tS(48,96)),
+  new THREE.MeshStandardMaterial({color:0xeef1f4,metalness:1,roughness:.22,
+   bumpMap:tEngraveBand(tChampionLines()),bumpScale:.05}));
+ band.position.y=1.7;g.add(band);
+ g.add(tFillet(.28,4.52,.09,sil));
+ g.add(tFillet(3.16,4.52,.09,sil));
+
+ /* the boy on the back of the plinth */
+ if(tHi()){
+  const boy=tFigure(sil,{scale:.36});
+  boy.position.set(0,.35,-3.6);boy.rotation.y=Math.PI;g.add(boy);
+  const bl=tBall(.34,new THREE.MeshStandardMaterial({color:0xe9eef3,metalness:1,
+   roughness:.25,bumpMap:tBallTex(),bumpScale:.05}));
+  bl.position.set(-.38,3.55,-3.6);g.add(bl)}
+
+ g.add(tLathe2([[2.4,4.0],[1.0,4.7],[.85,7.4],[1.65,8.3],[2.75,9.4],
+   [3.45,11.6],[3.8,14.6],[3.95,16.0]],sil,tS(36,96)));
+ g.add(tFillet(4.72,1.12,.08,SS));
+ const rim=new THREE.Mesh(new THREE.TorusGeometry(3.95,.16,tS(10,22),tS(48,96)),sil);
+ rim.position.y=16.0;rim.rotation.x=Math.PI/2;g.add(rim);
+ g.add(tBeads(15.5,3.9,tS(26,48),.085,SS));
+ [1,-1].forEach(s=>{
+  g.add(tStrap([[3.55*s,14.4,0],[5.1*s,13.4,0],[4.9*s,11.2,0],[3.35*s,10.8,0]],
+   .34,.12,sil))});
+ tRibbons(g,{a:'#1d4ed8',b:'#0a2270',word:'EUROPEAN CHAMPIONS',r:3.7,y:15.2,len:7.2});
+ return g};
+
+/* =====================================================================
+   13. THE LEAGUES OF EUROPE, EACH ITS OWN SHAPE
+   ---------------------------------------------------------------------
+   These were one cup in eight tints. Four of them stood in a row in the
+   hall and read as a rendering bug. Every one of them is a different
+   object in real life and at least two are not cups at all.
+   ===================================================================== */
+
+/* Spain: tall, gold, and it flares — a wide shallow mouth on a long stem */
+TB.ESP=function(){
+ const M=tMaterials(),g=new THREE.Group();
+ const gold=new THREE.MeshStandardMaterial({color:0xffab14,metalness:1,roughness:.10});
+ const GW=M.goldWarm;
+ g.add(tLathe2([[4.3,0],[4.3,1.1],[4.0,1.35],[2.6,1.8],[1.9,2.3]],M.stone));
+ const band=new THREE.Mesh(new THREE.CylinderGeometry(4.32,4.32,.78,tS(48,96)),
+  new THREE.MeshStandardMaterial({color:0xe8c25a,metalness:1,roughness:.24,
+   bumpMap:tEngraveBand(tChampionLines()),bumpScale:.04}));
+ band.position.y=.64;g.add(band);
+ g.add(tLathe2([[1.9,2.3],[1.15,3.4],[.95,5.2],[1.75,6.2],[1.0,7.2],
+   [1.5,8.4],[3.4,10.4],[5.2,12.6],[5.9,14.6],[6.1,16.2]],gold,tS(36,96)));
+ g.add(tFillet(6.2,1.82,.10,GW));
+ g.add(tGadroon(11.4,4.35,18,.5,GW,1.6));
+ const rim=new THREE.Mesh(new THREE.TorusGeometry(6.05,.17,tS(10,22),tS(56,112)),GW);
+ rim.position.y=16.2;rim.rotation.x=Math.PI/2;g.add(rim);
+ g.add(tBeads(15.7,6.0,tS(28,52),.09,GW));
+ [1,-1].forEach(s=>{
+  g.add(tStrap([[5.6*s,15.5,0],[8.0*s,14.6,0],[8.1*s,11.4,0],[5.0*s,10.9,0]],
+   .30,.11,gold))});
+ tRibbons(g,{a:'#c8102e',b:'#7a0a17',word:'CAMPEONES',r:7.7,y:14.4,len:7.8});
+ return g};
+
+/* Italy: not a cup. A spiral, coiling up off a stone base. */
+TB.ITA=function(){
+ const M=tMaterials(),g=new THREE.Group();
+ const S=M.silver,SS=M.silverSoft;
+ g.add(tLathe2([[4.5,0],[4.5,1.5],[4.2,1.75],[3.4,2.1]],M.stone));
+ const band=new THREE.Mesh(new THREE.CylinderGeometry(4.52,4.52,.9,tS(48,96)),
+  new THREE.MeshStandardMaterial({color:0xf2f5f8,metalness:1,roughness:.2,
+   bumpMap:tEngraveBand(tChampionLines()),bumpScale:.045}));
+ band.position.y=.72;g.add(band);
+ g.add(tFillet(1.56,4.53,.09,SS));
+ /* three coils, offset a third of a turn each, tightening as they climb */
+ for(let c=0;c<3;c++){
+  const pts=[];
+  for(let k=0;k<=tS(22,44);k++){
+   const t=k/tS(22,44);
+   const a=c/3*Math.PI*2+t*Math.PI*2*1.55;
+   const r=3.6-t*2.35;
+   pts.push(new THREE.Vector3(Math.cos(a)*r,2.1+t*13.4,Math.sin(a)*r))}
+  g.add(new THREE.Mesh(new THREE.TubeGeometry(
+   new THREE.CatmullRomCurve3(pts),tS(34,72),.30,tS(6,11),false),S))}
+ /* the ball the spiral closes around */
+ const bl=tBall(1.35,new THREE.MeshStandardMaterial({color:0xf4f7fa,metalness:1,
+  roughness:.2,bumpMap:tBallTex(),bumpScale:.06}));
+ bl.position.y=16.4;g.add(bl);
+ g.add(tFillet(15.5,1.35,.10,SS));
+ /* likewise the spiral */
+ return g};
+
+/* Germany: the Meisterschale. It is a plate. */
+TB.GER=function(){
+ const M=tMaterials(),g=new THREE.Group();
+ const S=M.silver,SS=M.silverSoft;
+ /* the stand */
+ g.add(tLathe2([[3.8,0],[3.8,.6],[3.4,.85],[1.5,1.15],[1.2,1.5]],M.stone));
+ [1,-1].forEach(s=>{
+  const arm=new THREE.Mesh(new THREE.CylinderGeometry(.22,.28,3.4,tS(8,14)),SS);
+  arm.position.set(1.6*s,3.0,0);arm.rotation.z=-.28*s;g.add(arm)});
+ /* the dish, standing on edge, face to the front */
+ const dish=new THREE.Group();
+ dish.position.y=9.9;dish.rotation.x=Math.PI/2;
+ dish.add(tLathe2([[0,.42],[3.0,.40],[5.6,.34],[6.9,.62],[7.5,1.05],
+   [7.55,1.45],[6.9,1.30],[5.6,.86],[3.0,.80],[0,.80]],SS,tS(40,110)));
+ /* the raised rim carrying the champions, engraved right round */
+ const rim=new THREE.Mesh(new THREE.CylinderGeometry(7.55,7.55,.95,tS(64,140),1,true),
+  new THREE.MeshStandardMaterial({color:0xffffff,metalness:1,roughness:.14,
+   side:THREE.DoubleSide,
+   bumpMap:tEngraveBand(tChampionLines()),bumpScale:.10}));
+ rim.position.y=1.0;dish.add(rim);
+ dish.add(tFillet(1.5,7.56,.13,S));
+ dish.add(tFillet(.44,7.0,.11,S));
+ /* the field of the dish, with its lettering */
+ const face=new THREE.Mesh(new THREE.CircleGeometry(6.7,tS(40,88)),
+  new THREE.MeshStandardMaterial({color:0xfbfdff,metalness:1,roughness:.11,
+   bumpMap:tTitleBump('DEUTSCHER','MEISTER',true),bumpScale:.11}));
+ face.position.y=.83;face.rotation.x=-Math.PI/2;dish.add(face);
+ if(tHi()){
+  /* the studs round the field */
+  dish.add(tBeads(.90,6.1,44,.13,S));
+  for(let i=0;i<10;i++){
+   const a=i/10*Math.PI*2;
+   const st=tStar(.42,.18,.09,S);
+   st.position.set(Math.cos(a)*4.7,.92,Math.sin(a)*4.7);
+   st.rotation.x=-Math.PI/2;dish.add(st)}}
+ g.add(dish);
+ /* the Schale is a plate; anything hung off it lands behind it */
+ return g};
+
+/* France: the Hexagoal — six sides, hollow, and nothing like a cup */
+TB.FRA=function(){
+ const M=tMaterials(),g=new THREE.Group();
+ const S=M.silver,SS=M.silverSoft;
+ const blue=new THREE.MeshStandardMaterial({color:0x2b4fb8,metalness:.8,roughness:.22});
+ g.add(tLathe2([[4.4,0],[4.4,1.2],[4.1,1.45],[3.2,1.8]],M.stone));
+ const band=new THREE.Mesh(new THREE.CylinderGeometry(4.42,4.42,.82,tS(48,96)),
+  new THREE.MeshStandardMaterial({color:0xf2f5f8,metalness:1,roughness:.2,
+   bumpMap:tEngraveBand(tChampionLines()),bumpScale:.045}));
+ band.position.y=.66;g.add(band);
+ /* two hexagons, one above the other, joined by six uprights that lean in */
+ const hex=(y,r,t,mat)=>{
+  const s=new THREE.Shape();
+  for(let i=0;i<6;i++){
+   const a=i/6*Math.PI*2+Math.PI/6;
+   const x=Math.cos(a)*r,z=Math.sin(a)*r;
+   i?s.lineTo(x,z):s.moveTo(x,z)}
+  s.closePath();
+  const hole=new THREE.Path();
+  for(let i=5;i>=0;i--){
+   const a=i/6*Math.PI*2+Math.PI/6;
+   const x=Math.cos(a)*(r-t),z=Math.sin(a)*(r-t);
+   i===5?hole.moveTo(x,z):hole.lineTo(x,z)}
+  s.holes.push(hole);
+  const m=new THREE.Mesh(new THREE.ExtrudeGeometry(s,{depth:.55,
+   bevelEnabled:true,bevelSize:.07,bevelThickness:.07,bevelSegments:tS(1,3)}),mat);
+  m.rotation.x=Math.PI/2;m.position.y=y;return m};
+ g.add(hex(2.4,5.2,.72,S));
+ g.add(hex(15.6,3.4,.60,S));
+ for(let i=0;i<6;i++){
+  const a=i/6*Math.PI*2+Math.PI/6;
+  g.add(tStrap([[Math.cos(a)*5.0,2.5,Math.sin(a)*5.0],
+    [Math.cos(a+.18)*5.6,7.0,Math.sin(a+.18)*5.6],
+    [Math.cos(a+.30)*4.4,12.0,Math.sin(a+.30)*4.4],
+    [Math.cos(a+.34)*3.25,15.6,Math.sin(a+.34)*3.25]],.42,.13,SS))}
+ const bl=tBall(2.05,new THREE.MeshStandardMaterial({color:0x3157c9,metalness:.75,
+  roughness:.24,bumpMap:tBallTex(),bumpScale:.07}));
+ bl.position.y=9.6;g.add(bl);
+ if(tHi())for(let i=0;i<6;i++){
+  const a=i/6*Math.PI*2;
+  const sp=new THREE.Mesh(new THREE.SphereGeometry(.20,12,10),blue);
+  sp.position.set(Math.cos(a)*3.42,15.9,Math.sin(a)*3.42);g.add(sp)}
+ /* and the Hexagoal */
+ return g};
+
+/* England below the top flight: one family of EFL cups, told apart by
+   size, lid and tint the way they really are */
+function tEflCup(o){
+ const M=tMaterials(),g=new THREE.Group();
+ const body=new THREE.MeshStandardMaterial({color:o.tint,metalness:1,roughness:.12});
+ const SS=M.silverSoft;
+ g.add(tLathe2([[4.7,0],[4.7,1.0],[4.4,1.25],[3.3,1.6],[2.6,2.0]],M.dark));
+ const band=new THREE.Mesh(new THREE.CylinderGeometry(4.72,4.72,.8,tS(48,96)),
+  new THREE.MeshStandardMaterial({color:0xeef1f4,metalness:1,roughness:.2,
+   bumpMap:tEngraveBand(tChampionLines()),bumpScale:.04}));
+ band.position.y=.62;g.add(band);
+ g.add(tFillet(1.06,4.73,.08,SS));
+ g.add(tLathe2([[2.6,2.0],[1.35,3.1],[1.05,4.6],[1.95,5.6],[1.1,6.6],
+   [3.0,8.6],[5.0,10.9],[5.7,13.0],[5.5,14.8]],body,tS(36,96)));
+ g.add(tFillet(5.6,2.05,.09,SS));
+ g.add(tGadroon(9.6,3.95,18,.48,SS,1.6));
+ const rim=new THREE.Mesh(new THREE.TorusGeometry(5.6,.18,tS(10,22),tS(56,112)),SS);
+ rim.position.y=14.8;rim.rotation.x=Math.PI/2;g.add(rim);
+ g.add(tBeads(14.3,5.56,tS(26,48),.09,SS));
+ [1,-1].forEach(s=>{
+  g.add(tStrap([[5.35*s,14.2,0],[7.9*s,13.2,0],[7.8*s,10.4,0],[5.2*s,9.9,0]],
+   .40,.14,body));
+  if(tHi()){
+   const v=tVolute(SS,.55,.13,1.2,s);
+   v.position.set(7.7*s,13.6,0);g.add(v)}});
+ if(o.lid){
+  g.add(tLathe2([[5.5,14.85],[5.65,15.2],[5.0,15.9],[3.4,16.7],[1.8,17.2],
+    [.8,17.45]],body,tS(30,80)));
+  g.add(tBeads(15.4,5.2,tS(24,44),.09,SS));
+  const fb=tBall(.62,new THREE.MeshStandardMaterial({color:0xf2f5f8,metalness:1,
+   roughness:.22,bumpMap:tBallTex(),bumpScale:.05}));
+  fb.position.y=18.1;g.add(fb);
+  const st=new THREE.Mesh(new THREE.CylinderGeometry(.26,.4,.6,tS(8,16)),SS);
+  st.position.y=17.6;g.add(st)}
+ if(o.ribbon)tRibbons(g,{a:o.ribbon[0],b:o.ribbon[1],word:o.word||'CHAMPIONS',
+   r:5.1,y:14.0,len:7.2});
+ return g}
+TB.CH=()=>tEflCup({tint:0xe4e8ec,lid:true, ribbon:['#1c3f94','#0a1c46'],word:'CHAMPIONSHIP'});
+TB.L1=()=>tEflCup({tint:0xd8dce1,lid:true, ribbon:['#127a4d','#06301e'],word:'LEAGUE ONE'});
+TB.L2=()=>tEflCup({tint:0xcfd4da,lid:false,ribbon:['#8a5a1b','#3b2409'],word:'LEAGUE TWO'});
+TB.NL=()=>tEflCup({tint:0xc9ced5,lid:false,ribbon:['#6b1f7a','#2c0b33'],word:'CHAMPIONS'});
+
+/* =====================================================================
+   14. THE INDIVIDUAL AWARDS
+   ===================================================================== */
+
+/* the Ballon d'Or: the ball is the whole trophy, so the ball has to be
+   a ball — panelled, not an icosahedron with a wireframe over it */
+TB.ballon=function(){
+ const M=tMaterials(),g=new THREE.Group();
+ const GW=M.goldWarm;
+ g.add(tLathe2([[4.3,0],[4.3,1.3],[4.05,1.55],[3.0,2.0],[2.4,2.45]],M.stone));
+ const band=new THREE.Mesh(new THREE.CylinderGeometry(4.32,4.32,.8,tS(48,96)),
+  new THREE.MeshStandardMaterial({color:0xe9c463,metalness:1,roughness:.24,
+   bumpMap:tEngraveBand(["BALLON D'OR"],{oneLine:true}),bumpScale:.04}));
+ band.position.y=.66;g.add(band);
+ g.add(tFillet(1.36,4.33,.09,M.gold));
+ g.add(tLathe2([[2.4,2.45],[1.15,3.3],[.6,4.6],[.55,6.6],[1.0,7.6]],GW));
+ const ball=tBall(4.2,new THREE.MeshStandardMaterial({color:0xffb700,metalness:1,
+  roughness:.13,bumpMap:tBallTex(),bumpScale:.16}));
+ ball.position.y=11.9;g.add(ball);
+ if(tHi()){
+  /* a raised seam course over the equator sells the panels in profile */
+  for(let i=0;i<3;i++){
+   const t=new THREE.Mesh(new THREE.TorusGeometry(4.23,.05,6,64),
+    new THREE.MeshStandardMaterial({color:0x8a6a12,metalness:1,roughness:.42}));
+   t.position.y=11.9;t.rotation.y=i*Math.PI/3;t.rotation.x=.3;g.add(t)}}
+ return g};
+
+/* THE GOLDEN BOOT
+   The old one lay flat on its plinth with the camera looking down on it,
+   and a boot seen from above is a lump. The real award stands the boot
+   up on its heel with the toe raised, which is the only angle at which
+   a boot is a boot. Sole, upper, heel counter, collar, tongue, crossed
+   laces and studs, on a raked mount. */
+TB.boot=function(){
+ const M=tMaterials(),g=new THREE.Group();
+ const G=M.gold, GW=M.goldWarm, GB=M.goldBright;
+ g.add(tLathe2([[5.0,0],[5.0,1.05],[4.7,1.3],[3.7,1.7],[3.3,2.05]],M.stone));
+ const band=new THREE.Mesh(new THREE.CylinderGeometry(5.02,5.02,.8,tS(44,88)),
+  new THREE.MeshStandardMaterial({color:0xe9c463,metalness:1,roughness:.24,
+   bumpMap:tEngraveBand(['GOLDEN BOOT'],{oneLine:true}),bumpScale:.04}));
+ band.position.y=.64;g.add(band);
+ g.add(tFillet(1.36,5.03,.09,G));
+ if(tHi())g.add(tBeads(1.34,5.06,36,.08,GB));
+
+ /* the mount the boot is raked on */
+ const post=new THREE.Mesh(new THREE.CylinderGeometry(.55,.95,2.6,tS(12,22)),GW);
+ post.position.set(-1.5,3.3,0);post.rotation.z=.20;g.add(post);
+
+ const boot=new THREE.Group();
+ boot.position.set(.2,4.4,0);
+ boot.rotation.z=.26;           /* toe up, but only just */
+ /* Nearly side-on. A boot is read from its profile — the line from heel
+    to toe. Turned three-quarters away it is a gold slug, which is what
+    the first two attempts at this were. */
+ boot.rotation.y=-.22;
+
+ /* sole: a boot-shaped plate, narrow at the waist */
+ const sole=new THREE.Shape();
+ sole.moveTo(-4.5,-1.45);
+ sole.bezierCurveTo(-5.0,.55,-3.9,1.55,-2.0,1.60);
+ sole.bezierCurveTo(-.2,1.20,1.6,1.45,3.4,1.35);
+ sole.bezierCurveTo(4.6,1.25,5.25,.55,5.15,-.25);
+ sole.bezierCurveTo(5.05,-1.05,4.3,-1.6,3.2,-1.6);
+ sole.bezierCurveTo(1.0,-1.75,-1.2,-1.35,-2.6,-1.7);
+ sole.lineTo(-4.5,-1.45);
+ const soleM=new THREE.Mesh(new THREE.ExtrudeGeometry(sole,
+  {depth:.5,bevelEnabled:true,bevelSize:.13,bevelThickness:.13,
+   bevelSegments:tS(2,4),curveSegments:tS(6,12)}),GW);
+ soleM.rotation.x=-Math.PI/2;soleM.position.y=.5;boot.add(soleM);
+
+ /* upper: forefoot, instep and toe box, each its own mass */
+ const fore=new THREE.Mesh(new THREE.SphereGeometry(2.4,tS(20,40),tS(15,28)),G);
+ fore.scale.set(1.30,.52,.80);fore.position.set(1.5,1.14,0);boot.add(fore);
+ const instep=new THREE.Mesh(new THREE.SphereGeometry(2.2,tS(18,34),tS(14,26)),G);
+ instep.scale.set(1.00,.76,.76);instep.position.set(-1.1,1.34,0);boot.add(instep);
+ const toe=new THREE.Mesh(new THREE.SphereGeometry(1.55,tS(16,30),tS(12,24)),G);
+ toe.scale.set(1.35,.50,.76);toe.position.set(3.9,.95,0);boot.add(toe);
+
+ /* heel counter, collar and ankle */
+ const heel=new THREE.Mesh(new THREE.SphereGeometry(1.75,tS(16,30),tS(12,24)),G);
+ heel.scale.set(.80,1.18,.76);heel.position.set(-3.3,1.70,0);boot.add(heel);
+ const collar=new THREE.Mesh(new THREE.TorusGeometry(1.30,.26,tS(10,18),tS(24,44)),GW);
+ collar.position.set(-3.1,2.78,0);collar.rotation.x=Math.PI/2;
+ collar.rotation.y=.16;boot.add(collar);
+ const tongue=new THREE.Mesh(new THREE.BoxGeometry(2.3,.26,1.45),GW);
+ tongue.position.set(-1.45,2.34,0);tongue.rotation.z=-.34;boot.add(tongue);
+
+ /* the laces actually cross */
+ for(let i=0;i<4;i++)[1,-1].forEach(sd=>{
+  const l=new THREE.Mesh(new THREE.CylinderGeometry(.085,.085,2.05,tS(6,10)),GB);
+  l.position.set(-2.35+i*.78,2.12+i*.05,0);
+  l.rotation.x=Math.PI/2;l.rotation.z=.44*sd;boot.add(l)});
+ const knot=new THREE.Mesh(new THREE.SphereGeometry(.26,tS(8,14),tS(7,12)),GB);
+ knot.position.set(-2.62,2.34,0);boot.add(knot);
+
+ /* studs */
+ [[-3.4,1.0],[-3.4,-1.0],[-1.5,1.15],[-1.5,-1.15],[.8,1.2],[.8,-1.2],
+  [3.0,1.0],[3.0,-1.0],[4.3,0]].forEach(([x,z])=>{
+  const st=new THREE.Mesh(new THREE.CylinderGeometry(.24,.34,.52,tS(8,14)),GW);
+  st.position.set(x,.18,z);boot.add(st)});
+ g.add(boot);
+ return g};
+
+/* the Golden Glove */
+const _gloveSculpt=TB.glove;
+TB.glove=function(){
+ const M=tMaterials();
+ const g=_gloveSculpt();
+ g.add(tFillet(2.2,3.04,.07,M.gold));
+ g.add(tFillet(3.3,3.04,.07,M.gold));
+ if(tHi())g.add(tBeads(2.18,3.08,34,.07,M.goldBright));
+ return g};
+
+/* the Playmaker */
+const _pmSculpt=TB.playmaker;
+TB.playmaker=function(){
+ const M=tMaterials();
+ const g=_pmSculpt();
+ g.add(tFillet(2.2,2.84,.07,M.silverSoft));
+ g.add(tFillet(3.3,2.84,.07,M.silverSoft));
+ if(tHi())g.add(tBeads(2.18,2.88,32,.07,M.silverSoft));
+ return g};
+
+/* YOUNG PLAYER OF THE SEASON
+   A star climbing, with the arc it came up on left behind it. The first
+   pass gave it a broom handle and a star the size of the base. */
+TB.young=function(){
+ const M=tMaterials(),g=new THREE.Group();
+ const SS=M.silverSoft;
+ g.add(tLathe2([[4.1,0],[4.1,1.2],[3.85,1.45],[2.8,1.9],[2.2,2.35]],M.stone));
+ const band=new THREE.Mesh(new THREE.CylinderGeometry(4.12,4.12,.76,tS(44,88)),
+  new THREE.MeshStandardMaterial({color:0xeef1f4,metalness:1,roughness:.2,
+   bumpMap:tEngraveBand(['YOUNG PLAYER OF THE SEASON'],{oneLine:true}),bumpScale:.04}));
+ band.position.y=.62;g.add(band);
+ g.add(tFillet(1.26,4.13,.08,SS));
+
+ /* the arc: a flat ribbon of silver sweeping up and back, tapering as it
+    goes, so it reads as a trail and not as a pole */
+ const arc=[[ -1.10,2.35],[-.35,5.0],[.95,8.2],[2.15,10.9],[2.75,12.6]];
+ g.add(tFlatBand(arc,t=>.90-t*.52,.52,SS));
+ if(tHi())g.add(tFlatBand(arc.map(p=>[p[0]-.55,p[1]-.35]),t=>.34-t*.20,.34,
+   new THREE.MeshStandardMaterial({color:0xdfe6ec,metalness:1,roughness:.36,
+    transparent:true,opacity:.42})));
+
+ const star=tStar(2.35,.98,.55,M.gold);
+ star.position.set(3.05,13.9,.15);star.rotation.y=.26;star.rotation.z=-.20;
+ g.add(star);
+ const core=new THREE.Mesh(new THREE.SphereGeometry(.70,tS(14,28),tS(11,22)),M.goldBright);
+ core.scale.z=.55;core.position.set(3.05,13.9,.48);g.add(core);
+ /* sparks falling away down the arc */
+ if(tHi())[[.4,-3.0,.3],[-.5,-5.6,-.1],[-1.2,-8.0,.35]].forEach(([dx,dy,dz],i)=>{
+  const sp=tStar(.62-i*.14,.26,.18,M.goldBright);
+  sp.position.set(3.05+dx,13.9+dy,dz);sp.rotation.z=.3*i;g.add(sp)});
+ return g};
+
+/* Player of the Season had literally been the Young Player trophy, which
+   is the sort of thing you only notice when the two stand side by side —
+   which, in a hall of pedestals, they do. */
+TB.poty=function(){
+ const M=tMaterials(),g=new THREE.Group();
+ const GW=M.goldWarm,SS=M.silverSoft;
+ g.add(tLathe2([[4.5,0],[4.5,1.5],[4.25,1.75],[3.2,2.15],[2.6,2.55]],M.marble));
+ const band=new THREE.Mesh(new THREE.CylinderGeometry(4.52,4.52,.86,tS(44,88)),
+  new THREE.MeshStandardMaterial({color:0xe9c463,metalness:1,roughness:.24,
+   bumpMap:tEngraveBand(['PLAYER OF THE SEASON'],{oneLine:true}),bumpScale:.04}));
+ band.position.y=.68;g.add(band);
+ g.add(tFillet(1.56,4.53,.09,M.gold));
+ /* a footballer with the ball held up */
+ const f=tFigure(M.gold,{scale:1.55});
+ f.position.y=2.55;g.add(f);
+ const bl=tBall(1.15,new THREE.MeshStandardMaterial({color:0xffc83a,metalness:1,
+  roughness:.16,bumpMap:tBallTex(),bumpScale:.09}));
+ bl.position.set(0,16.2,.1);g.add(bl);
+ if(tHi())g.add(tBeads(1.54,4.56,34,.085,GW));
+ return g};
+
+/* Manager of the Season: an easel, not a floating slab */
+TB.mgr=function(){
+ const M=tMaterials(),g=new THREE.Group();
+ const SS=M.silverSoft;
+ g.add(tLathe2([[4.7,0],[4.7,1.4],[4.45,1.65],[3.4,2.0],[3.0,2.4]],M.wood));
+ const band=new THREE.Mesh(new THREE.CylinderGeometry(4.72,4.72,.86,tS(44,88)),
+  new THREE.MeshStandardMaterial({color:0xf0f2f4,metalness:1,roughness:.2,
+   bumpMap:tEngraveBand(['MANAGER OF THE SEASON'],{oneLine:true}),bumpScale:.04}));
+ band.position.y=.68;g.add(band);
+ g.add(tFillet(1.46,4.73,.09,SS));
+ /* the easel: two front legs and a back prop, braced, with a tray */
+ [[-2.55,-.75],[2.55,-.75],[0,1.9]].forEach(([x,z])=>{
+  const leg=tLimb([x*.62,2.35,z*.62],[x*.20,9.35,z*.30],.26,SS);
+  g.add(leg)});
+ const brace=new THREE.Mesh(new THREE.BoxGeometry(4.2,.26,.26),SS);
+ brace.position.set(0,5.0,-.34);g.add(brace);
+ const tray=new THREE.Mesh(new THREE.BoxGeometry(8.4,.36,.72),SS);
+ tray.position.set(0,9.3,.44);g.add(tray);
+ const lip=new THREE.Mesh(new THREE.BoxGeometry(8.4,.5,.18),SS);
+ lip.position.set(0,9.55,.76);g.add(lip);
+ const board=new THREE.Mesh(new THREE.BoxGeometry(9.2,6.4,.42),SS);
+ board.position.set(0,12.75,.14);board.rotation.x=-.10;g.add(board);
+ const face=new THREE.Mesh(new THREE.PlaneGeometry(8.5,5.7),
+  new THREE.MeshStandardMaterial({map:tCanvas(tS(512,1024),tS(350,700),(x,W,H)=>{
+   x.fillStyle='#0d5c22';x.fillRect(0,0,W,H);
+   for(let i=0;i<10;i++){x.fillStyle=i%2?'#0f6626':'#0c5520';
+    x.fillRect(i*W/10,0,W/10,H)}
+   x.strokeStyle='rgba(255,255,255,.9)';x.lineWidth=W*.006;
+   x.strokeRect(W*.04,H*.06,W*.92,H*.88);
+   x.beginPath();x.moveTo(W/2,H*.06);x.lineTo(W/2,H*.94);x.stroke();
+   x.beginPath();x.arc(W/2,H/2,W*.078,0,Math.PI*2);x.stroke();
+   x.strokeRect(W*.04,H*.30,W*.107,H*.40);
+   x.strokeRect(W*.853,H*.30,W*.107,H*.40);
+   [[.234,.26],[.234,.74],[.42,.5],[.625,.29],[.625,.71],[.80,.5]].forEach(([a,b])=>{
+    x.fillStyle='#ffd21f';x.beginPath();x.arc(a*W,b*H,W*.021,0,Math.PI*2);x.fill();
+    x.strokeStyle='#7a5c00';x.lineWidth=W*.004;x.stroke();
+    x.strokeStyle='rgba(255,255,255,.9)';x.lineWidth=W*.006});
+   x.setLineDash([W*.014,W*.014]);x.strokeStyle='rgba(255,255,255,.75)';
+   x.beginPath();x.moveTo(.234*W,.26*H);x.lineTo(.42*W,.5*H);
+   x.lineTo(.625*W,.29*H);x.lineTo(.80*W,.5*H);x.stroke();x.setLineDash([]);
+  }),roughness:.55,metalness:.05}));
+ face.position.set(0,12.75,.38);face.rotation.x=-.10;g.add(face);
+ if(tHi()){
+  /* magnets that stand off the board */
+  [[-2.4,1.4],[-2.4,-1.4],[-.7,0],[1.1,1.2],[1.1,-1.2],[2.7,0]].forEach(([a,b])=>{
+   const m=new THREE.Mesh(new THREE.CylinderGeometry(.26,.26,.16,14),M.gold);
+   m.position.set(a,12.75+b,.48);m.rotation.x=Math.PI/2-.10;g.add(m)})}
+ return g};
+
+/* =====================================================================
+   15. AND THE CASES HAVE TO FIT WHAT IS IN THEM
+   ---------------------------------------------------------------------
+   The glass is sized from the trophy's height — CW = height * 0.62 —
+   which works for anything roughly as wide as a cup. It does not work
+   for the two shapes in here that are wider than they are tall: the
+   Champions League, whose ears now reach almost as far out as the bowl
+   is high, and the Meisterschale, which is a plate. Both stood with
+   their silhouettes sticking straight through the glass.
+
+   So the case is measured off the thing it is covering.
+   ===================================================================== */
+const _pedFit=hallPedestal;
+hallPedestal=function(row,ix,M){
+ const g=_pedFit.apply(this,arguments);
+ try{
+  const t=g.userData.trophyGrp;
+  if(!t)return g;
+  const box=new THREE.Box3().setFromObject(t);
+  const span=Math.max(box.max.x-box.min.x,box.max.z-box.min.z);
+  const th=(row.cm||60)/100;
+  const cur=Math.max(.62,Math.min(1.02,th*.62));
+  const need=span+.12;
+  if(!(need>cur))return g;
+  const k=need/cur;
+  g.children.forEach(o=>{
+   if(o.isLineSegments){o.scale.x=k;o.scale.z=k;return}
+   if(o.isMesh&&o.geometry&&o.geometry.type==='BoxGeometry'){
+    const P=o.geometry.parameters;
+    if(P&&Math.abs(P.width-P.depth)<1e-9&&Math.abs(P.width-cur)<1e-6){
+     o.scale.x=k;o.scale.z=k}}});
+  /* the tap target widens too, but only so far — the plinths are 2.4m
+     apart on the circle and a case must not start catching its
+     neighbour's taps */
+  const hk=Math.min(k,1.45);
+  (g.userData.hit||[]).forEach(o=>{o.scale.x=hk;o.scale.z=hk});
+ }catch(e){}
+ return g};
+
+/*#w92_trophies.js#*/
 showStart();
 </script>
 </body>
