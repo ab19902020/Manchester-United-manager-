@@ -46115,6 +46115,416 @@ function stakeChip(fix){
  return '<span class="fx-stake s-lg">3 points</span>'}
 
 /*#wA7_context.js#*/
+
+
+
+
+/*#wA8_calendar.js#*/
+
+/* =====================================================================
+   wA8_calendar — a fixture list that survives past the first season,
+                  and moves when the cups say it has to
+   ---------------------------------------------------------------------
+   The brief was fixture rescheduling: a club that goes deep in three
+   cups cannot keep playing one game a week, so the league programme has
+   to bend around it — midweek matches, two games in five days, ties
+   postponed and rearranged. Measuring the current calendar before
+   building any of that turned up something bigger underneath it.
+
+   TWO NUMBERS ARE MEASURED IN DIFFERENT UNITS. Every cup date in the
+   game is an offset from the first of August: the FA Cup final is day
+   294, meaning 294 days into this season. Every league date is an
+   absolute day number counted from the start of the save. In the first
+   season those are the same number, because the first season starts on
+   day zero. From the second season they are hundreds of days apart.
+
+   reserveCupDays builds the set of days the league must not use, and it
+   built that set out of the offsets. So in season one the cup calendar
+   was respected, and from season two the set contained days that had
+   already gone by and protected nothing.
+
+   AND THE SEASON HAD A HARD CEILING OF DAY 292. buildFixtures spread its
+   rounds across `292 - startDay` days. Season two opens on day 379, so
+   the span came out as *minus eighty-seven*, the step collapsed to its
+   floor of three, and the entire thirty-eight round league season was
+   dealt out three days apart, finishing in the middle of December —
+   while the FA Cup, correctly scheduled, was still on its first round.
+
+   Measured across three seasons: season one had one fixture collision.
+   Seasons two and three had five pairs of matches on consecutive days
+   and forty-one occasions of three matches inside a week, every one of
+   them an artefact of that arithmetic rather than of a cup run.
+
+   So this file is four things.
+
+   THE UNITS ARE FIXED. Reserved days are absolute, and the season's
+   span is measured from the season's own start.
+
+   THE RHYTHM IS REAL. Rounds are laid on a Saturday grid rather than
+   spread evenly across the available days, which is what makes a
+   football calendar feel like one. When a division has more rounds than
+   it has weekends, the surplus goes midweek, spread through the season
+   rather than bunched — which is exactly what a real fixture list does.
+
+   AND THEN THE ACTUAL BRIEF. With the calendar sane, the collisions
+   that remain are the real ones: a cup run puts a tie on top of a
+   league match, or three days after one. Those are found and the league
+   fixture is moved — never the cup, because cup dates are fixed and
+   shared with every other club in the round — to the nearest playable
+   midweek, and you are told about it.
+   ===================================================================== */
+
+/* ---------------------------------------------------------------------
+   1. RESERVED DAYS, IN THE SAME UNITS AS EVERYTHING ELSE
+   --------------------------------------------------------------------- */
+reserveCupDays=function(){
+ RESERVED.clear();
+ const s=G.seasonStart||0;
+ for(const k in CUP_DEFS)(CUP_DEFS[k].days||[]).forEach(d=>{
+  RESERVED.add(s+d);RESERVED.add(s+d+1)});
+ (typeof CL_EXTRA_DAYS!=='undefined'?CL_EXTRA_DAYS:[]).forEach(d=>RESERVED.add(s+d));
+ /* an international window is a fortnight in which no club football is
+    played at all, and it is eight days wide here */
+ (typeof INT_BREAKS!=='undefined'?INT_BREAKS:[]).forEach(d=>{
+  for(let x=0;x<8;x++)RESERVED.add(s+d+x)})};
+
+/* the last day a league round may be played. The cups run past it — the
+   FA Cup final is day 294 and the European final day 308 — and the
+   season-end check already knows to wait for them. */
+function seasonLastDay(){return (G.seasonStart||0)+292}
+
+/* ---------------------------------------------------------------------
+   2. THE SATURDAY GRID
+   ---------------------------------------------------------------------
+   A league season is a row of weekends with midweek rounds pushed into
+   the gaps when there are more games than weekends. Laying it out that
+   way rather than dividing the season into n equal slices is the
+   difference between a fixture list and a metronome.
+   --------------------------------------------------------------------- */
+function layDivision(div,from,to){
+ const mem=divMembers(div);
+ if(mem.length<2)return [];
+ let R=rrPairs(mem);
+ /* the small divisions play a third cycle so that a ten-club league is
+    not over by Christmas */
+ if(mem.length<=12)R=R.concat(rrPairs(mem).slice(0,mem.length-1));
+ const n=R.length;
+ if(!n)return [];
+
+ /* Every day the cups have not claimed. Spreading the rounds across
+    THESE rather than across the raw calendar is what keeps the season
+    inside its own window: however many days the cups and the
+    international breaks take out, the rounds redistribute over what is
+    left instead of running off the end of May.
+
+    An earlier version laid a strict seven-day grid and inserted midweek
+    rounds when it ran short of weekends. It produced a season with a
+    ninety-five day hole in it, because the grid landed on the cup
+    calendar and lost most of its slots at once. Spreading over the free
+    days and then pulling each round back onto a weekend does the same
+    job without being able to fail that way. */
+ const free=[];
+ for(let d=from;d<=to;d++)if(!RESERVED.has(d))free.push(d);
+ if(!free.length)return [];
+ const isFree=x=>x>=from&&x<=to&&!RESERVED.has(x);
+ const isWeekend=x=>((x-from)%7)===0;
+
+ /* Consecutive rounds need a turnaround between them. Three days is the
+    real minimum — Saturday then Tuesday — and it is only relaxed if the
+    division genuinely cannot fit inside its window at that spacing,
+    which no English division here does.
+
+    Without this the weekend snapping below could pull round r forward
+    three days and round r+1 back three, and the collision handler then
+    put them on consecutive days: a club playing two league matches in
+    two days, which turned up three times in a measured season. */
+ const room=Math.floor((to-from)/Math.max(1,n-1));
+ const minStep=Math.max(1,Math.min(3,room));
+
+ const days=[];
+ let prev=-1;
+ for(let r=0;r<n;r++){
+  const ix=Math.round(r*(free.length-1)/Math.max(1,n-1));
+  let d=free[ix];
+  /* football is played on Saturdays. Pull the round onto one if there is
+     a free one within three days, which is what turns an even spread
+     into a fixture list. */
+  if(!isWeekend(d))for(let o=1;o<=3;o++){
+   if(isFree(d-o)&&isWeekend(d-o)&&d-o>=prev+minStep){d-=o;break}
+   if(isFree(d+o)&&isWeekend(d+o)){d+=o;break}}
+  if(d<prev+minStep)d=prev+minStep;
+  while(d<=to&&!isFree(d))d++;
+  if(d>to)d=to;
+  days.push(d);prev=d}
+
+ const out=[];
+ R.forEach((ps,r)=>{
+  const d=days[r]!=null?days[r]:(days[days.length-1]+3+r);
+  ps.forEach(([h,a])=>out.push({r,day:d,h,a,played:false,hs:0,as:0,sc:[],div}))});
+ return out}
+
+buildFixtures=function(startDay){
+ reserveCupDays();
+ const to=seasonLastDay();
+ const from=Math.min(startDay,to-14);
+ G.fixtures=[];
+ leagueKeys().forEach(div=>{
+  const rows=layDivision(div,from,to);
+  if(rows.length)G.fixtures=G.fixtures.concat(rows)});
+ /* the real Premier League list, when the division still matches the one
+    it was written for. This used to be a wrapper on buildFixtures; it
+    lives here now because the layout above replaced the function it was
+    wrapping. */
+ try{
+  if(typeof plRealSchedule==='function'){
+   const real=plRealSchedule();
+   if(real&&real.length)
+    G.fixtures=G.fixtures.filter(f=>f.div!=='PL').concat(real)}
+ }catch(e){}
+ return G.fixtures};
+
+/* ---------------------------------------------------------------------
+   3. WHAT EVERY CLUB IS DOING, IN ONE PASS
+   ---------------------------------------------------------------------
+   The rescheduler asks "when does this club next play" several thousand
+   times per sweep. Walking the fixture list each time is what turns a
+   sensible idea into a stall, so the answer is built once.
+   --------------------------------------------------------------------- */
+function fixtureIndex(){
+ const by={};
+ const add=f=>{
+  if(f.played)return;
+  (by[f.h]=by[f.h]||[]).push(f);
+  (by[f.a]=by[f.a]||[]).push(f)};
+ (G.fixtures||[]).forEach(add);
+ if(G.cups)for(const k in G.cups)(G.cups[k].ties||[]).forEach(add);
+ for(const ci in by)by[ci].sort((a,b)=>a.day-b.day);
+ return by}
+
+/* ---------------------------------------------------------------------
+   4. THE RESCHEDULER
+   ---------------------------------------------------------------------
+   Rules, in the order they are applied:
+
+   A CUP TIE NEVER MOVES. Its date is shared with every other club left
+   in the round and with the draw for the round after it. The league
+   fixture is the one that gives way, which is how it works.
+
+   TWO MATCHES ON ONE DAY IS AN EMERGENCY. Anything else is a judgement:
+   less than three clear days between matches is congestion, and worth
+   moving a league fixture for, but only if there is somewhere better to
+   put it. A rearranged date that is no better than the one it replaced
+   is churn.
+
+   A REARRANGED FIXTURE GOES MIDWEEK. That is where the space is, and it
+   is what actually happens. It also has to work for the other club,
+   who did not ask for any of this and may have their own cup run.
+   --------------------------------------------------------------------- */
+const RESCH={gap:3,look:120,moved:0};
+
+/* the smallest number of days between this fixture and that club's
+   nearest other match */
+function nearestGap(idx,ci,day,skip){
+ let best=99;
+ const list=idx[ci]||[];
+ for(let i=0;i<list.length;i++){
+  const g=list[i];
+  if(g===skip)continue;
+  const d=Math.abs(g.day-day);
+  if(d<best)best=d}
+ return best}
+
+function playableOn(idx,f,day){
+ if(day<=(G.day||0)+2)return false;   /* nobody rearranges a game for tomorrow */
+ if(day>seasonLastDay())return false;
+ /* the sweep runs during the rollover, when G.day is the first of August
+    and the season has not opened. Without this a rearranged fixture can
+    be dropped into the middle of pre-season. */
+ if(day<(G.seasonStart||0)+12)return false;
+ if(RESERVED.has(day))return false;
+ /* both clubs need room either side of it */
+ if(nearestGap(idx,f.h,day,f)<RESCH.gap)return false;
+ if(nearestGap(idx,f.a,day,f)<RESCH.gap)return false;
+ return true}
+
+/* candidate dates, nearest first, midweek preferred */
+function reschedCandidates(f){
+ const out=[];
+ for(let off=3;off<=56;off++){out.push(f.day+off);out.push(f.day-off)}
+ return out}
+
+function reschedule(f,idx,why){
+ const cands=reschedCandidates(f);
+ let pick=null,pickScore=-1e9;
+ for(let i=0;i<cands.length;i++){
+  const d=cands[i];
+  if(!playableOn(idx,f,d))continue;
+  /* nearer to the original date is better, and a midweek slot is better
+     than dropping it onto a weekend that already has a full programme */
+  const dist=Math.abs(d-f.day);
+  const mid=((d-(G.seasonStart||0))%7);
+  const midweek=(mid===3||mid===4)?6:0;
+  const room=Math.min(9,Math.min(nearestGap(idx,f.h,d,f),nearestGap(idx,f.a,d,f)));
+  const score=room*3+midweek-dist*.7;
+  if(score>pickScore){pickScore=score;pick=d}
+  /* nothing beyond a fortnight is going to win, so stop looking */
+  if(dist>21&&pick)break}
+ if(pick==null)return false;
+ const from=f.day;
+ f.day=pick;
+ f.moved={from,why:why||'fixture congestion',season:G.season};
+ /* the index has to stay true or the next decision is made on stale
+    dates and two fixtures land on the same rearranged day */
+ [f.h,f.a].forEach(ci=>{const l=idx[ci];if(l)l.sort((a,b)=>a.day-b.day)});
+ RESCH.moved++;
+ return true}
+
+/* the sweep itself */
+function reschedSweep(){
+ try{
+  if(!G||!G.fixtures)return 0;
+  const from=(G.day||0)+1,to=from+RESCH.look;
+  /* The index covers the WHOLE remaining season, not just the window
+     being repaired. An earlier version indexed only the window, so a
+     fixture moved to the far edge of it could be dropped next to one
+     sitting just outside — which is how two league matches ended up on
+     consecutive days twice in a measured season. Conflicts are still
+     only looked for inside the window; it is the room-either-side check
+     that needs to see everything. */
+  const idx=fixtureIndex();
+  let moved=0;
+  const told=[];
+  for(const ci in idx){
+   const list=idx[ci];
+   /* the loop restarts a club after every successful move, so it needs a
+      ceiling: a move that does not actually resolve the gap it was made
+      for would otherwise be made again for ever */
+   let guard=0;
+   for(let i=1;i<list.length&&guard<40;i++){
+    guard++;
+    const a=list[i-1],b=list[i];
+    const gap=b.day-a.day;
+    if(gap>=RESCH.gap)continue;
+    if(b.day<from||a.day>to)continue;   /* outside the window being repaired */
+    /* the league fixture gives way; if both are cup ties there is
+       nothing to be done and the squad plays twice in three days, which
+       is a real thing that happens */
+    const move=(!b.cup&&!b.friendly)?b:((!a.cup&&!a.friendly)?a:null);
+    if(!move)continue;
+    const other=move===b?a:b;
+    const C=fixCtx(other);
+    const why=C.friendly?'a pre-season fixture'
+      :C.cup?(C.comp+(C.round?' '+C.round.toLowerCase():''))
+      :'a congested week';
+    const was=move.day;
+    if(reschedule(move,idx,why)){
+     moved++;
+     if(move.h===G.my||move.a===G.my)told.push({f:move,was,why});
+     /* the list just changed under the loop, so restart the club */
+     list.sort((x,y)=>x.day-y.day);
+     i=0}
+   }}
+  told.forEach(t=>announceMove(t.f,t.was,t.why));
+  return moved}
+ catch(e){return 0}}
+
+function announceMove(f,was,why){
+ try{
+  const opp=G.clubs[f.h===G.my?f.a:f.h];
+  if(!opp)return;
+  const home=f.h===G.my;
+  mail('info','📅 Fixture rearranged: '+esc(opp.short)+' '+(home?'(H)':'(A)'),
+   'The league have moved your game '+(home?'against ':'away at ')+'<b>'+esc(opp.name)+'</b> '+
+   'from '+fmtDate(was)+' to <b>'+fmtDate(f.day)+'</b>, because of '+esc(why)+'.'+
+   '<br><br><span class="xs faint">Rearranged fixtures are marked in the fixture list. '+
+   'A backlog is a backlog whichever way it is dressed up — the games still have to be played.</span>');
+ }catch(e){}}
+
+/* ---------------------------------------------------------------------
+   5. WHEN IT RUNS
+   ---------------------------------------------------------------------
+   A cup draw is the only thing that creates new dates, so the sweep runs
+   after one — and once a week regardless, because a postponement can
+   cascade into the fixture after it.
+   --------------------------------------------------------------------- */
+const _initCupsResch=initCups;
+initCups=function(){
+ const r=_initCupsResch.apply(this,arguments);
+ try{reserveCupDays();reschedSweep()}catch(e){}
+ return r};
+
+if(typeof advanceCup==='function'){
+ const _advCupResch=advanceCup;
+ advanceCup=function(){
+  const r=_advCupResch.apply(this,arguments);
+  try{reschedSweep()}catch(e){}
+  return r};
+}
+
+const _dtcResch=dailyTickCore;
+dailyTickCore=function(){
+ const r=_dtcResch.apply(this,arguments);
+ try{
+  if(G&&G.clubs&&!G.sacked){
+   const rel=(G.day||0)-(G.seasonStart||0);
+   if(rel>=0&&rel%7===2)reschedSweep()}
+ }catch(e){}
+ return r};
+
+/* ---------------------------------------------------------------------
+   6. AND THE FIXTURE LIST SAYS SO
+   --------------------------------------------------------------------- */
+(function reschCSS(){
+ const old=document.getElementById('wA8');if(old)old.remove();
+ const st=document.createElement('style');st.id='wA8';
+ st.textContent=
+  '.fx-moved{display:inline-block;font-size:9px;letter-spacing:.08em;'+
+   'text-transform:uppercase;font-weight:800;padding:1px 6px;border-radius:99px;'+
+   'color:#f0b649;border:1px solid currentColor;margin-left:6px;vertical-align:2px}';
+ document.head.appendChild(st)})();
+
+const _compLabelMoved=compLabel;
+compLabel=function(fix){
+ const s=_compLabelMoved.apply(this,arguments);
+ try{if(fix&&fix.moved&&fix.moved.season===G.season)return s+' · rearranged'}
+ catch(e){}
+ return s};
+
+/* ---------------------------------------------------------------------
+   7. AND THE SQUAD FEELS IT
+   ---------------------------------------------------------------------
+   Congestion that cannot be scheduled away — two cup ties three days
+   apart, a rearranged midweek on top of a Saturday — is supposed to
+   cost something, and daysRest already feeds the match engine. What it
+   did not do was tell you, so a manager could walk into the third game
+   in seven days without being warned that he should rotate.
+   --------------------------------------------------------------------- */
+function congestionAhead(days){
+ const to=(G.day||0)+(days||10);
+ const list=[];
+ (G.fixtures||[]).forEach(f=>{if(!f.played&&f.day>=G.day&&f.day<=to&&
+  (f.h===G.my||f.a===G.my))list.push(f)});
+ if(G.cups)for(const k in G.cups)(G.cups[k].ties||[]).forEach(t=>{
+  if(!t.played&&t.day>=G.day&&t.day<=to&&(t.h===G.my||t.a===G.my))list.push(t)});
+ return list.sort((a,b)=>a.day-b.day)}
+
+const _dtcWarn=dailyTickCore;
+dailyTickCore=function(){
+ const r=_dtcWarn.apply(this,arguments);
+ try{
+  if(!G||!G.clubs||G.sacked)return r;
+  const soon=congestionAhead(9);
+  if(soon.length<3)return r;
+  if(G._congWarn===G.day||((G.day-(G._congWarn||-99))<14))return r;
+  G._congWarn=G.day;
+  mail('info','🗓️ Three games in nine days',
+   soon.slice(0,4).map(f=>'<b>'+fmtDate(f.day)+'</b> — '+esc(compLabel(f))+
+    ' vs '+esc(G.clubs[f.h===G.my?f.a:f.h].short)).join('<br>')+
+   '<br><br>The physios have flagged it. Rotation is not weakness in a week like this.');
+ }catch(e){}
+ return r};
+
+/*#wA8_calendar.js#*/
 showStart();
 </script>
 </body>
