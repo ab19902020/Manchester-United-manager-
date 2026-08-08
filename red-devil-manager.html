@@ -47743,6 +47743,253 @@ sackManager=function(){
  return _sackCC.apply(this,arguments)};
 
 /*#wB2_climb.js#*/
+
+/*#wB3_fixes.js#*/
+
+/* =====================================================================
+   wB3_fixes — a crash on youth intake day in any reloaded save
+   ---------------------------------------------------------------------
+   Found while testing a built club through three seasons with a save and
+   a reload in the middle. It has nothing to do with built clubs and
+   everything to do with reloading.
+
+   clubNames(c) caches the names already at a club on the club itself, as
+   a Set, so a year's intake does not hand out a name the club already
+   has. A Set is the right structure for the job and the wrong one to
+   leave lying on a saved object: JSON.stringify turns `new Set(['a'])`
+   into `{}`. Not into an array, not into null — into an empty object,
+   silently, with no error at either end.
+
+   So the cache survives a save as a plain object, `clubNames` sees a
+   truthy `c._nm` and hands it back, and the first call to worldName on
+   intake day does `avoid.has(nm)` against something that has no `has`.
+   Every club in the world takes an intake on the same day, so the very
+   first one throws and the whole daily tick dies with it — no intake for
+   anybody, and an exception every time you press continue on that date
+   for the rest of the save.
+
+   It never showed up in the long soak because the soak plays fifteen
+   seasons in one sitting and never reloads. It takes a save, a reload,
+   and then playing on to the intake date, which is exactly what a person
+   does and exactly what a harness does not.
+
+   The fix is two lines and then a belt-and-braces one: rebuild the cache
+   if what came back is not a Set, and make worldName tolerate being
+   handed something that cannot answer.
+   ===================================================================== */
+
+clubNames=function(c){
+ if(!c._nm||typeof c._nm.has!=='function'){
+  c._nm=new Set();
+  (c.players||[]).forEach(p=>c._nm.add(p.name));
+  (c.youth||[]).forEach(p=>c._nm.add(p.name))}
+ return c._nm};
+
+const _worldNameSafe=worldName;
+worldName=function(cc,rng,avoid){
+ const ok=(avoid&&typeof avoid.has==='function')?avoid:null;
+ return _worldNameSafe.call(this,cc,rng,ok)};
+
+/* and the dead cache does not need saving in the first place — it is
+   rebuilt from the squad in a microsecond and it is one entry per player
+   per club, which is a few hundred kilobytes of nothing */
+const _packGNm=packG;
+packG=function(g){
+ try{(g&&g.clubs||[]).forEach(c=>{if(c._nm)c._nm=null})}catch(e){}
+ return _packGNm.apply(this,arguments)};
+
+/*#wB3_fixes.js#*/
+
+
+
+
+/*#wB4_stars.js#*/
+
+/* =====================================================================
+   wB4_stars — a star that means the same thing everywhere
+   ---------------------------------------------------------------------
+   Two problems, and the first one explains the blank ones.
+
+   THE HALF STAR WAS AN OBSCURE CHARACTER. starHtml drew a filled star
+   with ★ (U+2605, in every font ever made) and a half star with ⯨
+   (U+2BE8, in almost none). On any device without a font that carries
+   it — which is most of them — a half star rendered as a blank, a box,
+   or nothing at all. Fifty-one clubs in the game sit at exactly half a
+   star, so fifty-one clubs appeared to have no rating.
+
+   Stars are now two layers of ★★★★★, one dim and one gold, with the
+   gold one clipped to a percentage. Any fraction renders exactly, in
+   one glyph that cannot go missing, and 3.7 stars now looks like 3.7
+   rather than rounding to a half.
+
+   THE SCALE ONLY WORKED IN THE PREMIER LEAGUE. It was linear:
+   (rating - 52) / 8. That puts the top of the game at five and the
+   bottom of it — everything at 52 and below — at the floor. Measured
+   across the world, that meant:
+
+     Premier League   Man City 4.31 down to Ipswich 2.73
+     Championship     West Ham 2.94 down to Wrexham 1.48
+     League One       Bolton 1.03 down to Leyton Orient 0.50
+     League Two       every single club 0.50
+     National League  every single club 0.50
+
+   Forty-eight clubs across three divisions, all showing the same
+   rating, and the rating they showed was the one that would not draw.
+   The bottom two divisions of English football were literally
+   indistinguishable.
+
+   The replacement is a curve through fixed points rather than a
+   straight line, anchored where a star should mean something:
+
+     Manchester United        4.5
+     the bottom of the PL     3.0
+     the top of the           3.0   — the same standard, correctly
+       Championship                   arriving at the same number
+     and a real spread all the way down, so a good League Two side
+     reads better than a poor one instead of both reading as nothing.
+   ===================================================================== */
+
+/* ---------------------------------------------------------------------
+   1. THE CURVE
+   ---------------------------------------------------------------------
+   Control points, in squad rating against stars, interpolated between.
+   Written as a table rather than an equation because the requirement is
+   a set of specific anchors and a table is the honest way to hit them —
+   an equation fitted to these points would be a worse expression of the
+   same intent and harder to move when a number needs changing.
+   --------------------------------------------------------------------- */
+const STAR_CURVE=[
+ [40,0.20],   /* below anything that plays in the pyramid */
+ [44,0.50],   /* the bottom of the National League */
+ [50,1.00],   /* the top of the National League, the bottom of League Two */
+ [55,1.50],   /* mid League Two */
+ [60,2.00],   /* the top of League One */
+ [65,2.25],   /* the bottom of the Championship */
+ [70,2.60],   /* mid Championship */
+ [74,3.00],   /* the top of the Championship and the bottom of the PL */
+ [78,3.50],
+ [82,4.00],
+ [85,4.50],   /* Manchester United */
+ [88,4.80],
+ [92,5.00]];
+
+function starsOfRating(v){
+ const x=+v;
+ if(!isFinite(x))return 0.5;
+ const C=STAR_CURVE;
+ if(x<=C[0][0])return C[0][1];
+ if(x>=C[C.length-1][0])return 5;
+ for(let i=1;i<C.length;i++){
+  if(x<=C[i][0]){
+   const [x0,y0]=C[i-1],[x1,y1]=C[i];
+   return +(y0+(y1-y0)*(x-x0)/(x1-x0)).toFixed(2)}}
+ return 5}
+
+starsOf=function(ovr){return clamp(starsOfRating(ovr),0.2,5)};
+
+/* a club's rating is its best eleven, which is what you would field */
+rosterStars=function(c){
+ try{
+  const xi=(c.players||[]).filter(p=>!p.loan).sort((a,b)=>b.ovr-a.ovr).slice(0,11);
+  if(!xi.length)return 0.2;
+  const m=xi.reduce((s,p)=>s+p.ovr,0)/xi.length;
+  return +starsOfRating(m).toFixed(2)}
+ catch(e){return 0.5}};
+
+/* stature is reputation, not squad quality, and needs its own scale —
+   it was being fed through the squad curve as `52 + rep/220`, which put
+   a club nobody has heard of on two stars */
+function repStars(rep){
+ const r=+rep||0;
+ const t=clamp((r-1600)/(9700-1600),0,1);
+ return +clamp(0.3+Math.pow(t,.85)*4.7,0.3,5).toFixed(2)}
+
+/* ---------------------------------------------------------------------
+   2. DRAWING THEM
+   --------------------------------------------------------------------- */
+(function starCSS(){
+ const old=document.getElementById('wB4');if(old)old.remove();
+ const st=document.createElement('style');st.id='wB4';
+ st.textContent=[
+  /* Both layers have to occupy exactly the same box. Absolute
+     positioning does not achieve that here: the ★ glyph's em box is
+     taller than the line-height, so the wrapper ends up 23px tall while
+     the text draws in the top 11px of it, and an absolutely positioned
+     sibling lands somewhere else entirely — the gold row floated above
+     the grey one. A single-cell grid with both children in that cell
+     gives them identical metrics with no baseline or box arithmetic to
+     get wrong.
+
+     The layers are `strb` and `strf` and not the obvious `sb`/`sf`
+     because `.sb` is already a class in this game — a stat-block pill
+     with a gradient, nine pixels of corner radius and six of padding.
+     The grey layer inherited all of it: a rounded box behind every star
+     rating in the game, and the padding shifted that layer down and
+     right so the gold row sat above and to the left of the grey one.
+     Two hours of blaming baseline arithmetic for a name collision. */
+  /* width:max-content is load-bearing. The gold layer is clipped to a
+     percentage of the widget, so the widget has to be exactly as wide
+     as five stars. Dropped into a flex column or a stretching grid cell
+     it would otherwise fill the row, the stars would sit at the left of
+     a box ten times too wide, and a clip at 74% would cut nothing —
+     every rating rendered as five gold stars. */
+  '.stars{display:inline-grid;position:relative;line-height:1;'+
+   'letter-spacing:1px;font-size:11px;vertical-align:-1px;'+
+   'width:max-content;flex:0 0 auto;align-self:center;justify-self:start;'+
+   'background:none;border:0;padding:0}',
+  '.stars .strb,.stars .strf{grid-area:1/1;white-space:nowrap;'+
+   'font-size:inherit;letter-spacing:inherit;line-height:inherit}',
+  '.stars .strb{color:rgba(255,255,255,.16)}',
+  '.stars .strf{overflow:hidden;color:var(--gold,#fbe122)}',
+  /* a rating good enough to be worth noticing glows a little */
+  '.stars.s-elite .strf{text-shadow:0 0 7px rgba(251,225,34,.5)}'
+ ].join('\n');
+ document.head.appendChild(st)})();
+
+starHtml=function(s){
+ const v=clamp(+s||0,0,5);
+ const pct=(v/5*100).toFixed(2);
+ return '<span class="stars'+(v>=4.5?' s-elite':'')+'" title="'+v.toFixed(1)+' / 5">'+
+  '<span class="strb">★★★★★</span>'+
+  '<span class="strf" style="width:'+pct+'%">★★★★★</span></span>'};
+
+/* ---------------------------------------------------------------------
+   3. THE PLACES THAT CONVERTED TWICE
+   ---------------------------------------------------------------------
+   Two screens took a value that was already in stars, turned it back
+   into a pretend rating, and ran it through starsOf again. That was
+   survivable while the scale was linear and is not now.
+   --------------------------------------------------------------------- */
+if(typeof vStaff==='function'){
+ const _vStaffStars=vStaff;
+ vStaff=function(){
+  let h=_vStaffStars.apply(this,arguments);
+  try{
+   const c=G.clubs[G.my];
+   /* the stature tile fed reputation through the squad curve */
+   h=h.replace(starHtml(starsOf(52+c.rep/220)),starHtml(repStars(c.rep)));
+  }catch(e){}
+  return h}}
+
+/* ---------------------------------------------------------------------
+   4. AND THE PICKER'S CACHED ROSTER IS REBUILT
+   ---------------------------------------------------------------------
+   The club list is cached in localStorage with the star value baked in,
+   so an old cache would keep showing the old scale for ever. Bumping the
+   version the loader checks is what forces it to be rebuilt once.
+   --------------------------------------------------------------------- */
+try{
+ const raw=localStorage.getItem(ROSTER_KEY);
+ if(raw){
+  const j=JSON.parse(raw);
+  if(j&&j.list){
+   /* recompute rather than throw the whole thing away — the expensive
+      part is building the world, and the ratings are already in it */
+   localStorage.removeItem(ROSTER_KEY);
+   ROSTER=null}}
+}catch(e){}
+
+/*#wB4_stars.js#*/
 /*#wB1_createclub.js#*/
 
 /* =====================================================================
@@ -48119,18 +48366,10 @@ function installCustomClub(){
  G.cc={on:true,chair:r.chair.id,replaced:gone,
   founded:G.season,stage:0,told:{}};
 
- /* the calendar moves back to the first of July so there is time to do
-    any of this. Everything shifts together — the epoch, the season start
-    and every date already written into the world — so the fixture list,
-    the cups and the international breaks all stay exactly where they
-    were relative to each other, and 1 August is still 1 August. */
- const SHIFT=31;
- G.epoch=Date.UTC(2026,6,1);
- G.seasonStart=(G.seasonStart||0)+SHIFT;
- (G.fixtures||[]).forEach(f=>{f.day+=SHIFT});
- if(G.cups)for(const k in G.cups)(G.cups[k].ties||[]).forEach(t=>{t.day+=SHIFT});
- G.day=0;
- try{reserveCupDays()}catch(e){}
+ /* The calendar used to be moved back a month right here, so that a
+    club with no players had time to find some. Every save gets that
+    now — you are appointed on the thirtieth of June whoever you manage
+    — so the shift lives in one place and this no longer does it. */
 
  /* the backroom and the shape belong to the new club */
  try{G.staff=defaultStaff()}catch(e){}
@@ -48210,252 +48449,235 @@ ACTIONS.startGame=function(el){
  return _startGameCC.apply(this,arguments)};
 
 /*#wB1_createclub.js#*/
-/*#wB3_fixes.js#*/
+/*#wB5_june30.js#*/
 
 /* =====================================================================
-   wB3_fixes — a crash on youth intake day in any reloaded save
+   wB5_june30 — you are appointed on the thirtieth of June
    ---------------------------------------------------------------------
-   Found while testing a built club through three seasons with a save and
-   a reload in the middle. It has nothing to do with built clubs and
-   everything to do with reloading.
+   Every save used to open on the first of August and the fixture list
+   started almost immediately: the Premier League gave you a fortnight,
+   and everything below it gave you two days. Take a National League job
+   and your first competitive match was on the third of August, three
+   days into the save, with whatever squad you inherited and no window
+   of time to do anything about it.
 
-   clubNames(c) caches the names already at a club on the club itself, as
-   a Set, so a year's intake does not hand out a name the club already
-   has. A Set is the right structure for the job and the wrong one to
-   leave lying on a saved object: JSON.stringify turns `new Set(['a'])`
-   into `{}`. Not into an array, not into null — into an empty object,
-   silently, with no error at either end.
+   That is not how a football season begins. A manager is appointed in
+   the summer, spends July signing players and playing friendlies, and
+   the season starts in the middle of August.
 
-   So the cache survives a save as a plain object, `clubNames` sees a
-   truthy `c._nm` and hands it back, and the first call to worldName on
-   intake day does `avoid.has(nm)` against something that has no `has`.
-   Every club in the world takes an intake on the same day, so the very
-   first one throws and the whole daily tick dies with it — no intake for
-   anybody, and an exception every time you press continue on that date
-   for the rest of the save.
+   So the whole world moves back thirty-two days. The epoch becomes the
+   thirtieth of June, the season still starts on the first of August,
+   and every fixture, cup tie and international break shifts with it —
+   which means nothing changes relative to anything else. The FA Cup
+   third round is still in January. The dates all still read correctly.
+   What changes is that day zero is now five weeks before the football
+   rather than two days.
 
-   It never showed up in the long soak because the soak plays fifteen
-   seasons in one sitting and never reloads. It takes a save, a reload,
-   and then playing on to the intake date, which is exactly what a person
-   does and exactly what a harness does not.
+   It applies to every club in every country, and to a club you built
+   yourself, which used to do this privately for itself and no longer
+   needs to.
 
-   The fix is two lines and then a belt-and-braces one: rebuild the cache
-   if what came back is not a Set, and make worldName tolerate being
-   handed something that cannot answer.
+   AND IT HAS TO HAPPEN EVERY SUMMER, not just the first one. endSeason
+   rolled the calendar to the first of August and started the next
+   season immediately. It now rolls to the thirtieth of June and leaves
+   the same five weeks in front of you, every year.
    ===================================================================== */
 
-clubNames=function(c){
- if(!c._nm||typeof c._nm.has!=='function'){
-  c._nm=new Set();
-  (c.players||[]).forEach(p=>c._nm.add(p.name));
-  (c.youth||[]).forEach(p=>c._nm.add(p.name))}
- return c._nm};
-
-const _worldNameSafe=worldName;
-worldName=function(cc,rng,avoid){
- const ok=(avoid&&typeof avoid.has==='function')?avoid:null;
- return _worldNameSafe.call(this,cc,rng,ok)};
-
-/* and the dead cache does not need saving in the first place — it is
-   rebuilt from the squad in a microsecond and it is one entry per player
-   per club, which is a few hundred kilobytes of nothing */
-const _packGNm=packG;
-packG=function(g){
- try{(g&&g.clubs||[]).forEach(c=>{if(c._nm)c._nm=null})}catch(e){}
- return _packGNm.apply(this,arguments)};
-
-/*#wB3_fixes.js#*/
-
-
-
-
-/*#wB4_stars.js#*/
-
-/* =====================================================================
-   wB4_stars — a star that means the same thing everywhere
-   ---------------------------------------------------------------------
-   Two problems, and the first one explains the blank ones.
-
-   THE HALF STAR WAS AN OBSCURE CHARACTER. starHtml drew a filled star
-   with ★ (U+2605, in every font ever made) and a half star with ⯨
-   (U+2BE8, in almost none). On any device without a font that carries
-   it — which is most of them — a half star rendered as a blank, a box,
-   or nothing at all. Fifty-one clubs in the game sit at exactly half a
-   star, so fifty-one clubs appeared to have no rating.
-
-   Stars are now two layers of ★★★★★, one dim and one gold, with the
-   gold one clipped to a percentage. Any fraction renders exactly, in
-   one glyph that cannot go missing, and 3.7 stars now looks like 3.7
-   rather than rounding to a half.
-
-   THE SCALE ONLY WORKED IN THE PREMIER LEAGUE. It was linear:
-   (rating - 52) / 8. That puts the top of the game at five and the
-   bottom of it — everything at 52 and below — at the floor. Measured
-   across the world, that meant:
-
-     Premier League   Man City 4.31 down to Ipswich 2.73
-     Championship     West Ham 2.94 down to Wrexham 1.48
-     League One       Bolton 1.03 down to Leyton Orient 0.50
-     League Two       every single club 0.50
-     National League  every single club 0.50
-
-   Forty-eight clubs across three divisions, all showing the same
-   rating, and the rating they showed was the one that would not draw.
-   The bottom two divisions of English football were literally
-   indistinguishable.
-
-   The replacement is a curve through fixed points rather than a
-   straight line, anchored where a star should mean something:
-
-     Manchester United        4.5
-     the bottom of the PL     3.0
-     the top of the           3.0   — the same standard, correctly
-       Championship                   arriving at the same number
-     and a real spread all the way down, so a good League Two side
-     reads better than a poor one instead of both reading as nothing.
-   ===================================================================== */
+const PRE_DAYS=32;                    /* 30 June to 1 August */
+const SEASON_OPENS=9;                 /* the first league round, 9 August */
 
 /* ---------------------------------------------------------------------
-   1. THE CURVE
+   1. MOVING THE WORLD
    ---------------------------------------------------------------------
-   Control points, in squad rating against stars, interpolated between.
-   Written as a table rather than an equation because the requirement is
-   a set of specific anchors and a table is the honest way to hit them —
-   an equation fitted to these points would be a worse expression of the
-   same intent and harder to move when a number needs changing.
+   Everything that carries a day number moves by the same amount, so the
+   world stays internally consistent and only its relationship to the
+   calendar changes.
    --------------------------------------------------------------------- */
-const STAR_CURVE=[
- [40,0.20],   /* below anything that plays in the pyramid */
- [44,0.50],   /* the bottom of the National League */
- [50,1.00],   /* the top of the National League, the bottom of League Two */
- [55,1.50],   /* mid League Two */
- [60,2.00],   /* the top of League One */
- [65,2.25],   /* the bottom of the Championship */
- [70,2.60],   /* mid Championship */
- [74,3.00],   /* the top of the Championship and the bottom of the PL */
- [78,3.50],
- [82,4.00],
- [85,4.50],   /* Manchester United */
- [88,4.80],
- [92,5.00]];
-
-function starsOfRating(v){
- const x=+v;
- if(!isFinite(x))return 0.5;
- const C=STAR_CURVE;
- if(x<=C[0][0])return C[0][1];
- if(x>=C[C.length-1][0])return 5;
- for(let i=1;i<C.length;i++){
-  if(x<=C[i][0]){
-   const [x0,y0]=C[i-1],[x1,y1]=C[i];
-   return +(y0+(y1-y0)*(x-x0)/(x1-x0)).toFixed(2)}}
- return 5}
-
-starsOf=function(ovr){return clamp(starsOfRating(ovr),0.2,5)};
-
-/* a club's rating is its best eleven, which is what you would field */
-rosterStars=function(c){
+function shiftToJune30(){
  try{
-  const xi=(c.players||[]).filter(p=>!p.loan).sort((a,b)=>b.ovr-a.ovr).slice(0,11);
-  if(!xi.length)return 0.2;
-  const m=xi.reduce((s,p)=>s+p.ovr,0)/xi.length;
-  return +starsOfRating(m).toFixed(2)}
- catch(e){return 0.5}};
+  if(!G||G._preShift)return false;
+  G._preShift=PRE_DAYS;
+  G.epoch=Date.UTC(2026,5,30);
+  G.seasonStart=(G.seasonStart||0)+PRE_DAYS;
+  (G.fixtures||[]).forEach(f=>{f.day+=PRE_DAYS});
+  if(G.cups)for(const k in G.cups)(G.cups[k].ties||[]).forEach(t=>{t.day+=PRE_DAYS});
+  if(G.repLog)G.repLog.forEach(r=>{if(r&&r.day!=null)r.day+=PRE_DAYS});
+  (G.inbox||[]).forEach(m=>{if(m&&m.day!=null)m.day+=PRE_DAYS});
+  G.day=0;
+  try{reserveCupDays()}catch(e){}
+  return true}
+ catch(e){return false}}
 
-/* stature is reputation, not squad quality, and needs its own scale —
-   it was being fed through the squad curve as `52 + rep/220`, which put
-   a club nobody has heard of on two stars */
-function repStars(rep){
- const r=+rep||0;
- const t=clamp((r-1600)/(9700-1600),0,1);
- return +clamp(0.3+Math.pow(t,.85)*4.7,0.3,5).toFixed(2)}
+const _newGameJune=newGame;
+newGame=function(){
+ const r=_newGameJune.apply(this,arguments);
+ try{
+  shiftToJune30();
+  preseasonBriefing();
+ }catch(e){}
+ return r};
 
 /* ---------------------------------------------------------------------
-   2. DRAWING THEM
+   2. THE WINDOW IS OPEN WHEN YOU ARE APPOINTED
+   ---------------------------------------------------------------------
+   windowOpen reads the month and did not include June, so a manager
+   appointed on the thirtieth of June could not sign anybody until the
+   first of July — which is a day, but it is also the sort of thing you
+   would notice immediately and reasonably think was broken.
    --------------------------------------------------------------------- */
-(function starCSS(){
- const old=document.getElementById('wB4');if(old)old.remove();
- const st=document.createElement('style');st.id='wB4';
- st.textContent=[
-  /* Both layers have to occupy exactly the same box. Absolute
-     positioning does not achieve that here: the ★ glyph's em box is
-     taller than the line-height, so the wrapper ends up 23px tall while
-     the text draws in the top 11px of it, and an absolutely positioned
-     sibling lands somewhere else entirely — the gold row floated above
-     the grey one. A single-cell grid with both children in that cell
-     gives them identical metrics with no baseline or box arithmetic to
-     get wrong.
+const _windowOpenJune=windowOpen;
+windowOpen=function(){
+ try{
+  const d=dateOf(G.day);
+  if(d.getUTCMonth()===5&&d.getUTCDate()>=14)return true}
+ catch(e){}
+ return _windowOpenJune.apply(this,arguments)};
 
-     The layers are `strb` and `strf` and not the obvious `sb`/`sf`
-     because `.sb` is already a class in this game — a stat-block pill
-     with a gradient, nine pixels of corner radius and six of padding.
-     The grey layer inherited all of it: a rounded box behind every star
-     rating in the game, and the padding shifted that layer down and
-     right so the gold row sat above and to the left of the grey one.
-     Two hours of blaming baseline arithmetic for a name collision. */
-  /* width:max-content is load-bearing. The gold layer is clipped to a
-     percentage of the widget, so the widget has to be exactly as wide
-     as five stars. Dropped into a flex column or a stretching grid cell
-     it would otherwise fill the row, the stars would sit at the left of
-     a box ten times too wide, and a clip at 74% would cut nothing —
-     every rating rendered as five gold stars. */
-  '.stars{display:inline-grid;position:relative;line-height:1;'+
-   'letter-spacing:1px;font-size:11px;vertical-align:-1px;'+
-   'width:max-content;flex:0 0 auto;align-self:center;justify-self:start;'+
-   'background:none;border:0;padding:0}',
-  '.stars .strb,.stars .strf{grid-area:1/1;white-space:nowrap;'+
-   'font-size:inherit;letter-spacing:inherit;line-height:inherit}',
-  '.stars .strb{color:rgba(255,255,255,.16)}',
-  '.stars .strf{overflow:hidden;color:var(--gold,#fbe122)}',
-  /* a rating good enough to be worth noticing glows a little */
-  '.stars.s-elite .strf{text-shadow:0 0 7px rgba(251,225,34,.5)}'
- ].join('\n');
+/* ---------------------------------------------------------------------
+   3. THE SEASON DOES NOT START IN THE FIRST WEEK OF AUGUST
+   ---------------------------------------------------------------------
+   The Premier League gets its real dates from the published schedule.
+   Everything else was laid from whatever day buildFixtures happened to
+   be handed, which for most callers was a small absolute number left
+   over from when the save began on the first of August. Now that the
+   season start is a real number, every division is laid from it.
+   --------------------------------------------------------------------- */
+const _buildFixturesJune=buildFixtures;
+buildFixtures=function(){
+ /* Callers pass all sorts: 14, 0, and seasonStart+14, all of them left
+    over from a time when the save began on the first of August and the
+    two numbers were interchangeable. They are not interchangeable any
+    more, and none of the callers means anything by the difference, so
+    every division is laid from the same point in the season and the
+    Premier League's real published dates override it as they always
+    did. */
+ return _buildFixturesJune.call(this,(G.seasonStart||0)+SEASON_OPENS)};
+
+/* ---------------------------------------------------------------------
+   4. AND EVERY SUMMER AFTER THIS ONE
+   ---------------------------------------------------------------------
+   endSeason rolls to the first of August and hands you the new season
+   at once. It rolls to the thirtieth of June now and gives back the
+   same five weeks, so the second summer is the same job as the first.
+   --------------------------------------------------------------------- */
+const _endSeasonJune=endSeason;
+endSeason=function(){
+ const r=_endSeasonJune.apply(this,arguments);
+ try{
+  /* the base put G.day at the first of August and made that the season
+     start; the season start is right and the day is a month too late */
+  const s=G.seasonStart||0;
+  if(G.day>=s){
+   G.day=Math.max(0,s-PRE_DAYS);
+   G._preShift=PRE_DAYS;
+   try{reserveCupDays()}catch(e){}
+   preseasonBriefing(true)}
+ }catch(e){}
+ return r};
+
+/* ---------------------------------------------------------------------
+   5. WHAT THE SUMMER IS FOR
+   --------------------------------------------------------------------- */
+function firstLeagueDay(){
+ try{
+  let best=null;
+  (G.fixtures||[]).forEach(f=>{
+   if(f.friendly)return;
+   if(f.h!==G.my&&f.a!==G.my)return;
+   if(best==null||f.day<best)best=f.day});
+  return best==null?(G.seasonStart||0)+SEASON_OPENS:best}
+ catch(e){return (G.seasonStart||0)+SEASON_OPENS}}
+
+function preseasonBriefing(rollover){
+ try{
+  if(!G||!G.clubs||G.sacked)return;
+  if(G.cc&&G.cc.on&&!rollover)return;      /* a built club has its own letter */
+  const c=G.clubs[G.my];
+  const op=firstLeagueDay();
+  const days=Math.max(0,op-G.day);
+  mail('board',(rollover?'☀️ Back for pre-season':'📋 Your first day')+' — '+fmtDate(G.day),
+   (rollover
+    ?'The players report back today. '
+    :'You are the manager of <b>'+esc(c.name)+'</b> as of this morning. ')+
+   'The first league game is <b>'+fmtDate(op)+'</b>, which is <b>'+days+' days</b> away.'+
+   '<br><br>Between now and then: the transfer window is open, the squad needs '+
+   'looking at, and there is a pre-season tour to book.'+
+   '<br><br><span class="xs faint">Transfer budget '+fmtM(c.budget)+' · wage room '+
+   fmtW(Math.max(0,(c.wageCap||0)-squadWage(c)))+' · squad '+
+   (c.players||[]).filter(p=>!p.loan).length+'</span>');
+ }catch(e){}}
+
+/* ---------------------------------------------------------------------
+   6. THE TOUR FITS THE SUMMER IT IS NOW IN
+   ---------------------------------------------------------------------
+   preseasonWindow was two days to twelve days after the season start —
+   which under the old calendar was a fortnight of July and under this
+   one is the middle of the season's opening weeks. It is the real
+   pre-season now: from the first week of the job to a few days before
+   the opening fixture.
+   --------------------------------------------------------------------- */
+preseasonWindow=function(){
+ const op=firstLeagueDay();
+ const to=Math.max(8,op-4);
+ return {from:4,to,open:G.day<=to-6}};
+
+/* The letter asking where the tour is going is gated in the base on
+   `G.day <= seasonStart + 11`, which under the old calendar was the
+   middle of the opening fixtures and under this one is satisfied from
+   day zero — so it arrives on the first press of continue, which is
+   exactly where it belongs. Nothing to change.
+   --------------------------------------------------------------------- */
+
+/* ---------------------------------------------------------------------
+   7. AND THE HOME SCREEN COUNTS DOWN TO THE OPENING GAME
+   --------------------------------------------------------------------- */
+(function preCSS(){
+ const old=document.getElementById('wB5');if(old)old.remove();
+ const st=document.createElement('style');st.id='wB5';
+ st.textContent=
+  '.ps-wrap{border:1px solid rgba(127,179,255,.30);border-radius:14px;padding:11px 12px;'+
+   'margin-bottom:12px;background:linear-gradient(150deg,rgba(127,179,255,.10),rgba(9,11,15,.86) 62%)}'+
+  '.ps-top{display:flex;justify-content:space-between;align-items:flex-end;gap:10px}'+
+  '.ps-ttl{font-family:"Archivo Black",Impact,sans-serif;font-size:13px;color:#9ec5ff;letter-spacing:.03em}'+
+  '.ps-n{font-variant-numeric:tabular-nums;font-weight:800;font-size:22px;line-height:1}';
  document.head.appendChild(st)})();
 
-starHtml=function(s){
- const v=clamp(+s||0,0,5);
- const pct=(v/5*100).toFixed(2);
- return '<span class="stars'+(v>=4.5?' s-elite':'')+'" title="'+v.toFixed(1)+' / 5">'+
-  '<span class="strb">★★★★★</span>'+
-  '<span class="strf" style="width:'+pct+'%">★★★★★</span></span>'};
+function preseasonPanel(){
+ try{
+  if(!G||!G.clubs||G.sacked)return '';
+  const op=firstLeagueDay();
+  const left=op-G.day;
+  /* the Premier League opens on the twenty-second, which is fifty-three
+     days out — a cap of PRE_DAYS+14 hid the panel for every club whose
+     season starts late, which is most of them */
+  if(left<=0||left>90)return '';
+  const c=G.clubs[G.my];
+  const w=preseasonWindow();
+  const booked=G.tour&&G.tour.booked;
+  return '<div class="ps-wrap"><div class="ps-top"><div>'+
+   '<div class="ps-ttl">PRE-SEASON</div>'+
+   '<div class="xs faint" style="margin-top:3px">First league game '+fmtDate(op)+' · '+
+   esc((typeof DIV_NAMES!=='undefined'&&DIV_NAMES[c.league])||'league')+'</div></div>'+
+   '<div style="text-align:right"><div class="ps-n">'+left+'</div>'+
+   '<div class="xs faint">day'+(left===1?'':'s')+' to go</div></div></div>'+
+   '<div class="xs faint" style="margin-top:8px;line-height:1.5">'+
+   (w.open&&!booked?'The tour is not booked yet. ':'')+
+   'Budget '+fmtM(c.budget)+' · wage room '+fmtW(Math.max(0,(c.wageCap||0)-squadWage(c)))+
+   ' · squad '+(c.players||[]).filter(p=>!p.loan).length+
+   '</div></div>'}
+ catch(e){return ''}}
 
-/* ---------------------------------------------------------------------
-   3. THE PLACES THAT CONVERTED TWICE
-   ---------------------------------------------------------------------
-   Two screens took a value that was already in stars, turned it back
-   into a pretend rating, and ran it through starsOf again. That was
-   survivable while the scale was linear and is not now.
-   --------------------------------------------------------------------- */
-if(typeof vStaff==='function'){
- const _vStaffStars=vStaff;
- vStaff=function(){
-  let h=_vStaffStars.apply(this,arguments);
-  try{
-   const c=G.clubs[G.my];
-   /* the stature tile fed reputation through the squad curve */
-   h=h.replace(starHtml(starsOf(52+c.rep/220)),starHtml(repStars(c.rep)));
-  }catch(e){}
-  return h}}
+const _vHomePre=vHome;
+vHome=function(){
+ const h=_vHomePre.apply(this,arguments);
+ try{
+  if(G.sacked)return h;
+  const p=preseasonPanel();
+  return p?p+h:h}
+ catch(e){}
+ return h};
 
-/* ---------------------------------------------------------------------
-   4. AND THE PICKER'S CACHED ROSTER IS REBUILT
-   ---------------------------------------------------------------------
-   The club list is cached in localStorage with the star value baked in,
-   so an old cache would keep showing the old scale for ever. Bumping the
-   version the loader checks is what forces it to be rebuilt once.
-   --------------------------------------------------------------------- */
-try{
- const raw=localStorage.getItem(ROSTER_KEY);
- if(raw){
-  const j=JSON.parse(raw);
-  if(j&&j.list){
-   /* recompute rather than throw the whole thing away — the expensive
-      part is building the world, and the ratings are already in it */
-   localStorage.removeItem(ROSTER_KEY);
-   ROSTER=null}}
-}catch(e){}
-
-/*#wB4_stars.js#*/
+/*#wB5_june30.js#*/
 showStart();
 </script>
 </body>
