@@ -40428,6 +40428,267 @@ vHome=function(){
  document.head.appendChild(st)})();
 
 /*#w90_guide.js#*/
+
+
+
+/*#w91_contract.js#*/
+
+/* =====================================================================
+   w91_contract — your own deal
+   ---------------------------------------------------------------------
+   "When you pick your first club you sign a three year contract, and then
+   that gets upgraded by the board if you perform well and win trophies —
+   new contracts all the time trying to keep you."
+
+   There was no manager contract in this game at all. You were employed
+   by a single number called patience, which went down when you lost and
+   ran out when you were sacked. Nothing said how long you were there
+   for, nothing improved when you won something, and there was no version
+   of the thing that actually happens to a successful manager: somebody
+   coming to you in February with two more years and a rise on the table.
+
+   A deal has three jobs here:
+
+     IT IS A CLOCK. Three years, counted down every May, and the last one
+     is a different kind of season — the press ask about it, the board
+     watch it, and running it out means leaving.
+     IT IS A REWARD. Win something, finish above what was agreed, or put
+     a long unbeaten run together and they will come to you before they
+     have to.
+     IT IS PROTECTION. Two years left is a reason to be patient with a
+     bad autumn. Four months left is not.
+   ===================================================================== */
+
+function dealWage(c){
+ /* what a club like this pays a manager, weekly */
+ try{
+  const rep=c.rep||6000;
+  return Math.round((6000+rep*2.6)/1000)*1000}
+ catch(e){return 30000}}
+
+function newDeal(years){
+ const c=G.clubs[G.my];
+ return{club:c.name,clubKey:c.key,
+  signed:G.season,years:years||3,left:years||3,
+  wage:dealWage(c),renewals:0}}
+
+function myDeal(){
+ if(!G)return null;
+ if(!G.deal||G.deal.clubKey!==(G.clubs[G.my]||{}).key)G.deal=newDeal(3);
+ return G.deal}
+
+/* a new job is a new contract */
+const _takeOverDeal=takeOverClub;
+takeOverClub=function(idx){
+ const r=_takeOverDeal.apply(this,arguments);
+ try{G.deal=newDeal(3)}catch(e){}
+ return r};
+const _newGameDeal=newGame;
+newGame=function(){
+ const r=_newGameDeal.apply(this,arguments);
+ try{if(G)G.deal=newDeal(3)}catch(e){}
+ return r};
+
+/* ---------------------------------------------------------------------
+   WHAT A GOOD SEASON IS WORTH
+   --------------------------------------------------------------------- */
+function dealMerit(){
+ let score=0;
+ try{
+  const my=G.clubs[G.my];
+  const pos=leaguePos(G.my);
+  const obj=(typeof boardTarget==='function')?boardTarget():{pos:10};
+  const won=(G.honours||[]).filter(h=>h.season===G.season).length;
+  if(won)score+=3*won;
+  if(pos&&obj.pos){
+   if(pos<obj.pos)score+=Math.min(3,obj.pos-pos);
+   else if(pos>obj.pos+3)score-=2}
+  if(my.patience>=78)score+=1;
+  if(my.patience<=30)score-=2;
+  /* keeping your word counts for something with a board */
+  try{const w=wordIsWorth();if(w&&w.total>=2)score+=(w.ratio>=.7?1:w.ratio<=.3?-1:0)}catch(e){}
+ }catch(e){}
+ return score}
+
+/* the offer itself */
+function dealOffer(){
+ const d=myDeal(),c=G.clubs[G.my];
+ const m=dealMerit();
+ const yrs=m>=5?3:m>=3?2:2;
+ const rise=m>=5?.42:m>=3?.26:.15;
+ return{years:yrs,wage:Math.round(d.wage*(1+rise)/1000)*1000,merit:m}}
+
+/* An extension is added to what is left, not swapped for it. A man with
+   three years to run who signs two more has five, which is how it works
+   everywhere except in software written in a hurry. Five is the ceiling —
+   nobody hands a manager a seven-year deal. */
+function dealTotal(o){
+ let left=0;try{left=myDeal().left|0}catch(e){}
+ return Math.max(1,Math.min(5,left+(o.years|0)))}
+
+function dealSign(o){
+ const d=myDeal();
+ const total=dealTotal(o);
+ const added=total-d.left;
+ d.left=total;d.years=total;d.wage=o.wage;d.signed=G.season;d.renewals++;
+ try{
+  G.clubs[G.my].patience=clamp(G.clubs[G.my].patience+10,0,100);
+  fansShift(3,'signed a new deal');
+  mail('board','✍️ You have signed a new contract',
+   'You have put pen to paper on <b>'+added+' more year'+(added===1?'':'s')+
+   '</b> at <b>'+esc(d.club)+'</b> — <b>'+total+' year'+(total===1?'':'s')+
+   '</b> in all, on <b>'+fmtM(o.wage)+' a week</b>.<br><br>'+
+   'The club have shown you what they think of the job you are doing. '+
+   'The expectation that comes with it is the other half of the deal.')}
+ catch(e){}}
+
+/* ---------------------------------------------------------------------
+   THE BOARDROOM SCENE
+   --------------------------------------------------------------------- */
+const _boardSceneDeal=boardScene;
+boardScene=function(kind){
+ if(kind!=='renewal')return _boardSceneDeal.apply(this,arguments);
+ const P=boardPeople();
+ const d=myDeal();
+ const o=dealOffer();
+ const c=G.clubs[G.my];
+ return{
+  kind:'renewal',who:P.chair,
+  say:'We would like you to stay. There '+(d.left===1?'is a year':'are '+d.left+' years')+
+      ' left on your deal and we are not interested in getting to the end of it. '+
+      '<b>'+o.years+' more year'+(o.years===1?'':'s')+'</b> on top, and <b>'+fmtM(o.wage)+
+      ' a week</b>. What do you say?',
+  opts:[
+   {lbl:'Sign it',sub:'+'+o.years+' years · '+fmtM(o.wage)+' a week · '+dealTotal(o)+' in all',
+    go:()=>{dealSign(o);
+     return'Done. The photographs will be taken on Thursday and the supporters will like it.'}},
+   {lbl:'I want more than that',sub:'push them — it can go either way',
+    go:()=>{
+     const strong=o.merit>=4||c.patience>=72;
+     if(strong){
+      const better={years:o.years+1,wage:Math.round(o.wage*1.18/1000)*1000,merit:o.merit};
+      const tot=dealTotal(better);
+      dealSign(better);
+      return'A look between them, and then a nod. <b>'+tot+' years</b> at <b>'+
+       fmtM(better.wage)+' a week</b>. You were worth asking.'}
+     c.patience=clamp(c.patience-6,0,100);
+     return'"That is what is on the table." It is still on the table, and you have '+
+      'used up something you might have wanted later.'}},
+   {lbl:'Not now',sub:'leave it and see how the season goes',
+    go:()=>{G.dealAsked=G.season;
+     return'They put the folder away. Nobody says the obvious thing, which is that '+
+      'the offer may not be there in May.'}}]}};
+
+/* ---------------------------------------------------------------------
+   WHEN THEY COME TO YOU
+   --------------------------------------------------------------------- */
+const _dtcDeal=dailyTickCore;
+dailyTickCore=function(){
+ const r=_dtcDeal.apply(this,arguments);
+ try{
+  if(!G||G.sacked||G.boardCall)return r;
+  const d=myDeal();
+  if(G.dealAsked===G.season)return r;
+  const m=dealMerit();
+  /* mid-season, if you have earned it, or any time the last year is close */
+  const late=(G.day-(G.seasonStart||0))>150;
+  const wantsYou=m>=3&&late;
+  const running=d.left<=1&&late;
+  if(wantsYou||running){
+   G.dealAsked=G.season;
+   boardSummon('renewal',
+    running?'Your contract is running down':'The board want to extend your contract',
+    running
+     ?'You are into the last year of your deal and the board would rather it did not get to May.'
+     :'They have watched what you have done this season and they would like to talk about your future.')}
+ }catch(e){}
+ return r};
+
+/* ---- the clock, every May ---- */
+const _endSeasonDeal=endSeason;
+endSeason=function(){
+ /* Judged on the season that has just been played, so both readings are
+    taken before the rollover: endSeason bumps G.season, wipes every stat,
+    re-seeds the table and re-scores patience, and merit read afterwards
+    is merit for a season nobody has played yet. */
+ let m0=0,pat0=50;
+ try{m0=dealMerit();pat0=G.clubs[G.my].patience}catch(e){}
+ const r=_endSeasonDeal.apply(this,arguments);
+ try{
+  if(!G||G.sacked)return r;
+  const d=myDeal();
+  d.left=Math.max(0,d.left-1);
+  G.dealAsked=null;
+  if(d.left<=0){
+   /* it ran out. A club that wants you keeps you; one that does not, does not */
+   const m=m0,pat=pat0;
+   if(m>=1||pat>=55){
+    const o=dealOffer();dealSign(o);
+    mail('board','✍️ Contract renewed',
+     'Your deal expired this summer and the club have re-signed you without much of a conversation.')}
+   else{
+    mail('board','📄 Your contract has expired',
+     'The club have decided not to offer new terms. You are out of work.<br><br>'+
+     'Your record here is what it is, and somebody will have watched it.');
+    G.sacked=true}}
+  else if(d.left===1)
+   mail('board','📄 Into the last year of your contract',
+    'You have <b>one season</b> left on your deal at <b>'+esc(d.club)+'</b>. '+
+    'The press will ask about it and the board will be watching how you answer.');
+ }catch(e){}
+ return r};
+
+/* a long deal buys patience; a short one does not */
+const _sackDeal=sackManager;
+sackManager=function(){
+ try{
+  const d=myDeal();
+  /* No patience floor here. The whole point of the reprieve is that it
+     fires when patience has already hit the bottom — that is the moment
+     sackManager is called. Requiring patience>4 meant the guard could
+     never fire, and a three-year deal protected nobody. */
+  if(d&&d.left>=2&&!G._sackWarned){
+   /* a board does not pay off three years lightly */
+   G._sackWarned=true;
+   G.clubs[G.my].patience=clamp(Math.max(G.clubs[G.my].patience,8)+9,0,100);
+   mail('board','The board have stopped short of sacking you',
+    'There are <b>'+d.left+' years</b> left on your contract and paying it off is '+
+    'expensive. You have been given a little longer than the results deserve.');
+   return}}
+ catch(e){}
+ return _sackDeal.apply(this,arguments)};
+
+/* ---- and it is visible ---- */
+const _vClubDeal=vClubFinal;
+vClubFinal=function(){
+ let h=_vClubDeal.apply(this,arguments);
+ try{
+  if((UI.clubTab||'')!=='finances')return h;
+  const d=myDeal();
+  h=h.replace('<button class="btn btn-ghost btn-block btn-sm" style="margin-top:8px" data-action="boardRoom">',
+   '<div class="spread" style="padding:6px 2px">'+
+   '<span class="small" style="font-weight:800">Your contract</span>'+
+   '<span class="small" style="font-weight:700'+(d.left<=1?';color:var(--amber)':'')+'">'+
+    d.left+' year'+(d.left===1?'':'s')+' left · '+fmtW(d.wage)+'</span></div>'+
+   '<button class="btn btn-ghost btn-block btn-sm" style="margin-top:8px" data-action="boardRoom">');
+ }catch(e){}
+ return h};
+
+/* the press want to know */
+if(typeof PQ!=='undefined'&&PQ.push)PQ.push(
+ {id:'mgr-deal',w:F=>{try{return myDeal().left<=1}catch(e){return false}},q:F=>[
+  'You are into the last year of your contract. Will you still be here next season?',
+  'There has been no news on a new deal. Should the supporters be worried?',
+  'Would you walk away if the right job came up?']});
+if(typeof PANS==='object')PANS['mgr-deal']=F=>{
+ let d={left:1};try{d=myDeal()}catch(e){}
+ return[
+ ['🎯 I am staying','I am here and I intend to be here next season. My contract is not something I think about.'],
+ ['🧊 Club business','That is between me and the club, and it will be sorted out at the right time.'],
+ ['💬 Be honest','Nothing has been offered yet. I am not going to pretend that is not a strange position to be in.'],
+ ['🔥 Put it back on them','If the club want me here they know where I am. That is as much as I will say.']]};
+
+/*#w91_contract.js#*/
 showStart();
 </script>
 </body>
