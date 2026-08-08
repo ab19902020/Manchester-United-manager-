@@ -39408,6 +39408,733 @@ newGame=function(){
 
 
 
+/*#w87_look.js#*/
+
+/* =====================================================================
+   w87_look — the game in your club's colours, with something under the flat
+   ---------------------------------------------------------------------
+   The theme was coherent and it was flat: solid cards, one shadow, chalk
+   hairlines, and Manchester United red on every screen whoever you were
+   managing. Three things are wrong with that and all three are fixable at
+   the token level, which means every screen in the game improves at once
+   rather than one at a time.
+
+   1. IT IS ALWAYS MANCHESTER UNITED RED. Take the Everton job and the
+      buttons, the active tabs, the nav and the accents stay red. The
+      accent is now YOUR club's first colour, derived on load and whenever
+      you change job, with a readable-contrast pass so a yellow club does
+      not get white text on gold.
+
+   2. SURFACES HAVE NO DEPTH. A card was one flat fill and one shadow. Now
+      each one has a hairline of light along its top edge, a soft inner
+      shadow at its foot and a shadow that reads as elevation rather than
+      as a grey rectangle — the same three tricks every polished interface
+      uses and none of them costing a repaint.
+
+   3. NOTHING HAS ANY TEXTURE. A completely smooth dark interface looks
+      like a wireframe of itself. A very fine grain over the whole app —
+      one tiled data URI, no images, no requests — is the cheapest way to
+      make a flat dark UI look made rather than drawn.
+   ===================================================================== */
+
+/* ---------------------------------------------------------------------
+   1. YOUR COLOURS
+   --------------------------------------------------------------------- */
+function lkHex(h){
+ h=String(h||'').replace('#','');
+ if(h.length===3)h=h[0]+h[0]+h[1]+h[1]+h[2]+h[2];
+ const n=parseInt(h||'da291c',16);
+ return{r:(n>>16)&255,g:(n>>8)&255,b:n&255}}
+function lkStr(c){
+ const q=v=>('0'+Math.max(0,Math.min(255,Math.round(v))).toString(16)).slice(-2);
+ return '#'+q(c.r)+q(c.g)+q(c.b)}
+function lkMix(a,b,t){
+ const A=lkHex(a),B=lkHex(b);
+ return lkStr({r:A.r+(B.r-A.r)*t,g:A.g+(B.g-A.g)*t,b:A.b+(B.b-A.b)*t})}
+function lkLum(h){
+ const c=lkHex(h);
+ const f=v=>{v/=255;return v<=.03928?v/12.92:Math.pow((v+.055)/1.055,2.4)};
+ return .2126*f(c.r)+.7152*f(c.g)+.0722*f(c.b)}
+/* text that can actually be read on it */
+function lkInk(h){return lkLum(h)>.42?'#12150f':'#ffffff'}
+/* a colour bright enough to be an accent on a near-black background */
+function lkLift(h){
+ let c=h;let guard=0;
+ while(lkLum(c)<.16&&guard++<10)c=lkMix(c,'#ffffff',.18);
+ return c}
+
+function clubAccent(){
+ let c1='#da291c',c2='#ffffff';
+ try{
+  const c=(G&&G.clubs)?G.clubs[G.my]:null;
+  if(c){c1=c.c1||c1;c2=(c.c2&&c.c2!==c.c1)?c.c2:'#ffffff'}}
+ catch(e){}
+ const base=lkLift(c1);
+ return{
+  base,
+  hot:lkMix(base,'#ffffff',.22),
+  deep:lkMix(base,'#000000',.42),
+  ink:lkInk(base),
+  soft:'rgba('+Object.values(lkHex(base)).join(',')+',.16)',
+  line:'rgba('+Object.values(lkHex(base)).join(',')+',.42)',
+  glow:'rgba('+Object.values(lkHex(base)).join(',')+',.30)',
+  second:c2}}
+
+/* the whole app is repainted by moving six custom properties */
+function applyClubTheme(){
+ try{
+  const a=clubAccent();
+  const r=document.documentElement.style;
+  r.setProperty('--acc',a.base);
+  r.setProperty('--acc-hot',a.hot);
+  r.setProperty('--acc-deep',a.deep);
+  r.setProperty('--acc-ink',a.ink);
+  r.setProperty('--acc-soft',a.soft);
+  r.setProperty('--acc-line',a.line);
+  r.setProperty('--acc-glow',a.glow);
+  r.setProperty('--acc-2',a.second);
+  /* the old red is kept as a literal for the few places that mean the
+     colour rather than the club */
+  r.setProperty('--red',a.base);
+  r.setProperty('--red-hot',a.hot);
+ }catch(e){}}
+
+/* on load, on render, and whenever you change club */
+const _renderTheme=render;
+render=function(){
+ try{
+  const key=(G&&G.clubs&&G.clubs[G.my])?G.clubs[G.my].key:'';
+  if(key!==applyClubTheme._k){applyClubTheme._k=key;applyClubTheme()}}
+ catch(e){}
+ return _renderTheme.apply(this,arguments)};
+try{applyClubTheme()}catch(e){}
+
+/* =====================================================================
+   2. THE SURFACES
+   Injected after the inline sheet, so equal-specificity rules win without
+   a single !important.
+   ===================================================================== */
+(function lookCSS(){
+ const st=document.createElement('style');st.id='w87';
+ st.textContent=[
+
+ /* ---- the ground everything sits on ---------------------------------
+    A single flat colour behind a dark UI is what makes it look unfinished.
+    Two wide, very low-saturation pools and a fine grain give it somewhere
+    to be. */
+ 'body{background:'+
+  'radial-gradient(1400px 720px at 50% -260px,rgba(60,86,66,.30),transparent 62%),'+
+  'radial-gradient(1000px 620px at 112% 108%,rgba(28,44,32,.42),transparent 58%),'+
+  'radial-gradient(760px 520px at -12% 42%,rgba(22,34,26,.36),transparent 60%),'+
+  '#060907}',
+ /* the grain: one 4x4 tile, no request, invisible individually and the
+    difference between "drawn" and "made" in aggregate */
+ 'body::after{content:"";position:fixed;inset:0;z-index:9999;pointer-events:none;'+
+  'opacity:.055;mix-blend-mode:overlay;'+
+  'background-image:url("data:image/svg+xml;utf8,'+
+  encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="140" height="140"><filter id="n"><feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="3"/></filter><rect width="140" height="140" filter="url(%23n)"/></svg>')+
+  '");background-size:140px 140px}',
+
+ '#app{background:linear-gradient(180deg,rgba(34,50,36,.30),rgba(6,9,7,0) 260px)}',
+
+ /* ---- cards: a light edge, a shadow, and a floor -------------------- */
+ '.card{background:'+
+   'linear-gradient(168deg,rgba(255,255,255,.055),rgba(255,255,255,.012) 38%,rgba(0,0,0,.10)),'+
+   'linear-gradient(160deg,var(--card-2),var(--card));'+
+  'border:1px solid rgba(255,255,255,.075);'+
+  'box-shadow:0 1px 0 rgba(255,255,255,.06) inset,'+
+   '0 -14px 22px -18px rgba(0,0,0,.9) inset,'+
+   '0 12px 30px -12px rgba(0,0,0,.62),0 2px 6px rgba(0,0,0,.34);'+
+  'border-radius:17px}',
+ '.card.tight{border-radius:14px}',
+
+ /* ---- type ---------------------------------------------------------- */
+ 'body{letter-spacing:.1px}',
+ '.sec .t{font-size:12.5px;letter-spacing:2.1px;'+
+  'background:linear-gradient(180deg,#ffffff,#b9c8bc);'+
+  '-webkit-background-clip:text;background-clip:text;color:transparent}',
+ '.chip-lbl{letter-spacing:1.6px;color:#7b8c7f;font-size:9.5px}',
+ '.num{font-variant-numeric:tabular-nums;letter-spacing:-.2px}',
+
+ /* ---- buttons: real ones -------------------------------------------- */
+ '.btn{border-radius:14px;font-weight:800;letter-spacing:.25px;'+
+  'transition:transform .08s cubic-bezier(.2,.9,.3,1),filter .18s,box-shadow .18s}',
+ '.btn:active{transform:translateY(1px) scale(.985)}',
+ '.btn-primary{background:linear-gradient(180deg,var(--acc-hot),var(--acc) 52%,var(--acc-deep));'+
+  'color:var(--acc-ink);'+
+  'box-shadow:0 1px 0 rgba(255,255,255,.32) inset,0 -2px 6px rgba(0,0,0,.28) inset,'+
+   '0 10px 26px -8px var(--acc-glow),0 2px 5px rgba(0,0,0,.4)}',
+ '.btn-gold{background:linear-gradient(180deg,#ffef8a,#f6d63c 48%,#c9a017);color:#231d00;'+
+  'box-shadow:0 1px 0 rgba(255,255,255,.5) inset,0 -2px 6px rgba(120,86,0,.3) inset,'+
+   '0 10px 24px -9px rgba(246,214,60,.4),0 2px 5px rgba(0,0,0,.4)}',
+ '.btn-ghost{background:linear-gradient(180deg,rgba(255,255,255,.075),rgba(255,255,255,.028));'+
+  'border:1px solid rgba(255,255,255,.14);'+
+  'box-shadow:0 1px 0 rgba(255,255,255,.07) inset,0 4px 14px -8px rgba(0,0,0,.7)}',
+ '.btn-ghost:active{background:rgba(255,255,255,.13)}',
+
+ /* ---- header: glass, with the club's colour along the bottom -------- */
+ '.hdr{background:linear-gradient(180deg,rgba(12,18,13,.94),rgba(10,15,11,.80));'+
+  'backdrop-filter:blur(18px) saturate(1.3);-webkit-backdrop-filter:blur(18px) saturate(1.3);'+
+  'border-bottom:1px solid rgba(255,255,255,.07);'+
+  'box-shadow:0 1px 0 var(--acc-line),0 10px 24px -18px #000}',
+ '.hdr .crest{filter:drop-shadow(0 3px 6px rgba(0,0,0,.6))}',
+ '.hdr .hclub .n{font-size:15px;letter-spacing:.1px}',
+ '.hdr .bank .v{color:#ffd95e;text-shadow:0 0 16px rgba(255,217,94,.28)}',
+
+ /* ---- nav ------------------------------------------------------------ */
+ '.nav{background:linear-gradient(180deg,rgba(9,14,10,.82),rgba(7,11,8,.97));'+
+  'backdrop-filter:blur(20px) saturate(1.25);-webkit-backdrop-filter:blur(20px) saturate(1.25);'+
+  'border-top:1px solid rgba(255,255,255,.08)}',
+ '.nav button{transition:color .18s,transform .12s;position:relative}',
+ '.nav button.on{color:var(--acc-hot)}',
+ '.nav button.on svg{filter:drop-shadow(0 0 8px var(--acc-glow))}',
+ '.nav button.on .dot{background:var(--acc-hot);box-shadow:0 0 8px var(--acc-glow)}',
+ /* a lit bar over the active tab, which is what tells you where you are
+    at a glance rather than a colour change you have to look for */
+ '.nav button.on::before{content:"";position:absolute;top:0;left:50%;'+
+  'transform:translateX(-50%);width:30px;height:2.5px;border-radius:0 0 3px 3px;'+
+  'background:var(--acc-hot);box-shadow:0 0 12px var(--acc-glow)}',
+
+ /* ---- chips ---------------------------------------------------------- */
+ '.chip{background:linear-gradient(180deg,rgba(255,255,255,.055),rgba(255,255,255,.02));'+
+  'border:1px solid rgba(255,255,255,.11);transition:all .16s;'+
+  'box-shadow:0 1px 0 rgba(255,255,255,.05) inset}',
+ '.chip.on{background:linear-gradient(180deg,var(--acc-soft),rgba(0,0,0,.12));'+
+  'border-color:var(--acc-line);color:#fff;'+
+  'box-shadow:0 0 0 1px var(--acc-soft),0 4px 14px -6px var(--acc-glow)}',
+
+ /* ---- tables: readable rows, not a wall ------------------------------ */
+ '.tbl th{color:#7b8c7f;letter-spacing:1.3px;border-bottom:1px solid rgba(255,255,255,.10)}',
+ '.tbl td{border-bottom:1px solid rgba(255,255,255,.055)}',
+ '.tbl tbody tr{transition:background .14s}',
+ '.tbl tbody tr:nth-child(even){background:rgba(255,255,255,.016)}',
+ '.tbl tbody tr:active{background:var(--acc-soft)}',
+ '.pos-badge{box-shadow:0 1px 0 rgba(255,255,255,.10) inset,0 2px 5px rgba(0,0,0,.35);'+
+  'font-weight:900}',
+
+ /* ---- bars ----------------------------------------------------------- */
+ '.bar{background:rgba(0,0,0,.42);box-shadow:0 1px 0 rgba(255,255,255,.06),'+
+  'inset 0 1px 3px rgba(0,0,0,.6);height:6px}',
+ '.bar i{box-shadow:0 0 8px currentColor;filter:saturate(1.15)}',
+
+ /* ---- the continue dock ---------------------------------------------- */
+ '.continue-dock .btn{border-radius:17px;letter-spacing:1.7px;'+
+  'box-shadow:0 1px 0 rgba(255,255,255,.3) inset,0 14px 34px -10px var(--acc-glow),'+
+   '0 3px 10px rgba(0,0,0,.5)}',
+
+ /* ---- mail rows / list items ----------------------------------------- */
+ '.mail{border-radius:12px;transition:background .14s}',
+ '.mail:active{background:rgba(255,255,255,.05)}',
+
+ /* ---- and a little life when a screen arrives ------------------------ */
+ '@keyframes lkIn{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:none}}',
+ '.view>*{animation:lkIn .26s cubic-bezier(.2,.9,.3,1) both}',
+ '.view>*:nth-child(2){animation-delay:.03s}',
+ '.view>*:nth-child(3){animation-delay:.06s}',
+ '.view>*:nth-child(4){animation-delay:.09s}',
+ '.view>*:nth-child(n+5){animation-delay:.11s}',
+ '@media(prefers-reduced-motion:reduce){.view>*{animation:none}}'
+
+ ].join('\n');
+ document.head.appendChild(st)})();
+
+/*#w87_look.js#*/
+
+/*#w88_faces.js#*/
+
+/* =====================================================================
+   w88_faces — every player in the world looks like himself
+   ---------------------------------------------------------------------
+   "Make sure every single skin colour is correct for all the Premier
+   League players and the top divisions around Europe."
+
+   There is a real bug behind this, and it is a one-liner. Outside the
+   twenty-six Manchester United players who are described by hand, every
+   footballer in this game has his complexion chosen like this:
+
+       skin = sk[Math.floor(r() * sk.length)]
+
+   Eight tones, uniform, seeded on his id. A Norwegian centre-half has a
+   one-in-eight chance of being the darkest tone in the palette and a
+   Senegalese winger has the same chance of being the palest. A later
+   layer added a name-regex guess on top, which helps for the four hundred
+   or so surnames it lists and does nothing for the other ten thousand
+   players.
+
+   Meanwhile every one of those players already carries the one field that
+   answers the question properly: p.nat. It is set at squad build, it is
+   used for international football, and the face code never looked at it.
+
+   So appearance is now decided in this order:
+
+     1. a hand-written entry, if there is one for this player
+     2. his NATIONALITY, against a table of weighted distributions for
+        every footballing nation in the game
+     3. the surname regex that was already here
+     4. and only then, random
+
+   The distributions are population-level priors for each nation's playing
+   pool, weighted rather than fixed, so a squad from one country still
+   looks like a group of individuals rather than eleven clones.
+   ===================================================================== */
+
+/* skin keys: pale fair light olive tan brown deep dark
+   hair keys: black jet darkbrown brown midbrown lightbrown dirtyblond
+              blond platinum ginger grey bleach                        */
+const NAT_LOOK={
+ /* ---- Britain & Ireland ---- */
+ ENG:{sk:[['pale',3],['fair',5],['light',4],['olive',1],['tan',1],['brown',3],['deep',2],['dark',1]],
+      hr:[['midbrown',4],['darkbrown',4],['lightbrown',2],['blond',2],['ginger',1],['black',4]]},
+ SCO:{sk:[['pale',6],['fair',5],['light',2],['brown',1]],hr:[['midbrown',3],['ginger',2],['darkbrown',3],['blond',2],['black',1]]},
+ WAL:{sk:[['pale',5],['fair',5],['light',2],['brown',1]],hr:[['midbrown',4],['darkbrown',3],['black',2],['blond',1]]},
+ NIR:{sk:[['pale',6],['fair',4],['light',2]],hr:[['midbrown',3],['ginger',2],['darkbrown',3],['blond',2]]},
+ IRL:{sk:[['pale',6],['fair',5],['light',2]],hr:[['midbrown',3],['ginger',2],['darkbrown',3],['blond',1],['black',1]]},
+
+ /* ---- Western Europe ---- */
+ FRA:{sk:[['pale',1],['fair',2],['light',3],['olive',2],['tan',2],['brown',4],['deep',3],['dark',1]],
+      hr:[['black',6],['darkbrown',4],['midbrown',2],['brown',2]]},
+ ESP:{sk:[['fair',2],['light',5],['olive',5],['tan',2],['brown',1]],
+      hr:[['darkbrown',5],['black',4],['midbrown',2],['brown',2]]},
+ POR:{sk:[['fair',1],['light',4],['olive',5],['tan',3],['brown',2],['deep',1]],
+      hr:[['darkbrown',5],['black',5],['midbrown',1]]},
+ ITA:{sk:[['fair',2],['light',5],['olive',5],['tan',2],['brown',1]],
+      hr:[['darkbrown',5],['black',4],['midbrown',2],['brown',1]]},
+ GER:{sk:[['pale',3],['fair',5],['light',4],['olive',2],['tan',1],['brown',2],['deep',1]],
+      hr:[['midbrown',3],['darkbrown',4],['blond',3],['lightbrown',2],['black',3]]},
+ NED:{sk:[['pale',3],['fair',5],['light',3],['tan',1],['brown',3],['deep',2]],
+      hr:[['blond',3],['midbrown',3],['darkbrown',3],['black',3],['lightbrown',2]]},
+ BEL:{sk:[['pale',3],['fair',4],['light',3],['tan',1],['brown',3],['deep',2]],
+      hr:[['midbrown',3],['darkbrown',3],['blond',2],['black',3]]},
+ SUI:{sk:[['fair',4],['light',4],['olive',2],['tan',1],['brown',2],['deep',1]],
+      hr:[['midbrown',3],['darkbrown',4],['blond',2],['black',3]]},
+ AUT:{sk:[['pale',3],['fair',5],['light',3],['olive',1],['tan',1],['brown',1]],
+      hr:[['midbrown',4],['darkbrown',3],['blond',3],['black',2]]},
+
+ /* ---- Nordics ---- */
+ NOR:{sk:[['pale',7],['fair',5],['light',2],['brown',1]],hr:[['blond',5],['lightbrown',3],['midbrown',3],['darkbrown',1]]},
+ SWE:{sk:[['pale',6],['fair',5],['light',2],['tan',1],['brown',2]],hr:[['blond',5],['lightbrown',3],['midbrown',2],['black',1]]},
+ DEN:{sk:[['pale',6],['fair',5],['light',2],['brown',1]],hr:[['blond',5],['lightbrown',3],['midbrown',3]]},
+ FIN:{sk:[['pale',7],['fair',4],['light',1]],hr:[['blond',5],['lightbrown',3],['midbrown',2]]},
+ ISL:{sk:[['pale',7],['fair',4]],hr:[['blond',5],['lightbrown',3],['ginger',1],['midbrown',2]]},
+
+ /* ---- Central & Eastern Europe ---- */
+ POL:{sk:[['pale',5],['fair',5],['light',3]],hr:[['midbrown',4],['darkbrown',4],['blond',3],['lightbrown',2]]},
+ CZE:{sk:[['pale',5],['fair',5],['light',2]],hr:[['midbrown',4],['darkbrown',3],['blond',3],['lightbrown',2]]},
+ SVK:{sk:[['pale',5],['fair',4],['light',2]],hr:[['midbrown',4],['darkbrown',4],['blond',2]]},
+ HUN:{sk:[['pale',4],['fair',5],['light',3],['olive',1]],hr:[['midbrown',3],['darkbrown',5],['blond',2]]},
+ CRO:{sk:[['fair',4],['light',5],['olive',2],['pale',2]],hr:[['darkbrown',5],['midbrown',3],['black',2],['blond',1]]},
+ SRB:{sk:[['fair',4],['light',5],['olive',2],['pale',2]],hr:[['darkbrown',5],['midbrown',3],['black',2]]},
+ SVN:{sk:[['fair',4],['light',4],['pale',3],['olive',1]],hr:[['darkbrown',4],['midbrown',3],['blond',2]]},
+ BIH:{sk:[['fair',4],['light',5],['olive',2]],hr:[['darkbrown',5],['midbrown',2],['black',2]]},
+ ROU:{sk:[['fair',3],['light',5],['olive',3],['tan',1]],hr:[['darkbrown',5],['black',3],['midbrown',2]]},
+ BUL:{sk:[['fair',3],['light',5],['olive',3]],hr:[['darkbrown',5],['black',3],['midbrown',2]]},
+ UKR:{sk:[['pale',5],['fair',5],['light',3]],hr:[['midbrown',3],['darkbrown',4],['blond',3],['lightbrown',2]]},
+ RUS:{sk:[['pale',5],['fair',5],['light',3]],hr:[['midbrown',3],['darkbrown',4],['blond',3]]},
+ GRE:{sk:[['light',4],['olive',5],['tan',2],['fair',1]],hr:[['black',5],['darkbrown',4]]},
+ TUR:{sk:[['light',4],['olive',5],['tan',3],['fair',1],['brown',1]],hr:[['black',6],['darkbrown',4]]},
+ ALB:{sk:[['light',4],['olive',4],['fair',2],['tan',1]],hr:[['darkbrown',5],['black',4]]},
+ KVX:{sk:[['light',4],['olive',4],['fair',2]],hr:[['darkbrown',5],['black',4]]},
+
+ /* ---- Africa ---- */
+ SEN:{sk:[['deep',6],['dark',5],['brown',3]],hr:[['black',10]]},
+ NGA:{sk:[['deep',6],['dark',4],['brown',4]],hr:[['black',10]]},
+ GHA:{sk:[['deep',6],['dark',4],['brown',4]],hr:[['black',10]]},
+ CIV:{sk:[['deep',6],['dark',4],['brown',4]],hr:[['black',10]]},
+ CMR:{sk:[['deep',6],['dark',4],['brown',4]],hr:[['black',10]]},
+ MLI:{sk:[['deep',6],['dark',5],['brown',3]],hr:[['black',10]]},
+ GUI:{sk:[['deep',6],['dark',4],['brown',4]],hr:[['black',10]]},
+ COD:{sk:[['deep',6],['dark',4],['brown',4]],hr:[['black',10]]},
+ BFA:{sk:[['deep',6],['dark',4],['brown',4]],hr:[['black',10]]},
+ GAB:{sk:[['deep',5],['dark',3],['brown',5]],hr:[['black',10]]},
+ ANG:{sk:[['deep',6],['dark',4],['brown',4]],hr:[['black',10]]},
+ ZAM:{sk:[['deep',6],['dark',4],['brown',4]],hr:[['black',10]]},
+ RSA:{sk:[['deep',4],['dark',3],['brown',4],['light',2],['fair',1]],hr:[['black',9],['midbrown',1]]},
+ MAR:{sk:[['light',3],['olive',4],['tan',4],['brown',2]],hr:[['black',8],['darkbrown',3]]},
+ ALG:{sk:[['light',3],['olive',4],['tan',4],['brown',2]],hr:[['black',8],['darkbrown',3]]},
+ TUN:{sk:[['light',3],['olive',4],['tan',4],['brown',1]],hr:[['black',8],['darkbrown',3]]},
+ EGY:{sk:[['olive',3],['tan',5],['brown',3],['light',2]],hr:[['black',9],['darkbrown',2]]},
+
+ /* ---- The Americas ---- */
+ BRA:{sk:[['fair',2],['light',4],['olive',3],['tan',4],['brown',4],['deep',3],['dark',1]],
+      hr:[['black',7],['darkbrown',4],['midbrown',1],['bleach',1]]},
+ ARG:{sk:[['fair',3],['light',6],['olive',4],['tan',1]],hr:[['darkbrown',6],['black',4],['midbrown',2]]},
+ URU:{sk:[['fair',3],['light',6],['olive',3],['tan',1],['brown',1]],hr:[['darkbrown',5],['black',4],['midbrown',1]]},
+ COL:{sk:[['light',3],['olive',3],['tan',4],['brown',3],['deep',2]],hr:[['black',8],['darkbrown',3]]},
+ CHI:{sk:[['light',4],['olive',4],['tan',3]],hr:[['darkbrown',5],['black',5]]},
+ ECU:{sk:[['tan',3],['brown',4],['deep',3],['olive',2]],hr:[['black',9]]},
+ PAR:{sk:[['light',4],['olive',4],['tan',3]],hr:[['darkbrown',5],['black',4]]},
+ PER:{sk:[['olive',3],['tan',4],['brown',3],['light',2]],hr:[['black',8],['darkbrown',2]]},
+ VEN:{sk:[['light',3],['olive',4],['tan',3],['brown',2]],hr:[['black',7],['darkbrown',3]]},
+ USA:{sk:[['pale',2],['fair',3],['light',3],['olive',2],['tan',2],['brown',3],['deep',2]],
+      hr:[['midbrown',3],['darkbrown',3],['black',4],['blond',2],['lightbrown',1]]},
+ CAN:{sk:[['pale',2],['fair',4],['light',3],['tan',1],['brown',2],['deep',1]],
+      hr:[['midbrown',3],['darkbrown',3],['black',3],['blond',2]]},
+ MEX:{sk:[['light',3],['olive',4],['tan',4],['brown',2]],hr:[['black',8],['darkbrown',3]]},
+ JAM:{sk:[['deep',5],['dark',3],['brown',5]],hr:[['black',10]]},
+
+ /* ---- Asia & Oceania ---- */
+ JPN:{sk:[['fair',3],['light',6],['olive',2]],hr:[['jet',6],['black',5]]},
+ KOR:{sk:[['fair',3],['light',6],['olive',2]],hr:[['jet',6],['black',5]]},
+ CHN:{sk:[['fair',3],['light',6],['olive',2]],hr:[['jet',6],['black',5]]},
+ AUS:{sk:[['pale',3],['fair',5],['light',3],['olive',2],['tan',1],['brown',1]],
+      hr:[['midbrown',4],['darkbrown',3],['blond',3],['black',2]]},
+ NZL:{sk:[['pale',3],['fair',4],['light',3],['tan',2],['brown',2]],hr:[['midbrown',3],['darkbrown',3],['black',3]]},
+ IRN:{sk:[['light',3],['olive',5],['tan',3]],hr:[['black',8],['darkbrown',3]]},
+ KSA:{sk:[['olive',3],['tan',5],['brown',3]],hr:[['black',9]]},
+ QAT:{sk:[['olive',3],['tan',5],['brown',3]],hr:[['black',9]]},
+ ISR:{sk:[['light',4],['olive',4],['tan',2]],hr:[['darkbrown',5],['black',4]]}};
+
+/* a couple of regions stand in for anything not listed */
+const CONF_LOOK={
+ UEFA:{sk:[['pale',3],['fair',4],['light',4],['olive',3],['tan',1],['brown',2],['deep',1]],
+       hr:[['midbrown',3],['darkbrown',4],['black',3],['blond',2],['lightbrown',1]]},
+ CAF:{sk:[['brown',4],['deep',5],['dark',3]],hr:[['black',10]]},
+ CONMEBOL:{sk:[['light',4],['olive',4],['tan',3],['brown',2],['deep',1]],hr:[['black',6],['darkbrown',4]]},
+ CONCACAF:{sk:[['light',3],['olive',3],['tan',3],['brown',3],['deep',2]],hr:[['black',7],['darkbrown',3]]},
+ AFC:{sk:[['light',4],['olive',4],['tan',3]],hr:[['black',7],['jet',4]]},
+ OFC:{sk:[['tan',3],['brown',3],['fair',2],['light',2]],hr:[['black',7],['darkbrown',2]]}};
+
+function pickWeighted(list,r){
+ let tot=0;list.forEach(x=>tot+=x[1]);
+ let n=r()*tot;
+ for(let i=0;i<list.length;i++){n-=list[i][1];if(n<=0)return list[i][0]}
+ return list[list.length-1][0]}
+
+function natLook(code){
+ if(NAT_LOOK[code])return NAT_LOOK[code];
+ try{
+  const conf=(NAT_BY[code]||{}).conf;
+  if(conf&&CONF_LOOK[conf])return CONF_LOOK[conf]}
+ catch(e){}
+ return CONF_LOOK.UEFA}
+
+/* ---------------------------------------------------------------------
+   THE ORDER OF PRECEDENCE
+   A hand-written face wins. Then nationality. Then the surname regex that
+   was already here, which is now only reached by players whose nation the
+   table does not know. Nothing is random any more except the variation
+   INSIDE a nation's distribution, which is the variation you want.
+   --------------------------------------------------------------------- */
+const _specNatReal=faceSpec;
+faceSpec=function(p){
+ const s=_specNatReal.apply(this,arguments);
+ try{
+  if(!p||MUN_FACES[p.name])return s;          /* described by hand: leave it */
+  let code=p.nat;
+  if(!code&&typeof natOf==='function')try{code=natOf(p)}catch(e){}
+  if(!code)return s;
+  const look=natLook(code);
+  if(!look)return s;
+  const r=mulberry(hashStr('nat9|'+code+'|'+p.id+'|'+p.name));
+  s.sk=pickWeighted(look.sk,r);
+  s.hr=pickWeighted(look.hr,r);
+  /* the cut follows from the hair, not from a separate roll */
+  const deep=['brown','deep','dark'].indexOf(s.sk)>=0;
+  const cuts=deep?['fade','buzz','curls','short','cornrows','afro','taper']
+                 :['short','crop','mid','taper','quiff','curtains','buzz','fade','curls'];
+  s.cut=cuts[Math.floor(r()*cuts.length)];
+  if(p.age>=32&&r()<.22)s.cut='bald';
+  /* and the plausibility guards the old code applied, kept */
+  if(deep&&['blond','platinum','bleach','ginger','dirtyblond','lightbrown','grey'].indexOf(s.hr)>=0)
+   s.hr=(r()<.12)?'bleach':'black';           /* the bleached crop is a real look */
+  if(s.sk==='tan'&&['platinum','blond'].indexOf(s.hr)>=0)s.hr='darkbrown';
+  /* older players grey */
+  if(p.age>=33&&r()<.45&&s.hr!=='bleach')s.hr='grey';
+ }catch(e){}
+ return s};
+
+/* ---------------------------------------------------------------------
+   AND THE PORTRAIT ITSELF, BROUGHT UP TO THE MANAGER'S STANDARD
+   ---------------------------------------------------------------------
+   The manager got a proper eye — a smaller white, an iris that fills it,
+   a lid shadow, a lash line and a lower lip — because he is drawn at a
+   hundred and sixty pixels where the old shape read as a cartoon. Player
+   portraits are drawn at twenty-eight in a list and at eighty on a
+   profile, and the same eye reads as a cartoon at eighty too.
+
+   The same treatment, applied to every face in the game.
+   --------------------------------------------------------------------- */
+const _faceUp=face;
+face=function(p,sz){
+ let svg='';
+ try{svg=_faceUp.apply(this,arguments)}catch(e){return ''}
+ try{
+  if(!svg||svg.indexOf('<svg')<0)return svg;
+  const sp=faceSpec(p);
+  const S=SKIN2[sp.sk]||SKIN2.light;
+  /* the eyes, swapped for the built ones */
+  const oldEyes=/<ellipse cx="16\.2" cy="15\.3" rx="2\.1" ry="1\.42"[^>]*\/>[\s\S]*?opacity="\.5"\/>/;
+  if(!oldEyes.test(svg))return svg;
+  const iris=(sp.sk==='pale'||sp.sk==='fair')?'#4a6b52':'#33231a';
+  const eyes=
+   '<ellipse cx="16.2" cy="15.3" rx="1.95" ry="1.28" fill="#f4f0ea"/>'+
+   '<ellipse cx="23.8" cy="15.3" rx="1.95" ry="1.28" fill="#f4f0ea"/>'+
+   '<ellipse cx="16.2" cy="15.3" rx="1.95" ry="1.28" fill="none" stroke="'+S.d+'" stroke-width=".22" opacity=".45"/>'+
+   '<ellipse cx="23.8" cy="15.3" rx="1.95" ry="1.28" fill="none" stroke="'+S.d+'" stroke-width=".22" opacity=".45"/>'+
+   '<circle cx="16.3" cy="15.32" r="1.16" fill="'+iris+'"/>'+
+   '<circle cx="23.7" cy="15.32" r="1.16" fill="'+iris+'"/>'+
+   '<circle cx="16.3" cy="15.32" r=".44" fill="#080605"/>'+
+   '<circle cx="23.7" cy="15.32" r=".44" fill="#080605"/>'+
+   '<circle cx="16.68" cy="14.86" r=".3" fill="#fff" opacity=".95"/>'+
+   '<circle cx="24.08" cy="14.86" r=".3" fill="#fff" opacity=".95"/>'+
+   '<path d="M14.25 15.3a1.95 1.28 0 0 1 3.9 0z" fill="'+S.d+'" opacity=".26"/>'+
+   '<path d="M21.85 15.3a1.95 1.28 0 0 1 3.9 0z" fill="'+S.d+'" opacity=".26"/>'+
+   '<path d="M14.2 14.95c.7-.92 1.36-1.32 2-1.32s1.3.4 2 1.32" stroke="'+shade(S.d,.75)+
+    '" stroke-width=".46" fill="none" stroke-linecap="round"/>'+
+   '<path d="M21.8 14.95c.7-.92 1.36-1.32 2-1.32s1.3.4 2 1.32" stroke="'+shade(S.d,.75)+
+    '" stroke-width=".46" fill="none" stroke-linecap="round"/>'+
+   '<path d="M14.05 13.35c.85-.62 1.6-.92 2.25-.92s1.35.3 2.1.92M21.6 13.35c.85-.62 1.6-.92 2.25-.92s1.35.3 2.1.92" stroke="'+S.d+'" stroke-width=".3" fill="none" opacity=".34"/>';
+  svg=svg.replace(oldEyes,eyes);
+  /* and a lower lip under the mouth line */
+  const oldMouth=/<path d="M16\.9 23\.9c1\.9 1\.0 4\.3 1\.0 6\.2 0"[^>]*\/>/;
+  if(oldMouth.test(svg))svg=svg.replace(oldMouth,
+   '<path d="M16.9 23.55c1.9 1.5 4.3 1.5 6.2 0 .1 1.25-1.35 2.15-3.1 2.15s-3.2-.9-3.1-2.15z" '+
+   'fill="'+S.l+'" opacity=".55"/>');
+ }catch(e){}
+ return svg};
+
+/* ---------------------------------------------------------------------
+   AND THE ONES PEOPLE WOULD NOTICE
+   ---------------------------------------------------------------------
+   A national distribution cannot get an individual right, and it should
+   not try: it gives Bukayo Saka the modal England complexion, which is
+   wrong, and no amount of tuning the England row fixes that without
+   breaking the other six hundred English players.
+
+   So the players a person would recognise are named. Skin, and hair where
+   it is part of how you picture him. Everyone not on this list keeps the
+   national prior, which is right far more often than the coin-flip it
+   replaced.
+
+   Format: 'skin|hair' — hair optional.
+   --------------------------------------------------------------------- */
+const PLAYER_LOOK={
+ /* ---------------- Premier League ---------------- */
+ 'Bukayo Saka':'deep|black','Declan Rice':'fair|midbrown','Martin Ødegaard':'pale|blond',
+ 'Gabriel Jesus':'brown|black','Gabriel Martinelli':'tan|black','William Saliba':'deep|black',
+ 'Gabriel Magalhães':'brown|black','Ben White':'fair|lightbrown','Kai Havertz':'fair|darkbrown',
+ 'Leandro Trossard':'fair|midbrown','Jurriën Timber':'brown|black','Riccardo Calafiori':'light|darkbrown',
+ 'David Raya':'light|darkbrown','Thomas Partey':'deep|black','Oleksandr Zinchenko':'pale|lightbrown',
+ 'Erling Haaland':'fair|blond','Phil Foden':'pale|blond','Rodri':'olive|darkbrown',
+ 'Kevin De Bruyne':'fair|lightbrown','Bernardo Silva':'light|darkbrown','Rúben Dias':'light|darkbrown',
+ 'Joško Gvardiol':'fair|darkbrown','Jérémy Doku':'deep|black','Savinho':'tan|black',
+ 'Ederson':'tan|black','Kyle Walker':'brown|black','John Stones':'fair|darkbrown',
+ 'Nathan Aké':'deep|black','Manuel Akanji':'deep|black','Mateo Kovačić':'fair|darkbrown',
+ 'İlkay Gündoğan':'olive|black','Matheus Nunes':'tan|black','Rico Lewis':'fair|darkbrown',
+ 'Mohamed Salah':'tan|black','Virgil van Dijk':'deep|black','Alisson':'light|darkbrown',
+ 'Trent Alexander-Arnold':'fair|midbrown','Andrew Robertson':'pale|ginger','Luis Díaz':'brown|black',
+ 'Darwin Núñez':'light|darkbrown','Cody Gakpo':'fair|midbrown','Dominik Szoboszlai':'fair|midbrown',
+ 'Alexis Mac Allister':'light|darkbrown','Ryan Gravenberch':'deep|black','Ibrahima Konaté':'deep|black',
+ 'Curtis Jones':'brown|black','Diogo Jota':'light|darkbrown','Wataru Endo':'light|black',
+ 'Cole Palmer':'pale|lightbrown','Enzo Fernández':'light|darkbrown','Moisés Caicedo':'deep|black',
+ 'Nicolas Jackson':'deep|black','Reece James':'brown|black','Levi Colwill':'brown|black',
+ 'Robert Sánchez':'light|darkbrown','Malo Gusto':'deep|black','Wesley Fofana':'deep|black',
+ 'Noni Madueke':'deep|black','Pedro Neto':'light|darkbrown','Marc Cucurella':'light|darkbrown',
+ 'Romeo Lavia':'deep|black','Christopher Nkunku':'deep|black','Axel Disasi':'deep|black',
+ 'Son Heung-min':'light|black','James Maddison':'fair|midbrown','Cristian Romero':'light|darkbrown',
+ 'Micky van de Ven':'fair|midbrown','Dejan Kulusevski':'light|darkbrown','Pedro Porro':'light|darkbrown',
+ 'Destiny Udogie':'deep|black','Yves Bissouma':'deep|black','Guglielmo Vicario':'light|darkbrown',
+ 'Brennan Johnson':'brown|black','Richarlison':'brown|black','Rodrigo Bentancur':'light|darkbrown',
+ 'Bruno Fernandes':'light|darkbrown','Marcus Rashford':'deep|black','Kobbie Mainoo':'deep|black',
+ 'Alejandro Garnacho':'light|darkbrown','Lisandro Martínez':'light|darkbrown','Matthijs de Ligt':'fair|blond',
+ 'Diogo Dalot':'light|darkbrown','Luke Shaw':'fair|darkbrown','Casemiro':'brown|black',
+ 'Mason Mount':'fair|midbrown','Amad Diallo':'deep|black','Rasmus Højlund':'pale|midbrown',
+ 'André Onana':'deep|black','Noussair Mazraoui':'tan|black','Manuel Ugarte':'light|darkbrown',
+ 'Leny Yoro':'deep|black','Joshua Zirkzee':'brown|black','Bryan Mbeumo':'deep|black',
+ 'Matheus Cunha':'tan|black','Harry Maguire':'fair|midbrown','Altay Bayındır':'olive|black',
+ 'Senne Lammens':'pale|midbrown','Patrick Dorgu':'brown|black',
+ 'Alexander Isak':'brown|black','Bruno Guimarães':'tan|black','Anthony Gordon':'fair|midbrown',
+ 'Sandro Tonali':'light|darkbrown','Nick Pope':'fair|midbrown','Kieran Trippier':'fair|midbrown',
+ 'Sven Botman':'fair|blond','Joelinton':'brown|black','Fabian Schär':'fair|darkbrown',
+ 'Tino Livramento':'brown|black','Dan Burn':'fair|darkbrown','Lewis Hall':'fair|midbrown',
+ 'Ollie Watkins':'deep|black','Morgan Rogers':'brown|black','Emiliano Martínez':'light|darkbrown',
+ 'John McGinn':'pale|ginger','Youri Tielemans':'fair|midbrown','Ezri Konsa':'deep|black',
+ 'Pau Torres':'light|darkbrown','Lucas Digne':'fair|darkbrown','Amadou Onana':'deep|black',
+ 'Leon Bailey':'deep|black','Jhon Durán':'brown|black','Boubacar Kamara':'deep|black',
+ 'Jarrod Bowen':'fair|midbrown','Lucas Paquetá':'tan|black','Mohammed Kudus':'deep|black',
+ 'Michail Antonio':'deep|black','Aaron Cresswell':'fair|midbrown','Alphonse Areola':'deep|black',
+ 'Edson Álvarez':'olive|black','Tomáš Souček':'fair|midbrown','Konstantinos Mavropanos':'olive|black',
+ 'Dominic Solanke':'deep|black','Antoine Semenyo':'deep|black','Justin Kluivert':'brown|black',
+ 'Milos Kerkez':'fair|midbrown','Illia Zabarnyi':'pale|lightbrown','Marcus Tavernier':'fair|midbrown',
+ 'Eberechi Eze':'deep|black','Michael Olise':'brown|black','Jean-Philippe Mateta':'deep|black',
+ 'Marc Guéhi':'deep|black','Adam Wharton':'fair|midbrown','Tyrick Mitchell':'deep|black',
+ 'Dean Henderson':'fair|midbrown','Daniel Muñoz':'tan|black','Ismaïla Sarr':'dark|black',
+ 'Jordan Pickford':'fair|midbrown','Jarrad Branthwaite':'pale|midbrown','Dominic Calvert-Lewin':'brown|black',
+ 'Iliman Ndiaye':'deep|black','Abdoulaye Doucouré':'deep|black','James Tarkowski':'fair|darkbrown',
+ 'Kaoru Mitoma':'light|black','João Pedro':'tan|darkbrown','Danny Welbeck':'deep|black',
+ 'Pervis Estupiñán':'deep|black','Lewis Dunk':'fair|darkbrown','Bart Verbruggen':'fair|midbrown',
+ 'Yankuba Minteh':'dark|black','Georginio Rutter':'deep|black',
+ 'Matz Sels':'fair|midbrown','Morgan Gibbs-White':'brown|black','Chris Wood':'fair|midbrown',
+ 'Callum Hudson-Odoi':'deep|black','Murillo':'brown|black','Ola Aina':'deep|black',
+ 'Nikola Milenković':'fair|darkbrown','Elliot Anderson':'fair|midbrown','Anthony Elanga':'deep|black',
+ 'Jørgen Strand Larsen':'pale|blond','Matheus Cunha ':'tan|black','Rayan Aït-Nouri':'tan|black',
+ 'Nélson Semedo':'deep|black','José Sá':'light|darkbrown','Jean-Ricner Bellegarde':'deep|black',
+ 'Alex Iwobi':'deep|black','Emile Smith Rowe':'brown|black','Bernd Leno':'fair|midbrown',
+ 'Antonee Robinson':'brown|black','Andreas Pereira':'light|darkbrown','Raúl Jiménez':'olive|black',
+ 'Joachim Andersen':'fair|blond','Rodrigo Muniz':'tan|black','Calvin Bassey':'deep|black',
+ 'Kyle Walker-Peters':'brown|black',
+ 'Yoane Wissa':'deep|black','Mikkel Damsgaard':'pale|blond','Nathan Collins':'fair|midbrown',
+ 'Mark Flekken':'fair|midbrown','Christian Nørgaard':'fair|midbrown','Kevin Schade':'deep|black',
+ 'Vitaly Janelt':'fair|midbrown','Keane Lewis-Potter':'fair|midbrown',
+
+ /* ---------------- La Liga ---------------- */
+ 'Jude Bellingham':'brown|black','Vinícius Júnior':'brown|black','Kylian Mbappé':'deep|black',
+ 'Rodrygo':'brown|black','Federico Valverde':'light|midbrown','Aurélien Tchouaméni':'deep|black',
+ 'Eduardo Camavinga':'deep|black','Antonio Rüdiger':'deep|black','Thibaut Courtois':'fair|midbrown',
+ 'Éder Militão':'deep|black','Ferland Mendy':'deep|black','Dani Carvajal':'light|darkbrown',
+ 'Luka Modrić':'fair|blond','Brahim Díaz':'olive|black','Endrick':'brown|black',
+ 'Lamine Yamal':'tan|black','Robert Lewandowski':'fair|midbrown','Pedri':'light|darkbrown',
+ 'Gavi':'light|darkbrown','Frenkie de Jong':'fair|midbrown','Raphinha':'tan|black',
+ 'Jules Koundé':'deep|black','Ronald Araújo':'light|darkbrown','Pau Cubarsí':'light|darkbrown',
+ 'Marc-André ter Stegen':'fair|darkbrown','Alejandro Balde':'deep|black','Ferran Torres':'light|darkbrown',
+ 'Dani Olmo':'light|midbrown','Iñigo Martínez':'light|darkbrown',
+ 'Antoine Griezmann':'fair|midbrown','Julián Álvarez':'light|darkbrown','Jan Oblak':'fair|darkbrown',
+ 'Koke':'light|darkbrown','Marcos Llorente':'light|midbrown','José María Giménez':'light|darkbrown',
+ 'Rodrigo De Paul':'light|darkbrown','Samuel Lino':'brown|black','Ángel Correa':'light|darkbrown',
+ 'Nico Williams':'deep|black','Iñaki Williams':'deep|black','Oihan Sancet':'light|darkbrown',
+ 'Unai Simón':'light|darkbrown','Mikel Oyarzabal':'light|darkbrown','Martín Zubimendi':'light|darkbrown',
+ 'Takefusa Kubo':'light|black','Isco':'light|darkbrown','Antony':'brown|black',
+
+ /* ---------------- Serie A ---------------- */
+ 'Lautaro Martínez':'light|darkbrown','Marcus Thuram':'deep|black','Nicolò Barella':'light|darkbrown',
+ 'Hakan Çalhanoğlu':'olive|black','Alessandro Bastoni':'light|darkbrown','Federico Dimarco':'light|darkbrown',
+ 'Denzel Dumfries':'deep|black','Yann Sommer':'fair|midbrown','Rafael Leão':'deep|black',
+ 'Christian Pulisic':'fair|midbrown','Theo Hernández':'light|darkbrown','Mike Maignan':'deep|black',
+ 'Fikayo Tomori':'deep|black','Tijjani Reijnders':'brown|black','Álvaro Morata':'light|darkbrown',
+ 'Dušan Vlahović':'fair|darkbrown','Kenan Yıldız':'olive|black','Federico Gatti':'light|darkbrown',
+ 'Manuel Locatelli':'light|darkbrown','Weston McKennie':'deep|black','Michele Di Gregorio':'light|darkbrown',
+ 'Victor Osimhen':'dark|black','Khvicha Kvaratskhelia':'fair|darkbrown','Romelu Lukaku':'deep|black',
+ 'Alex Meret':'light|darkbrown','Giovanni Di Lorenzo':'light|darkbrown','Scott McTominay':'pale|midbrown',
+ 'Paulo Dybala':'light|darkbrown','Artem Dovbyk':'pale|lightbrown','Lorenzo Pellegrini':'light|darkbrown',
+ 'Ademola Lookman':'deep|black','Charles De Ketelaere':'fair|midbrown','Gianluca Scamacca':'light|darkbrown',
+ 'Teun Koopmeiners':'fair|midbrown',
+
+ /* ---------------- Bundesliga ---------------- */
+ 'Harry Kane':'fair|midbrown','Jamal Musiala':'brown|black','Joshua Kimmich':'fair|blond',
+ 'Alphonso Davies':'deep|black','Manuel Neuer':'fair|blond','Leroy Sané':'deep|black',
+ 'Serge Gnabry':'deep|black','Dayot Upamecano':'deep|black','Kingsley Coman':'deep|black',
+ 'Michael Olise ':'brown|black','Konrad Laimer':'fair|midbrown','Thomas Müller':'fair|midbrown',
+ 'Florian Wirtz':'fair|midbrown','Granit Xhaka':'light|darkbrown','Jonathan Tah':'deep|black',
+ 'Jeremie Frimpong':'deep|black','Alejandro Grimaldo':'light|darkbrown','Patrik Schick':'fair|midbrown',
+ 'Victor Boniface':'dark|black','Serhou Guirassy':'deep|black','Karim Adeyemi':'deep|black',
+ 'Julian Brandt':'fair|midbrown','Nico Schlotterbeck':'fair|blond','Gregor Kobel':'fair|midbrown',
+ 'Marcel Sabitzer':'fair|midbrown','Xavi Simons':'fair|midbrown','Benjamin Šeško':'fair|darkbrown',
+ 'Loïs Openda':'deep|black','Willi Orbán':'fair|midbrown',
+
+ /* ---------------- Ligue 1 ---------------- */
+ 'Ousmane Dembélé':'deep|black','Bradley Barcola':'brown|black','Achraf Hakimi':'tan|black',
+ 'Marquinhos':'brown|black','Vitinha':'light|darkbrown','João Neves':'light|darkbrown',
+ 'Gianluigi Donnarumma':'light|darkbrown','Nuno Mendes':'deep|black','Warren Zaïre-Emery':'deep|black',
+ 'Désiré Doué':'deep|black','Willian Pacho':'deep|black','Fabián Ruiz':'light|darkbrown',
+ 'Mason Greenwood':'brown|black','Pierre-Emerick Aubameyang':'deep|black','Adrien Rabiot':'fair|darkbrown',
+ 'Alexandre Lacazette':'deep|black','Rayan Cherki':'olive|black','Georges Mikautadze':'light|darkbrown',
+ 'Jonathan David':'deep|black','Edon Zhegrova':'light|darkbrown','Lucas Chevalier':'fair|midbrown',
+ 'Arnaud Kalimuendo':'deep|black',
+
+ /* ---------------- Primeira Liga & elsewhere ---------------- */
+ 'Viktor Gyökeres':'fair|midbrown','Pedro Gonçalves':'light|darkbrown','Morten Hjulmand':'pale|blond',
+ 'Gonçalo Inácio':'light|darkbrown','Samu Aghehowa':'deep|black','Rodrigo Mora':'light|darkbrown',
+ 'Diogo Costa':'light|darkbrown','Pepê':'brown|black','Ángel Di María':'light|darkbrown',
+ 'Vangelis Pavlidis':'olive|black','Nicolás Otamendi':'light|darkbrown','Orkun Kökçü':'olive|black',
+ 'Kerem Aktürkoğlu':'olive|black','Mauro Icardi':'light|darkbrown','Victor Nelsson':'fair|blond',
+ 'Dries Mertens':'fair|midbrown','Edin Džeko':'fair|darkbrown',
+ 'Callum McGregor':'pale|midbrown','Kyogo Furuhashi':'light|black','Cameron Carter-Vickers':'deep|black',
+ 'James Tavernier':'fair|midbrown'};
+
+/* it sits above the national prior, and below a hand-drawn MUN face */
+const _specNamed=faceSpec;
+faceSpec=function(p){
+ const s=_specNamed.apply(this,arguments);
+ try{
+  if(!p||!p.name)return s;
+  const v=PLAYER_LOOK[p.name];
+  if(!v)return s;
+  const bits=String(v).split('|');
+  if(bits[0]&&SKIN2[bits[0]])s.sk=bits[0];
+  if(bits[1]&&HAIR2[bits[1]])s.hr=bits[1];
+  if(bits[2])s.cut=bits[2];
+ }catch(e){}
+ return s};
+
+/*#w88_faces.js#*/
+
+/*#w89_layout.js#*/
+
+/* =====================================================================
+   w89_layout — the space between things
+   ---------------------------------------------------------------------
+   With the colours and the faces fixed, what still reads as basic is not
+   the styling, it is the spacing. On the squad screen the five section
+   chips wrap onto two rows and take a hundred and thirty vertical pixels
+   before you see a single player; the six sort chips take another eighty.
+   A third of the first screenful is spent on navigation.
+
+   Chips are a horizontal rail now — one line, scrolled sideways, with the
+   edge of the next one visible so it is obvious it moves. They are the
+   size a thumb needs and no bigger. Everything else here is the same
+   argument applied to card padding, tile sizes and the gaps between
+   sections.
+   ===================================================================== */
+(function layoutCSS(){
+ const st=document.createElement('style');st.id='w89';
+ st.textContent=[
+
+ /* ---- chip rails: one line, scrollable, with a fade at the edge ----
+    Three different containers hold chips in this game — .chips, .subtabs
+    and .secnav — so all three become rails rather than only the one that
+    happens to be called chips. */
+ '.chips,.subtabs{display:flex;align-items:center;gap:7px}',
+ '.chips,.subtabs{flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;'+
+  'scrollbar-width:none;-ms-overflow-style:none;'+
+  'padding:2px 14px 4px;margin:0 -14px;'+
+  'scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch}',
+ '.chips::-webkit-scrollbar,.subtabs::-webkit-scrollbar{display:none}',
+ '.chips>*,.subtabs>*{flex:0 0 auto;scroll-snap-align:start}',
+ '.chip{min-height:32px;padding:0 12px;font-size:12px;border-radius:10px}',
+ /* the secondary nav rows the club and squad screens build by hand */
+ '.secnav{overflow-x:auto;scrollbar-width:none;padding-bottom:2px}',
+ '.secnav::-webkit-scrollbar{display:none}',
+
+ /* ---- cards and sections: tighter, so more football fits ---- */
+ '.card{padding:12px;margin-bottom:10px}',
+ '.card.tight{padding:9px 11px}',
+ '.sec{margin:16px 2px 8px}',
+ '.chip-lbl{margin:12px 0 5px}',
+ '.view{padding:10px 14px calc(var(--nav-h) + 96px)}',
+
+ /* ---- the stat tiles every screen uses ---- */
+ '.grid2{gap:8px}.grid3{gap:7px}',
+
+ /* ---- your face belongs in the top row of the header ---- */
+ '.mgr-hdr{order:-1;padding:0 2px 0 0}',
+ '.mgr-hdr svg{width:30px;height:30px;border-radius:9px}',
+
+ /* ---- lists breathe a little less ---- */
+ '.mail{padding-top:8px;padding-bottom:8px}',
+
+ /* ---- and a scroll fade so a rail reads as a rail ---- */
+ '.chips,.subtabs{-webkit-mask-image:linear-gradient(90deg,#000 0,#000 calc(100% - 26px),transparent);'+
+  'mask-image:linear-gradient(90deg,#000 0,#000 calc(100% - 26px),transparent)}',
+ '.subtabs{margin-bottom:8px}'
+
+ ].join('\n');
+ document.head.appendChild(st)})();
+
+/* the header face is appended after the pills; it belongs beside the
+   crest, so it is moved to the front of the bar rather than the end */
+const _hdrPlace=renderHdr;
+renderHdr=function(){
+ const r=_hdrPlace.apply(this,arguments);
+ try{
+  const bar=document.querySelector('.hdr');
+  const slot=bar&&bar.querySelector('.mgr-hdr');
+  const crest=bar&&bar.querySelector('.crest');
+  if(bar&&slot&&crest&&slot.previousElementSibling!==crest)
+   crest.parentNode.insertBefore(slot,crest.nextSibling);
+ }catch(e){}
+ return r};
+
+/*#w89_layout.js#*/
 showStart();
 </script>
 </body>
