@@ -42729,6 +42729,242 @@ pAvatar=function(p,sz){
  document.head.appendChild(st)})();
 
 /*#w95_identity.js#*/
+
+
+/*#w96_badges.js#*/
+
+/* =====================================================================
+   w96_badges — four hundred and eighty-four clubs stop sharing a badge
+   ---------------------------------------------------------------------
+   Every crest in the game was the same object: one pointed shield, a
+   vertical gradient running from the club's first colour to its second,
+   a wash of black over the right half, and two or three letters. Change
+   the club and the only thing that changes is the two colours. Man Utd
+   came out red fading into yellow, which is not a Manchester United
+   badge, it is a sunset.
+
+   The gradient is the root of it. A real badge does not fade between its
+   two colours — it has a FIELD in the primary and TRIM in the secondary,
+   and the second colour appears as a ring, a stripe or a device rather
+   than as the bottom half. Fixing only that would have been most of the
+   improvement.
+
+   On top of it, three things.
+
+   SHAPE. Six silhouettes — shield, roundel, crest, spade, oval, hex —
+   because the outline is what you recognise at sixteen pixels in a
+   league table, long before you can read the letters. The clubs whose
+   badge shape people actually know are named; the rest are assigned
+   from a hash of the key, so they are varied, stable across saves, and
+   never claim to be something they are not.
+
+   THE KIT, AGAIN. The field carries the same pattern the shirt does,
+   through the same kitPattern() the portraits use. Newcastle's badge is
+   striped because Newcastle's shirt is striped, and both come from one
+   table. That is also how real clubs do it.
+
+   METAL AND ENAMEL. A raised trim ring, a bevel inside it, a gloss
+   sweep across the top and a shadow underneath. A badge is an object
+   pinned to a shirt, not a coloured shape, and the four of those are
+   what say so.
+   ===================================================================== */
+
+/* ---- 1. THE SILHOUETTES --------------------------------------------
+   All drawn in the same 40x40 box with a 2.5 unit margin, so any of
+   them can be swapped for any other without moving the lettering. */
+const BADGE_SHAPE={
+ shield:'M20 2.4 35.2 6.9v12.3c0 8.6-6.2 15-15.2 18.5C11 34.2 4.8 27.8 4.8 19.2V6.9z',
+ round :'M2.6 20a17.4 17.4 0 1 0 34.8 0a17.4 17.4 0 1 0 -34.8 0z',
+ oval  :'M20 2.2c-7.7 0-13.6 7.7-13.6 17.9S12.3 37.9 20 37.9s13.6-7.8 13.6-17.8S27.7 2.2 20 2.2z',
+ crest :'M6.1 4.4h27.8v13.5c0 9.3-6.7 15.8-13.9 19.9C12.8 33.7 6.1 27.2 6.1 17.9z',
+ spade :'M20 2.3c-4.7 2.7-9.6 3.9-14.7 3.9v11.6c0 9.8 5.9 17.1 14.7 20.4 8.8-3.3 14.7-10.6 14.7-20.4V6.2c-5.1 0-10-1.2-14.7-3.9z',
+ hex   :'M20 2.5 34.4 10.9v18.2L20 37.5 5.6 29.1V10.9z'};
+
+/* The clubs whose badge shape is part of how you know them. Everything
+   not on this list is assigned by hash — varied, stable, and honest
+   about not knowing. */
+const BADGE_NAMED=[
+ [/arsenal|milan|inter\b|internazionale|roma\b|napoli|ajax|bayern|dortmund|leipzig|benfica|celtic|marseille|feyenoord|besiktas|galatasaray/i,'round'],
+ [/liverpool|nottingham|forest\b|st\.? mirren/i,'spade'],
+ [/barcelona|real madrid|valencia|sevilla|villarreal|betis|espanyol|porto|sporting/i,'crest'],
+ [/juventus|lazio|fiorentina|atalanta|torino|monaco|lille|nice\b/i,'oval'],
+ [/manchester|man utd|man city|chelsea|tottenham|everton|newcastle|aston villa|west ham|wolverhampton|leeds|leicester|southampton|brighton|crystal palace|fulham|brentford|bournemouth|burnley|sunderland/i,'shield'],
+ [/atl[eé]tico|athletic|sociedad|psv|az\b|twente|utrecht/i,'shield'],
+ [/leverkusen|hoffenheim|augsburg|union berlin|freiburg|mainz/i,'hex']
+];
+const BADGE_POOL=['shield','round','crest','shield','oval','round','spade','shield'];
+function badgeShape(c){
+ const n=String((c&&c.name)||'')+' '+String((c&&c.short)||'');
+ for(let i=0;i<BADGE_NAMED.length;i++)
+  if(BADGE_NAMED[i][0].test(n))return BADGE_NAMED[i][1];
+ const h=Math.abs(hashStr('badge|'+((c&&c.key)||n)));
+ return BADGE_POOL[h%BADGE_POOL.length]}
+
+/* ---- 2. THE DEVICE ON THE FIELD ------------------------------------
+   The same pattern the shirt wears, from the same table, plus the two
+   heraldic ordinaries that cover most of what is left: a chevron and a
+   bend. Drawn across the whole box and clipped to the badge. */
+function badgeDevice(kind,trim,variant){
+ const o=[];
+ if(kind==='stripe'){
+  for(let x=-2;x<40;x+=6.2)
+   o.push('<rect x="'+x.toFixed(1)+'" y="0" width="3.1" height="40" fill="'+trim+'"/>');
+ }else if(kind==='hoop'){
+  for(let y=1;y<40;y+=7)
+   o.push('<rect x="0" y="'+y+'" width="40" height="3.2" fill="'+trim+'"/>');
+ }else if(kind==='half'){
+  o.push('<rect x="20" y="0" width="20" height="40" fill="'+trim+'"/>');
+ }else if(kind==='band'){
+  o.push('<rect x="16.2" y="0" width="7.6" height="40" fill="'+trim+'"/>');
+ }else if(kind==='sash'){
+  o.push('<path d="M-8 40 22 0h9.5L1.5 40z" fill="'+trim+'"/>');
+ }else if(kind==='sleeve'){
+  /* a chevron reads better than two side panels inside a shield */
+  o.push('<path d="M20 11 36 24v6L20 17 4 30v-6z" fill="'+trim+'"/>');
+ }else{
+  /* Most clubs wear a plain shirt, so most badges land here — and one
+     device for all of them put the same bar across three hundred
+     badges. Four ordinaries instead, picked from the club's key, so a
+     plain club still has something of its own and still has somewhere
+     legible to put its letters. */
+  const v=variant|0;
+  if(v===0){
+   o.push('<rect x="0" y="16.6" width="40" height="9.4" fill="'+trim+'" opacity=".92"/>');
+  }else if(v===1){
+   /* a fess between two cotises */
+   o.push('<rect x="0" y="17.4" width="40" height="8" fill="'+trim+'" opacity=".92"/>');
+   o.push('<rect x="0" y="14.6" width="40" height="1.5" fill="'+trim+'" opacity=".7"/>');
+   o.push('<rect x="0" y="26.7" width="40" height="1.5" fill="'+trim+'" opacity=".7"/>');
+  }else if(v===2){
+   /* A pale: an upright behind the lettering. At 21 units wide and 88%
+      it swallowed half the badge, and on a club whose second colour is
+      a bright yellow — United, say — the badge came out gold instead of
+      red. Narrower, and it frames the letters instead of replacing the
+      field. */
+   o.push('<rect x="12.4" y="0" width="15.2" height="40" fill="'+trim+'" opacity=".8"/>');
+  }else{
+   /* a bordure, with the letters left on the field */
+   o.push('<rect x="0" y="17.2" width="40" height="8.4" fill="'+trim+'" opacity=".16"/>');
+  }
+ }
+ return o.join('')}
+
+/* ---- 3. COLOUR ------------------------------------------------------ */
+function bLum(c){
+ let s=String(c||'#888').replace('#','');
+ if(s.length===3)s=s[0]+s[0]+s[1]+s[1]+s[2]+s[2];
+ const v=parseInt(s,16)||0;
+ return (((v>>16)&255)*.299+((v>>8)&255)*.587+(v&255)*.114)/255}
+function bMix(a,b,t){
+ const A=String(a||'#888').replace('#',''),B=String(b||'#888').replace('#','');
+ const pa=parseInt(A.length===3?A[0]+A[0]+A[1]+A[1]+A[2]+A[2]:A,16)||0;
+ const pb=parseInt(B.length===3?B[0]+B[0]+B[1]+B[1]+B[2]+B[2]:B,16)||0;
+ const out=[16,8,0].map(sh=>{
+  const x=(pa>>sh)&255,y=(pb>>sh)&255;
+  return Math.round(x+(y-x)*t)});
+ return '#'+out.map(x=>x.toString(16).padStart(2,'0')).join('')}
+/* the trim has to be visible on the field. A lot of clubs store two
+   colours a few per cent apart, and a badge whose ring you cannot see
+   is the flat shield all over again. */
+function badgeTrim(c1,c2){
+ if(c2&&c2!==c1&&Math.abs(bLum(c1)-bLum(c2))>=.18)return c2;
+ return bLum(c1)>.55?'#1b1f26':'#e8dfb4'}
+
+/* ---- 4. THE BADGE --------------------------------------------------- */
+const BADGE_CACHE={};
+function badgeSVG(c,size){
+ const c1=(c&&c.c1)||'#33404a';
+ const c2=(c&&c.c2)||'';
+ const key=[(c&&c.key)||(c&&c.name)||'?',size,c1,c2,(c&&c.abbr)||''].join('|');
+ if(BADGE_CACHE[key])return BADGE_CACHE[key];
+
+ const shape=BADGE_SHAPE[badgeShape(c)]||BADGE_SHAPE.shield;
+ const trim=badgeTrim(c1,c2);
+ const kind=(typeof kitPattern==='function')?kitPattern(c):'plain';
+ const mark=(typeof crestMark==='function')?crestMark(c):'?';
+ const seed=Math.abs(hashStr('dev|'+((c&&c.key)||(c&&c.name)||'?')));
+ /* weighted so the quiet ordinaries are the common ones: a badge full
+    of the secondary colour is the exception on a real shirt too */
+ const variant=[0,0,1,2,3,3][seed%6];
+ const uid='b'+Math.abs(hashStr('crest|'+key))%1000000;
+ const dark=bMix(c1,'#000000',.42);
+ const lite=bMix(c1,'#ffffff',.20);
+ /* the trim ring is metal, so it is a gradient rather than a flat fill */
+ const tHi=bMix(trim,'#ffffff',.55), tLo=bMix(trim,'#000000',.42);
+ const inner='translate(20,20) scale(.885) translate(-20,-20)';
+ const fs=mark.length<=2?15.5:mark.length===3?12.6:10.4;
+ /* letters go on whichever of field or trim they are actually sitting on */
+ /* the letters sit on whatever is actually behind them: the trim when
+    an ordinary runs under the waist, the field when it does not */
+ const onBar=(kind==='plain'&&variant<3)||kind==='sleeve';
+ const inkBase=onBar?trim:c1;
+ const ink=bLum(inkBase)>.58?'#14181e':'#ffffff';
+ const inkEdge=bLum(inkBase)>.58?'rgba(255,255,255,.55)':'rgba(0,0,0,.55)';
+
+ const svg='<svg class="crest" width="'+size+'" height="'+size+'" viewBox="0 0 40 40" '+
+  'style="display:block;overflow:visible">'+
+ '<defs>'+
+  '<linearGradient id="f'+uid+'" x1="0" y1="0" x2="0.25" y2="1">'+
+   '<stop offset="0" stop-color="'+lite+'"/><stop offset="0.55" stop-color="'+c1+'"/>'+
+   '<stop offset="1" stop-color="'+dark+'"/></linearGradient>'+
+  '<linearGradient id="m'+uid+'" x1="0.1" y1="0" x2="0.9" y2="1">'+
+   '<stop offset="0" stop-color="'+tHi+'"/><stop offset="0.45" stop-color="'+trim+'"/>'+
+   '<stop offset="1" stop-color="'+tLo+'"/></linearGradient>'+
+  '<clipPath id="c'+uid+'"><path d="'+shape+'" transform="'+inner+'"/></clipPath>'+
+ '</defs>'+
+ /* it sits on something */
+ '<path d="'+shape+'" fill="rgba(0,0,0,.55)" transform="translate(0,1.4)"/>'+
+ /* the trim ring */
+ '<path d="'+shape+'" fill="url(#m'+uid+')"/>'+
+ /* the enamel field, inset inside the ring */
+ '<path d="'+shape+'" transform="'+inner+'" fill="url(#f'+uid+')"/>'+
+ /* the device, clipped to the field */
+ '<g clip-path="url(#c'+uid+')">'+badgeDevice(kind,trim,variant)+
+  /* a bevel: light along the top inside edge, shade along the bottom */
+  '<path d="'+shape+'" transform="'+inner+'" fill="none" '+
+   'stroke="rgba(255,255,255,.35)" stroke-width="1.6"/>'+
+  '<ellipse cx="17" cy="4" rx="19" ry="12" fill="#ffffff" opacity=".17"/>'+
+  '<ellipse cx="22" cy="41" rx="20" ry="12" fill="#000000" opacity=".22"/>'+
+ '</g>'+
+ /* the keyline, which is what stops a badge dissolving into a dark page */
+ '<path d="'+shape+'" fill="none" stroke="rgba(0,0,0,.55)" stroke-width="1"/>'+
+ '<path d="'+shape+'" transform="'+inner+'" fill="none" '+
+  'stroke="rgba(0,0,0,.28)" stroke-width=".8"/>'+
+ /* the mark */
+ '<text x="20" y="24.6" text-anchor="middle" textLength="'+(mark.length<=2?19:23)+'" '+
+  'lengthAdjust="spacingAndGlyphs" font-family="Archivo Black,Impact,sans-serif" '+
+  'font-size="'+fs+'" font-weight="900" fill="'+ink+'" style="paint-order:stroke" '+
+  'stroke="'+inkEdge+'" stroke-width="2.4">'+esc(mark)+'</text>'+
+ '</svg>';
+
+ /* 484 clubs and a league table redraws all twenty of them on every
+    tick, so the string is built once per club per size. */
+ if(Object.keys(BADGE_CACHE).length>3000)for(const k in BADGE_CACHE)delete BADGE_CACHE[k];
+ BADGE_CACHE[key]=svg;
+ return svg}
+
+/* the game calls crest() from about forty places; none of them change */
+crest=function(c,size){
+ try{
+  if(!c)return '';
+  return badgeSVG(c,size||28)}
+ catch(e){return ''}};
+
+/* the crest is an object now, so it gets lit like one wherever it is
+   drawn large enough for the shadow to matter */
+(function badgeCSS(){
+ const old=document.getElementById('w96');if(old)old.remove();
+ const st=document.createElement('style');st.id='w96';
+ st.textContent=[
+  '.crest{filter:drop-shadow(0 2px 4px rgba(0,0,0,.55))}',
+  '.hdr .crest{filter:drop-shadow(0 3px 7px rgba(0,0,0,.7))}',
+  /* inside a player portrait socket it is 15px and a drop shadow at
+     that size is mud */
+  '.pavc .crest{filter:none}'
+ ].join('\n');
+ document.head.appendChild(st)})();
+
+/*#w96_badges.js#*/
 showStart();
 </script>
 </body>
