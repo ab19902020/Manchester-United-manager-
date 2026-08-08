@@ -47328,6 +47328,943 @@ dailyTickCore=function(){
  return r};
 
 /*#wB0_deadline.js#*/
+
+
+/*#wB2_climb.js#*/
+
+/* =====================================================================
+   wB2_climb — building the squad, and the story of the climb
+   ---------------------------------------------------------------------
+   A club that starts with nobody in it needs three things the rest of
+   the game does not.
+
+   SOMEWHERE TO SIGN PLAYERS FROM. Twenty transfer negotiations in five
+   weeks is not a challenge, it is data entry — and it is not how a
+   non-league club is built either. Real ones are built out of free
+   agents: players released in May who need a club by August. So there
+   is a trials list. Forty of them, refreshed every Monday, free, and
+   you agree wages rather than a fee. Some of them are better than this
+   division deserves and they know it, which is what the wage ceiling is
+   for.
+
+   A REASON TO DO IT. The board will not let the season start with an
+   unregisterable squad, and the game already has a guard that quietly
+   signs somebody whenever you drop below eighteen. That guard is
+   correct everywhere except here, where it would do the entire job for
+   you in a fortnight. It is switched off until the last two days before
+   the opening fixture, and then it comes back — because a save that
+   cannot fulfil its fixtures is broken, and being broken is not a
+   difficulty setting.
+
+   AND A STORY. Not a deep one. A chairman who talks to you at the
+   moments that matter — the first signing, the twentieth, the first
+   competitive match, the first win, the first time you top the table,
+   and the day you go up — and who remembers what he said when you took
+   the job.
+   ===================================================================== */
+
+/* ---------------------------------------------------------------------
+   1. THE BADGE SAYS WHAT YOU CALLED IT
+   ---------------------------------------------------------------------
+   crestMark strips the club key down to letters, and the built club's
+   key is a marker rather than a name, so a club called Ashfield Rovers
+   wore a badge that said CC.
+   --------------------------------------------------------------------- */
+const _crestMarkCC=crestMark;
+crestMark=function(c){
+ if(c&&c.mark)return String(c.mark).toUpperCase().slice(0,3);
+ return _crestMarkCC.apply(this,arguments)};
+
+function ccOn(){return !!(G&&G.cc&&G.cc.on)}
+function ccSquad(){
+ try{return (G.clubs[G.my].players||[]).filter(p=>!p.loan).length}
+ catch(e){return 0}}
+function ccOpenerDay(){
+ try{
+  const f=(G.fixtures||[]).filter(x=>(x.h===G.my||x.a===G.my))
+   .sort((a,b)=>a.day-b.day)[0];
+  return f?f.day:(G.seasonStart||0)+14}
+ catch(e){return (G.seasonStart||0)+14}}
+const CC_TARGET=20;
+
+/* ---------------------------------------------------------------------
+   2. THE DEPTH GUARD STANDS DOWN UNTIL IT IS ACTUALLY NEEDED
+   --------------------------------------------------------------------- */
+const _dtcDepthCC=dailyTickCore;
+dailyTickCore=function(){
+ if(!ccOn())return _dtcDepthCC.apply(this,arguments);
+ /* it may act from two days before the first game and not before */
+ if(G.day>=ccOpenerDay()-2)return _dtcDepthCC.apply(this,arguments);
+ /* run everything else, with the guard's own hook neutralised by
+    telling it the squad is fine — the flag it checks is the day stamp */
+ const stamp=G._depthWarn;
+ G._depthWarn=G.day;
+ try{return _dtcDepthCC.apply(this,arguments)}
+ finally{if(stamp!==G.day)G._depthWarn=stamp}};
+
+/* ---------------------------------------------------------------------
+   3. THE TRIALS LIST
+   ---------------------------------------------------------------------
+   Free agents, generated to the level of the division you are in rather
+   than the level of the club, so the list is worth reading in the
+   National League and still worth reading three promotions later. The
+   spread is deliberately wide: most of them are what you would expect,
+   a few are players who have fallen a long way and will cost you in
+   wages.
+   --------------------------------------------------------------------- */
+function ccDivStandard(){
+ try{
+  const div=G.clubs[G.my].league;
+  const mem=divMembers(div);
+  let n=0,s=0;
+  mem.forEach(i=>{(G.clubs[i].players||[]).forEach(p=>{if(!p.loan){s+=p.ovr;n++}})});
+  return n?s/n:44}
+ catch(e){return 44}}
+
+function ccMakeAgents(){
+ const std=ccDivStandard();
+ const rng=mulberry(hashStr('agents|'+G.season+'|'+Math.floor(G.day/7)+'|'+(G.cc.founded||0)));
+ const out=[];
+ const shape=['GK','GK','DC','DC','DC','DL','DR','DM','MC','MC','MC','AMC','AML','AMR','ST','ST','ST'];
+ const used=new Set();
+ for(let k=0;k<40;k++){
+  const pos=shape[Math.floor(rng()*shape.length)];
+  /* the tail is long in both directions and thickest just below the
+     division's own standard, which is what a free agent is */
+  const roll=rng();
+  const off=roll<.62?(-9+rng()*9):roll<.92?(rng()*5):(4+rng()*7);
+  const ovr=clamp(Math.round(std+off),28,Math.round(std+12));
+  /* somebody good and free is good and free for a reason */
+  const age=off>3?(rng()<.6?Math.round(31+rng()*5):Math.round(20+rng()*3))
+                 :Math.round(22+rng()*12);
+  const pot=clamp(Math.round(ovr+(age<=21?8+rng()*14:age<=25?2+rng()*6:0)),ovr,88);
+  let nm=FN[Math.floor(rng()*FN.length)]+' '+LN[Math.floor(rng()*LN.length)];
+  let g=0;while(used.has(nm)&&g++<20)nm=FN[Math.floor(rng()*FN.length)]+' '+LN[Math.floor(rng()*LN.length)];
+  used.add(nm);
+  const p=genPlayer([nm,pos,age,ovr,pot],G.my);
+  /* he is nobody's player until you sign him */
+  p.club=-1;p.scouted=true;p.contract=0;
+  const my=G.clubs[G.my];
+  p.askWage=Math.max(500,Math.round(wageFor(ovr,my.rep)*(1+(off>3?.55:.15))/500)*500);
+  out.push({p,ask:p.askWage})}
+ out.sort((a,b)=>b.p.ovr-a.p.ovr);
+ return out}
+
+/* The list lives outside the save. Forty unsigned player objects a week
+   would be forty players of dead weight in localStorage, and the list is
+   generated from a seed anyway — season, week and the club's founding
+   year — so a reload rebuilds the same names rather than losing them. */
+let CC_AG=null;
+function ccAgents(){
+ const wk=G.season+':'+Math.floor(G.day/7);
+ if(!CC_AG||CC_AG.wk!==wk)CC_AG={wk,list:ccMakeAgents()};
+ /* anyone signed since is off the list */
+ CC_AG.list=CC_AG.list.filter(a=>a.p.club===-1);
+ return CC_AG.list}
+
+ACTIONS.ccTrials=()=>{
+ const my=G.clubs[G.my];
+ const list=ccAgents();
+ const room=Math.max(0,(my.wageCap||0)-squadWage(my));
+ let h='<h3>🧾 Trials</h3>'+
+  '<div class="small muted" style="margin:6px 0 10px;line-height:1.5">'+
+  'Players without a club. No fee — you agree wages and that is the deal. '+
+  'A new list comes in every Monday.</div>'+
+  '<div class="grid2" style="margin-bottom:10px">'+
+  '<div class="kpi"><div class="v num">'+ccSquad()+'</div><div class="l">Senior squad</div></div>'+
+  '<div class="kpi"><div class="v num" style="color:'+(room>0?'var(--green)':'var(--danger)')+'">'+
+   fmtW(room)+'</div><div class="l">Wage room</div></div></div>';
+ h+='<div class="card tight" style="max-height:56vh;overflow:auto">'+
+  (list.length?list.map(a=>{
+   const p=a.p;
+   const afford=a.ask<=room;
+   return '<div class="prow">'+
+    '<div class="row" style="gap:9px;min-width:0">'+
+     '<span class="xs faint" style="min-width:32px">'+esc(p.pos)+'</span>'+
+     '<div style="min-width:0"><div class="small" style="font-weight:700">'+esc(p.name)+'</div>'+
+     '<div class="xs faint">'+p.age+' · asking '+fmtW(a.ask)+
+     (p.pot>p.ovr+4?' · <span style="color:#7fb3ff">room to grow</span>':'')+'</div></div></div>'+
+    '<div class="row" style="gap:8px"><b class="num ovr">'+p.ovr+'</b>'+
+    '<button class="btn '+(afford?'btn-gold':'btn-ghost')+' btn-xs" data-action="ccSign" data-v="'+
+     p.id+'">'+(afford?'Sign':'Too rich')+'</button></div></div>'}).join('')
+   :'<div class="small muted" style="padding:8px">Nobody left on this week’s list.</div>')+
+  '</div>'+
+  '<button class="btn btn-ghost btn-block" style="margin-top:10px" data-action="closeModal">Close</button>';
+ openModal(h)};
+
+ACTIONS.ccSign=el=>{
+ const id=+el.dataset.v;
+ const a=ccAgents().filter(x=>x.p.id===id)[0];
+ if(!a){toast('He has signed elsewhere.');return}
+ const my=G.clubs[G.my];
+ if(squadWage(my)+a.ask>(my.wageCap||0)){
+  toast('The wage bill will not take it.');return}
+ if((my.players||[]).filter(p=>!p.loan).length>=32){toast('The squad is full.');return}
+ const p=a.p;
+ p.club=G.my;p.wage=a.ask;p.contract=irnd(1,3);p.listed=false;
+ p.morale=clamp(p.morale+8,1,100);p.sharp=Math.max(p.sharp||55,52);
+ delete p.askWage;
+ my.players.push(p);
+ if(typeof windowId==='function')p.movedWindow=windowId();
+ try{sfx('tap')}catch(e){}
+ toast('✍️ '+p.name+' signs');
+ ccStory('firstSign',p);
+ if(ccSquad()>=CC_TARGET)ccStory('twenty');
+ try{if(!G.tacs.xi||G.tacs.xi.length<11)G.tacs.xi=autoPick(G.my,G.tacs.formation)}catch(e){}
+ ACTIONS.ccTrials();
+ render()};
+
+/* ---------------------------------------------------------------------
+   4. THE JOB IN FRONT OF YOU
+   --------------------------------------------------------------------- */
+(function ccbCSS(){
+ const old=document.getElementById('wB2');if(old)old.remove();
+ const st=document.createElement('style');st.id='wB2';
+ st.textContent=[
+  '.cb-wrap{border:1px solid rgba(251,225,34,.35);border-radius:14px;padding:12px;margin-bottom:12px;'+
+   'background:linear-gradient(150deg,rgba(251,225,34,.11),rgba(9,11,15,.86) 62%)}',
+  '.cb-top{display:flex;justify-content:space-between;align-items:flex-end;gap:10px;margin-bottom:8px}',
+  '.cb-ttl{font-family:"Archivo Black",Impact,sans-serif;font-size:14px;letter-spacing:.03em;color:var(--gold,#fbe122)}',
+  '.cb-n{font-variant-numeric:tabular-nums;font-weight:800;font-size:24px;line-height:1}',
+  '.cb-bar{height:6px;border-radius:99px;background:rgba(255,255,255,.10);overflow:hidden;margin-bottom:9px}',
+  '.cb-bar i{display:block;height:100%;background:linear-gradient(90deg,#57d38c,#fbe122);transition:width .5s ease}',
+  '.cb-btns{display:flex;gap:7px}',
+  '.cb-btns .btn{flex:1}'
+ ].join('\n');
+ document.head.appendChild(st)})();
+
+function ccBuildPanel(){
+ if(!ccOn())return '';
+ const n=ccSquad();
+ const opener=ccOpenerDay();
+ const days=opener-G.day;
+ if(n>=CC_TARGET&&days<0)return '';
+ const my=G.clubs[G.my];
+ const pct=Math.min(100,Math.round(n/CC_TARGET*100));
+ const done=n>=CC_TARGET;
+ let h='<div class="cb-wrap"><div class="cb-top"><div>'+
+  '<div class="cb-ttl">'+(done?'SQUAD REGISTERED':'BUILD THE SQUAD')+'</div>'+
+  '<div class="xs faint" style="margin-top:3px">'+
+  (done?'Twenty senior players. You can field a team.'
+       :(days>0?'First game in '+days+' day'+(days===1?'':'s')+' · '+
+         fmtM(my.budget)+' left · '+fmtW(Math.max(0,(my.wageCap||0)-squadWage(my)))+' wage room'
+        :'The season has started and you are short.'))+
+  '</div></div>'+
+  '<div style="text-align:right"><div class="cb-n">'+n+'<span class="xs faint">/'+CC_TARGET+'</span></div>'+
+  '<div class="xs faint">senior</div></div></div>'+
+  '<div class="cb-bar"><i style="width:'+pct+'%"></i></div>';
+ if(!done||days>0){
+  h+='<div class="cb-btns">'+
+   '<button class="btn btn-gold btn-xs" data-action="ccTrials">🧾 Trials</button>'+
+   '<button class="btn btn-ghost btn-xs" data-action="jump" data-v="transfer">💷 Transfer market</button>'+
+   '</div>'}
+ return h+'</div>'}
+
+const _vHomeCC=vHome;
+vHome=function(){
+ const h=_vHomeCC.apply(this,arguments);
+ try{
+  if(G.sacked||!ccOn())return h;
+  const panel=ccBuildPanel();
+  return panel?panel+h:h}
+ catch(e){}
+ return h};
+
+/* ---------------------------------------------------------------------
+   5. THE STORY
+   ---------------------------------------------------------------------
+   Six beats and then a milestone per promotion. Each fires once, from a
+   flag on the save, so reloading does not replay them.
+   --------------------------------------------------------------------- */
+function ccChair(){
+ try{return (typeof CC_CHAIRS!=='undefined'&&CC_CHAIRS.filter(c=>c.id===G.cc.chair)[0])||null}
+ catch(e){return null}}
+
+function ccStory(beat,arg){
+ try{
+  if(!ccOn())return;
+  if(!G.cc.told)G.cc.told={};
+  if(G.cc.told[beat])return;
+  G.cc.told[beat]=G.day;
+  const c=G.clubs[G.my];
+  const ch=ccChair();
+  const tight=ch&&ch.id==='tig', rich=ch&&ch.id==='gen';
+
+  if(beat==='firstSign')
+   return mail('board','✍️ The first one',
+    '<b>'+esc(arg?arg.name:'Your first signing')+'</b> is the first professional footballer ever '+
+    'to sign for <b>'+esc(c.name)+'</b>.'+
+    '<br><br>“'+(tight
+     ?'Well. That is one. Nineteen to go and the same money to do it with.'
+     :rich?'Good. Get me nineteen more like him and we will have something.'
+     :'That is a start. Whatever happens now, somebody had to be first.')+'”'+
+    '<br><br><span class="xs faint">Somebody will put his name on a shirt one day.</span>');
+
+  if(beat==='twenty')
+   return mail('board','📋 Twenty. You have a football team.',
+    'The squad is registered. <b>'+esc(c.name)+'</b> can fulfil its fixtures.'+
+    '<br><br>“'+(tight
+     ?'You did it on nothing, which is what I asked. Now go and get us through the season.'
+     :rich?'Now we find out whether I bought a squad or twenty individuals.'
+     :'That is the hard part done. The rest is football.')+'”');
+
+  if(beat==='firstMatch')
+   return mail('news','⚽ The first competitive match in the club’s history',
+    'Whatever happens this afternoon has never happened to <b>'+esc(c.name)+'</b> before, '+
+    'because nothing has.'+
+    '<br><br><span class="xs faint">'+esc(c.stadium)+' · '+c.cap.toLocaleString()+
+    ' · National League</span>');
+
+  if(beat==='firstWin')
+   return mail('news','🎉 The first win',
+    'The first three points in the history of <b>'+esc(c.name)+'</b>.'+
+    '<br><br>Somebody in the crowd has kept the teamsheet. In thirty years it will be '+
+    'in a frame behind the bar.');
+
+  if(beat==='firstTop')
+   return mail('news','📈 Top of the league',
+    '<b>'+esc(c.name)+'</b> are top of the National League. The club is '+
+    ((G.season-(G.cc.founded||G.season))||0)+' season'+
+    (((G.season-(G.cc.founded||G.season))||0)===1?'':'s')+' old.'+
+    '<br><br>“'+(tight
+     ?'I will be honest, I did not budget for this.'
+     :'Do not let them tell you it is early. Being top is being top.')+'”');
+
+  if(beat==='promoted')
+   return mail('board','🏆 Up',
+    '<b>'+esc(c.name)+'</b> are promoted out of the National League.'+
+    '<br><br>“'+(tight
+     ?'On that budget. I owe you an apology and, I suppose, a raise.'
+     :rich?'That is what the money was for. Now do it again, one division up.'
+     :'Everyone who paid a subscription this year got their money’s worth.')+'”'+
+    '<br><br><span class="xs faint">Four divisions to go.</span>');
+ }catch(e){}}
+
+/* the beats that have to watch for themselves */
+const _apmCC=applyPostMatch;
+applyPostMatch=function(res,gf,ga){
+ const r=_apmCC.apply(this,arguments);
+ try{
+  if(!ccOn())return r;
+  const C=(typeof fixCtx==='function')?fixCtx(MU.fix):{friendly:false};
+  if(C.friendly)return r;
+  ccStory('firstMatch');
+  if(res==='W')ccStory('firstWin');
+  try{if(leaguePos(G.my)===1&&(G.clubs[G.my].recent||[]).length>=4)ccStory('firstTop')}catch(e){}
+ }catch(e){}
+ return r};
+
+/* promotion is announced by the pyramid, so it is read off the division */
+const _endSeasonCC=endSeason;
+endSeason=function(){
+ const before=(G.clubs&&G.clubs[G.my])?G.clubs[G.my].league:null;
+ const r=_endSeasonCC.apply(this,arguments);
+ try{
+  if(!ccOn())return r;
+  const after=G.clubs[G.my].league;
+  const order=(typeof DIV_ORDER!=='undefined')?DIV_ORDER:['PL','CH','L1','L2','NL'];
+  if(before&&after&&order.indexOf(after)<order.indexOf(before)){
+   /* getting out of the National League is the one that matters; every
+      promotion after it gets a line of its own rather than reusing it */
+   if(before==='NL')ccStory('promoted');
+   else ccStory('promoted:'+after)}
+ }catch(e){}
+ return r};
+
+/* the later promotions, written once each */
+const _ccStoryBase=ccStory;
+ccStory=function(beat,arg){
+ if(String(beat).indexOf('promoted:')===0){
+  try{
+   if(!ccOn())return;
+   if(!G.cc.told)G.cc.told={};
+   if(G.cc.told[beat])return;
+   G.cc.told[beat]=G.day;
+   const c=G.clubs[G.my];
+   const div=beat.split(':')[1];
+   const nm=(typeof DIV_NAMES!=='undefined'&&DIV_NAMES[div])||div;
+   const age=(G.season-(G.cc.founded||G.season))||0;
+   return mail('board','🏆 Promoted to the '+esc(nm),
+    '<b>'+esc(c.name)+'</b> go up again. '+age+' season'+(age===1?'':'s')+
+    ' since the club did not exist.'+
+    '<br><br>'+(div==='PL'
+     ?'“There is a fixture list coming with Anfield and Old Trafford on it. '+
+      'I want you to know that I have not slept.”'
+     :div==='CH'
+     ?'“The Championship. People have heard of the Championship.”'
+     :'“Every division from here is somebody else’s idea of a big club. Good.”'));
+  }catch(e){return}}
+ return _ccStoryBase.apply(this,arguments)};
+
+/* ---------------------------------------------------------------------
+   6. AND THE BOARD JUDGE YOU AGAINST THE CHAIRMAN YOU PICKED
+   --------------------------------------------------------------------- */
+const _expectPosCC=expectPos;
+expectPos=function(ci){
+ try{
+  if(ci===G.my&&ccOn()){
+   const ch=ccChair();
+   if(ch)return ch.target}}
+ catch(e){}
+ return _expectPosCC.apply(this,arguments)};
+
+/* ---------------------------------------------------------------------
+   7. NOBODY IS SACKED IN THE CLUB'S FIRST SEASON
+   ---------------------------------------------------------------------
+   The chairman appointed you to build a football club out of nothing and
+   then judges you against a target. Both of those are right, and put
+   together in year one they are not: a squad assembled from free agents
+   in five weeks can finish bottom, and being sacked for it ends a save
+   that has not started.
+
+   So the first season is protected, and only the first. The chairman
+   says so at the point it would have happened, which is more useful
+   than silently not happening — you find out you are in trouble without
+   losing the save to it.
+   --------------------------------------------------------------------- */
+const _sackCC=sackManager;
+sackManager=function(){
+ try{
+  if(ccOn()&&G.season===(G.cc.founded||G.season)){
+   const c=G.clubs[G.my];
+   c.patience=Math.max(c.patience||0,26);
+   if(!G.cc.told.spared){
+    G.cc.told.spared=G.day;
+    mail('board','😬 A conversation about your future',
+     'The results have been bad enough that at most clubs this would be the end of it.'+
+     '<br><br>“'+(ccChair()&&ccChair().id==='tig'
+      ?'Nobody else wants the job and we cannot afford a pay-off. You have got the season.'
+      :'I did not build this club to sack a manager in its first year. '+
+       'You have until May. After that we are a normal football club and normal rules apply.')+'”'+
+     '<br><br><span class="xs faint">You cannot be sacked before the end of this season. '+
+     'From next season you can.</span>')}
+   return}}
+ catch(e){}
+ return _sackCC.apply(this,arguments)};
+
+/*#wB2_climb.js#*/
+/*#wB1_createclub.js#*/
+
+/* =====================================================================
+   wB1_createclub — build your own club and start at the bottom
+   ---------------------------------------------------------------------
+   A second way into a career. Instead of taking a job that exists, you
+   make a club that does not: name it, colour it, draw its badge, name
+   its ground, and take it into the National League — where a real club
+   quietly makes way for it, because a league has the number of teams it
+   has.
+
+   WHO MAKES WAY. The smallest club in the division by reputation, chosen
+   at random from the bottom eight, so it is never a name anybody would
+   miss and it is never the same one twice. Its index in the world is
+   reused, which means every fixture, every cup entry and every league
+   place that already pointed at it now points at you — no rebuild, no
+   re-draw, nothing left dangling.
+
+   THE CHAIRMAN IS THE DIFFICULTY. Three of them, and the choice is the
+   whole shape of the save:
+
+     GENEROUS   money that has no business being in this division. You
+                will go up if you spend it properly. You will not if you
+                spend it on the wrong twenty players.
+     SENSIBLE   enough to compete, not enough to buy the league. The
+                title is winnable and it is not a formality.
+     TIGHT      a shoestring, a wage cap that bites, and a first season
+                you are probably not getting out of. This is the long
+                version.
+
+   YOU START ON THE FIRST OF JULY. Six weeks before anybody kicks a ball,
+   because you begin with no senior squad at all — just an academy of
+   fifteen to seventeen year olds, some of whom are better than they look
+   — and twenty players is a lot of phone calls.
+   ===================================================================== */
+
+/* ---------------------------------------------------------------------
+   1. THE SPEC
+   --------------------------------------------------------------------- */
+const CC_KEY='rdmCustomClub';
+const CC_PALETTE=[
+ '#d81e2c','#0b4ea2','#f6b60e','#0f8a4a','#111418','#f4f6f8',
+ '#7b2d8e','#e5601c','#00a3ad','#8c1d3c','#1b2f6b','#5a7a1e',
+ '#c9a227','#2f2f36','#e2447a','#3f7fd8'];
+const CC_BADGES=[['shield','Shield'],['round','Roundel'],['oval','Oval'],
+ ['crest','Crest'],['spade','Spade'],['hex','Hexagon']];
+const CC_PATTERNS=[['plain','Plain'],['stripes','Stripes'],['hoops','Hoops'],
+ ['halves','Halves'],['sash','Sash'],['sleeve','Contrast sleeves']];
+const CC_CAPS=[[1200,'1,200 — a proper non-league ground'],
+ [2400,'2,400 — terracing on three sides'],
+ [4000,'4,000 — the biggest ground in the division'],
+ [6500,'6,500 — a ground that has seen better days']];
+
+const CC_CHAIRS=[
+ {id:'gen',name:'Generous',icon:'💰',
+  who:'a local businessman who supported the club as a boy and has just sold his company',
+  budget:9e6,bank:4e6,wage:210000,patience:76,
+  blurb:'Money this division has never seen. Spend it well and you go up.',
+  warn:'He expects promotion. He is nice about it, and he expects it.',
+  target:1},
+ {id:'sen',name:'Sensible',icon:'⚖️',
+  who:'a supporters’ trust with a chair who used to do the accounts',
+  budget:3200000,bank:1600000,wage:120000,patience:66,
+  blurb:'Enough to compete. Not enough to buy the league.',
+  warn:'They want the play-offs and they want the books to balance.',
+  target:5},
+ {id:'tig','icon':'🪙',name:'Tight',
+  who:'a consortium that bought the ground and treats the football as a tenant',
+  budget:750000,bank:400000,wage:62000,patience:58,
+  blurb:'A shoestring. You are not getting out of here in one season.',
+  warn:'They want you to survive, stay solvent, and stop asking.',
+  target:12}];
+CC_CHAIRS[2].icon='🪙';
+
+function ccDefault(){
+ return {name:'',short:'',code:'',town:'',
+  c1:'#d81e2c',c2:'#f4f6f8',
+  badge:'shield',pattern:'stripes',
+  stadium:'',cap:2400,chair:'sen'}}
+
+let CC={on:false,pending:false,spec:ccDefault()};
+try{
+ const raw=localStorage.getItem(CC_KEY);
+ if(raw){const j=JSON.parse(raw);
+  if(j&&typeof j==='object'){const d=ccDefault();for(const k in d)if(j[k]!=null)d[k]=j[k];CC.spec=d}}}
+catch(e){}
+function ccSave(){try{localStorage.setItem(CC_KEY,JSON.stringify(CC.spec))}catch(e){}}
+
+/* what the club will actually be called, filling the gaps sensibly */
+function ccResolved(){
+ const s=CC.spec;
+ const name=(s.name||'').trim()||'Athletic FC';
+ const town=(s.town||'').trim()||name.replace(/\s*(FC|AFC|United|Town|City|Rovers|Athletic|Albion)\s*$/i,'').trim()||'Town';
+ const short=(s.short||'').trim()||name.split(/\s+/)[0].slice(0,12);
+ let code=(s.code||'').trim().toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,3);
+ if(code.length<2)code=short.toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,3)||'FCC';
+ const stadium=(s.stadium||'').trim()||(town+' Park');
+ return {name,short,code,town,stadium,
+  c1:s.c1,c2:s.c2,badge:s.badge,pattern:s.pattern,cap:s.cap,
+  chair:CC_CHAIRS.filter(c=>c.id===s.chair)[0]||CC_CHAIRS[1]}}
+
+function ccReady(){
+ const s=CC.spec;
+ return !!((s.name||'').trim().length>=3)}
+
+/* ---------------------------------------------------------------------
+   2. THE BADGE AND THE SHIRT OBEY THE BUILDER
+   ---------------------------------------------------------------------
+   Both are derived from the club's name and key, which is right for four
+   hundred and eighty-four clubs nobody chose and wrong for the one club
+   somebody did. A club that carries its own choice uses it.
+   --------------------------------------------------------------------- */
+const _badgeShapeCC=badgeShape;
+badgeShape=function(c){
+ if(c&&c.badgeShape)return c.badgeShape;
+ return _badgeShapeCC.apply(this,arguments)};
+
+const _kitPatternCC=kitPattern;
+kitPattern=function(c){
+ if(c&&c.kitPattern)return c.kitPattern;
+ return _kitPatternCC.apply(this,arguments)};
+
+/* ---------------------------------------------------------------------
+   3. THE BUILDER SCREEN
+   --------------------------------------------------------------------- */
+(function ccCSS(){
+ const old=document.getElementById('wB1');if(old)old.remove();
+ const st=document.createElement('style');st.id='wB1';
+ st.textContent=[
+  '.cc-hero{display:flex;gap:13px;align-items:center;padding:13px;border-radius:14px;'+
+   'border:1px solid rgba(255,255,255,.12);margin-bottom:12px;'+
+   'background:linear-gradient(140deg,var(--cc1,#d81e2c)22,rgba(9,11,15,.9) 62%)}',
+  '.cc-hero .nm{font-family:"Archivo Black",Impact,sans-serif;font-size:17px;line-height:1.1}',
+  '.cc-hero .sub{font-size:11px;color:rgba(255,255,255,.55);margin-top:3px;line-height:1.4}',
+  '.cc-lbl{font-size:10px;letter-spacing:.1em;text-transform:uppercase;'+
+   'color:rgba(255,255,255,.5);margin:12px 0 5px;font-weight:800}',
+  '.cc-in{width:100%;box-sizing:border-box;padding:10px 11px;border-radius:10px;'+
+   'border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.05);'+
+   'color:var(--ink,#eef);font-size:14px;font-weight:600}',
+  '.cc-in:focus{outline:none;border-color:rgba(251,225,34,.6)}',
+  '.cc-in.bad{border-color:rgba(255,80,80,.8)}',
+  '.cc-row{display:flex;gap:8px}',
+  '.cc-row .cc-in{min-width:0}',
+  '.cc-sw{display:flex;flex-wrap:wrap;gap:7px}',
+  '.cc-sw button{width:30px;height:30px;border-radius:8px;border:2px solid rgba(255,255,255,.16);'+
+   'padding:0;cursor:pointer}',
+  '.cc-sw button.on{border-color:#fff;transform:scale(1.12)}',
+  '.cc-chair{display:block;width:100%;text-align:left;padding:11px 12px;border-radius:12px;'+
+   'border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.035);'+
+   'margin-bottom:8px;cursor:pointer;color:inherit}',
+  '.cc-chair.on{border-color:rgba(251,225,34,.65);background:rgba(251,225,34,.09)}',
+  '.cc-chair .t{font-weight:800;font-size:14px}',
+  '.cc-chair .b{font-size:11.5px;color:rgba(255,255,255,.62);margin-top:3px;line-height:1.45}',
+  '.cc-chair .n{font-size:11px;color:var(--gold,#fbe122);margin-top:5px;font-variant-numeric:tabular-nums}',
+  '.cc-mode{display:flex;gap:7px;margin-bottom:11px}',
+  '.cc-mode button{flex:1;padding:9px 6px;border-radius:11px;font-size:12px;font-weight:800;'+
+   'border:1px solid rgba(255,255,255,.13);background:rgba(255,255,255,.04);color:inherit;cursor:pointer}',
+  '.cc-mode button.on{border-color:rgba(251,225,34,.6);background:rgba(251,225,34,.11);color:#fbe122}',
+  /* the badge and shirt rails have six options each and .chips does not
+     wrap by default, so two of them hung off the right of a 390px
+     phone with nothing to scroll them back */
+  '.cc-chips{display:flex;flex-wrap:wrap;gap:7px}'
+ ].join('\n');
+ document.head.appendChild(st)})();
+
+function ccPreviewBadge(){
+ const r=ccResolved();
+ /* badgeSVG reads a club-shaped object, so it gets one. `mark` is the
+    lettering: without it crestMark falls back to the club key, which for
+    a built club is a marker rather than a name, and the preview showed
+    every club in the game as "CC". */
+ return badgeSVG({key:'__CC__',mark:r.code,name:r.name,short:r.short,
+  c1:r.c1,c2:r.c2,badgeShape:r.badge,kitPattern:r.pattern},54)}
+
+function vClubCreate(){
+ const s=CC.spec,r=ccResolved();
+ const T=(id,ph,val,max)=>'<input class="cc-in" id="'+id+'" placeholder="'+esc(ph)+
+  '" maxlength="'+(max||24)+'" value="'+esc(val||'')+'">';
+ let h='';
+ h+='<div class="cc-hero" style="--cc1:'+esc(r.c1)+'">'+ccPreviewBadge()+
+  '<div style="min-width:0"><div class="nm">'+esc(r.name)+'</div>'+
+  '<div class="sub">'+esc(r.stadium)+' · '+r.cap.toLocaleString()+' · National League</div>'+
+  '<div class="sub">'+esc(r.short)+' · '+esc(r.code)+'</div></div></div>';
+
+ h+='<div class="cc-lbl">The club</div>'+T('ccName','Name your club',s.name,26);
+ h+='<div class="cc-row" style="margin-top:7px">'+
+  T('ccShort','Short name',s.short,14)+T('ccCode','ABC',s.code,3)+'</div>';
+ h+='<div style="margin-top:7px">'+T('ccTown','Town or city',s.town,22)+'</div>';
+
+ h+='<div class="cc-lbl">First colour</div><div class="cc-sw">'+
+  CC_PALETTE.map(c=>'<button data-action="ccC1" data-v="'+c+'" style="background:'+c+'"'+
+   (s.c1===c?' class="on"':'')+'></button>').join('')+'</div>';
+ h+='<div class="cc-lbl">Second colour</div><div class="cc-sw">'+
+  CC_PALETTE.map(c=>'<button data-action="ccC2" data-v="'+c+'" style="background:'+c+'"'+
+   (s.c2===c?' class="on"':'')+'></button>').join('')+'</div>';
+
+ h+='<div class="cc-lbl">Badge</div><div class="cc-chips">'+CC_BADGES.map(b=>
+  '<button class="chip'+(s.badge===b[0]?' on':'')+'" data-action="ccBadge" data-v="'+b[0]+'">'+
+  esc(b[1])+'</button>').join('')+'</div>';
+ h+='<div class="cc-lbl">Shirt</div><div class="cc-chips">'+CC_PATTERNS.map(b=>
+  '<button class="chip'+(s.pattern===b[0]?' on':'')+'" data-action="ccPat" data-v="'+b[0]+'">'+
+  esc(b[1])+'</button>').join('')+'</div>';
+
+ h+='<div class="cc-lbl">The ground</div>'+T('ccStad','Stadium name',s.stadium,28);
+ h+='<div class="cc-chips" style="margin-top:7px">'+CC_CAPS.map(c=>
+  '<button class="chip'+(s.cap===c[0]?' on':'')+'" data-action="ccCap" data-v="'+c[0]+'">'+
+  c[0].toLocaleString()+'</button>').join('')+'</div>'+
+  '<div class="xs faint" style="margin-top:5px;line-height:1.45">'+
+  esc((CC_CAPS.filter(c=>c[0]===s.cap)[0]||CC_CAPS[1])[1])+'</div>';
+
+ h+='<div class="cc-lbl">Who owns it</div>';
+ CC_CHAIRS.forEach(c=>{
+  h+='<button class="cc-chair'+(s.chair===c.id?' on':'')+'" data-action="ccChair" data-v="'+c.id+'">'+
+   '<div class="t">'+c.icon+' '+esc(c.name)+'</div>'+
+   '<div class="b">'+esc(c.who)+'. '+esc(c.blurb)+'</div>'+
+   '<div class="n">'+fmtM(c.budget)+' to spend · '+fmtM(c.wage)+'/w wage ceiling · '+
+   'target: '+(c.target===1?'promotion':c.target<=5?'the play-offs':'stay up')+'</div>'+
+   '</button>'});
+
+ h+='<div class="xs faint" style="margin:10px 0 10px;line-height:1.5">'+
+  'You start on <b>1 July</b> with no senior squad — only an academy — and six weeks to sign '+
+  'at least twenty players before the season begins.</div>';
+ h+='<button class="btn btn-primary btn-block'+(ccReady()?'':' is-blocked')+'" data-action="ccGo">'+
+  (ccReady()?'Build the club →':'Name your club first')+'</button>';
+ h+='<button class="btn btn-ghost btn-block" style="margin-top:8px" data-action="ccMode" data-v="pick">'+
+  '← Take an existing job instead</button>';
+ return h}
+
+/* the two routes, and the toggle between them */
+const _paintStartCC=paintStart;
+paintStart=function(){
+ if(!CC.on)return _paintStartCC.apply(this,arguments);
+ const host=document.getElementById('startBody');
+ if(!host)return _paintStartCC.apply(this,arguments);
+ host.innerHTML=ccModeBar()+vClubCreate();
+ ccBind();
+ return};
+
+function ccModeBar(){
+ return '<div class="cc-mode">'+
+  '<button class="'+(CC.on?'':'on')+'" data-action="ccMode" data-v="pick">⚽ Take a job</button>'+
+  '<button class="'+(CC.on?'on':'')+'" data-action="ccMode" data-v="make">⚒️ Build a club</button>'+
+  '</div>'}
+
+/* the picker gets the same bar at the top of it */
+const _paintStartBar=paintStart;
+paintStart=function(){
+ const r=_paintStartBar.apply(this,arguments);
+ try{
+  if(CC.on)return r;
+  const host=document.getElementById('startBody');
+  if(!host||host.querySelector('.cc-mode'))return r;
+  host.insertAdjacentHTML('afterbegin',ccModeBar());
+ }catch(e){}
+ return r};
+
+ACTIONS.ccMode=el=>{CC.on=el.dataset.v==='make';paintStart()};
+ACTIONS.ccC1=el=>{CC.spec.c1=el.dataset.v;ccSave();paintStart()};
+ACTIONS.ccC2=el=>{CC.spec.c2=el.dataset.v;ccSave();paintStart()};
+ACTIONS.ccBadge=el=>{CC.spec.badge=el.dataset.v;ccSave();paintStart()};
+ACTIONS.ccPat=el=>{CC.spec.pattern=el.dataset.v;ccSave();paintStart()};
+ACTIONS.ccCap=el=>{CC.spec.cap=+el.dataset.v;ccSave();paintStart()};
+ACTIONS.ccChair=el=>{CC.spec.chair=el.dataset.v;ccSave();paintStart()};
+
+/* Text inputs cannot go through data-action — a repaint on every
+   keystroke would move the caret to the end of the field and make the
+   thing unusable. They are bound directly and only repaint the header. */
+function ccBind(){
+ const map={ccName:'name',ccShort:'short',ccCode:'code',ccTown:'town',ccStad:'stadium'};
+ for(const id in map){
+  const el=document.getElementById(id);
+  if(!el)continue;
+  el.oninput=()=>{
+   CC.spec[map[id]]=el.value;
+   ccSave();
+   ccRepaintHero();
+   const go=document.querySelector('[data-action="ccGo"]');
+   if(go){go.classList.toggle('is-blocked',!ccReady());
+    go.textContent=ccReady()?'Build the club →':'Name your club first'}}}}
+
+function ccRepaintHero(){
+ try{
+  const r=ccResolved();
+  const hero=document.querySelector('.cc-hero');
+  if(!hero)return;
+  hero.style.setProperty('--cc1',r.c1);
+  hero.innerHTML=ccPreviewBadge()+
+   '<div style="min-width:0"><div class="nm">'+esc(r.name)+'</div>'+
+   '<div class="sub">'+esc(r.stadium)+' · '+r.cap.toLocaleString()+' · National League</div>'+
+   '<div class="sub">'+esc(r.short)+' · '+esc(r.code)+'</div></div>';
+ }catch(e){}}
+
+/* ---------------------------------------------------------------------
+   4. AND THEN THE MANAGER, THEN THE WORLD
+   --------------------------------------------------------------------- */
+ACTIONS.ccGo=()=>{
+ if(!ccReady()){
+  const n=document.getElementById('ccName');
+  if(n){n.focus();n.classList.add('bad');setTimeout(()=>n.classList.remove('bad'),1100)}
+  toast('Name your club first');return}
+ CC.pending=true;
+ ccSave();
+ /* the manager creator is the same one every career goes through */
+ return ACTIONS.startGame({dataset:{k:'__CC__'}})};
+
+/* ---------------------------------------------------------------------
+   5. INSTALLING IT IN THE WORLD
+   ---------------------------------------------------------------------
+   The world is built exactly as it always is, then one National League
+   club is replaced in place. Reusing the index rather than appending a
+   club is the whole trick: the fixture list, the cup entries and the
+   league table were all built pointing at that number, and they all keep
+   working without a single one of them being told.
+   --------------------------------------------------------------------- */
+function ccVictim(){
+ const nl=G.clubs.filter(c=>c.league==='NL');
+ if(!nl.length)return null;
+ nl.sort((a,b)=>(a.rep||0)-(b.rep||0));
+ /* the eight smallest, so it is never a name anybody would miss */
+ const pool=nl.slice(0,Math.min(8,Math.max(2,nl.length)));
+ const rng=mulberry(hashStr('victim|'+Date.now()+'|'+(CC.spec.name||'')));
+ return pool[Math.floor(rng()*pool.length)]}
+
+function ccAcademy(ci,rng){
+ const out=[];
+ const shape=['GK','DC','DC','DL','DR','DM','MC','MC','AMC','AML','AMR','ST','ST','GK'];
+ const used=new Set();
+ for(let k=0;k<13;k++){
+  const pos=shape[k%shape.length];
+  /* one or two of them are worth something. The rest are what a
+     non-league academy is: local lads who might make it. */
+  const gifted=k<2;
+  const ovr=Math.round((gifted?40:32)+rng()*(gifted?7:8));
+  const pot=clamp(Math.round(ovr+(gifted?18+rng()*16:6+rng()*14)),ovr+3,gifted?78:62);
+  let nm=FN[Math.floor(rng()*FN.length)]+' '+LN[Math.floor(rng()*LN.length)];
+  let guard=0;
+  while(used.has(nm)&&guard++<20)nm=FN[Math.floor(rng()*FN.length)]+' '+LN[Math.floor(rng()*LN.length)];
+  used.add(nm);
+  const p=genPlayer([nm,pos,15+Math.floor(rng()*3),ovr,pot],ci);
+  p.youth=true;p.wage=250;p.contract=3;p.scouted=true;
+  out.push(p)}
+ return out}
+
+function installCustomClub(){
+ const r=ccResolved();
+ const v=ccVictim();
+ if(!v)return false;
+ const i=v.i;
+ const c=G.clubs[i];
+ const gone=c.name;
+ const rng=mulberry(hashStr('cc|'+r.name+'|'+r.code+'|'+i));
+
+ c.key='__CC__';
+ c.name=r.name;c.short=r.short;
+ c.c1=r.c1;c.c2=r.c2;
+ c.badgeShape=r.badge;c.kitPattern=r.pattern;
+ c.stadium=r.stadium;c.cap=r.cap;c.town=r.town;
+ c.custom=true;
+ c.mark=r.code;
+ /* a club nobody has heard of has the reputation of a club nobody has
+    heard of, whatever the chairman is worth */
+ c.rep=1850;
+ c.budget=r.chair.budget;
+ c.bank=r.chair.bank;
+ c.wageCap=r.chair.wage;
+ c.patience=r.chair.patience;
+ c.players=[];
+ c.recent=[];
+ c.stad={tier:1,train:1,youth:1};
+ c.youth=ccAcademy(i,rng);
+ c.tacs={formation:'4-4-2',mentality:'Balanced'};
+
+ G.my=i;
+ G.cc={on:true,chair:r.chair.id,replaced:gone,
+  founded:G.season,stage:0,told:{}};
+
+ /* the calendar moves back to the first of July so there is time to do
+    any of this. Everything shifts together — the epoch, the season start
+    and every date already written into the world — so the fixture list,
+    the cups and the international breaks all stay exactly where they
+    were relative to each other, and 1 August is still 1 August. */
+ const SHIFT=31;
+ G.epoch=Date.UTC(2026,6,1);
+ G.seasonStart=(G.seasonStart||0)+SHIFT;
+ (G.fixtures||[]).forEach(f=>{f.day+=SHIFT});
+ if(G.cups)for(const k in G.cups)(G.cups[k].ties||[]).forEach(t=>{t.day+=SHIFT});
+ G.day=0;
+ try{reserveCupDays()}catch(e){}
+
+ /* the backroom and the shape belong to the new club */
+ try{G.staff=defaultStaff()}catch(e){}
+ try{G.tacs.formation='4-4-2';G.tacs.xi=[]}catch(e){}
+ G.inbox=[];G.unread=0;
+ G.fans=62;
+ ccOpeningPost(r,gone);
+ return true}
+
+function ccOpeningPost(r,gone){
+ const c=G.clubs[G.my];
+ mail('board','🏟️ '+esc(r.name)+' are a football club',
+  'It is the first of July. The paperwork has cleared, the National League have '+
+  'confirmed your place — <b>'+esc(gone)+'</b> drop out of the pyramid to make room — and '+
+  '<b>'+esc(r.stadium)+'</b> has a new set of keys.'+
+  '<br><br>What you have: <b>'+fmtM(c.budget)+'</b> to spend, a wage ceiling of <b>'+
+  fmtW(c.wageCap)+'</b>, a ground that holds <b>'+c.cap.toLocaleString()+'</b>, and '+
+  (c.youth||[]).length+' academy players who are between fifteen and seventeen years old.'+
+  '<br><br>What you do not have: <b>a single senior footballer</b>.'+
+  '<br><br>The first game is in six weeks.');
+ mail('board','💬 A word from the chairman',
+  'Your chairman is '+esc(r.chair.who)+'.<br><br>“'+esc(ccChairLine(r.chair))+'”'+
+  '<br><br><span class="xs faint">'+esc(r.chair.warn)+'</span>',
+  null);
+ mail('info','📋 Twenty players by the first game',
+  'A squad of fewer than eighteen cannot be registered. You need <b>twenty</b> senior '+
+  'players before the opening fixture, and you have until then to find them.'+
+  '<br><br>Everybody is available to a club with money, and nobody has heard of you. '+
+  'Expect to pay over the odds for anyone who has a choice.')}
+
+function ccChairLine(ch){
+ if(ch.id==='gen')return 'I have waited forty years to be able to do this. '+
+  'The money is there. I am not going to tell you how to spend it, but I am going to '+
+  'be very disappointed if we are still in this league in May.';
+ if(ch.id==='sen')return 'We are a members’ club and every pound is somebody’s subscription. '+
+  'Spend it like it is theirs, because it is. Get us in the play-offs and we will back you again.';
+ return 'Let us be honest with one another. We own the ground. The football is what happens '+
+  'on it. Keep the club alive, keep the wage bill down, and do not come to us for more.'}
+
+/* ---------------------------------------------------------------------
+   6. THE HOOK
+   --------------------------------------------------------------------- */
+const _newGameCC=newGame;
+newGame=function(){
+ const want=CC.pending;
+ CC.pending=false;
+ if(!want)return _newGameCC.apply(this,arguments);
+ /* build the world normally, then take it over */
+ const r=_newGameCC.call(this,0);
+ try{
+  if(!installCustomClub()){
+   /* the one failure mode worth handling out loud rather than dumping
+      somebody into Manchester United by accident */
+   toast('Could not place the club. Starting at the bottom of the league instead.')}
+ }catch(e){}
+ return r};
+
+/* the picker's "take the X job" button must not fire for a built club */
+const _startGameCC=ACTIONS.startGame;
+ACTIONS.startGame=function(el){
+ const k=(el&&el.dataset&&el.dataset.k)||null;
+ if(k==='__CC__'&&!MGRUI.done){
+  /* first pass: open the creator, remembering that this is a built club */
+  MGRUI.startEl=el;MGRUI.key='__CC__';
+  CC.pending=true;
+  openMgrCreate();
+  return false}
+ if(k==='__CC__'){
+  CC.pending=true;
+  MGRUI.done=false;
+  newGame();
+  try{document.getElementById('startScreen').style.display='none'}catch(e){}
+  UI.view='home';UI.mailShow=8;UI.squadTab='first';UI.clubTab='table';UI.tblDiv=null;
+  try{render()}catch(e){}
+  try{toast('⚒️ '+G.clubs[G.my].short+' are born')}catch(e){}
+  return}
+ return _startGameCC.apply(this,arguments)};
+
+/*#wB1_createclub.js#*/
+/*#wB3_fixes.js#*/
+
+/* =====================================================================
+   wB3_fixes — a crash on youth intake day in any reloaded save
+   ---------------------------------------------------------------------
+   Found while testing a built club through three seasons with a save and
+   a reload in the middle. It has nothing to do with built clubs and
+   everything to do with reloading.
+
+   clubNames(c) caches the names already at a club on the club itself, as
+   a Set, so a year's intake does not hand out a name the club already
+   has. A Set is the right structure for the job and the wrong one to
+   leave lying on a saved object: JSON.stringify turns `new Set(['a'])`
+   into `{}`. Not into an array, not into null — into an empty object,
+   silently, with no error at either end.
+
+   So the cache survives a save as a plain object, `clubNames` sees a
+   truthy `c._nm` and hands it back, and the first call to worldName on
+   intake day does `avoid.has(nm)` against something that has no `has`.
+   Every club in the world takes an intake on the same day, so the very
+   first one throws and the whole daily tick dies with it — no intake for
+   anybody, and an exception every time you press continue on that date
+   for the rest of the save.
+
+   It never showed up in the long soak because the soak plays fifteen
+   seasons in one sitting and never reloads. It takes a save, a reload,
+   and then playing on to the intake date, which is exactly what a person
+   does and exactly what a harness does not.
+
+   The fix is two lines and then a belt-and-braces one: rebuild the cache
+   if what came back is not a Set, and make worldName tolerate being
+   handed something that cannot answer.
+   ===================================================================== */
+
+clubNames=function(c){
+ if(!c._nm||typeof c._nm.has!=='function'){
+  c._nm=new Set();
+  (c.players||[]).forEach(p=>c._nm.add(p.name));
+  (c.youth||[]).forEach(p=>c._nm.add(p.name))}
+ return c._nm};
+
+const _worldNameSafe=worldName;
+worldName=function(cc,rng,avoid){
+ const ok=(avoid&&typeof avoid.has==='function')?avoid:null;
+ return _worldNameSafe.call(this,cc,rng,ok)};
+
+/* and the dead cache does not need saving in the first place — it is
+   rebuilt from the squad in a microsecond and it is one entry per player
+   per club, which is a few hundred kilobytes of nothing */
+const _packGNm=packG;
+packG=function(g){
+ try{(g&&g.clubs||[]).forEach(c=>{if(c._nm)c._nm=null})}catch(e){}
+ return _packGNm.apply(this,arguments)};
+
+/*#wB3_fixes.js#*/
 showStart();
 </script>
 </body>
