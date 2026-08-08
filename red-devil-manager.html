@@ -46787,6 +46787,547 @@ endSeason=function(){
  return r};
 
 /*#wA9_ratings.js#*/
+
+
+
+
+/*#wB0_deadline.js#*/
+
+/* =====================================================================
+   wB0_deadline — deadline day
+   ---------------------------------------------------------------------
+   The transfer window closed the way every other day ended: you pressed
+   continue and it was September. The busiest day in the football
+   calendar went past in one press.
+
+   So the last day of each window stops being a day and becomes ten
+   hours. Two in the afternoon until midnight, one press an hour, and the
+   window shuts when the clock does. Ten chances to get the last piece of
+   business done, which is what the day is actually for.
+
+   WHAT HAPPENS IN AN HOUR. The market moves — clubs complete deals,
+   rivals bid for your fringe players, and somebody who needed the money
+   this morning becomes affordable this afternoon. That last one is the
+   heart of the day: PANIC SALES. A club short of cash puts a good player
+   on the market at a discount that expires when the hour does. It is why
+   deadline day exists and it is the only time in the game you can buy
+   above your weight.
+
+   And it works the other way. TOUT A PLAYER and you can put one of your
+   own out to the market on the hour, which is how a squad gets trimmed
+   when nobody has been asking.
+
+   THE CLOCK IS THE PRESSURE. Every hour the discounts get better and the
+   bidders get more desperate, because that is true, and at midnight it
+   is over until January.
+
+   Two windows a season: the first of September and the thirty-first of
+   January. A match on either day is played after the clock runs out,
+   which is roughly when they are played anyway.
+   ===================================================================== */
+
+const DL={hours:10,open:14};        /* 14:00 to midnight, one press an hour */
+
+/* ---------------------------------------------------------------------
+   1. WHICH DAY IS IT
+   ---------------------------------------------------------------------
+   windowOpen() says July, August, the first of September, and all of
+   January. The deadline is therefore the first of September and the
+   last day of January — worked out from the date rather than a stored
+   offset, so it stays right in every season.
+   --------------------------------------------------------------------- */
+function deadlineKind(day){
+ try{
+  const d=dateOf(day==null?G.day:day);
+  const m=d.getUTCMonth(),n=d.getUTCDate();
+  if(m===8&&n===1)return 'summer';
+  if(m===0&&n===31)return 'winter';
+  return null}
+ catch(e){return null}}
+
+function dlLive(){
+ return !!(G.dl&&G.dl.day===G.day&&G.dl.hour<DL.hours)}
+
+function dlClock(){
+ const h=(DL.open+((G.dl&&G.dl.hour)||0));
+ return (h>=24?'00':String(h).padStart(2,'0'))+':00'}
+
+function dlLeft(){
+ return DL.hours-((G.dl&&G.dl.hour)||0)}
+
+/* ---------------------------------------------------------------------
+   2. THE PANIC SALES
+   ---------------------------------------------------------------------
+   A club with more wages than money, on the last day, will take less
+   than the player is worth to get him off the books. The discount
+   deepens as the clock runs, because the alternative is carrying him
+   until January.
+
+   Who is available is decided by the club's position rather than at
+   random: overspent, over-squadded, or relegation-bound with a wage bill
+   it cannot carry. That way the names that come up make sense.
+   --------------------------------------------------------------------- */
+function dlDistress(c){
+ try{
+  if(c.i===G.my)return 0;
+  const wage=squadWage(c);
+  const cap=c.wageCap||1;
+  let d=0;
+  if(wage>cap*.92)d+=2;                       /* over the wage budget */
+  if(wage>cap)d+=2;
+  if((c.bank||0)<wage*8)d+=2;                 /* short of cash */
+  if((c.budget||0)<=0)d+=1;
+  if((c.players||[]).filter(p=>!p.loan).length>26)d+=1;
+  return d}
+ catch(e){return 0}}
+
+function dlMakeBargains(){
+ const out=[];
+ const my=G.clubs[G.my];
+ const rng=mulberry(hashStr('dl|'+G.season+'|'+G.day+'|'+G.dl.hour));
+ /* the discount deepens through the afternoon */
+ const t=G.dl.hour/DL.hours;
+ const disc=.80-t*.28;                        /* 80% of value down to 52% */
+ const pool=G.clubs.filter(c=>c.i!==G.my&&dlDistress(c)>=3);
+ if(!pool.length)return out;
+ for(let k=0;k<26&&out.length<4;k++){
+  const c=pool[Math.floor(rng()*pool.length)];
+  /* A club in trouble sells from the squad, not from the spine. Without
+     this the pool picked uniformly and Galatasaray were offering an
+     85-rated winger at forty per cent off, which is not a panic sale,
+     it is a going-out-of-business sale. The two best players stay. */
+  const all=(c.players||[]).filter(p=>!p.loan).sort((a,b)=>b.ovr-a.ovr);
+  const squad=all.slice(2).filter(p=>!p.injury&&
+   !(typeof windowId==='function'&&p.movedWindow===windowId()));
+  if(squad.length<15)continue;                /* nobody guts their squad */
+  const p=squad[Math.floor(rng()*squad.length)];
+  if(!p)continue;
+  if(out.some(x=>x.pid===p.id))continue;
+  /* he has to be worth having and worth affording */
+  if(p.ovr<Math.max(40,(myBestOvr()-16)))continue;
+  const fee=Math.max(0,Math.round(p.value*disc/5e4)*5e4);
+  const wage=wageFor(p.ovr,my.rep);
+  out.push({pid:p.id,from:c.i,fee,wage,hour:G.dl.hour,
+   why:dlWhy(c,rng())})}
+ return out}
+
+function myBestOvr(){
+ try{
+  const s=(G.clubs[G.my].players||[]).filter(p=>!p.loan);
+  return s.length?Math.max.apply(null,s.map(p=>p.ovr)):55}
+ catch(e){return 55}}
+
+function dlWhy(c,r){
+ const w=[
+  esc(c.short)+' need the money before midnight',
+  esc(c.short)+' are over their wage budget and know it',
+  'a fee agreed elsewhere has collapsed and '+esc(c.short)+' want him gone',
+  esc(c.short)+' have too many bodies and not enough room'];
+ return w[Math.floor(r*w.length)]}
+
+/* clubs that need the money, finding clubs that have it */
+function dlAiDeals(n,rng){
+ const out=[];
+ const sellers=G.clubs.filter(c=>c.i!==G.my&&dlDistress(c)>=3&&
+  (c.players||[]).filter(p=>!p.loan).length>=18);
+ if(!sellers.length)return out;
+ const w=windowId?windowId():null;
+ for(let k=0;k<n*7&&out.length<n;k++){
+  const s=sellers[Math.floor(rng()*sellers.length)];
+  const all=(s.players||[]).filter(p=>!p.loan).sort((a,b)=>b.ovr-a.ovr);
+  const squad=all.slice(2).filter(p=>p.movedWindow!==w);
+  if(squad.length<16)continue;
+  const p=squad[Math.floor(rng()*squad.length)];
+  if(!p)continue;
+  const fee=Math.max(0,Math.round(p.value*(.55+rng()*.25)/5e4)*5e4);
+  /* somebody who can pay it, has room for him, and is not a division
+     the player would laugh at */
+  const buyers=G.clubs.filter(c=>c.i!==G.my&&c.i!==s.i&&
+   (c.budget||0)>=fee&&
+   (c.players||[]).filter(x=>!x.loan).length<28&&
+   squadWage(c)+wageFor(p.ovr,c.rep)<=(c.wageCap||0)&&
+   (c.rep||0)>(s.rep||0)-2200);
+  if(!buyers.length)continue;
+  const bu=buyers[Math.floor(rng()*buyers.length)];
+  s.players=s.players.filter(x=>x.id!==p.id);
+  p.club=bu.i;p.listed=false;p.contract=irnd(2,4);
+  p.wage=wageFor(p.ovr,bu.rep);p.morale=clamp(p.morale+8,1,100);
+  if(w)p.movedWindow=w;
+  bu.players.push(p);
+  bu.budget-=fee;s.budget+=Math.round(fee*.7);s.bank+=fee;
+  const g={d:G.day,fee,ovr:p.ovr,nm:p.name,pos:p.pos,age:p.age,
+   to:bu.short,from:s.short,big:fee>=9e7||p.ovr>=88};
+  if(!G.gossip)G.gossip=[];
+  G.gossip.unshift(g);
+  if(G.gossip.length>150)G.gossip.length=150;
+  out.push(g)}
+ return out}
+
+/* ---------------------------------------------------------------------
+   3. AN HOUR OF THE DAY
+   --------------------------------------------------------------------- */
+function dlFeed(icon,text){
+ if(!G.dl.feed)G.dl.feed=[];
+ G.dl.feed.unshift({h:dlClock(),icon,text});
+ if(G.dl.feed.length>40)G.dl.feed.length=40}
+
+function dlHour(){
+ G.dl.hour++;
+ const rng=mulberry(hashStr('dlh|'+G.season+'|'+G.day+'|'+G.dl.hour));
+
+ /* The market itself. The first version called aiTransfers, which does
+    nothing at all by the first of September: it runs every day, and
+    after three or four passes every player who could plausibly move has
+    already moved and been stamped for the window. Sixty-five deals on
+    day one, zero by day four, zero on deadline day — so the busiest day
+    of the window had the quietest feed in the game.
+
+    Deadline-day business is a different kind of business anyway. It is
+    not clubs improving their weakest position over a leisurely July; it
+    is clubs that need the money finding clubs that have it, late, at a
+    price the seller would not have taken in June. So it is dealt with
+    directly, from the same distressed pool the panic sales come from. */
+ const deals=dlAiDeals(1+Math.floor(rng()*3),rng);
+ deals.slice(0,3).forEach(g=>dlFeed('✅',
+  '<b>'+esc(g.nm)+'</b> ('+g.pos+', '+g.ovr+') to <b>'+esc(g.to)+
+  '</b> from '+esc(g.from)+' — '+fmtM(g.fee)));
+ if(deals.length>3)dlFeed('📋',(deals.length-3)+' other deals confirmed across the leagues.');
+
+ /* somebody wants one of yours */
+ if(rng()<.34){
+  const n=(G.pendingOffers||[]).length;
+  try{aiBidForUserPlayer()}catch(e){}
+  const o=(G.pendingOffers||[])[ (G.pendingOffers||[]).length-1 ];
+  if((G.pendingOffers||[]).length>n&&o){
+   const p=playerById(o.pid);
+   /* a deadline-day bid does not sit around for five days */
+   o.expires=G.day;o.deadline=true;
+   if(p)dlFeed('📞','<b>'+esc(G.clubs[o.buyer].short)+'</b> have bid '+fmtM(o.fee)+
+    ' for <b>'+esc(p.name)+'</b>. It is in your inbox and it dies at midnight.')}}
+
+ /* and the panic sales are refreshed */
+ G.dl.bargains=dlMakeBargains();
+ if(G.dl.bargains.length){
+  const b=G.dl.bargains[0],p=playerById(b.pid);
+  if(p)dlFeed('🔻','<b>'+esc(p.name)+'</b> ('+p.ovr+') available at '+fmtM(b.fee)+' — '+b.why+'.')}
+
+ /* colour */
+ if(rng()<.4)dlFeed('📻',dlChatter(rng()));
+
+ if(G.dl.hour>=DL.hours)dlClose();
+ return G.dl.hour}
+
+function dlChatter(r){
+ const my=G.clubs[G.my];
+ const lines=[
+  'Reporters are outside the training ground and nobody has come out yet.',
+  'The phone lines are jammed. Two clubs are said to be waiting on the same signature.',
+  'A medical is under way somewhere in the north-west and nobody will say whose.',
+  'Sky have a man outside '+esc(my.stadium)+' with nothing whatsoever to report.',
+  'An agent has been photographed walking into a hotel. That is the whole story.',
+  'Three clubs are reportedly waiting to see what one club does first.',
+  'A deal is "close", which at this hour means somebody has answered the phone.'];
+ return lines[Math.floor(r*lines.length)]}
+
+function dlClose(){
+ try{
+  const shut=(G.dl.signed||0)+' in, '+(G.dl.sold||0)+' out';
+  /* offers that were still on the table die with the window */
+  const dead=(G.pendingOffers||[]).filter(o=>o.deadline).length;
+  G.pendingOffers=(G.pendingOffers||[]).filter(o=>!o.deadline);
+  G.dl.closed=true;
+  mail('transfer','🔒 The window is shut',
+   'Midnight. Nothing else moves until '+
+   (deadlineKind(G.day)==='summer'?'January':'the summer')+'.'+
+   '<br><br>Your day: <b>'+esc(shut)+'</b>.'+
+   (dead?'<br><br>'+dead+' bid'+(dead===1?'':'s')+' for your players expired unanswered.':'')+
+   '<br><br><span class="xs faint">Whatever the squad is now, it is the squad you have.</span>');
+ }catch(e){}}
+
+/* ---------------------------------------------------------------------
+   4. BUYING ONE
+   ---------------------------------------------------------------------
+   A panic sale is a fixed price with the hour on it — no negotiation,
+   because there is no time for one, which is the entire point of the
+   mechanic. What it does check is that you can actually afford it, in
+   fee and in wages, because a deadline-day signing you cannot pay is how
+   clubs get into this state in the first place.
+   --------------------------------------------------------------------- */
+const DL_MAX_IN=3;                  /* nobody signs a team on one afternoon */
+
+ACTIONS.dlBuy=el=>{
+ if(!dlLive()){toast('The window is shut.');return}
+ const pid=+el.dataset.v;
+ const b=((G.dl&&G.dl.bargains)||[]).find(x=>x.pid===pid);
+ if(!b||b.hour!==G.dl.hour){toast('Too late — that one has gone.');render();return}
+ const p=playerById(pid);
+ const my=G.clubs[G.my];
+ if(!p||p.club===G.my){toast('He is no longer available.');return}
+ /* Without this the day is an exploit rather than a mechanic: four
+    discounted players an hour for ten hours is forty signings, and a
+    rich club could rebuild its entire squad below cost in one afternoon.
+    Three is what a busy deadline day actually looks like. */
+ if((G.dl.signed||0)>=DL_MAX_IN){
+  toast('Three signings in a day is enough — the paperwork will not clear.');return}
+ if((my.players||[]).filter(x=>!x.loan).length>=30){
+  toast('The squad is full. Move somebody on first.');return}
+ if(b.fee>my.budget){toast('Not enough transfer budget — '+fmtM(b.fee)+' needed.');return}
+ if(squadWage(my)+b.wage>my.wageCap){
+  toast('The wage bill will not take it. Move somebody on first.');return}
+ const seller=G.clubs[p.club];
+ seller.players=seller.players.filter(x=>x.id!==p.id);
+ seller.budget+=Math.round(b.fee*.75);seller.bank+=b.fee;
+ my.budget-=b.fee;my.bank-=b.fee;
+ p.club=G.my;p.listed=false;p.scouted=true;p.wage=b.wage;p.contract=irnd(2,4);
+ if(typeof windowId==='function')p.movedWindow=windowId();
+ p.morale=clamp(p.morale+10,1,100);p.sharp=Math.max(p.sharp||55,50);
+ my.players.push(p);
+ G.dl.signed=(G.dl.signed||0)+1;
+ G.dl.bargains=(G.dl.bargains||[]).filter(x=>x.pid!==pid);
+ dlFeed('🔴','<b>'+esc(p.name)+'</b> signs for us from '+esc(seller.short)+' — '+fmtM(b.fee)+'.');
+ mail('transfer','DEADLINE DAY: '+p.name+' signs',
+  '<b>'+esc(p.name)+'</b> ('+p.pos+', '+p.age+', rated '+p.ovr+') joins from <b>'+esc(seller.name)+
+  '</b> for <b>'+fmtM(b.fee)+'</b> on '+fmtW(b.wage)+'.<br><br>'+
+  'A deal that would not have been there at nine o’clock this morning.');
+ try{sfx('cheer')}catch(e){}
+ toast('🔴 '+p.name+' is ours');
+ render()};
+
+/* ---------------------------------------------------------------------
+   5. AND SELLING ONE
+   ---------------------------------------------------------------------
+   Touting a player is the outgoing half of the day, and it is not a
+   guarantee: you put his name about and see who calls back. A fringe
+   player at a fair price gets interest; a poor player on big wages that
+   nobody wanted in July does not become wanted at ten at night.
+   --------------------------------------------------------------------- */
+ACTIONS.dlTout=()=>{
+ if(!dlLive()){toast('The window is shut.');return}
+ const my=G.clubs[G.my];
+ const squad=(my.players||[]).filter(p=>!p.loan&&
+  !(typeof windowId==='function'&&p.movedWindow===windowId())&&
+  !(G.pendingOffers||[]).some(o=>o.pid===p.id));
+ if(!squad.length){openModal('<h3>Nobody to offer</h3><div class="small muted">'+
+  'Everyone is either cup-tied to this window already or has a bid in.</div>'+
+  '<button class="btn btn-primary btn-block" style="margin-top:10px" data-action="closeModal">Close</button>');return}
+ const rows=squad.slice().sort((a,b)=>a.ovr-b.ovr).map(p=>
+  '<div class="prow" data-action="dlToutGo" data-v="'+p.id+'" style="cursor:pointer">'+
+  '<div class="row" style="gap:9px;min-width:0">'+
+   '<span class="xs faint" style="min-width:30px">'+esc(p.pos)+'</span>'+
+   '<div style="min-width:0"><div class="small" style="font-weight:700">'+esc(p.name)+'</div>'+
+   '<div class="xs faint">'+p.age+' · '+fmtW(p.wage)+' · worth '+fmtM(p.value)+'</div></div></div>'+
+  '<b class="num ovr">'+p.ovr+'</b></div>').join('');
+ openModal('<h3>📤 Offer a player out</h3>'+
+  '<div class="small muted" style="margin:6px 0 10px;line-height:1.5">'+
+  'Put his name about and see who comes back before midnight. Nobody is obliged to.</div>'+
+  '<div class="card tight" style="max-height:50vh;overflow:auto">'+rows+'</div>'+
+  '<button class="btn btn-ghost btn-block" style="margin-top:10px" data-action="closeModal">Never mind</button>')};
+
+ACTIONS.dlToutGo=el=>{
+ if(!dlLive()){closeModal();toast('The window is shut.');return}
+ const p=playerById(+el.dataset.v);
+ if(!p||p.club!==G.my)return;
+ closeModal();
+ const rng=mulberry(hashStr('tout|'+p.id+'|'+G.day+'|'+G.dl.hour));
+ /* Who would actually want him: somebody with the money and the room.
+    The wage test has to be the wage HE WOULD BE ON THERE, not the one
+    he is on here — the first version compared a Manchester United salary
+    against a Championship wage budget, so a 78-rated first-teamer got
+    offered around the whole country and nobody could afford to answer.
+    A player takes the going rate at the club he joins. */
+ const cands=G.clubs.filter(c=>c.i!==G.my&&
+  (c.budget||0)>p.value*.55&&
+  squadWage(c)+wageFor(p.ovr,c.rep)<=(c.wageCap||0)&&
+  (c.players||[]).filter(x=>!x.loan).length<28);
+ /* interest falls away sharply for an expensive player nobody rated */
+ const want=cands.filter(c=>{
+  const best=(c.players||[]).filter(x=>POSGROUP(x.pos)===POSGROUP(p.pos))
+   .sort((a,b)=>b.ovr-a.ovr)[0];
+  return !best||p.ovr>=best.ovr-2});
+ if(!want.length||rng()<.28){
+  dlFeed('📵','<b>'+esc(p.name)+'</b> offered out. Nobody came back.');
+  toast('No takers.');render();return}
+ const buyer=want[Math.floor(rng()*want.length)];
+ /* a late seller has no leverage */
+ const fee=Math.max(0,Math.round(p.value*(.55+rng()*.30)/5e4)*5e4);
+ const oid='dl'+Math.random().toString(36).slice(2);
+ G.pendingOffers.push({id:oid,pid:p.id,buyer:buyer.i,fee,expires:G.day,stage:0,deadline:true});
+ dlFeed('📞','<b>'+esc(buyer.short)+'</b> have come back on <b>'+esc(p.name)+'</b> — '+fmtM(fee)+'.');
+ mail('transfer','Deadline bid: '+p.name,
+  '<b>'+esc(buyer.name)+'</b> will take <b>'+esc(p.name)+'</b> for <b>'+fmtM(fee)+'</b>. '+
+  'Market value '+fmtM(p.value)+'.<br><br>It stands until midnight and not a minute past.',
+  [{lbl:'Accept '+fmtM(fee),act:'offerAccept',arg:oid},
+   {lbl:'Reject',act:'offerReject',arg:oid,ghost:1}]);
+ toast('📞 '+buyer.short+' are interested');
+ render()};
+
+/* every sale on the day counts toward the summary */
+const _offAccDl=ACTIONS.offerAccept;
+ACTIONS.offerAccept=el=>{
+ const live=dlLive();
+ const r=_offAccDl.apply(this,arguments);
+ try{if(live&&G.dl){G.dl.sold=(G.dl.sold||0)+1;
+  dlFeed('📤','A sale is confirmed.')}}catch(e){}
+ return r};
+
+/* ---------------------------------------------------------------------
+   6. THE CLOCK RUNS ON CONTINUE
+   ---------------------------------------------------------------------
+   The outermost wrapper, so nothing downstream advances the date while
+   there are hours left in the day.
+   --------------------------------------------------------------------- */
+const _advDeadline=ACTIONS.advance;
+ACTIONS.advance=function(){
+ try{
+  if(!G||G.sacked)return _advDeadline.apply(this,arguments);
+  const kind=deadlineKind(G.day);
+  if(kind){
+   if(!G.dl||G.dl.day!==G.day){
+    G.dl={day:G.day,hour:0,kind,feed:[],bargains:[],signed:0,sold:0,closed:false};
+    G.dl.bargains=dlMakeBargains();
+    dlFeed('⏰','Deadline day. The window shuts at midnight.');
+    try{sfx('tap')}catch(e){}}
+   if(G.dl.hour<DL.hours){
+    dlHour();
+    if(typeof render==='function')render();
+    return}}
+ }catch(e){}
+ return _advDeadline.apply(this,arguments)};
+
+/* ---------------------------------------------------------------------
+   6b. MIDNIGHT MEANS MIDNIGHT
+   ---------------------------------------------------------------------
+   windowOpen() reads the date, and the date on deadline day is still
+   deadline day after the clock has run out. Without this you could sit
+   on the closed screen and go on signing people through the ordinary
+   transfer pages until you pressed continue — which is precisely the
+   thing the whole day is built to stop.
+   --------------------------------------------------------------------- */
+const _windowOpenDl=windowOpen;
+windowOpen=function(){
+ try{if(G&&G.dl&&G.dl.day===G.day&&G.dl.closed)return false}catch(e){}
+ return _windowOpenDl.apply(this,arguments)};
+
+/* ---------------------------------------------------------------------
+   7. AND THE SCREEN SAYS SO
+   --------------------------------------------------------------------- */
+(function dlCSS(){
+ const old=document.getElementById('wB0');if(old)old.remove();
+ const st=document.createElement('style');st.id='wB0';
+ st.textContent=[
+  '.dl-wrap{border:1px solid rgba(255,72,72,.45);border-radius:14px;padding:12px;margin-bottom:12px;'+
+   'background:linear-gradient(150deg,rgba(255,60,60,.16),rgba(9,10,14,.86) 62%)}',
+  '.dl-top{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:9px}',
+  '.dl-ttl{font-family:"Archivo Black",Impact,sans-serif;font-size:15px;letter-spacing:.04em;color:#ff6b6b}',
+  '.dl-clock{font-variant-numeric:tabular-nums;font-weight:800;font-size:26px;line-height:1;'+
+   'color:#fff;text-shadow:0 0 16px rgba(255,80,80,.5)}',
+  '.dl-left{font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:rgba(255,255,255,.55);text-align:right}',
+  '.dl-bar{height:4px;border-radius:99px;background:rgba(255,255,255,.10);overflow:hidden;margin-bottom:10px}',
+  '.dl-bar i{display:block;height:100%;background:linear-gradient(90deg,#ff9f43,#ff4d4d);transition:width .4s ease}',
+  '.dl-deal{display:flex;align-items:center;justify-content:space-between;gap:8px;'+
+   'padding:8px 9px;border:1px solid rgba(255,255,255,.10);border-radius:10px;margin-bottom:7px;'+
+   'background:rgba(255,255,255,.035)}',
+  '.dl-deal .nm{font-weight:700;font-size:13px}',
+  '.dl-deal .wy{font-size:10.5px;color:rgba(255,255,255,.52);line-height:1.35}',
+  '.dl-feed{max-height:172px;overflow:auto;margin-top:4px}',
+  '.dl-line{display:flex;gap:8px;padding:5px 2px;border-bottom:1px solid rgba(255,255,255,.055);font-size:11.5px;line-height:1.42}',
+  '.dl-line .t{color:rgba(255,255,255,.42);font-variant-numeric:tabular-nums;min-width:34px}',
+  '.dl-shut{border-color:rgba(255,255,255,.18);background:rgba(255,255,255,.04)}',
+  '.dl-shut .dl-ttl{color:rgba(255,255,255,.65)}'
+ ].join('\n');
+ document.head.appendChild(st)})();
+
+function dlPanel(){
+ if(!G.dl||G.dl.day!==G.day)return '';
+ const shut=G.dl.hour>=DL.hours;
+ const pct=Math.round(G.dl.hour/DL.hours*100);
+ let h='<div class="dl-wrap'+(shut?' dl-shut':'')+'">'+
+  '<div class="dl-top"><div>'+
+   '<div class="dl-ttl">'+(shut?'WINDOW CLOSED':'DEADLINE DAY')+'</div>'+
+   '<div class="xs faint" style="margin-top:2px">'+
+   (shut?'Nothing else moves until '+(G.dl.kind==='summer'?'January':'the summer')+'.'
+        :'The '+(G.dl.kind==='summer'?'summer':'winter')+' window shuts at midnight.')+'</div>'+
+  '</div><div style="text-align:right">'+
+   '<div class="dl-clock">'+(shut?'00:00':dlClock())+'</div>'+
+   '<div class="dl-left">'+(shut?'shut':dlLeft()+' hour'+(dlLeft()===1?'':'s')+' left')+'</div>'+
+  '</div></div>'+
+  '<div class="dl-bar"><i style="width:'+pct+'%"></i></div>';
+
+ if(!shut){
+  const bs=(G.dl.bargains||[]).filter(b=>b.hour===G.dl.hour);
+  if(bs.length){
+   h+='<div class="xs faint" style="margin:2px 0 6px;letter-spacing:.08em">AVAILABLE THIS HOUR</div>';
+   bs.forEach(b=>{
+    const p=playerById(b.pid);if(!p)return;
+    const my=G.clubs[G.my];
+    const canFee=b.fee<=my.budget;
+    const canWage=squadWage(my)+b.wage<=my.wageCap;
+    h+='<div class="dl-deal"><div style="min-width:0">'+
+     '<div class="nm">'+esc(p.name)+' <span class="xs faint">'+esc(p.pos)+' · '+p.age+' · '+p.ovr+'</span></div>'+
+     '<div class="wy">'+b.why+' · '+fmtW(b.wage)+'</div></div>'+
+     '<button class="btn '+(canFee&&canWage?'btn-gold':'btn-ghost')+' btn-xs" '+
+      'data-action="dlBuy" data-v="'+p.id+'">'+fmtM(b.fee)+'</button></div>'});
+  }else{
+   h+='<div class="xs faint" style="padding:2px 0 8px">Nothing going cheap this hour. Press on.</div>'}
+  h+='<button class="btn btn-ghost btn-block btn-xs" data-action="dlTout" style="margin:2px 0 8px">'+
+   '📤 Offer a player out</button>';
+ }
+
+ h+='<div class="dl-feed">'+((G.dl.feed||[]).map(f=>
+   '<div class="dl-line"><span class="t">'+f.h+'</span><span>'+f.icon+' '+f.text+'</span></div>').join(''))+
+  '</div></div>';
+ return h}
+
+const _vHomeDl=vHome;
+vHome=function(){
+ const h=_vHomeDl.apply(this,arguments);
+ try{
+  if(G.sacked)return h;
+  if(!G.dl||G.dl.day!==G.day)return h;
+  return dlPanel()+h}
+ catch(e){}
+ return h};
+
+/* the button counts down with it */
+const _dockDl=renderDock;
+renderDock=function(){
+ const r=_dockDl.apply(this,arguments);
+ try{
+  if(G.sacked||!dlLive())return r;
+  const d=document.getElementById('continueDock');
+  if(!d)return r;
+  const n=dlLeft();
+  d.innerHTML='<button class="btn btn-gold" data-action="advance">⏰ '+dlClock()+
+   '<span class="cd-sub">Deadline day · '+n+' hour'+(n===1?'':'s')+' until the window shuts</span></button>';
+ }catch(e){}
+ return r};
+
+/* ---------------------------------------------------------------------
+   8. AND YOU GET A WEEK'S WARNING
+   --------------------------------------------------------------------- */
+const _dtcDlDay=dailyTickCore;
+dailyTickCore=function(){
+ const r=_dtcDlDay.apply(this,arguments);
+ try{
+  if(!G||!G.clubs||G.sacked)return r;
+  [7,3,1].forEach(n=>{
+   const k=deadlineKind(G.day+n);
+   if(!k)return;
+   const tag=k+':'+G.season+':'+n;
+   if((G.dlWarned||[]).indexOf(tag)>=0)return;
+   G.dlWarned=(G.dlWarned||[]).concat(tag);
+   const my=G.clubs[G.my];
+   mail('transfer','⏳ '+(n===1?'Deadline day is tomorrow':'Deadline day in '+n+' days'),
+    'The '+(k==='summer'?'summer':'winter')+' window shuts at midnight on <b>'+fmtDate(G.day+n)+'</b>.'+
+    '<br><br>Budget remaining: <b>'+fmtM(my.budget)+'</b>. Wage room: <b>'+
+    fmtM(Math.max(0,(my.wageCap||0)-squadWage(my)))+'</b> a week. Squad: <b>'+
+    (my.players||[]).filter(p=>!p.loan).length+'</b>.'+
+    (n===1?'<br><br><span class="xs faint">The day runs hour by hour. Clubs that need money start '+
+      'dropping their asking prices as it gets late.</span>':''))});
+ }catch(e){}
+ return r};
+
+/*#wB0_deadline.js#*/
 showStart();
 </script>
 </body>
