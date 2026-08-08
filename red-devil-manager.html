@@ -48909,6 +48909,464 @@ function divStandardFor(c){
  catch(e){return 50}}
 
 /*#wB6_finance.js#*/
+
+
+/*#wB7_freeagents.js#*/
+
+/* =====================================================================
+   wB7_freeagents — players without a club, for everybody
+   ---------------------------------------------------------------------
+   There was no free transfer market. A club you built yourself had a
+   trials list, added because a squad of nobody cannot be assembled out
+   of transfer negotiations in five weeks — but every other manager in
+   the game had one route to a player, which was to buy him from
+   somebody, and below the Championship that route was mostly shut.
+
+   Free agency is a real and enormous part of football. Something like a
+   third of lower-league squads turn over on frees every summer, and a
+   Premier League club signing a thirty-four year old with four hundred
+   appearances behind him on a one-year deal is a normal Tuesday.
+
+   So there is a proper market, and it belongs to everyone.
+
+   WHO IS IN IT. Around two hundred and forty players at the start of a
+   save, spread across every level of the pyramid from a fifty-eight
+   rated ex-Championship midfielder down to a thirty-eight rated
+   goalkeeper who will play for expenses. It skews old, because that is
+   who gets released: half of them are over twenty-nine and a good
+   number are over thirty-three, with the mileage in the legs to show
+   for it. A smaller group are young players let go by academies who
+   still have something to find.
+
+   WHERE THEY ARE FROM. Names come from the same world name pools as
+   everybody else — a Portuguese free agent has a Portuguese name, and
+   the nationality follows — so the list reads like a real one rather
+   than forty variations on Lewis Walker.
+
+   IT MOVES ON ITS OWN. Computer clubs sign from it, so the good ones go
+   if you leave them, and players who are released anywhere in the world
+   drop into it rather than disappearing. It refills every summer with
+   that year's releases.
+
+   AND A NEW CLUB HAS ONE ADVANTAGE. Nothing about the money — a club
+   nobody has heard of pays what it can pay. But some players want to be
+   part of something being built, so a club in its first seasons sees a
+   handful who would not otherwise look at it, marked as what they are.
+   ===================================================================== */
+
+/* ---------------------------------------------------------------------
+   1. THE POOL
+   --------------------------------------------------------------------- */
+const FA_TARGET=240;
+
+/* The game already had a free-agent store — G.freeAgents — holding ten
+   players, all rated between sixty-two and eighty, all with English
+   names, refilled to ten once a month and priced at a big club's wage
+   rate. Ten Premier League squad players is not a market, and for a
+   National League club it is a list of ten people who will never sign.
+
+   This is the same store, filled properly. Reusing it rather than
+   adding a second one keeps one source of truth and means the existing
+   screen, the existing buttons and any save already in progress all
+   keep working. */
+function faList(){
+ if(!G.freeAgents)G.freeAgents=[];
+ /* rehydrate anything that came back from a save in compact form */
+ let n=0;
+ for(let i=0;i<G.freeAgents.length;i++)
+  if(Array.isArray(G.freeAgents[i])){G.freeAgents[i]=faFromRow(G.freeAgents[i]);n++}
+ return G.freeAgents}
+
+/* ---------------------------------------------------------------------
+   HOW THEY ARE SAVED
+   ---------------------------------------------------------------------
+   packG compresses every player in every squad into a compact row and
+   knows nothing about this list, so two hundred and forty full player
+   objects — nineteen attributes and a stats block each — went into the
+   save raw. That is about a quarter of a megabyte on a save that was
+   already within a few hundred kilobytes of what localStorage will
+   take, and it pushed it over: writeSlot failed, the slot kept the
+   previous write, and loading it silently produced an older world. The
+   save round-trip harness caught it as career totals collapsing from
+   three thousand six hundred players to four.
+
+   An unattached player has no match history and his attributes are
+   derived from his rating, so nine numbers describe him completely and
+   genPlayer rebuilds the rest on the way back in.
+   --------------------------------------------------------------------- */
+function faToRow(p){
+ return [p.id,p.name,p.pos,p.age,p.ovr,p.pot,p.nat||'ENG',
+  p.askWage||1000,p.faSince||0]}
+
+function faFromRow(r){
+ try{
+  const p=genPlayer([r[1],r[2],r[3],r[4],r[5]],G.my,r[0]);
+  p.club=-1;p.free=true;p.contract=0;p.youth=false;
+  p.nat=r[6];p.askWage=r[7];p.faSince=r[8];p.scouted=false;
+  p.value=valueFor(p);
+  return p}
+ catch(e){return null}}
+
+const _packGFA=packG;
+packG=function(g){
+ const out=_packGFA.apply(this,arguments);
+ try{
+  if(out&&out.g&&Array.isArray(out.g.freeAgents))
+   out.g.freeAgents=out.g.freeAgents
+    .map(p=>Array.isArray(p)?p:faToRow(p))}
+ catch(e){}
+ return out};
+
+function faStandards(){
+ /* the rating bands the world actually plays at, read off the world
+    rather than guessed, so the pool tracks the pyramid if it drifts */
+ const out={};
+ try{
+  ['PL','CH','L1','L2','NL'].forEach(d=>{
+   const mem=divMembers(d)||[];
+   let n=0,s=0;
+   mem.forEach(i=>(G.clubs[i].players||[]).forEach(p=>{if(!p.loan){s+=p.ovr;n++}}));
+   if(n)out[d]=s/n})}
+ catch(e){}
+ return out}
+
+/* which countries the market draws from, weighted so most of a free
+   agent list in England is English */
+function faCountry(rng){
+ const r=rng();
+ if(r<.58)return 'ENG';
+ if(r<.66)return 'IRL';
+ if(r<.72)return 'SCO';
+ const pool=['ESP','POR','FRA','GER','ITA','NED','BEL','NOR','DEN','SWE',
+  'POL','CZE','SRB','CRO','TUR','GRE','AUT','SUI','UKR','BRA','ARG','NGA',
+  'GHA','CIV','SEN','CMR','USA','CAN','JPN','KOR','AUS'];
+ return pool[Math.floor(rng()*pool.length)]}
+
+function faMakeOne(rng,std){
+ const shape=['GK','GK','DC','DC','DC','DL','DR','DM','MC','MC','MC',
+  'AMC','AML','AMR','ST','ST','ST','WBL','WBR'];
+ const pos=shape[Math.floor(rng()*shape.length)];
+
+ /* Where in the pyramid he last played. Weighted downward: far more
+    players are released by League Two clubs than by Premier League ones,
+    because there are far more League Two contracts. */
+ const roll=rng();
+ const band=roll<.06?'PL':roll<.20?'CH':roll<.44?'L1':roll<.72?'L2':'NL';
+ const base=std[band]||{PL:77,CH:65,L1:55,L2:49,NL:43}[band];
+ /* released players are the bottom of the squad they left, mostly */
+ const ovr=clamp(Math.round(base-6+rng()*9),30,88);
+
+ /* AGE. This is the whole character of the list: released means old far
+    more often than it means young. */
+ const ar=rng();
+ const age=ar<.10?Math.round(18+rng()*3)      /* an academy let-go */
+          :ar<.28?Math.round(22+rng()*4)      /* did not make it */
+          :ar<.62?Math.round(27+rng()*3)      /* squad player, moved on */
+          :ar<.88?Math.round(31+rng()*3)      /* the veteran */
+          :Math.round(34+rng()*4);            /* one more year */
+
+ const pot=clamp(Math.round(ovr+(age<=21?7+rng()*16:age<=24?2+rng()*7:0)),ovr,90);
+ const cc=faCountry(rng);
+ const nm=worldName(cc,rng,null);
+ const p=genPlayer([nm,pos,age,ovr,pot],G.my);
+ p.club=-1;p.youth=false;p.contract=0;p.nat=cc;p.free=true;
+ p.scouted=false;
+ /* his own idea of his worth, which a free agent always overstates a
+    little because there is no fee to argue about */
+ p.askWage=Math.max(250,Math.round(baseWage(ovr)*(.62+rng()*.42)/50)*50);
+ /* how long he has been waiting — it gets cheaper the longer it goes */
+ p.faSince=G.day||0;
+ return p}
+
+function faRefill(n){
+ try{
+  const std=faStandards();
+  const rng=mulberry(hashStr('fa|'+(G.season||1)+'|'+(G.day||0)+'|'+faList().length));
+  const want=Math.max(0,n==null?FA_TARGET-faList().length:n);
+  for(let k=0;k<want;k++)faList().push(faMakeOne(rng,std));
+ }catch(e){}}
+
+/* ---------------------------------------------------------------------
+   2. WHAT HE WANTS, AND WHETHER HE WILL COME
+   ---------------------------------------------------------------------
+   A free agent has no fee attached, so the whole negotiation is the
+   wage and whether he fancies it. He will drop his asking price the
+   longer he is out of work, and he will not sign for a club playing
+   several divisions below the level he was released from unless he has
+   been waiting a while — or unless there is something else in it.
+   --------------------------------------------------------------------- */
+function faAsk(p){
+ const waited=Math.max(0,(G.day||0)-(p.faSince||0));
+ /* down to sixty per cent of his opening demand over three months */
+ const drop=1-Math.min(.40,waited/90*.40);
+ const c=G.clubs[G.my];
+ return Math.max(250,Math.round((p.askWage||1000)*drop*
+  clubPayFactor(c?c.rep:3000)/clubPayFactor(6000)/50)*50)}
+
+function faProject(){
+ /* a club being built from nothing, in its first three seasons */
+ try{
+  if(!G.cc||!G.cc.on)return 0;
+  const age=(G.season||1)-(G.cc.founded||1);
+  return age<=2?1:0}
+ catch(e){return 0}}
+
+function faAppeal(p){
+ try{
+  const c=G.clubs[G.my];
+  const std=faStandards();
+  const here=std[c.league]!=null?std[c.league]:ovrForRep(c.rep);
+  const waited=Math.max(0,(G.day||0)-(p.faSince||0));
+  /* the gap between what he is and what the club is */
+  let a=60-(p.ovr-here)*4.5;
+  a+=Math.min(28,waited/90*28);          /* desperation */
+  a+=p.age>=32?12:p.age<=21?8:0;         /* both ends want a club */
+  a+=faProject()?14:0;                   /* something being built */
+  return clamp(Math.round(a),2,98)}
+ catch(e){return 50}}
+
+/* ---------------------------------------------------------------------
+   3. THE COMPUTER SIGNS FROM IT TOO
+   ---------------------------------------------------------------------
+   Without this the list is a shop nobody else uses, and the good ones
+   sit there all season waiting for you.
+   --------------------------------------------------------------------- */
+function faAiSweep(){
+ try{
+  const L=faList();
+  if(!L.length)return 0;
+  const rng=mulberry(hashStr('faai|'+G.season+'|'+G.day));
+  let done=0;
+  for(let k=0;k<10&&done<2;k++){
+   const p=L[Math.floor(rng()*L.length)];
+   if(!p||p.club!==-1)continue;
+   /* somebody who needs him, can pay him, and is roughly his level */
+   const buyers=G.clubs.filter(c=>{
+    if(c.i===G.my)return false;
+    const s=(c.players||[]).filter(x=>!x.loan);
+    if(s.length>=26)return false;
+    const w=wageFor(p.ovr,c.rep);
+    if(s.reduce((a,x)=>a+(x.wage||0),0)+w>(c.wageCap||0))return false;
+    const best=s.filter(x=>POSGROUP(x.pos)===POSGROUP(p.pos))
+     .sort((a,b)=>b.ovr-a.ovr)[0];
+    return !best||p.ovr>=best.ovr-4});
+   if(!buyers.length)continue;
+   const c=buyers[Math.floor(rng()*buyers.length)];
+   p.club=c.i;p.free=false;delete p.askWage;delete p.faSince;
+   p.wage=wageFor(p.ovr,c.rep);p.contract=irnd(1,3);p.value=valueFor(p);
+   c.players.push(p);
+   G.freeAgents=faList().filter(x=>x!==p);
+   done++}
+  return done}
+ catch(e){return 0}}
+
+/* a player you release goes onto the market rather than out of existence */
+const _releaseDoFA=ACTIONS.releaseDo;
+ACTIONS.releaseDo=function(el){
+ let p=null;
+ try{p=playerById(el&&el.dataset&&el.dataset.id)}catch(e){}
+ const r=_releaseDoFA.apply(this,arguments);
+ try{
+  if(p&&!(G.clubs[G.my].players||[]).some(x=>x.id===p.id)){
+   p.club=-1;p.free=true;p.contract=0;p.listed=false;
+   p.askWage=Math.max(250,Math.round(baseWage(p.ovr)*.70/50)*50);
+   p.faSince=G.day;
+   faList().push(p)}
+ }catch(e){}
+ return r};
+
+/* and the market keeps ticking */
+const _dtcFree=dailyTickCore;
+dailyTickCore=function(){
+ const r=_dtcFree.apply(this,arguments);
+ try{
+  if(!G||!G.clubs||G.sacked)return r;
+  if(!G.freeAgents){G.freeAgents=[];faRefill()}
+  G.freeAgents=faList().filter(Boolean);
+  if(G.day%3===0)faAiSweep();
+  /* the summer's releases arrive through July */
+  /* Kept topped up rather than allowed to drain. The computer takes a
+     couple every three days, which over a season is more than the pool
+     holds, so it refills whenever it drops below three quarters. */
+  if(faList().filter(x=>x&&x.club===-1).length<FA_TARGET*.75)
+   faRefill(Math.round(FA_TARGET*.2));
+ }catch(e){}
+ return r};
+
+const _newGameFA=newGame;
+newGame=function(){
+ const r=_newGameFA.apply(this,arguments);
+ try{G.freeAgents=[];faRefill()}catch(e){}
+ return r};
+
+const _endSeasonFA=endSeason;
+endSeason=function(){
+ const r=_endSeasonFA.apply(this,arguments);
+ try{
+  /* everyone still waiting has been waiting a year; a good few give up */
+  /* a year older, and most of them have found something or stopped
+     looking; the rest are joined by this summer's releases */
+  G.freeAgents=faList().filter(()=>Math.random()<.35);
+  faList().forEach(p=>{p.faSince=G.day;p.age=(p.age||25)+1;
+   p.value=valueFor(p);
+   p.askWage=Math.max(250,Math.round(baseWage(p.ovr)*.62/50)*50)});
+  G.freeAgents=faList().filter(p=>p.age<=39);
+  faRefill()}
+ catch(e){}
+ return r};
+
+/* ---------------------------------------------------------------------
+   4. THE SCREEN
+   --------------------------------------------------------------------- */
+(function faCSS(){
+ const old=document.getElementById('wB7');if(old)old.remove();
+ const st=document.createElement('style');st.id='wB7';
+ st.textContent=[
+  '.fa-row{display:flex;align-items:center;gap:9px;padding:8px 4px;'+
+   'border-bottom:1px solid rgba(255,255,255,.06)}',
+  '.fa-row .nm{font-weight:700;font-size:12.5px;line-height:1.25}',
+  '.fa-row .mt{font-size:10.5px;color:rgba(255,255,255,.5);line-height:1.35}',
+  '.fa-tag{display:inline-block;font-size:9px;letter-spacing:.06em;'+
+   'text-transform:uppercase;font-weight:800;padding:1px 5px;border-radius:99px;'+
+   'border:1px solid currentColor;margin-left:5px;vertical-align:1px}',
+  '.fa-tag.t-proj{color:#7fb3ff}',
+  '.fa-tag.t-vet{color:#f0b649}',
+  '.fa-tag.t-kid{color:#57d38c}'
+ ].join('\n');
+ document.head.appendChild(st)})();
+
+function faSorted(){
+ const c=G.clubs[G.my];
+ const room=Math.max(0,(c.wageCap||0)-squadWage(c));
+ return faList().slice()
+  .filter(p=>p&&p.club===-1)
+  .map(p=>({p,ask:faAsk(p),app:faAppeal(p)}))
+  /* Affordable first, then the ones who would actually come, then by
+     rating. Sorting on rating alone put a fifty-nine at the top of a
+     National League list who was never going to drop three divisions —
+     technically affordable, permanently unavailable, and the first
+     thing you saw. */
+  .sort((a,b)=>{
+   const af=(a.ask<=room?1:0),bf=(b.ask<=room?1:0);
+   if(af!==bf)return bf-af;
+   const aw=(a.app>=45?1:0),bw=(b.app>=45?1:0);
+   if(aw!==bw)return bw-aw;
+   return b.p.ovr-a.p.ovr})}
+
+function faTag(p){
+ if(faProject()&&p.ovr>=(faStandards()[G.clubs[G.my].league]||45)+3)
+  return '<span class="fa-tag t-proj">likes the project</span>';
+ if(p.age>=33)return '<span class="fa-tag t-vet">veteran</span>';
+ if(p.age<=21)return '<span class="fa-tag t-kid">released kid</span>';
+ return ''}
+
+ACTIONS.faOpen=el=>{
+ const c=G.clubs[G.my];
+ const room=Math.max(0,(c.wageCap||0)-squadWage(c));
+ const rows=faSorted();
+ UI.faShow=UI.faShow||40;
+ let h='<h3>🆓 Free agents</h3>'+
+  '<div class="small muted" style="margin:6px 0 10px;line-height:1.5">'+
+  'Out of contract. No fee — you agree wages and he signs. '+
+  'The longer a player is without a club the less he asks for, and the '+
+  'more likely he is to drop a division to get one.</div>'+
+  '<div class="grid2" style="margin-bottom:10px">'+
+  '<div class="kpi"><div class="v num">'+rows.length+'</div><div class="l">Available</div></div>'+
+  '<div class="kpi"><div class="v num" style="color:'+(room>0?'var(--green)':'var(--danger)')+
+   '">'+fmtW(room)+'</div><div class="l">Wage room</div></div></div>';
+ h+='<div class="card tight" style="max-height:54vh;overflow:auto">'+
+  (rows.length?rows.slice(0,UI.faShow).map(r=>{
+   const p=r.p,ok=r.ask<=room;
+   return '<div class="fa-row">'+
+    '<span class="xs faint" style="min-width:32px">'+esc(p.pos)+'</span>'+
+    '<div style="flex:1;min-width:0">'+
+     '<div class="nm">'+esc(p.name)+faTag(p)+'</div>'+
+     '<div class="mt">'+(typeof ccFlag==='function'?ccFlag(p.nat)+' ':'')+
+      p.age+' · asking '+fmtW(r.ask)+' · '+
+      (r.app>=70?'keen':r.app>=45?'would consider it':r.app>=25?'needs persuading':'not interested')+
+     '</div></div>'+
+    '<b class="num ovr">'+p.ovr+'</b>'+
+    '<button class="btn '+(ok?'btn-gold':'btn-ghost')+' btn-xs" '+
+     'data-action="faSign" data-v="'+p.id+'">'+(ok?'Offer':'Too rich')+'</button>'+
+    '</div>'}).join('')
+   :'<div class="small muted" style="padding:8px">Nobody available.</div>')+
+  '</div>';
+ if(rows.length>UI.faShow)
+  h+='<button class="btn btn-ghost btn-block btn-xs" style="margin-top:8px" '+
+   'data-action="faMore">Show more ('+(rows.length-UI.faShow)+' left)</button>';
+ h+='<button class="btn btn-ghost btn-block" style="margin-top:10px" data-action="closeModal">Close</button>';
+ openModal(h)};
+
+ACTIONS.faMore=()=>{UI.faShow=(UI.faShow||40)+40;ACTIONS.faOpen()};
+
+ACTIONS.faSign=el=>{
+ const id=+el.dataset.v;
+ const p=faList().filter(x=>x.id===id)[0];
+ if(!p||p.club!==-1){toast('He has signed elsewhere.');return}
+ const c=G.clubs[G.my];
+ const ask=faAsk(p),app=faAppeal(p);
+ if(squadWage(c)+ask>(c.wageCap||0)){toast('The wage bill will not take it.');return}
+ if((c.players||[]).filter(x=>!x.loan).length>=32){toast('The squad is full.');return}
+ /* he decides, once, and the answer sticks for the day */
+ const rng=mulberry(hashStr('fasign|'+p.id+'|'+G.day));
+ if(rng()*100>app){
+  p.faTurned=G.day;
+  toast(p.name+' has turned it down.');
+  mail('transfer','No thanks: '+p.name,
+   '<b>'+esc(p.name)+'</b> has decided against joining. '+
+   (app<25?'He still thinks he can do better than this.'
+          :'He is weighing up other offers.')+
+   '<br><br><span class="xs faint">Free agents get less choosy the longer they wait. '+
+   'Come back to him.</span>');
+  ACTIONS.faOpen();render();return}
+ p.club=G.my;p.free=false;p.wage=ask;p.contract=p.age>=32?1:irnd(1,3);
+ p.listed=false;p.scouted=true;p.morale=clamp(p.morale+10,1,100);
+ p.sharp=Math.max(p.sharp||55,48);p.value=valueFor(p);
+ delete p.askWage;delete p.faSince;
+ c.players.push(p);
+ G.freeAgents=faList().filter(x=>x.id!==id);
+ if(typeof windowId==='function')p.movedWindow=windowId();
+ try{if(!G.tacs.xi||G.tacs.xi.length<11)G.tacs.xi=autoPick(G.my,G.tacs.formation)}catch(e){}
+ try{sfx('cheer')}catch(e){}
+ toast('✍️ '+p.name+' signs on a free');
+ mail('transfer','FREE TRANSFER: '+p.name+' signs',
+  '<b>'+esc(p.name)+'</b> ('+p.pos+', '+p.age+', rated '+p.ovr+') joins on a free transfer, '+
+  'on '+fmtW(ask)+' for '+p.contract+' year'+(p.contract===1?'':'s')+'.'+
+  (p.age>=33?'<br><br>He has plenty of miles on him. One good season is what you are buying.':'')+
+  (faProject()?'<br><br>He said he liked the idea of being part of something from the start.':''));
+ try{if(typeof ccStory==='function')ccStory('firstSign',p)}catch(e){}
+ try{if(typeof ccSquad==='function'&&ccSquad()>=20&&typeof ccStory==='function')ccStory('twenty')}catch(e){}
+ ACTIONS.faOpen();render()};
+
+/* ---------------------------------------------------------------------
+   5. AND A DOOR TO IT
+   ---------------------------------------------------------------------
+   The transfers screen used to print all ten free agents inline. Two
+   hundred and forty of them would be a wall, so the screen carries a
+   card that says how many there are and opens the browser above.
+   --------------------------------------------------------------------- */
+vFreeAgents=function(){
+ try{
+  const n=faList().filter(p=>p&&p.club===-1).length;
+  const c=G.clubs[G.my];
+  const room=Math.max(0,(c.wageCap||0)-squadWage(c));
+  const fit=faSorted().filter(r=>r.ask<=room).length;
+  return '<div class="sec"><div class="t">🆓 Free agents</div><div class="ln"></div>'+
+   '<div class="sub">no fee</div></div>'+
+   '<div class="card" data-action="faOpen" style="cursor:pointer;'+
+    'border-color:rgba(87,211,140,.35)">'+
+   '<div class="spread"><div style="min-width:0">'+
+   '<div style="font-weight:800;font-size:14px">'+n+' players out of contract</div>'+
+   '<div class="xs muted" style="margin-top:3px">'+
+   (fit?fit+' of them inside your wage budget. ':'None inside your wage budget yet. ')+
+   'No fee — you agree wages and he signs.</div></div>'+
+   '<div class="chip on" style="flex:none">Browse ›</div></div></div>'}
+ catch(e){return ''}};
+
+/* the built club's trials list is this market, so there is one of them */
+if(typeof ACTIONS.ccTrials==='function')ACTIONS.ccTrials=()=>ACTIONS.faOpen();
+
+/*#wB7_freeagents.js#*/
 showStart();
 </script>
 </body>
