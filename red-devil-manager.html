@@ -44393,6 +44393,241 @@ buildTrophyRoom=function(host){
  return r};
 
 /*#wA2_metal.js#*/
+
+
+
+
+/*#wA3_balance.js#*/
+
+/* =====================================================================
+   wA3_balance — real scorelines, and a league that stays a league
+   ---------------------------------------------------------------------
+   Measuring five seasons turned up two things, and only one of them was
+   the one being looked for.
+
+   GOALS ran at 3.1 a game against about 2.8 in real top-flight
+   football. Eleven per cent high does not sound like much until you
+   notice it is a goal every three matches, and that it is the number
+   every result in the game is made of.
+
+   THE LEAGUE GOT BETTER AT ITSELF. Mean overall across the division:
+
+     season 1   76.8
+     season 2   79.3
+     season 3   80.4
+     season 4   82.8
+     season 5   82.7
+
+   Six points in four seasons, and then a plateau — which is the shape
+   that gives the cause away. It is not runaway inflation, it is
+   CONVERGENCE. weeklyTraining runs for every club in the world, and any
+   player under 24 below his potential gets bumped every week until he
+   reaches it. Nobody ever fails. So the league does not drift upward
+   forever, it climbs to the mean POTENTIAL of its players and sits
+   there, and mean potential is six points above mean ability.
+
+   In real football almost nobody reaches their ceiling. That is what a
+   ceiling is. Three changes:
+
+     A REALISED CEILING, hidden, between 80% and 100% of potential and
+     weighted so most players land near nine tenths. Potential stays
+     what the scouts tell you — the gap between what he could have been
+     and what he became is the interesting part, and now the game can
+     have one.
+
+     DECLINE THAT STARTS WHEN IT STARTS. It began at 31 and touched
+     three attributes. Legs go at 29, and by 33 they go faster.
+
+     AND CONVERSION, trimmed. A share of clear chances become saves
+     instead. Shots, expected goals and save counts all stay honest,
+     because the chance was still created — it just did not go in, which
+     is what happens to most of them.
+   ===================================================================== */
+
+/* ---------------------------------------------------------------------
+   1. WHAT A PLAYER ACTUALLY BECOMES
+   ---------------------------------------------------------------------
+   Deterministic from the player, so it survives a save and a reload
+   without being stored, and so a scout's report does not change every
+   time you look at it.
+   --------------------------------------------------------------------- */
+function playerCeiling(p){
+ try{
+  const pot=p.pot||p.ovr||60;
+  const r=mulberry(hashStr('ceil|'+(p.id||0)+'|'+(p.name||'')))();
+  /* pow<1 pushes the mass toward the top of the range: plenty of players
+     get close, a few realise everything, and a tail never do */
+  const f=.80+Math.pow(r,.62)*.20;
+  return Math.max(p.ovr||0,Math.round(pot*f));
+ }catch(e){return p.pot||p.ovr||60}}
+
+/* how close he came, for anywhere that wants to say so */
+function ceilingGap(p){
+ try{return Math.max(0,(p.pot||0)-playerCeiling(p))}catch(e){return 0}}
+
+/* ---------------------------------------------------------------------
+   2. THE CEILING IS APPLIED TO THE POTENTIAL, NOT TO THE TRAINING
+   ---------------------------------------------------------------------
+   The first attempt replaced weeklyTraining outright. That works and it
+   is also wrong: a later module wraps weeklyTraining to apply the
+   individual training focus you set on a player's card, and replacing
+   the function throws that wrapper away along with the growth condition
+   it was chained onto. Silently — the focus still saves, still shows,
+   and stops doing anything.
+
+   Every growth path in the game already stops at p.pot. So the ceiling
+   goes there and every path inherits it: the weekly session, the
+   individual focus, the academy, all of it, with nothing replaced.
+
+   Idempotent and deterministic, so applying it twice is harmless and a
+   reload lands on the same number.
+   --------------------------------------------------------------------- */
+function applyCeilings(){
+ try{
+  eachPlayer(p=>{
+   if(p._cap)return;
+   p._cap=1;
+   const c=playerCeiling(p);
+   if(c<p.pot)p.pot=c});
+ }catch(e){}}
+
+const _ngCeil=newGame;
+newGame=function(){
+ const r=_ngCeil.apply(this,arguments);
+ applyCeilings();
+ return r};
+const _lsCeil=loadSlot;
+loadSlot=function(s){
+ const ok=_lsCeil.apply(this,arguments);
+ if(ok)applyCeilings();
+ return ok};
+/* the summer intake and anyone signed from outside the world */
+const _esCeil=endSeason;
+endSeason=function(){
+ const r=_esCeil.apply(this,arguments);
+ applyCeilings();
+ return r};
+
+/* ---------------------------------------------------------------------
+   3. DECLINE
+   ---------------------------------------------------------------------
+   The old one took a tenth off three attributes a month from 31. Over a
+   career that is nowhere near enough to balance a league where everyone
+   under 24 is improving every week.
+   --------------------------------------------------------------------- */
+monthlyDecline=function(){
+ eachPlayer(p=>{
+  const age=p.age||25;
+  if(age<29)return;
+  const hard=age>=33, late=age>=36;
+  const d=late?.22:hard?.15:.075;
+  ['pace','acceleration','stamina'].forEach(a=>{
+   if(p.attrs[a]!=null)p.attrs[a]=clamp(p.attrs[a]-d,1,20)});
+  if(age>=31)['agility','jumping'].forEach(a=>{
+   if(p.attrs[a]!=null)p.attrs[a]=clamp(p.attrs[a]-d*.6,1,20)});
+  if(age>=33&&p.attrs.strength!=null)
+   p.attrs.strength=clamp(p.attrs.strength-d*.45,1,20);
+  /* what he knows does not go — it is the only thing that does not */
+  if(age>=34&&p.attrs.positioning!=null)
+   p.attrs.positioning=clamp(p.attrs.positioning+.02,1,20);
+  p.ovr=Math.round(ovrOf(p));
+ })};
+
+/* ---------------------------------------------------------------------
+   4. CONVERSION, CLOSED LOOP
+   ---------------------------------------------------------------------
+   Two open-loop attempts at this failed, and both are worth recording.
+
+   A FIXED TRIM. Cut a tenth of open-play goals. It landed season one on
+   2.94 and season six on 3.67, because the rate is not constant: goals
+   climb with the league's ability. Attack and defence rise together, so
+   this should not happen.
+
+   MAKING THE KEEPER'S BONUS PROPORTIONAL. shotEvent gives the keeper a
+   flat +0.92 while everything else on both sides scales with ability,
+   so the theory was that his edge erodes as attributes climb. Expressed
+   as a fraction instead, goals went UP — 3.41 in season one, 4.52 by
+   season six, and the slope got steeper. The theory was wrong, and the
+   likelier cause is that shooting sits in two training focus areas
+   while a keeper's agility sits in one, so forwards simply outgrow
+   goalkeepers. That change is reverted.
+
+   Chasing the mechanism further is the wrong use of the time. What the
+   game needs is a rate that is right and STAYS right — through rating
+   drift, through a rebalanced training focus, through whatever gets
+   changed next season. So the trim is not a constant, it is a
+   controller: the league's real goals-per-game is measured over a
+   rolling window of matches and the trim is solved for directly.
+
+     observed = untrimmed x (1 - trim)
+     so untrimmed = observed / (1 - trim)
+     and the trim that hits the target is 1 - target/untrimmed
+
+   which converges in one window rather than creeping. The window then
+   halves rather than resetting, so the estimate keeps a memory and does
+   not jitter on a run of high-scoring Saturdays.
+   --------------------------------------------------------------------- */
+const GOAL_TARGET=2.80;      /* real top-flight football */
+const GOAL_WINDOW=120;       /* matches in a division before re-solving */
+
+/* PER DIVISION. One shared controller held the whole world at 2.80,
+   which meant the Premier League sat at 3.05 to make up for the leagues
+   below it scoring less. Each division is solved on its own numbers. */
+function goalCal(div){
+ if(typeof G==='undefined'||!G)return{n:0,g:0,trim:.12};
+ if(!G.gcal||G.gcal.trim!=null)G.gcal={};
+ const k=div||'_';
+ if(!G.gcal[k])G.gcal[k]={n:0,g:0,trim:.12};
+ return G.gcal[k]}
+
+function goalRetune(c){
+ const obs=c.g/c.n;
+ const untrimmed=obs/Math.max(.25,1-c.trim);
+ c.trim=clamp(1-GOAL_TARGET/Math.max(.5,untrimmed),0,.62);
+ /* halve rather than clear: the next solve still remembers this one */
+ c.n=Math.round(c.n/2);c.g=c.g/2}
+
+const _finCal=MatchSim.prototype.finish;
+MatchSim.prototype.finish=function(){
+ const r=_finCal.apply(this,arguments);
+ try{
+  const f=this.fix;
+  /* league matches only. Cups mix divisions and would bias the estimate
+     toward whatever the draw happened to produce. */
+  if(f&&f.div){
+   const c=goalCal(f.div);
+   c.n++;c.g+=(f.hs|0)+(f.as|0);
+   if(c.n>=GOAL_WINDOW)goalRetune(c)}
+ }catch(e){}
+ return r};
+
+/* ---------------------------------------------------------------------
+   5. HOW A GOAL BECOMES A SAVE
+   ---------------------------------------------------------------------
+   The goal is intercepted rather than the shot, so everything upstream
+   stays honest: the shot was taken, the expected goals were earned, the
+   commentary said a chance was made. All of that is true. It just did
+   not go in, which is what happens to most chances.
+
+   Penalties are exempt — they convert about three times in four in real
+   football and the model already reproduces that.
+   --------------------------------------------------------------------- */
+const _goalCal=MatchSim.prototype.goal;
+MatchSim.prototype.goal=function(A,D,shooter,creator,assister,pen){
+ try{
+  const div=(this.fix&&this.fix.div)||null;
+  if(!pen&&Math.random()<goalCal(div).trim){
+   const g=this.gk(D);
+   A.st.sot++;D.st.sv++;
+   g.rating+=.24;
+   if(shooter&&shooter.rating!=null)shooter.rating-=.02;
+   this.say(this.dispMin(),A,
+    cf(COMM.save,{b:shooter.p.name,g:g.p.name}),'big');
+   return}
+ }catch(e){}
+ return _goalCal.apply(this,arguments)};
+
+/*#wA3_balance.js#*/
 showStart();
 </script>
 </body>
