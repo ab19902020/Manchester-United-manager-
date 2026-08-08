@@ -36562,7 +36562,20 @@ buildTrophyRoom=function(host){
    INS.rx=Math.max(-1.15,Math.min(1.15,INS.rx+dy*.008));
    INS.spin=0;INS.idle=0;
   }else{
-   P.yaw-=dx*.0042;
+   /* LOOKING AND WALKING HAD OPPOSITE IDEAS OF WHICH WAY IS RIGHT.
+      Measured rather than reasoned about: at yaw +0.6 the camera faces
+      (-0.564, -0.825) while every movement line in this room computes
+      forward as (sin yaw, -cos yaw) = (+0.565, -0.825). The x is
+      mirrored. So you would drag to look at a plinth, press Walk, and
+      set off in the other direction — which is what "swiping right takes
+      me left" actually is.
+
+      The movement maths is used in six places and the camera in one, so
+      the camera is the thing that moves: rotateY(-yaw) below makes it
+      face (sin yaw, -cos yaw), agreeing with the walk, the strafe, the
+      wheel, the pinch and the fly-to-plinth. With that flip, drag right
+      must now INCREASE yaw to turn right. */
+   P.yaw+=dx*.0042;
    P.pitch=Math.max(-.5,Math.min(.45,P.pitch-dy*.0032));
    fly=null}
   px=e.clientX;py=e.clientY});
@@ -36675,7 +36688,9 @@ buildTrophyRoom=function(host){
 
   cam.position.set(P.x,1.55,P.z);
   cam.rotation.set(0,0,0);
-  cam.rotateY(P.yaw);cam.rotateX(P.pitch);
+  /* negated so the camera agrees with the movement maths — see the drag
+     handler above for why this is the line that moved */
+  cam.rotateY(-P.yaw);cam.rotateX(P.pitch);
 
   /* the room */
   rend.autoClear=true;
@@ -40135,6 +40150,284 @@ renderHdr=function(){
  return r};
 
 /*#w89_layout.js#*/
+
+/*#w90_guide.js#*/
+
+/* =====================================================================
+   w90_guide — tell people what they have to do
+   ---------------------------------------------------------------------
+   "If I forget to type my name it doesn't let you go forward. It needs to
+   be intuitive and take you to the page and literally say you need to do
+   this to move forward, and this needs to be in the whole game."
+
+   The manager creator is the clearest case and it is worse than it looks.
+   The check was:
+
+       if(!m.name){ document.getElementById('mgrName').focus() ... }
+
+   That element only exists while the "Who you are" tab is on screen. Get
+   as far as picking a haircut without typing a name, press Take the job,
+   and getElementById returns null, the focus call does nothing, the
+   highlight lands on nothing, and the only feedback in the entire
+   interface is a toast that has probably already faded. The button simply
+   stops working and the game never says why.
+
+   Three things, and the third is the general one:
+
+     1. A BLOCKED ACTION TAKES YOU TO THE THING THAT IS BLOCKING IT.
+        Not a message about a field you cannot see — the tab changes, the
+        field scrolls into view, and the reason sits underneath it in
+        words.
+     2. IT SAYS SO BEFORE YOU PRESS. The button reads "Name yourself
+        first" while it cannot be used, so the requirement is visible
+        rather than discovered.
+     3. AND THE SAME MACHINERY IS AVAILABLE EVERYWHERE. requireFirst() is
+        a general check-then-explain, and the home screen grows a panel
+        listing everything waiting on a decision from you, each with the
+        button that takes you to it.
+   ===================================================================== */
+
+/* ---------------------------------------------------------------------
+   1. A REASON, ATTACHED TO THE THING THAT NEEDS DOING
+   --------------------------------------------------------------------- */
+function guideClear(host){
+ try{(host||document).querySelectorAll('.need-msg').forEach(n=>n.remove());
+  (host||document).querySelectorAll('.need-bad').forEach(n=>n.classList.remove('need-bad'))}
+ catch(e){}}
+
+function guidePoint(el,msg){
+ try{
+  if(!el)return;
+  el.classList.add('need-bad');
+  const n=document.createElement('div');
+  n.className='need-msg';
+  n.innerHTML='<span class="need-i">!</span><span>'+esc(msg)+'</span>';
+  const host=el.parentElement||el;
+  host.insertBefore(n,el.nextSibling);
+  try{el.scrollIntoView({block:'center',behavior:'smooth'})}catch(e){}
+  try{if(el.focus)setTimeout(()=>{try{el.focus({preventScroll:true})}catch(x){}},260)}catch(e){}
+  setTimeout(()=>{try{el.classList.remove('need-bad')}catch(x){}},2400);
+ }catch(e){}}
+
+/* the general form: a list of {ok, goTo, field, why} — the first one that
+   is not ok is taken to and explained */
+function requireFirst(checks){
+ for(let i=0;i<checks.length;i++){
+  const c=checks[i];
+  let ok=false;try{ok=!!c.ok()}catch(e){ok=false}
+  if(ok)continue;
+  try{if(c.goTo)c.goTo()}catch(e){}
+  setTimeout(()=>{
+   let el=null;
+   try{el=(typeof c.field==='function')?c.field():document.getElementById(c.field)}catch(e){}
+   guideClear(document);
+   guidePoint(el,c.why);
+   try{toast('⚠️ '+c.why)}catch(e){}},40);
+  return false}
+ return true}
+
+/* ---------------------------------------------------------------------
+   2. THE CREATOR, WHICH IS WHERE IT WAS FOUND
+   --------------------------------------------------------------------- */
+ACTIONS.mgrDone=function(){
+ const m=myManager();
+ const ok=requireFirst([
+  {ok:()=>!!(m.name&&m.name.trim().length>=2),
+   why:'Your manager needs a name before you can take the job.',
+   goTo:()=>{if(MGRUI.tab!=='who'){MGRUI.tab='who';paintMgrCreate()}},
+   field:'mgrName'}]);
+ if(!ok)return;
+ return ACTIONS.mgrDoneGo()};
+
+/* the original, kept under a name of its own so the check has something
+   to call once it is satisfied */
+ACTIONS.mgrDoneGo=function(){
+ const m=myManager();
+ const built={};for(const k in m)built[k]=m[k];
+ try{mgrRemember(m)}catch(e){}
+ closeMgrCreate();
+ MGRUI.done=true;
+ PENDING_MGR=built;
+ try{sfx('tap')}catch(e){}
+ const el=MGRUI.startEl||{dataset:{k:MGRUI.key}};
+ try{ACTIONS.startGame(el)}
+ finally{MGRUI.done=false;PENDING_MGR=null}};
+
+/* and the button says what it wants before you press it */
+const _paintMgrNeed=paintMgrCreate;
+paintMgrCreate=function(){
+ const r=_paintMgrNeed.apply(this,arguments);
+ try{
+  const m=myManager();
+  const go=document.querySelector('[data-action="mgrDone"]');
+  if(!go)return r;
+  const named=!!(m.name&&m.name.trim().length>=2);
+  go.classList.toggle('is-blocked',!named);
+  go.textContent=named?'Take the job →':'Name yourself first';
+ }catch(e){}
+ return r};
+
+/* typing a name un-blocks it as you type, rather than on the next repaint */
+const _bindNeed=mgrBindInputs;
+mgrBindInputs=function(){
+ const r=_bindNeed.apply(this,arguments);
+ try{
+  const m=myManager();
+  const n=document.getElementById('mgrName');
+  if(!n)return r;
+  const prev=n.oninput;
+  n.oninput=function(){
+   if(prev)try{prev.apply(this,arguments)}catch(e){}
+   try{
+    guideClear(n.parentElement);
+    const go=document.querySelector('[data-action="mgrDone"]');
+    const named=!!(m.name&&m.name.trim().length>=2);
+    if(go){go.classList.toggle('is-blocked',!named);
+     go.textContent=named?'Take the job →':'Name yourself first'}}
+   catch(e){}};
+ }catch(e){}
+ return r};
+
+/* =====================================================================
+   3. AND EVERYWHERE ELSE: WHAT IS WAITING ON YOU
+   ---------------------------------------------------------------------
+   The same principle, applied to the game rather than to one form. There
+   are things in a save that are waiting on a decision — a press
+   conference, the board upstairs, a bid on your player, a contract with
+   a month left — and the only way to find them was to notice a number on
+   the inbox pill and go looking.
+
+   This is not a tutorial and it does not coach you through football. It
+   lists the things that are actually outstanding, says why each one
+   matters in one line, and gives you the button that goes there. When
+   nothing is waiting it disappears completely, which is the difference
+   between a to-do list and nagging.
+   ===================================================================== */
+function needsList(){
+ const out=[];
+ try{
+  if(!G||G.sacked)return out;
+  const my=G.clubs[G.my];
+
+  /* the board are upstairs */
+  if(G.boardCall)
+   out.push({k:'board',icon:'🏛️',t:'The board want to see you',
+    s:'They are waiting upstairs.',act:'boardGo',cta:'Go up'});
+
+  /* a press conference nobody has taken */
+  if(G.pressCtx)
+   out.push({k:'press',icon:'🎙️',t:'The press are waiting',
+    s:'Duck it after a defeat and it is noticed.',act:'pressOpen',cta:'Take your seat'});
+
+  /* anything in the inbox that still has a decision attached */
+  const decide=(G.inbox||[]).filter(m=>m.actions&&m.actions.length);
+  decide.slice(0,3).forEach(m=>{
+   out.push({k:'mail'+m.id,icon:'✉️',t:String(m.title||'A decision to make').replace(/^[^\w£]*\s*/,''),
+    s:'Waiting on your answer.',act:'nav',v:'home',cta:'Open',mid:m.id})});
+
+  /* an eleven that will not take the field */
+  try{
+   const xi=(G.tacs&&G.tacs.xi)||[];
+   const bad=xi.map(id=>playerById(id)).filter(p=>!p||p.injury||p.susp>0||p.club!==G.my);
+   if(xi.length<11)
+    out.push({k:'xi',icon:'📋',t:'Your eleven is not picked',
+     s:xi.length+' of 11 named.',act:'nav',v:'tactics',cta:'Pick it'});
+   else if(bad.length)
+    out.push({k:'xibad',icon:'📋',t:bad.length+' in your eleven cannot play',
+     s:'Injured, suspended or gone.',act:'nav',v:'tactics',cta:'Fix it'})}
+  catch(e){}
+
+  /* a good player about to walk for nothing */
+  try{
+   const exp=(my.players||[]).filter(p=>!p.loan&&p.contract<=1&&p.ovr>=74)
+    .sort((a,b)=>b.ovr-a.ovr);
+   if(exp.length)
+    out.push({k:'exp',icon:'📄',t:exp[0].name+' is in his last year',
+     s:exp.length>1?(exp.length-1)+' more out of contract too.':'He can leave for nothing.',
+     act:'profile',id:exp[0].id,cta:'Look at it'})}
+  catch(e){}
+
+  /* a promise about to be tested */
+  try{
+   const dl=(G.pledges||[]).filter(p=>p.kind==='deadline'&&p.state==='open')[0];
+   if(dl&&dl.due-G.day<=21)
+    out.push({k:'pl',icon:'🗞️',t:'The time you asked for is nearly up',
+     s:(dl.due-G.day)+' days until the board judge it.',act:'nav',v:'club',cta:'See it'})}
+  catch(e){}
+ }catch(e){}
+ return out}
+
+function vNeeds(){
+ const list=needsList();
+ if(!list.length)return '';
+ return '<div class="needs">'+
+  '<div class="needs-h"><span class="needs-d"></span>'+
+   (list.length===1?'One thing needs you':list.length+' things need you')+'</div>'+
+  list.slice(0,5).map(n=>
+   '<div class="need-row">'+
+    '<span class="need-ic">'+n.icon+'</span>'+
+    '<div class="need-tx"><div class="need-t">'+esc(n.t)+'</div>'+
+     '<div class="need-s">'+esc(n.s)+'</div></div>'+
+    '<button class="need-go" data-action="'+esc(n.act)+'"'+
+     (n.v?' data-v="'+esc(n.v)+'"':'')+
+     (n.id!=null?' data-id="'+esc(String(n.id))+'"':'')+
+     (n.mid?' data-mid="'+esc(n.mid)+'"':'')+
+     '>'+esc(n.cta)+'</button>'+
+   '</div>').join('')+
+ '</div>'}
+
+/* it goes at the very top of Home, above everything, and vanishes when
+   there is nothing outstanding */
+const _vHomeNeeds=vHome;
+vHome=function(){
+ let base='';try{base=_vHomeNeeds.apply(this,arguments)}catch(e){base=''}
+ try{if(G&&G.sacked)return base;return vNeeds()+base}catch(e){return base}};
+
+(function needCSS(){
+ const st=document.createElement('style');st.id='w90';
+ st.textContent=
+ /* the inline requirement */
+ '.need-msg{display:flex;align-items:flex-start;gap:7px;margin-top:7px;'+
+  'padding:9px 11px;border-radius:11px;font-size:12px;line-height:1.45;'+
+  'background:rgba(255,120,90,.12);border:1px solid rgba(255,120,90,.4);'+
+  'color:#ffc9bd;animation:needIn .22s ease both}'+
+ '@keyframes needIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}'+
+ '.need-i{flex:0 0 auto;width:16px;height:16px;border-radius:50%;'+
+  'background:#ff7a5c;color:#231007;font-weight:900;font-size:11px;'+
+  'display:flex;align-items:center;justify-content:center;margin-top:1px}'+
+ '.need-bad{border-color:#ff7a5c !important;'+
+  'box-shadow:0 0 0 3px rgba(255,122,92,.18) !important;'+
+  'animation:needShake .34s}'+
+ '@keyframes needShake{0%,100%{transform:translateX(0)}30%{transform:translateX(-5px)}'+
+  '70%{transform:translateX(5px)}}'+
+ '.is-blocked{filter:saturate(.35) brightness(.82)}'+
+
+ /* the panel on Home */
+ '.needs{border-radius:15px;padding:11px 12px;margin-bottom:11px;'+
+  'background:linear-gradient(180deg,rgba(255,196,96,.10),rgba(20,16,8,.55));'+
+  'border:1px solid rgba(255,196,96,.30);'+
+  'box-shadow:0 8px 24px -12px rgba(0,0,0,.7)}'+
+ '.needs-h{display:flex;align-items:center;gap:8px;font-size:10px;'+
+  'letter-spacing:1.8px;text-transform:uppercase;font-weight:900;'+
+  'color:#f0c877;margin-bottom:7px}'+
+ '.needs-d{width:7px;height:7px;border-radius:50%;background:#f0c877;'+
+  'box-shadow:0 0 0 3px rgba(240,200,119,.20);animation:needPulse 2.2s infinite}'+
+ '@keyframes needPulse{0%,100%{opacity:1}50%{opacity:.45}}'+
+ '.need-row{display:flex;align-items:center;gap:9px;padding:6px 0;'+
+  'border-top:1px solid rgba(255,255,255,.06)}'+
+ '.need-row:first-of-type{border-top:0}'+
+ '.need-ic{font-size:16px;flex:0 0 auto;width:22px;text-align:center}'+
+ '.need-tx{flex:1;min-width:0}'+
+ '.need-t{font-size:12.5px;font-weight:800;line-height:1.25;'+
+  'overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'+
+ '.need-s{font-size:10.5px;color:var(--ink-faint,#8b96a4);font-weight:600}'+
+ '.need-go{flex:0 0 auto;padding:7px 12px;border-radius:10px;cursor:pointer;'+
+  'background:rgba(255,196,96,.18);border:1px solid rgba(255,196,96,.42);'+
+  'color:#ffdc9e;font-size:11.5px;font-weight:800}'+
+ '.need-go:active{background:rgba(255,196,96,.32)}';
+ document.head.appendChild(st)})();
+
+/*#w90_guide.js#*/
 showStart();
 </script>
 </body>
