@@ -46525,6 +46525,268 @@ dailyTickCore=function(){
  return r};
 
 /*#wA8_calendar.js#*/
+
+/*#wA9_ratings.js#*/
+
+/* =====================================================================
+   wA9_ratings — how good everybody actually is
+   ---------------------------------------------------------------------
+   Audited every squad in the game against what the division should look
+   like. The named players are right: Bowen is 80 at West Ham, Haaland
+   91, Saka 89, Rice 88, Kilman 76, Mbappé and Yamal 92 at the top of the
+   world. The Premier League as a whole is right — Arsenal 83.2 average,
+   City 82.8, Liverpool 81.5, the bottom half between 75 and 77.
+
+   Three things are not.
+
+   THE PROMOTED CLUBS ARE IN THE WRONG DIVISION. Ipswich, Coventry and
+   Hull come up carrying the squads they had in the Championship, which
+   is realistic, and nothing then lifts them, which is not. They arrive
+   averaging 65 to 68 in a division averaging 77 — a gap of ten, which is
+   the gap between the Premier League and the Championship itself. A
+   promoted side is the weakest in the division; it is not a different
+   sport. They get the summer every promoted club gets.
+
+   NOTHING BELOW THE CHAMPIONSHIP KNOWS WHO IT IS. Every League One club
+   drew its players from the same flat band, so Bolton, with the biggest
+   ground and the biggest budget in the division, had exactly the squad
+   Wimbledon had: 53.7 against 53.4, which is noise. Same in League Two,
+   same in the National League. A division where every club is identical
+   has no promotion race in it, only a random number generator.
+
+   AND THE TIERS DID NOT OVERLAP. The best player in League One was 63
+   and the Championship median was 64, so the entire League One was worse
+   than almost every Championship player. In reality the divisions
+   interleave heavily — the best League One players are Championship
+   regulars, which is why they get bought every January.
+
+   WHAT IS NOT CHANGED, DELIBERATELY: the division medians. Value and
+   wage are cubic and quadratic in rating, so lifting a League Two median
+   from 49 to 57 would multiply the median League Two player's transfer
+   value eightfold and break the finances of eighty clubs. The shape
+   changes — a squad now has a couple of players worth watching and a
+   long tail, the good clubs are better than the bad ones, and the top of
+   each division reaches into the one above — while the middle stays
+   where the economy expects it.
+   ===================================================================== */
+
+/* ---------------------------------------------------------------------
+   1. RESTATING A PLAYER
+   ---------------------------------------------------------------------
+   A rating is not stored, it is computed from twenty attributes. Moving
+   one means scaling the attributes and letting the weighted sum land
+   where it should — the same three-pass normalisation genPlayer uses,
+   because anything else leaves the rating and the attribute list saying
+   different things.
+   --------------------------------------------------------------------- */
+function setOvr(p,target){
+ try{
+  const t=clamp(Math.round(target),20,99);
+  for(let k=0;k<4;k++){
+   const cur=ovrOf(p);
+   const f=t/Math.max(1,cur);
+   for(const a in p.attrs)p.attrs[a]=clamp(p.attrs[a]*f,1,20)}
+  p.ovr=Math.round(ovrOf(p));
+  if(p.pot<p.ovr)p.pot=p.ovr;
+  const c=G.clubs[p.club];
+  p.wage=wageFor(p.ovr,(c&&c.rep)||4000);
+  p.value=valueFor(p);
+ }catch(e){}}
+
+/* ---------------------------------------------------------------------
+   2. THE SHAPE OF A SQUAD
+   ---------------------------------------------------------------------
+   `best` is what the strongest club in the division has at the top of
+   its squad; `floor` is what the weakest has at the bottom of its. A
+   club's own band is interpolated between them on reputation, and the
+   players inside it fall away from the top on a curve rather than
+   sitting in a uniform block — which is what a real squad list looks
+   like when you sort it: two or three you would pay to watch, a solid
+   middle, and a bench.
+
+   The exponent is what keeps the median where it was. At 0.75 the mean
+   of the curve sits at 43% of the way up the band, so widening the band
+   upwards lifts the top of the division without dragging the middle
+   with it.
+   --------------------------------------------------------------------- */
+const TIER_SHAPE={
+ L1:{best:67,floor:47,spread:5},
+ L2:{best:61,floor:41,spread:4},
+ NL:{best:55,floor:36,spread:4}};
+
+function reshapeTier(div){
+ const shape=TIER_SHAPE[div];
+ if(!shape)return 0;
+ const clubs=G.clubs.filter(c=>c.league===div&&c.players&&c.players.length);
+ if(clubs.length<2)return 0;
+ const reps=clubs.map(c=>c.rep||0);
+ const lo=Math.min.apply(null,reps),hi=Math.max.apply(null,reps);
+ const span=Math.max(1,hi-lo);
+ let n=0;
+ clubs.forEach(c=>{
+  const t=clamp(((c.rep||0)-lo)/span,0,1);
+  /* the best club in the division is `spread` better at the top than
+     the worst, and a little better at the bottom too */
+  const top=shape.best-Math.round((1-t)*shape.spread);
+  const bot=shape.floor-Math.round((1-t)*Math.round(shape.spread*.6));
+  const squad=c.players.filter(p=>!p.loan).slice().sort((a,b)=>b.ovr-a.ovr);
+  const m=squad.length;
+  if(m<2)return;
+  const rng=mulberry(hashStr('shape|'+div+'|'+c.key));
+  squad.forEach((p,k)=>{
+   const u=k/(m-1);
+   let v=top-(top-bot)*Math.pow(u,.75);
+   v+=(rng()*2-1)*1.1;                 /* a squad is not a smooth curve */
+   /* a young player carries his potential rather than his rating, so a
+      nineteen year old at the bottom of the list is not simply the
+      worst footballer at the club */
+   if(p.age<=20)v+=1.5;
+   setOvr(p,v);
+   /* potential moves with the rating, then the growth ceiling is
+      re-applied on top so nobody escapes it through this door */
+   if(p.pot<p.ovr+1)p.pot=Math.min(99,p.ovr+Math.round(rng()*4));
+   n++});
+  c._shaped=1});
+ return n}
+
+/* ---------------------------------------------------------------------
+   3. THE PROMOTED CLUBS GET THEIR SUMMER
+   ---------------------------------------------------------------------
+   Detected rather than named, because the club that comes up changes
+   every season and a hard-coded list would be wrong by August. Any club
+   in a division whose squad average is more than six below the
+   division's median club is lifted to five below it — the weakest in the
+   division, which is what a promoted side is.
+
+   The lift is applied around the club's own average with a slight
+   compression, so the shape of the squad survives: the good players stay
+   the good players, they are simply no longer Championship players in a
+   Premier League shirt.
+   --------------------------------------------------------------------- */
+function liftStragglers(div){
+ const clubs=G.clubs.filter(c=>c.league===div&&c.players&&c.players.length>=11);
+ if(clubs.length<6)return 0;
+ const meanOf=c=>{
+  const s=c.players.filter(p=>!p.loan);
+  return s.length?s.reduce((a,p)=>a+p.ovr,0)/s.length:0};
+ const means=clubs.map(meanOf).sort((a,b)=>a-b);
+ const med=means[Math.floor(means.length/2)];
+ let n=0;
+ clubs.forEach(c=>{
+  const mu=meanOf(c);
+  if(mu>=med-6)return;
+  const target=med-5;
+  c.players.forEach(p=>{
+   if(p.loan)return;
+   setOvr(p,mu===0?target:(target+(p.ovr-mu)*.88));
+   if(p.pot<p.ovr)p.pot=p.ovr;
+   n++});
+  c._lifted=Math.round(target-mu)});
+ return n}
+
+/* ---------------------------------------------------------------------
+   4. AND IT RUNS ONCE, WHEN THE WORLD IS BUILT
+   ---------------------------------------------------------------------
+   After every other module has had its say about who plays where, and
+   before the growth ceilings, which then apply to the new numbers.
+   --------------------------------------------------------------------- */
+function rebalanceRatings(){
+ try{
+  let n=0;
+  ['L1','L2','NL'].forEach(d=>{n+=reshapeTier(d)});
+  ['PL','CH'].forEach(d=>{n+=liftStragglers(d)});
+  /* the ceilings were computed against the old ratings, so they are
+     recomputed against these */
+  try{
+   if(typeof applyCeilings==='function'){
+    eachPlayer(p=>{p._cap=0});
+    applyCeilings()}
+  }catch(e){}
+  return n}
+ catch(e){return 0}}
+
+const _ngRatings=newGame;
+newGame=function(){
+ const r=_ngRatings.apply(this,arguments);
+ try{rebalanceRatings()}catch(e){}
+ return r};
+
+/* ---------------------------------------------------------------------
+   5. AND AFTER PROMOTION, THE CLUB GOES AND SIGNS SOMEBODY
+   ---------------------------------------------------------------------
+   A club that goes up in May has exactly the problem the promoted clubs
+   had at the start: a squad calibrated for the division below, dropped
+   into one that averages thirteen points higher. Left alone it takes
+   five points and comes straight back, every season, for ever.
+
+   The first version of this simply raised its players' ratings, which
+   is the wrong answer and the soak harness said so — twenty-six players
+   flagged as having grown past their age ceiling in season one, because
+   that is precisely what had happened to them. Barnsley's left-back
+   does not become a better footballer because the club got promoted.
+
+   What a promoted club actually does is spend. So it signs: the weakest
+   players leave and are replaced, one at a time, until the squad is
+   within reach of the weakest side already in the division — never past
+   it, because a promoted club is supposed to be the weakest side in the
+   division. New players carry their own ratings, nobody's ability
+   changes overnight, and the growth ceilings are untouched.
+
+   YOUR club is excluded. If you go up, strengthening the squad is the
+   job; having it done for you in the background is not a favour.
+   --------------------------------------------------------------------- */
+function signUpgrades(c,target){
+ const rng=mulberry(hashStr('promo|'+c.key+'|'+G.season));
+ const mean=()=>{
+  const s=c.players.filter(p=>!p.loan);
+  return s.length?s.reduce((a,p)=>a+p.ovr,0)/s.length:0};
+ let n=0;
+ while(mean()<target&&n<9){
+  const squad=c.players.filter(p=>!p.loan).sort((a,b)=>a.ovr-b.ovr);
+  const out=squad[0];
+  if(!out)break;
+  /* a signing is better than the man he replaces but not a star — the
+     spread is what stops nine of them arriving identical */
+  const ovr=Math.round(target+1+rng()*6);
+  if(ovr<=out.ovr)break;
+  const age=Math.round(22+rng()*8);
+  const nm=FN[Math.floor(rng()*FN.length)]+' '+LN[Math.floor(rng()*LN.length)];
+  const np=genPlayer([nm,out.pos,age,ovr,Math.min(99,ovr+Math.round(rng()*4))],c.i);
+  const ix=c.players.indexOf(out);
+  if(ix<0)break;
+  c.players.splice(ix,1,np);
+  /* it costs what it costs */
+  c.bank=Math.max(0,(c.bank||0)-(np.value||0)*.85+(out.value||0)*.6);
+  n++}
+ return n}
+
+function rebuildPromoted(){
+ let total=0;
+ ['PL','CH','L1','L2'].forEach(div=>{
+  const clubs=G.clubs.filter(c=>c.league===div&&c.players&&c.players.length>=11);
+  if(clubs.length<6)return;
+  const meanOf=c=>{
+   const s=c.players.filter(p=>!p.loan);
+   return s.length?s.reduce((a,p)=>a+p.ovr,0)/s.length:0};
+  const means=clubs.map(meanOf).sort((a,b)=>a-b);
+  const med=means[Math.floor(means.length/2)];
+  clubs.forEach(c=>{
+   if(c.i===G.my)return;                 /* your squad is your problem */
+   if(meanOf(c)>=med-6)return;
+   total+=signUpgrades(c,med-5)})});
+ return total}
+
+const _endSeasonRatings=endSeason;
+endSeason=function(){
+ const r=_endSeasonRatings.apply(this,arguments);
+ try{
+  rebuildPromoted();
+  eachPlayer(p=>{p._cap=0});
+  if(typeof applyCeilings==='function')applyCeilings();
+ }catch(e){}
+ return r};
+
+/*#wA9_ratings.js#*/
 showStart();
 </script>
 </body>
