@@ -48678,6 +48678,237 @@ vHome=function(){
  return h};
 
 /*#wB5_june30.js#*/
+/*#wB6_finance.js#*/
+
+/* =====================================================================
+   wB6_finance — what a footballer is worth and what a club can pay
+   ---------------------------------------------------------------------
+   Three numbers underpin every transfer in the game and all three were
+   wrong below the Championship.
+
+   WHAT A PLAYER COSTS. valueFor was (rating − 45)³ × 1100 with the
+   bracket floored at six — so every player rated fifty-one or below was
+   worth exactly £238,000. The whole of League Two, the whole of the
+   National League and most of League One: one price, regardless of who
+   they were. That is why a loan fee looked like a transfer fee, why
+   there was nothing worth buying, and why a club with a £200,000 budget
+   could not buy anybody at all.
+
+   WHAT A PLAYER EARNS. wageFor was quadratic and barely noticed which
+   club he played for: forty per cent between a National League wage and
+   a Premier League one at the same rating, and a cap of £155,000 a week
+   for the best player in the world. Real football is a factor of thirty
+   between those two ends.
+
+   WHAT A CLUB CAN SPEND. Wage ceilings were reputation × 90, which
+   works out at four and a half times what a National League club
+   actually pays its players and one and a tenth of what a Championship
+   club pays. Measured, ceiling against wage bill:
+
+     Premier League 1.52   Championship 1.10   League One 1.74
+     League Two     3.02   National League 4.46   Turkey 0.79
+
+   No relationship to anything. A National League club had £180,000 a
+   week of headroom it could never use and £200,000 of transfer budget
+   that could not buy one player.
+
+   All three are rebuilt against real football. The anchors are written
+   out as tables and interpolated, because the requirement is a set of
+   specific real-world numbers and a table is the honest way to hit them.
+
+   WHAT DOES NOT MOVE: the top of the game. The old value curve was
+   roughly right above rating eighty and is left roughly where it was —
+   £65M at eighty-five, £110M at ninety. It is the bottom two-thirds of
+   world football that was broken, and only that is corrected.
+   ===================================================================== */
+
+/* ---------------------------------------------------------------------
+   1. INTERPOLATION IN LOG SPACE
+   ---------------------------------------------------------------------
+   Money spans four orders of magnitude across the pyramid, so straight
+   lines between the anchors would put visible kinks in the curve. In
+   log space the anchors join smoothly.
+   --------------------------------------------------------------------- */
+function finLerp(table,x){
+ const T=table;
+ if(x<=T[0][0])return T[0][1]*Math.pow(T[1][1]/T[0][1],(x-T[0][0])/(T[1][0]-T[0][0]));
+ const n=T.length-1;
+ if(x>=T[n][0])return T[n][1]*Math.pow(T[n][1]/T[n-1][1],(x-T[n][0])/(T[n][0]-T[n-1][0]));
+ for(let i=1;i<=n;i++){
+  if(x<=T[i][0]){
+   const [x0,y0]=T[i-1],[x1,y1]=T[i];
+   const t=(x-x0)/(x1-x0);
+   return y0*Math.pow(y1/y0,t)}}
+ return T[n][1]}
+
+/* ---------------------------------------------------------------------
+   2. WHAT A PLAYER IS WORTH
+   ---------------------------------------------------------------------
+   A rating against a transfer fee, in pounds, for a twenty-five year
+   old in the middle of a contract. Everything else — age, unrealised
+   potential, a contract running down — is the modifier the game already
+   applied, kept exactly as it was.
+   --------------------------------------------------------------------- */
+const VALUE_CURVE=[
+ [35,4e3],[40,12e3],[45,40e3],[50,120e3],[55,4e5],[60,12e5],
+ [65,35e5],[70,9e6],[75,2e7],[80,38e6],[85,65e6],[90,11e7],[95,17e7]];
+
+function baseValue(ovr){return finLerp(VALUE_CURVE,clamp(+ovr||40,30,97))}
+
+valueFor=function(p){
+ const ovr=Math.round(ovrOf(p));
+ let v=baseValue(ovr);
+ const a=p.age;
+ const af=a<=20?1.20:a<=23?1.10:a<=27?1:a<=29?.90:a<=31?.72:a<=33?.50:.30;
+ v*=af*(1+Math.max(0,(p.pot||ovr)-ovr)*.02);
+ if(p.contract<=1)v*=.65;
+ /* rounded to something a newspaper would print, and the step gets
+    coarser as the number gets bigger */
+ const step=v>=2e7?5e5:v>=2e6?1e5:v>=2e5?1e4:v>=2e4?2500:500;
+ return Math.max(step,Math.round(v/step)*step)};
+
+/* ---------------------------------------------------------------------
+   3. WHAT A PLAYER EARNS
+   ---------------------------------------------------------------------
+   The rating sets the going rate; the club decides how far above or
+   below it he is paid. A National League club pays about two thirds of
+   the going rate and Manchester City about ten per cent over, which is
+   roughly the real spread once you account for the fact that the good
+   players are at the good clubs already.
+   --------------------------------------------------------------------- */
+const WAGE_CURVE=[
+ [35,450],[40,800],[45,1600],[50,3200],[55,6500],[60,13e3],
+ [65,25e3],[70,48e3],[75,85e3],[80,135e3],[85,205e3],[90,31e4],[95,42e4]];
+
+function baseWage(ovr){return finLerp(WAGE_CURVE,clamp(+ovr||40,30,97))}
+function clubPayFactor(rep){return clamp(.55+.55*((+rep||3000)/9400),.55,1.15)}
+
+wageFor=function(ovr,rep){
+ const w=baseWage(ovr)*clubPayFactor(rep);
+ const step=w>=5e4?2500:w>=1e4?500:w>=2e3?100:25;
+ return Math.max(250,Math.round(w/step)*step)};
+
+/* ---------------------------------------------------------------------
+   4. WHAT A CLUB CAN PAY, AND SPEND
+   ---------------------------------------------------------------------
+   Both derived from the squad the club actually has rather than from a
+   multiple of its reputation, so they cannot drift apart from it.
+
+   The ceiling is the wage bill plus headroom, and the headroom is wider
+   at the bottom because a National League club's bill is four or five
+   contracts rather than twenty-five, so one signing is a much larger
+   proportion of it.
+
+   The transfer budget is a share of the ANNUAL wage bill, which is how
+   football clubs actually think about it, and the share falls as you go
+   down because the money below the Championship is gate receipts rather
+   than television.
+   --------------------------------------------------------------------- */
+function finTierShare(c){
+ const d=c.league;
+ if(d==='PL')return {head:1.22,bud:.55};
+ if(d==='CH')return {head:1.26,bud:.35};
+ if(d==='L1')return {head:1.32,bud:.22};
+ if(d==='L2')return {head:1.38,bud:.18};
+ if(d==='NL')return {head:1.45,bud:.15};
+ const L=(typeof LEAGUES!=='undefined')&&LEAGUES[d];
+ if(!L)return {head:1.30,bud:.25};
+ if(L.tier===1){
+  const co=L.coef||2;
+  return {head:1.22,bud:co>=5?.55:co>=4?.48:co>=3?.38:.30}}
+ return {head:1.32,bud:.20}}
+
+function repriceClub(c){
+ try{
+  if(!c||c.custom)return;                 /* a built club is the chairman's */
+  const s=(c.players||[]).filter(p=>!p.loan);
+  if(!s.length)return;
+  s.forEach(p=>{p.wage=wageFor(p.ovr,c.rep);p.value=valueFor(p)});
+  (c.youth||[]).forEach(p=>{
+   p.value=valueFor(p);
+   p.wage=Math.max(250,Math.round(wageFor(p.ovr,c.rep)*.30/50)*50)});
+  const bill=s.reduce((a,p)=>a+(p.wage||0),0);
+  const t=finTierShare(c);
+  c.wageCap=Math.max(Math.round(bill*t.head),1000);
+  const annual=bill*52;
+  const step=annual*t.bud>=1e7?5e5:annual*t.bud>=1e6?5e4:1e4;
+  c.budget=Math.max(step,Math.round(annual*t.bud/step)*step);
+  c.bank=Math.round(c.budget*1.6+bill*10);
+ }catch(e){}}
+
+function repriceWorld(){
+ try{(G.clubs||[]).forEach(repriceClub)}catch(e){}}
+
+const _newGameFin=newGame;
+newGame=function(){
+ const r=_newGameFin.apply(this,arguments);
+ try{repriceWorld()}catch(e){}
+ return r};
+
+/* the ladder is re-levelled every summer as squads change, but a club's
+   own trading is not undone: only the ceiling and the budget are
+   recomputed, and the budget only if the club has not already banked
+   something unusual */
+const _endSeasonFin=endSeason;
+endSeason=function(){
+ const r=_endSeasonFin.apply(this,arguments);
+ try{
+  (G.clubs||[]).forEach(c=>{
+   if(!c||c.custom)return;
+   const s=(c.players||[]).filter(p=>!p.loan);
+   if(!s.length)return;
+   const bill=s.reduce((a,p)=>a+(p.wage||0),0);
+   const t=finTierShare(c);
+   c.wageCap=Math.max(Math.round(bill*t.head),1000);
+   if(c.i!==G.my)c.budget=Math.max(1e4,Math.round(bill*52*t.bud/1e4)*1e4)});
+ }catch(e){}
+ return r};
+
+/* ---------------------------------------------------------------------
+   5. A LOAN IS NOT A TRANSFER
+   ---------------------------------------------------------------------
+   The loan fee was a fraction of the player's value with a hard floor of
+   two hundred thousand pounds. Under the old value curve every player
+   below rating fifty-one was worth £238,000, so a National League club
+   paid £200,000 to borrow a player it could have bought outright for
+   £238,000 — which is the thing that gave the whole problem away.
+
+   The fraction was always right. The floor is now the borrowing club's
+   own scale rather than a number from the Premier League.
+   --------------------------------------------------------------------- */
+const _loanFeeFin=loanFeeFor;
+loanFeeFor=function(p,from){
+ try{
+  const me=G.clubs[G.my];
+  const v=p.value||valueFor(p);
+  const t=(typeof clubTier==='function')?clubTier(me).k:2;
+  const eager=p.age<=22?.55:1;
+  const fee=v*.075*eager*(1+(3-t)*.06);
+  /* two per cent of a week's wage ceiling — a token at every level
+     rather than a Premier League number applied to everybody */
+  const floor=Math.max(1500,Math.round((me.wageCap||5e4)*.02/500)*500);
+  const step=fee>=1e6?5e4:fee>=1e5?1e4:1000;
+  return Math.max(floor,Math.round(fee/step)*step);
+ }catch(e){return _loanFeeFin.apply(this,arguments)}};
+
+/* ---------------------------------------------------------------------
+   6. AND THE EMERGENCY SIGNING IS PRICED FOR THE DIVISION TOO
+   ---------------------------------------------------------------------
+   The depth guard signs a player rated `rep/145`, which is a Premier
+   League formula: it gave a National League club a 46 and a Premier
+   League club a 65, when the divisions they play in are separated by
+   thirty-five rating points. It uses the same standard the rest of the
+   division has.
+   --------------------------------------------------------------------- */
+function divStandardFor(c){
+ try{
+  const mem=divMembers(c.league)||[];
+  let n=0,s=0;
+  mem.forEach(i=>{(G.clubs[i].players||[]).forEach(p=>{if(!p.loan){s+=p.ovr;n++}})});
+  return n?s/n:(typeof ovrForRep==='function'?ovrForRep(c.rep):50)}
+ catch(e){return 50}}
+
+/*#wB6_finance.js#*/
 showStart();
 </script>
 </body>
