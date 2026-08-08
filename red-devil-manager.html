@@ -43305,156 +43305,7 @@ function roomEnv(scene,rend){
 
 /*#w97_room.js#*/
 
-/*#w98_clubroom.js#*/
 
-/* =====================================================================
-   w98_clubroom — the room belongs to the club you manage
-   ---------------------------------------------------------------------
-   Two things were still generic in a room that is supposed to be yours.
-
-   THE BADGE ON THE BACK WALL was drawn by hallCrestTex, which builds its
-   own shield from scratch: one bezier outline, a vertical fade from the
-   club's first colour to its second, a white outline and the letters.
-   That is the badge the whole game used to have and it was replaced
-   everywhere else — so the one place in the game where a crest is four
-   metres tall was the one place still showing the old one. It renders
-   the real badge now, the same function the header and the team sheets
-   use, so redesigning a badge redesigns this too.
-
-   THE RIBBONS were the competition's colours: blue for the FA Cup, red
-   for the Premier League, orange for the Europa League. But ribbons on
-   a trophy are not the competition's, they are the winner's — they go
-   on when somebody lifts it, in that club's colours. So they are yours
-   now, and only on the trophies you have actually won. On a trophy you
-   have never lifted there are no ribbons at all, which turns them into
-   the fastest read in the room: colour means you won it.
-   ===================================================================== */
-
-/* ---------------------------------------------------------------------
-   1. THE BADGE, FOUR METRES TALL
-   ---------------------------------------------------------------------
-   The badge is SVG and the wall wants a texture, so it goes through an
-   Image. That is asynchronous, which is fine — the texture is handed
-   back immediately and repaints itself when the raster lands.
-
-   The lettering is drawn on the canvas rather than left in the SVG.
-   An SVG loaded through an img is its own document and cannot reach the
-   page's fonts, so Archivo Black would silently become whatever the
-   platform felt like. Canvas can reach them.
-   --------------------------------------------------------------------- */
-hallCrestTex=function(){
- const S=1024;
- const c=document.createElement('canvas');c.width=S;c.height=S;
- const x=c.getContext('2d');
- const t=new THREE.CanvasTexture(c);
- t.anisotropy=8;
- t.encoding=THREE.sRGBEncoding;
- try{
-  const club=(typeof G!=='undefined'&&G&&G.clubs)?G.clubs[G.my]:null;
-  if(!club)return t;
-  const mark=crestMark(club);
-  /* the same decision badgeSVG makes about what colour the letters have
-     to be, made again here because the letters are drawn separately */
-  const c1=club.c1||'#33404a';
-  const trim=badgeTrim(c1,club.c2);
-  const kind=kitPattern(club);
-  const seed=Math.abs(hashStr('dev|'+(club.key||club.name||'?')));
-  const variant=[0,0,1,2,3,3][seed%6];
-  const onBar=(kind==='plain'&&variant<3)||kind==='sleeve';
-  const base=onBar?trim:c1;
-  const ink=bLum(base)>.58?'#14181e':'#ffffff';
-  const edge=bLum(base)>.58?'rgba(255,255,255,.55)':'rgba(0,0,0,.55)';
-
-  /* THE ONE THAT MAKES IT APPEAR AT ALL. An SVG inlined into the page
-     inherits the HTML namespace and works without a declaration; the
-     same string handed to an <img> is parsed as a standalone document
-     and is rejected outright without xmlns. First attempt rendered a
-     brass ring around nothing. */
-  const svg=badgeSVG(club,S)
-   .replace(/<text[\s\S]*?<\/text>/,'')
-   .replace('<svg ','<svg xmlns="http://www.w3.org/2000/svg" ');
-  const img=new Image();
-  img.onload=()=>{
-   try{
-    x.clearRect(0,0,S,S);
-    x.drawImage(img,0,0,S,S);
-    x.textAlign='center';x.textBaseline='middle';
-    x.font='900 '+(mark.length<=2?400:mark.length===3?320:265)+
-      'px "Archivo Black",Impact,sans-serif';
-    x.lineWidth=S*.030;x.strokeStyle=edge;
-    x.lineJoin='round';
-    x.strokeText(mark,S/2,S*.615);
-    x.fillStyle=ink;x.fillText(mark,S/2,S*.615);
-    t.needsUpdate=true}
-   catch(e){}};
-  /* and if it still will not rasterise, the wall gets a plain shield
-     rather than an empty frame */
-  img.onerror=()=>{
-   try{
-    x.clearRect(0,0,S,S);
-    x.fillStyle=c1;
-    x.beginPath();
-    x.moveTo(S*.5,S*.09);x.lineTo(S*.88,S*.21);x.lineTo(S*.88,S*.53);
-    x.bezierCurveTo(S*.88,S*.75,S*.68,S*.86,S*.5,S*.93);
-    x.bezierCurveTo(S*.32,S*.86,S*.12,S*.75,S*.12,S*.53);
-    x.lineTo(S*.12,S*.21);x.closePath();x.fill();
-    x.strokeStyle=trim;x.lineWidth=S*.022;x.stroke();
-    x.textAlign='center';x.textBaseline='middle';
-    x.font='900 '+(mark.length<=2?400:320)+'px "Archivo Black",Impact,sans-serif';
-    x.fillStyle=ink;x.fillText(mark,S/2,S*.58);
-    t.needsUpdate=true}
-   catch(e){}};
-  img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg);
- }catch(e){}
- return t};
-
-/* ---------------------------------------------------------------------
-   2. THE RIBBONS ARE YOURS, AND ONLY ON WHAT YOU HAVE WON
-   --------------------------------------------------------------------- */
-function trophyWonCount(code){
- let n=0;
- try{(myTrophies()||[]).forEach(t=>{if(t&&t.code===code)n++})}
- catch(e){}
- return n}
-
-function clubRibbonMat(){
- let c1='#c8102e',c2='#7a0a17',word='CHAMPIONS';
- try{
-  const cl=G.clubs[G.my];
-  if(cl){
-   c1=cl.c1||c1;
-   /* a second colour only if it is actually a second colour — plenty of
-      clubs store two that are within a few per cent of each other, and
-      a two-tone ribbon out of those is just a muddy one */
-   c2=(cl.c2&&cl.c2!==cl.c1&&Math.abs(bLum(cl.c1)-bLum(cl.c2))>=.14)
-      ?cl.c2:bMix(c1,'#000000',.45);
-   word=String(cl.short||cl.name||'').toUpperCase().slice(0,16)||word}}
- catch(e){}
- return new THREE.MeshStandardMaterial({
-  map:tRibbonTex(c1,c2,word),
-  roughness:.86,metalness:0,side:THREE.DoubleSide})}
-
-/* trophyBuild is where a sculpt becomes a specific trophy — it is handed
-   the code, which is the one thing the builders themselves never know */
-const _tbRibbons=trophyBuild;
-trophyBuild=function(code){
- const g=_tbRibbons.apply(this,arguments);
- try{
-  if(!g)return g;
-  const rib=[];
-  g.traverse(o=>{if(o.userData&&o.userData.ribbon)rib.push(o)});
-  if(!rib.length)return g;
-  if(!trophyWonCount(code)){
-   /* never lifted, so no ribbons. It also stops the cabinet looking
-      like you have won all twenty-two of them. */
-   rib.forEach(o=>{if(o.parent)o.parent.remove(o)});
-   return g}
-  const mat=clubRibbonMat();
-  rib.forEach(o=>{o.material=mat});
- }catch(e){}
- return g};
-
-/*#w98_clubroom.js#*/
 
 /*#w99_trophy2.js#*/
 
@@ -44628,6 +44479,477 @@ MatchSim.prototype.goal=function(A,D,shooter,creator,assister,pen){
  return _goalCal.apply(this,arguments)};
 
 /*#wA3_balance.js#*/
+
+
+/*#wA4_present.js#*/
+
+/* =====================================================================
+   wA4_present — winning something becomes a moment
+   ---------------------------------------------------------------------
+   You could win the league and find out about it in the inbox. A line
+   of mail, between a contract renewal and a scout report. Everything in
+   this game points at the trophy room and the game never once took you
+   there.
+
+   So it does now. The season's last whistle goes, the screen goes dark,
+   and the thing you won comes up out of it on a plinth under a single
+   light, in your colours, with your badge behind it and your club's
+   name being cut into the band while you watch. You lift it. Then you
+   put it in the room.
+
+   Two sizes. A cup gets the presentation. A LEAGUE TITLE gets the
+   presentation, the confetti and the whole stand singing, because
+   finishing top of a division over thirty-eight matches is not the same
+   as winning a knockout and the game should not pretend it is.
+
+   HOW IT KNOWS. Honours are pushed onto G.honours from five different
+   places — the league rollover, two cup finals, promotion, a summer
+   tournament. Rather than hook all five and miss the sixth somebody
+   adds later, the list is watched: if it got longer since the last
+   render, whatever is new gets presented. It is one comparison of a
+   number and it cannot be bypassed.
+   ===================================================================== */
+
+const TP={queue:[],on:false,seen:-1,raf:0};
+
+/* which sculpt goes with "Premier League champions" */
+function compCode(comp){
+ const s=String(comp||'').toLowerCase()
+  .replace(/\s+(winners|champions|champion)$/,'').trim();
+ try{
+  for(const k in TROPHY_LABEL){
+   const l=String(TROPHY_LABEL[k]).toLowerCase();
+   if(l===s||l.replace(/\s+(winners|champions)$/,'')===s)return k}
+ }catch(e){}
+ return null}
+
+function isTitle(comp){return /champion/i.test(String(comp||''))}
+
+/* ---------------------------------------------------------------------
+   1. WATCHING THE HONOURS LIST
+   --------------------------------------------------------------------- */
+function honWatch(){
+ try{
+  if(typeof G==='undefined'||!G||!G.honours)return;
+  const n=G.honours.length;
+  if(TP.seen<0||n<TP.seen){TP.seen=n;return}
+  if(n>TP.seen){
+   for(let i=TP.seen;i<n;i++){
+    const h=G.honours[i];
+    if(h&&!h._shown){h._shown=1;TP.queue.push(h)}}
+   TP.seen=n}
+  tpMaybe();
+ }catch(e){}}
+
+function tpMaybe(){
+ if(TP.on||!TP.queue.length)return;
+ /* never over a match in progress, and never over the press room */
+ try{if(MU&&MU.m&&!MU.m.done)return}catch(e){}
+ try{if(document.querySelector('.thall-panel'))return}catch(e){}
+ const h=TP.queue.shift();
+ presentTrophy(h);
+}
+
+const _renderHon=render;
+render=function(){
+ const r=_renderHon.apply(this,arguments);
+ honWatch();
+ return r};
+const _ngHon=newGame;
+newGame=function(){const r=_ngHon.apply(this,arguments);TP.seen=-1;TP.queue.length=0;return r};
+const _lsHon=loadSlot;
+loadSlot=function(s){const r=_lsHon.apply(this,arguments);TP.seen=-1;TP.queue.length=0;return r};
+
+/* ---------------------------------------------------------------------
+   2. THE PRESENTATION
+   --------------------------------------------------------------------- */
+function presentTrophy(h){
+ if(TP.on)return;
+ const code=compCode(h.comp);
+ if(!code||typeof THREE==='undefined'||!THREE.Scene){
+  /* no sculpt for it, or three has not loaded — say so and move on */
+  try{toast('🏆 '+h.comp)}catch(e){}
+  return}
+ TP.on=true;
+
+ const club=(G.clubs&&G.clubs[G.my])||{name:'',c1:'#c8102e',c2:'#ffffff'};
+ const big=isTitle(h.comp);
+ const c1=club.c1||'#c8102e';
+ const c2=(club.c2&&club.c2!==club.c1)?club.c2:'#ffffff';
+
+ const host=document.createElement('div');
+ host.id='tpHost';
+ host.innerHTML=
+  '<canvas class="tp-cv"></canvas>'+
+  '<div class="tp-ui">'+
+   '<div class="tp-kick">'+(big?'CHAMPIONS':'WINNERS')+'</div>'+
+   '<div class="tp-comp">'+esc(TROPHY_LABEL[code]||h.comp)+'</div>'+
+   '<div class="tp-club">'+esc(club.name||'')+'</div>'+
+   '<div class="tp-season">'+esc(seasonLabel(h.season||G.season))+'</div>'+
+  '</div>'+
+  '<div class="tp-foot">'+
+   '<button class="tp-btn tp-lift" data-tp="lift">Lift it</button>'+
+   '<button class="tp-btn tp-go" data-tp="room">Put it in the room</button>'+
+   '<button class="tp-btn tp-skip" data-tp="close">Not now</button>'+
+  '</div>';
+ document.body.appendChild(host);
+
+ const cv=host.querySelector('.tp-cv');
+ const W=host.clientWidth||window.innerWidth, H=host.clientHeight||window.innerHeight;
+ const rend=new THREE.WebGLRenderer({canvas:cv,antialias:true,alpha:true});
+ rend.setPixelRatio(Math.min(2,window.devicePixelRatio||1));
+ rend.setSize(W,H,false);
+ rend.outputEncoding=THREE.sRGBEncoding;
+ rend.toneMapping=THREE.ACESFilmicToneMapping;
+ rend.toneMappingExposure=1.15;
+
+ const scene=new THREE.Scene();
+ try{scene.environment=studioEnvFor(rend,0)}catch(e){}
+ const cam=new THREE.PerspectiveCamera(34,W/H,.02,60);
+
+ /* the trophy, at the detail you get when you hold one */
+ let obj=null;
+ try{
+  if(typeof TDETAIL!=='undefined')TDETAIL=2;
+  obj=trophyOnPlinth(code,1.0,true);
+  if(typeof TDETAIL!=='undefined')TDETAIL=1;
+ }catch(e){obj=null}
+ const rig=new THREE.Group();scene.add(rig);
+ if(obj)rig.add(obj);
+
+ /* a single hard light, the way a trophy is lit on a podium */
+ /* 26 blew the ribbons out to cream. The environment is doing most of
+    the work on the metal; the key is here for the plinth and the cloth,
+    both of which are diffuse and take light properly. */
+ const key=new THREE.SpotLight(0xfff3dc,11,9,.55,.7,1.7);
+ key.position.set(1.4,3.4,2.2);scene.add(key);scene.add(key.target);
+ const rim=new THREE.DirectionalLight(0xbcd4ff,1.6);rim.position.set(-2,1.2,-2.4);
+ scene.add(rim);
+ scene.add(new THREE.AmbientLight(0xffffff,.16));
+ /* the club's colour, thrown up from below */
+ const glow=new THREE.PointLight(new THREE.Color(c1),5.5,4.2,2);
+ glow.position.set(0,-.5,1.1);scene.add(glow);
+
+ /* confetti, for a title */
+ let conf=null;
+ if(big){
+  const N=420, pos=new Float32Array(N*3), col=new Float32Array(N*3);
+  const vel=[];
+  const A=new THREE.Color(c1), B=new THREE.Color(c2);
+  for(let i=0;i<N;i++){
+   pos[i*3]=(Math.random()-.5)*4.4;
+   pos[i*3+1]=1.2+Math.random()*3.4;
+   pos[i*3+2]=(Math.random()-.5)*2.2;
+   const c=Math.random()<.5?A:B;
+   col[i*3]=c.r;col[i*3+1]=c.g;col[i*3+2]=c.b;
+   vel.push(.22+Math.random()*.5)}
+  const g=new THREE.BufferGeometry();
+  g.setAttribute('position',new THREE.BufferAttribute(pos,3));
+  g.setAttribute('color',new THREE.BufferAttribute(col,3));
+  conf={pts:new THREE.Points(g,new THREE.PointsMaterial({size:.045,
+    vertexColors:true,transparent:true,opacity:.95,depthWrite:false})),vel,N};
+  scene.add(conf.pts)}
+
+ /* ---- THE SHOT ----
+    Framed off the object rather than guessed. The first pass parked the
+    camera at a fixed 2.55 and the Premier League trophy — the tallest
+    thing in the cabinet — ran off the top of the screen and straight
+    through the buttons.
+
+    The usable band is what is left between the title block and the
+    buttons: about 54% of the height. At a vertical field of view f, the
+    world height visible at distance d is 2*d*tan(f/2), so the distance
+    that makes an object of height h fill a fraction k of it is
+
+      d = h / (k * 2 * tan(f/2))
+
+    and the aim is nudged up so the trophy sits in the middle of that
+    band rather than the middle of the screen. */
+ const FOV=34, BAND=.54, AIM=.06;
+ const box=new THREE.Box3().setFromObject(rig);
+ const size=new THREE.Vector3();box.getSize(size);
+ const ctr=new THREE.Vector3();box.getCenter(ctr);
+ const objH=Math.max(.4,size.y);
+ const TANH=Math.tan(FOV*Math.PI/360);
+ const DIST=Math.max(1.6,objH/(BAND*2*TANH));
+ const AIMY=ctr.y+objH*AIM;
+
+ const S={t0:performance.now(),spin:0,boost:0,dead:false};
+ const tick=(ts)=>{
+  if(S.dead)return;
+  TP.raf=requestAnimationFrame(tick);
+  const t=(ts-S.t0)/1000;
+  /* it comes up out of the dark over the first second and a half */
+  const rise=Math.min(1,t/1.5), e=1-Math.pow(1-rise,3);
+  rig.position.y=-objH*.9+e*objH*.9;
+  S.boost*=.94;
+  S.spin+=(0.24+S.boost)*0.016;
+  rig.rotation.y=S.spin;
+  /* a slow push in as it rises */
+  const d=DIST*(1.10-e*.10);
+  cam.position.set(Math.sin(.18)*d,AIMY+objH*.10,Math.cos(.18)*d);
+  cam.lookAt(0,AIMY,0);
+  key.target.position.set(0,ctr.y,0);
+  if(conf){
+   const p=conf.pts.geometry.attributes.position;
+   for(let i=0;i<conf.N;i++){
+    let y=p.getY(i)-conf.vel[i]*.016;
+    if(y<-1.2)y=3.4+Math.random()*1.2;
+    p.setY(i,y);
+    p.setX(i,p.getX(i)+Math.sin(t*1.3+i)*.0016)}
+   p.needsUpdate=true}
+  rend.render(scene,cam)};
+ TP.raf=requestAnimationFrame(tick);
+
+ /* ---- the buttons ---- */
+ const close=(go)=>{
+  if(S.dead)return;
+  S.dead=true;
+  cancelAnimationFrame(TP.raf);
+  try{rend.dispose()}catch(e){}
+  host.classList.add('tp-out');
+  setTimeout(()=>{
+   try{host.remove()}catch(e){}
+   TP.on=false;
+   if(go){try{
+    /* the room already knows how to walk you to a named plinth */
+    TR.focusCode=code;
+    UI.view='club';UI.clubTab='trophies';render();
+    ACTIONS.trophyRoom();
+   }catch(e){}}
+   else setTimeout(tpMaybe,300);
+  },320)};
+ host.addEventListener('click',ev=>{
+  const b=ev.target.closest?ev.target.closest('[data-tp]'):null;
+  if(!b)return;
+  const k=b.dataset.tp;
+  if(k==='lift'){
+   S.boost=2.6;
+   try{sfx('cheer')}catch(e){}
+   try{if(navigator.vibrate)navigator.vibrate([18,40,18])}catch(e){}
+   host.classList.add('tp-lifted');
+   return}
+  close(k==='room')});
+
+ try{sfx(big?'cheer':'tap')}catch(e){}
+ requestAnimationFrame(()=>host.classList.add('tp-in'));
+}
+
+/* ---------------------------------------------------------------------
+   3. THE LOOK
+   --------------------------------------------------------------------- */
+(function tpCSS(){
+ const old=document.getElementById('wA4');if(old)old.remove();
+ const st=document.createElement('style');st.id='wA4';
+ st.textContent=[
+  '#tpHost{position:fixed;inset:0;z-index:9000;opacity:0;'+
+   'transition:opacity .38s ease;'+
+   'background:radial-gradient(120% 80% at 50% 18%,'+
+    'color-mix(in srgb,var(--acc,#c8102e) 22%,#05070a),#04060a 62%,#020305)}',
+  '#tpHost.tp-in{opacity:1}',
+  '#tpHost.tp-out{opacity:0}',
+  '.tp-cv{position:absolute;inset:0;width:100%;height:100%;display:block}',
+  '.tp-ui{position:absolute;left:0;right:0;top:calc(4vh + env(safe-area-inset-top,0px));'+
+   'text-align:center;pointer-events:none;padding:0 18px}',
+  '.tp-kick{font-size:11px;letter-spacing:5px;font-weight:900;'+
+   'color:var(--acc-hot,#ff5a4a);text-shadow:0 0 22px rgba(255,90,74,.5)}',
+  '.tp-comp{font-family:var(--disp,inherit);font-size:clamp(22px,7vw,38px);'+
+   'font-weight:900;letter-spacing:.5px;margin-top:6px;color:#fff;'+
+   'text-shadow:0 4px 26px rgba(0,0,0,.85)}',
+  '.tp-club{font-size:clamp(13px,3.6vw,17px);font-weight:800;margin-top:8px;'+
+   'color:#e8eef5;opacity:.92}',
+  '.tp-season{font-size:11px;letter-spacing:2.4px;font-weight:800;'+
+   'margin-top:4px;color:#95a6b6}',
+  '.tp-foot::before{content:"";position:absolute;left:0;right:0;bottom:-40vh;'+
+   'top:-26px;background:linear-gradient(180deg,transparent,rgba(3,5,8,.82) 34%);'+
+   'pointer-events:none}',
+  '.tp-foot>*{position:relative}',
+  '.tp-foot{position:absolute;left:0;right:0;'+
+   'bottom:calc(3vh + env(safe-area-inset-bottom,0px));'+
+   'display:flex;flex-direction:column;align-items:center;gap:9px;padding:0 20px}',
+  '.tp-btn{min-height:48px;border-radius:14px;font-weight:800;font-size:14px;'+
+   'letter-spacing:.3px;padding:0 22px;cursor:pointer;width:min(420px,100%);'+
+   'transition:transform .12s cubic-bezier(.2,.9,.3,1),filter .16s}',
+  '.tp-btn:active{transform:scale(.96)}',
+  '.tp-lift{background:linear-gradient(180deg,#ffe95c,#e3c018 58%,#c9a70c);'+
+   'color:#241f00;box-shadow:0 12px 34px -12px rgba(251,225,34,.7),'+
+   'inset 0 1px 0 rgba(255,255,255,.5)}',
+  '.tp-go{background:rgba(255,255,255,.09);color:#eaf1f8;'+
+   'border:1px solid rgba(255,255,255,.22)}',
+  '.tp-skip{background:none;color:#8b9aa8;min-height:38px;font-size:12.5px}',
+  '#tpHost.tp-lifted .tp-lift{filter:brightness(1.15)}',
+  '@media (prefers-reduced-motion: reduce){'+
+   '#tpHost{transition:none}}'
+ ].join('\n');
+ document.head.appendChild(st)})();
+
+/* ---------------------------------------------------------------------
+   4. THE OLD CELEBRATION STANDS DOWN
+   ---------------------------------------------------------------------
+   There was already one: a card with a trophy emoji on it, a heading and
+   two buttons. It fires off the same honours list, so with the
+   presentation in place you got both — the card in front, the real
+   trophy turning on its plinth behind it, blurred out and unreachable.
+
+   It is not deleted, it is emptied. Something else may still call it,
+   and a function that quietly does nothing is safer here than a
+   function that is suddenly missing.
+   --------------------------------------------------------------------- */
+hallCelebrate=function(){};
+
+/*#wA4_present.js#*/
+/*#w98_clubroom.js#*/
+
+/* =====================================================================
+   w98_clubroom — the room belongs to the club you manage
+   ---------------------------------------------------------------------
+   Two things were still generic in a room that is supposed to be yours.
+
+   THE BADGE ON THE BACK WALL was drawn by hallCrestTex, which builds its
+   own shield from scratch: one bezier outline, a vertical fade from the
+   club's first colour to its second, a white outline and the letters.
+   That is the badge the whole game used to have and it was replaced
+   everywhere else — so the one place in the game where a crest is four
+   metres tall was the one place still showing the old one. It renders
+   the real badge now, the same function the header and the team sheets
+   use, so redesigning a badge redesigns this too.
+
+   THE RIBBONS were the competition's colours: blue for the FA Cup, red
+   for the Premier League, orange for the Europa League. But ribbons on
+   a trophy are not the competition's, they are the winner's — they go
+   on when somebody lifts it, in that club's colours. So they are yours
+   now, and only on the trophies you have actually won. On a trophy you
+   have never lifted there are no ribbons at all, which turns them into
+   the fastest read in the room: colour means you won it.
+   ===================================================================== */
+
+/* ---------------------------------------------------------------------
+   1. THE BADGE, FOUR METRES TALL
+   ---------------------------------------------------------------------
+   The badge is SVG and the wall wants a texture, so it goes through an
+   Image. That is asynchronous, which is fine — the texture is handed
+   back immediately and repaints itself when the raster lands.
+
+   The lettering is drawn on the canvas rather than left in the SVG.
+   An SVG loaded through an img is its own document and cannot reach the
+   page's fonts, so Archivo Black would silently become whatever the
+   platform felt like. Canvas can reach them.
+   --------------------------------------------------------------------- */
+hallCrestTex=function(){
+ const S=1024;
+ const c=document.createElement('canvas');c.width=S;c.height=S;
+ const x=c.getContext('2d');
+ const t=new THREE.CanvasTexture(c);
+ t.anisotropy=8;
+ t.encoding=THREE.sRGBEncoding;
+ try{
+  const club=(typeof G!=='undefined'&&G&&G.clubs)?G.clubs[G.my]:null;
+  if(!club)return t;
+  const mark=crestMark(club);
+  /* the same decision badgeSVG makes about what colour the letters have
+     to be, made again here because the letters are drawn separately */
+  const c1=club.c1||'#33404a';
+  const trim=badgeTrim(c1,club.c2);
+  const kind=kitPattern(club);
+  const seed=Math.abs(hashStr('dev|'+(club.key||club.name||'?')));
+  const variant=[0,0,1,2,3,3][seed%6];
+  const onBar=(kind==='plain'&&variant<3)||kind==='sleeve';
+  const base=onBar?trim:c1;
+  const ink=bLum(base)>.58?'#14181e':'#ffffff';
+  const edge=bLum(base)>.58?'rgba(255,255,255,.55)':'rgba(0,0,0,.55)';
+
+  /* THE ONE THAT MAKES IT APPEAR AT ALL. An SVG inlined into the page
+     inherits the HTML namespace and works without a declaration; the
+     same string handed to an <img> is parsed as a standalone document
+     and is rejected outright without xmlns. First attempt rendered a
+     brass ring around nothing. */
+  const svg=badgeSVG(club,S)
+   .replace(/<text[\s\S]*?<\/text>/,'')
+   .replace('<svg ','<svg xmlns="http://www.w3.org/2000/svg" ');
+  const img=new Image();
+  img.onload=()=>{
+   try{
+    x.clearRect(0,0,S,S);
+    x.drawImage(img,0,0,S,S);
+    x.textAlign='center';x.textBaseline='middle';
+    x.font='900 '+(mark.length<=2?400:mark.length===3?320:265)+
+      'px "Archivo Black",Impact,sans-serif';
+    x.lineWidth=S*.030;x.strokeStyle=edge;
+    x.lineJoin='round';
+    x.strokeText(mark,S/2,S*.615);
+    x.fillStyle=ink;x.fillText(mark,S/2,S*.615);
+    t.needsUpdate=true}
+   catch(e){}};
+  /* and if it still will not rasterise, the wall gets a plain shield
+     rather than an empty frame */
+  img.onerror=()=>{
+   try{
+    x.clearRect(0,0,S,S);
+    x.fillStyle=c1;
+    x.beginPath();
+    x.moveTo(S*.5,S*.09);x.lineTo(S*.88,S*.21);x.lineTo(S*.88,S*.53);
+    x.bezierCurveTo(S*.88,S*.75,S*.68,S*.86,S*.5,S*.93);
+    x.bezierCurveTo(S*.32,S*.86,S*.12,S*.75,S*.12,S*.53);
+    x.lineTo(S*.12,S*.21);x.closePath();x.fill();
+    x.strokeStyle=trim;x.lineWidth=S*.022;x.stroke();
+    x.textAlign='center';x.textBaseline='middle';
+    x.font='900 '+(mark.length<=2?400:320)+'px "Archivo Black",Impact,sans-serif';
+    x.fillStyle=ink;x.fillText(mark,S/2,S*.58);
+    t.needsUpdate=true}
+   catch(e){}};
+  img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg);
+ }catch(e){}
+ return t};
+
+/* ---------------------------------------------------------------------
+   2. THE RIBBONS ARE YOURS, AND ONLY ON WHAT YOU HAVE WON
+   --------------------------------------------------------------------- */
+function trophyWonCount(code){
+ let n=0;
+ try{(myTrophies()||[]).forEach(t=>{if(t&&t.code===code)n++})}
+ catch(e){}
+ return n}
+
+function clubRibbonMat(){
+ let c1='#c8102e',c2='#7a0a17',word='CHAMPIONS';
+ try{
+  const cl=G.clubs[G.my];
+  if(cl){
+   c1=cl.c1||c1;
+   /* The two-tone version of this used the club's second colour for the
+      shaded edge, which is right for a kit and wrong for a ribbon:
+      United store yellow as their second, so a red-to-yellow satin came
+      out orange and the Premier League trophy was hung with tangerine.
+      A winners' ribbon is one colour with the club's name printed down
+      it, so the edge is just the same colour in shadow. */
+   c2=bMix(c1,'#000000',.5);
+   word=String(cl.short||cl.name||'').toUpperCase().slice(0,16)||word}}
+ catch(e){}
+ return new THREE.MeshStandardMaterial({
+  map:tRibbonTex(c1,c2,word),
+  roughness:.86,metalness:0,side:THREE.DoubleSide})}
+
+/* trophyBuild is where a sculpt becomes a specific trophy — it is handed
+   the code, which is the one thing the builders themselves never know */
+const _tbRibbons=trophyBuild;
+trophyBuild=function(code){
+ const g=_tbRibbons.apply(this,arguments);
+ try{
+  if(!g)return g;
+  const rib=[];
+  g.traverse(o=>{if(o.userData&&o.userData.ribbon)rib.push(o)});
+  if(!rib.length)return g;
+  if(!trophyWonCount(code)){
+   /* never lifted, so no ribbons. It also stops the cabinet looking
+      like you have won all twenty-two of them. */
+   rib.forEach(o=>{if(o.parent)o.parent.remove(o)});
+   return g}
+  const mat=clubRibbonMat();
+  rib.forEach(o=>{o.material=mat});
+ }catch(e){}
+ return g};
+
+/*#w98_clubroom.js#*/
 showStart();
 </script>
 </body>
