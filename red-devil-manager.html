@@ -45023,6 +45023,1098 @@ try{
 }catch(e){}
 
 /*#wA5_crowd.js#*/
+
+/*#wA6_board.js#*/
+
+/* =====================================================================
+   wA6_board — real people upstairs, and a meeting that ends
+   ---------------------------------------------------------------------
+   THE BUG FIRST, because it is a state bug and worth naming precisely.
+
+     ACTIONS.boardRoom=()=>openBoardRoom(BR.next||'summoned')
+
+   BR.next is never set anywhere, so the button on the finances screen
+   always opened the scene called 'summoned' — the one where the board
+   demand an explanation for your results. And the button is drawn
+   unconditionally, so after the August objectives meeting it was still
+   sitting there. Press it in week one and three men who have not
+   watched you play a competitive match tell you the results are not
+   good enough.
+
+   Nothing was broken in the summons system. What was missing is that a
+   button which is always visible has to lead somewhere that is always
+   sensible. So it does two different things now: if the board have
+   actually called you in, it takes you to that. If they have not, it is
+   a meeting YOU asked for, and they behave like people whose time you
+   have taken rather than people who sent for you.
+
+   THEN THE PEOPLE. boardPeople() invented three names from a hash of
+   the club key, so Manchester United was owned by whoever the random
+   number generator produced. The clubs whose ownership people actually
+   know are named. Everything else keeps the generator.
+
+   AND THE FIRST MEETING. It was one question with three answers. It is
+   the meeting that sets your entire season and it was over in four
+   seconds. It is four questions now — the target, the money, how you
+   want to play and what happens to the academy — and the board are
+   keeping score. Agree with them and you start with them behind you;
+   argue with all four and you start the season already behind.
+
+   Then a review every month, which is the thing that was missing
+   between August and May.
+   ===================================================================== */
+
+/* ---------------------------------------------------------------------
+   1. WHO IS ACTUALLY IN THE ROOM
+   ---------------------------------------------------------------------
+   From knowledge rather than from a feed, so it is accurate to roughly
+   the 2025/26 season and will drift as boardrooms do. Any club not
+   listed keeps the generated names, which is better than a wrong name
+   stated confidently.
+   --------------------------------------------------------------------- */
+const BOARD_REAL=[
+ [/^manchester united|man utd/i,{chair:'Sir Jim Ratcliffe',ceo:'Omar Berrada',
+   dir:'Jason Wilcox',own:'the Glazer family and INEOS'}],
+ [/^manchester city|man city/i,{chair:'Khaldoon Al Mubarak',ceo:'Ferran Soriano',
+   dir:'Txiki Begiristain',own:'City Football Group'}],
+ [/^liverpool/i,{chair:'Tom Werner',ceo:'Billy Hogan',
+   dir:'Richard Hughes',own:'Fenway Sports Group'}],
+ [/^arsenal/i,{chair:'Josh Kroenke',ceo:'Richard Garlick',
+   dir:'Andrea Berta',own:'Kroenke Sports & Entertainment'}],
+ [/^chelsea/i,{chair:'Todd Boehly',ceo:'Jason Gannon',
+   dir:'Laurence Stewart',own:'BlueCo'}],
+ [/^tottenham|^spurs/i,{chair:'Daniel Levy',ceo:'Vinai Venkatesham',
+   dir:'Johan Lange',own:'ENIC Group'}],
+ [/^newcastle/i,{chair:'Yasir Al-Rumayyan',ceo:'Darren Eales',
+   dir:'Paul Mitchell',own:'the Public Investment Fund'}],
+ [/^aston villa/i,{chair:'Nassef Sawiris',ceo:'Christian Purslow',
+   dir:'Monchi',own:'V Sports'}],
+ [/^west ham/i,{chair:'David Sullivan',ceo:'Karren Brady',
+   dir:'Tim Steidten',own:'David Sullivan and Daniel Kretinsky'}],
+ [/^everton/i,{chair:'Marc Watts',ceo:'Angus Kinnear',
+   dir:'Kevin Thelwell',own:'The Friedkin Group'}],
+ [/^brighton/i,{chair:'Tony Bloom',ceo:'Paul Barber',
+   dir:'David Weir',own:'Tony Bloom'}],
+ [/^wolverhampton|^wolves/i,{chair:'Jeff Shi',ceo:'Russell Jones',
+   dir:'Matt Hobbs',own:'Fosun International'}],
+ [/^crystal palace/i,{chair:'Steve Parish',ceo:'Barry Webber',
+   dir:'Dougie Freedman',own:'Steve Parish and Woody Johnson'}],
+ [/^fulham/i,{chair:'Shahid Khan',ceo:'Alistair Mackintosh',
+   dir:'Tony Khan',own:'Shahid Khan'}],
+ [/^brentford/i,{chair:'Cliff Crown',ceo:'Jon Varney',
+   dir:'Phil Giles',own:'Matthew Benham'}],
+ [/^nottingham forest/i,{chair:'Evangelos Marinakis',ceo:'Ross Wilson',
+   dir:'George Syrianos',own:'Evangelos Marinakis'}],
+ [/^bournemouth|^afc bournemouth/i,{chair:'Bill Foley',ceo:'Neill Blake',
+   dir:'Tiago Pinto',own:'Black Knight Football Club'}],
+ [/^leicester/i,{chair:'Aiyawatt Srivaddhanaprabha',ceo:'Susan Whelan',
+   dir:'Jon Rudkin',own:'King Power'}],
+ [/^southampton/i,{chair:'Henrik Kraft',ceo:'Phil Parsons',
+   dir:'Johannes Spors',own:'Sport Republic'}],
+ [/^ipswich/i,{chair:'Mark Ashton',ceo:'Mark Ashton',
+   dir:'Sam Williams',own:'Gamechanger 20'}],
+ [/^leeds/i,{chair:'Paraag Marathe',ceo:'Robbie Evans',
+   dir:'Nick Hammond',own:'49ers Enterprises'}],
+ [/^burnley/i,{chair:'Alan Pace',ceo:'Matt Williams',
+   dir:'Mike Rigg',own:'ALK Capital'}],
+ [/^sunderland/i,{chair:'Kyril Louis-Dreyfus',ceo:'Steve Davison',
+   dir:'Kristjaan Speakman',own:'Kyril Louis-Dreyfus'}],
+ [/^real madrid/i,{chair:'Florentino Perez',ceo:'Jose Angel Sanchez',
+   dir:'Juni Calafat',own:'the club members'}],
+ [/^barcelona|^fc barcelona/i,{chair:'Joan Laporta',ceo:'Manel del Rio',
+   dir:'Deco',own:'the club members'}],
+ [/^bayern/i,{chair:'Herbert Hainer',ceo:'Jan-Christian Dreesen',
+   dir:'Max Eberl',own:'the members, Adidas, Allianz and Audi'}],
+ [/^paris saint|^psg/i,{chair:'Nasser Al-Khelaifi',ceo:'Victoriano Melero',
+   dir:'Luis Campos',own:'Qatar Sports Investments'}],
+ [/^juventus/i,{chair:'Gianluca Ferrero',ceo:'Maurizio Scanavino',
+   dir:'Cristiano Giuntoli',own:'Exor'}],
+ [/^inter\b|^internazionale/i,{chair:'Giuseppe Marotta',ceo:'Alessandro Antonello',
+   dir:'Piero Ausilio',own:'Oaktree Capital'}],
+ [/^ac milan|^milan\b/i,{chair:'Paolo Scaroni',ceo:'Giorgio Furlani',
+   dir:'Igli Tare',own:'RedBird Capital'}]
+];
+
+const _boardPeopleReal=boardPeople;
+boardPeople=function(){
+ const P=_boardPeopleReal.apply(this,arguments)||{};
+ try{
+  const c=G.clubs[G.my];
+  if(!c)return P;
+  if(G.boardRoom&&G.boardRoom._real)return G.boardRoom;
+  const n=String(c.name||'');
+  for(let i=0;i<BOARD_REAL.length;i++){
+   if(BOARD_REAL[i][0].test(n)){
+    const R=BOARD_REAL[i][1];
+    G.boardRoom={chair:R.chair,ceo:R.ceo,dir:R.dir,own:R.own,_real:1};
+    return G.boardRoom}}
+ }catch(e){}
+ return P};
+
+function boardOwner(){
+ try{const P=boardPeople();return P.own||('the owners of '+G.clubs[G.my].name)}
+ catch(e){return 'the owners'}}
+
+/* ---------------------------------------------------------------------
+   2. MEETINGS THAT RUN TO MORE THAN ONE QUESTION
+   ---------------------------------------------------------------------
+   brPick runs the option, stores the reply and repaints, and the footer
+   button closes the room. A scene that wants a follow-up leaves it on
+   BR.chain; the footer then says "Go on" and advances instead.
+   --------------------------------------------------------------------- */
+BR.chain=null;
+
+const _vBoardChain=vBoardRoom;
+vBoardRoom=function(){
+ let h=_vBoardChain.apply(this,arguments);
+ try{
+  if(BR.chain&&BR.chain.length)
+   h=h.replace('data-action="brDone">Leave the room',
+               'data-action="brNext">Go on');
+ }catch(e){}
+ return h};
+
+ACTIONS.brNext=()=>{
+ if(!BR.chain||!BR.chain.length)return closeBoardRoom();
+ BR.scene=BR.chain.shift();
+ BR.reply=null;
+ paintBoardRoom();
+ try{sfx('tap')}catch(e){}};
+
+const _brDoneChain=ACTIONS.brDone;
+ACTIONS.brDone=()=>{BR.chain=null;return _brDoneChain()};
+
+/* how much goodwill this meeting earned. Announced at the end so the
+   answers feel like they added up to something. */
+function boardMood(n,why){
+ try{
+  const c=G.clubs[G.my];
+  c.patience=clamp(c.patience+n,0,100);
+  if(!BR._score)BR._score={n:0,why:[]};
+  BR._score.n+=n;
+  if(why)BR._score.why.push(why);
+ }catch(e){}}
+
+/* ---------------------------------------------------------------------
+   3. THE FIRST MEETING, IN FOUR PARTS
+   --------------------------------------------------------------------- */
+function boardIntroChain(){
+ const P=boardPeople();
+ const c=G.clubs[G.my];
+ const obj=boardTarget();
+ const q=[];
+
+ /* money */
+ q.push({kind:'objectives',who:P.ceo,
+  say:'On the money. We can back you in the window, or we can keep it '+
+      'back and see where we are in January. Which would you rather?',
+  opts:[
+   {lbl:'Back me now',sub:'more to spend, and more expected of it',
+    go:()=>{try{c.budget=Math.round(c.budget*1.25);c.transferBoost=1}catch(e){}
+     obj.pos=Math.max(1,obj.pos-1);
+     boardMood(-2,'asked for more money');
+     return'"Then we will find it." The chief executive writes a figure down and '+
+      'slides it across. It is more than you expected, and so is the '+ordinal(obj.pos)+' next to it.'}},
+   {lbl:'Hold it until January',sub:'they like the patience; you start thinner',
+    go:()=>{boardMood(6,'took a long view on spending');
+     return'"Sensible." You can feel the room relax. You will have to start the season '+
+      'with what is already in the building.'}},
+   {lbl:'Whatever you think is right',sub:'let them decide',
+    go:()=>{boardMood(2,'left the money to them');
+     return'A small shrug from the chairman. "We will let you know."'}}]});
+
+ /* how you want to play */
+ q.push({kind:'objectives',who:P.dir,
+  say:'And how do you want us to play? It matters to us — we sell tickets on it.',
+  opts:[
+   {lbl:'On the front foot',sub:'the supporters will love it, the board will worry',
+    go:()=>{try{fansShift(5,'promised attacking football')}catch(e){}
+     boardMood(1,'promised football people want to watch');
+     return'"Good. That is what this place expects." The director looks pleased. '+
+      'The chief executive looks like a man doing arithmetic.'}},
+   {lbl:'Solid first, build from there',sub:'the safe answer, and they know it',
+    go:()=>{boardMood(4,'promised a foundation first');
+     return'"We have been relegated on romance before." He is agreeing with you.'}},
+   {lbl:'Whatever wins',sub:'no promises to anybody',
+    go:()=>{boardMood(3,'refused to promise a style');
+     return'"Fair enough." Nobody in the room disagrees, and nobody warms to you either.'}}]});
+
+ /* the academy */
+ q.push({kind:'objectives',who:P.chair,
+  say:'Last thing. The academy. Do you intend to use it, or is it somebody '+
+      'else’s department?',
+  opts:[
+   {lbl:'They will play',sub:'the board love it; the results may not',
+    go:()=>{try{G.youthPledge=true;fansShift(4,'backed the academy')}catch(e){}
+     boardMood(7,'committed to the academy');
+     return'That is the first thing all afternoon that has made the chairman smile. '+
+      '"We will hold you to it."'}},
+   {lbl:'If they are good enough',sub:'the honest answer',
+    go:()=>{boardMood(3,'was honest about the youngsters');
+     return'"That is all anybody can say." He writes it down anyway.'}},
+   {lbl:'I need proven players',sub:'they will not forget it',
+    go:()=>{boardMood(-4,'wrote the academy off');
+     return'A silence you could park a bus in. "Noted."'}}]});
+
+ /* the summing up, which is where the score lands */
+ q.push({kind:'objectives',who:P.chair,
+  say:'That will do. Anything you want from us before you go?',
+  opts:[
+   {lbl:'Just your patience',sub:'ask for time',
+    go:()=>{
+     const s=BR._score||{n:0,why:[]};
+     boardMood(3,'');
+     const warm=s.n>=10?'They are with you.':s.n>=3?'They are willing to be convinced.':
+       s.n>=-2?'They are reserving judgement.':'You have not started well in this room.';
+     BR._score=null;
+     return'"Time is the one thing we cannot promise." He stands, and offers a hand.<br><br>'+
+      '<b>'+warm+'</b> '+esc(boardOwner())+' will be watching.'}},
+   {lbl:'Nothing at all',sub:'leave it there',
+    go:()=>{
+     const s=BR._score||{n:0,why:[]};
+     const warm=s.n>=10?'They are with you.':s.n>=3?'They are willing to be convinced.':
+       s.n>=-2?'They are reserving judgement.':'You have not started well in this room.';
+     BR._score=null;
+     return'"Then we are done." <br><br><b>'+warm+'</b>'}}]});
+ return q}
+
+/* ---------------------------------------------------------------------
+   4. THE SCENES
+   --------------------------------------------------------------------- */
+const _boardSceneA6=boardScene;
+boardScene=function(kind){
+ const P=boardPeople();
+ const c=(G.clubs&&G.clubs[G.my])||{};
+ const obj=(typeof boardTarget==='function')?boardTarget():{pos:10};
+ let pos=null;try{pos=leaguePos(G.my)}catch(e){}
+ const played=(function(){
+  try{const t=(tableRows(c.league)||[]).filter(r=>r.i===G.my)[0];return t?(t.p||0):0}
+  catch(e){return 0}})();
+
+ /* the first meeting gains its follow-ups */
+ if(kind==='objectives'){
+  const s=_boardSceneA6.apply(this,arguments);
+  try{
+   BR._score={n:0,why:[]};
+   BR.chain=boardIntroChain();
+   /* the original first question keeps its three answers; each one now
+      leads into the rest of the meeting rather than ending it */
+  }catch(e){}
+  return s}
+
+ /* A MEETING YOU ASKED FOR. This is what the finances button opens when
+    nothing is pending, and the whole point is that they do not open by
+    complaining about results that do not exist yet. */
+ if(kind==='checkin'){
+  const early=played<3;
+  return{kind,who:P.ceo,
+   say:early
+    ?'You wanted to see us. We have not kicked a ball yet, so there is not '+
+      'much to report — but the door is open. What is on your mind?'
+    :'You wanted to see us. '+(pos?'We have you '+ordinal(pos)+' after '+played+
+      ' '+(played===1?'match':'matches')+'. ':'')+'What is on your mind?',
+   opts:[
+    {lbl:'Just checking in',sub:'nothing in particular',
+     go:()=>'"Good." '+esc(P.chair)+' goes back to his phone. It is the shortest '+
+       'meeting anybody has had in this room all year.'},
+    {lbl:'I need more money',sub:'ask, and spend some goodwill doing it',
+     go:()=>{
+      const ok=(c.patience||50)>=62;
+      if(ok){try{c.budget=Math.round((c.budget||0)*1.12)}catch(e){}
+       boardMood(-4,'');
+       return'A look between them. "A little. Not a lot." The budget moves, and so '+
+        'does the amount of rope you have left.'}
+      boardMood(-6,'');
+      return'"On this run of form?" He does not finish the sentence. The answer is no.'}},
+    {lbl:'Where do I stand?',sub:'ask them straight',
+     go:()=>{
+      const t=(typeof boardTemper==='function')?boardTemper():'';
+      return'"You want it plainly? '+esc(t)+'." '+
+       (played<3?'It is early, and everybody in the room knows it.'
+        :'The target is still '+ordinal(obj.pos)+'.')}}]}}
+
+ /* THE MONTHLY REVIEW, which is what was missing between August and May */
+ if(kind==='monthly'){
+  const ahead=pos&&obj.pos&&pos<obj.pos;
+  const level=pos&&obj.pos&&Math.abs(pos-obj.pos)<=2;
+  return{kind,who:P.ceo,
+   say:'The monthly review. '+
+    (pos?'You are <b>'+ordinal(pos)+'</b> after '+played+' '+
+      (played===1?'match':'matches')+', against a target of <b>'+ordinal(obj.pos)+'</b>. '
+      :'')+
+    (ahead?'Which is ahead of where we asked you to be.'
+     :level?'Which is about where we asked you to be.'
+     :'Which is not where we asked you to be.'),
+   opts:[
+    {lbl:ahead?'Long way to go':'It will come',
+     sub:'play it down',
+     go:()=>{boardMood(ahead?3:1,'');
+      return ahead
+       ?'"That is the right attitude." Nobody wants a manager who thinks it is done in October.'
+       :'"We hope so." He closes the folder without looking at you.'}},
+    {lbl:'Ask for backing',sub:'use the meeting for something',
+     go:()=>{
+      if(ahead){try{c.budget=Math.round((c.budget||0)*1.08)}catch(e){}
+       boardMood(-2,'');
+       return'"Given where we are — yes, a little." It is not much. It is more than nothing.'}
+      boardMood(-5,'');
+      return'"Let us see an improvement first."'}},
+    {lbl:'Take the criticism',sub:'own it',
+     go:()=>{boardMood(ahead?1:6,'');
+      return'You do not argue. It is the first time in this room that anybody has not, '+
+       'and it lands better than any excuse would have.'}}]}}
+
+ return _boardSceneA6.apply(this,arguments)};
+
+/* ---------------------------------------------------------------------
+   5. THE BUTTON, AND A MEETING EVERY MONTH
+   --------------------------------------------------------------------- */
+ACTIONS.boardRoom=()=>{
+ /* if they called you in, that is what this button is for */
+ const pending=(G&&G.boardCall&&G.boardCall.kind)||null;
+ if(pending){G.boardCall=null;return openBoardRoom(pending)}
+ /* otherwise it is a meeting you asked for, and they behave accordingly */
+ return openBoardRoom('checkin')};
+
+const _vClubBoardBtn=vClubFinal;
+vClubFinal=function(){
+ let h=_vClubBoardBtn.apply(this,arguments);
+ try{
+  if(!G||!G.boardCall)
+   h=h.replace('🏛️ Go up to the boardroom','🏛️ Ask for a meeting');
+  else
+   h=h.replace('🏛️ Go up to the boardroom','🏛️ They want to see you');
+ }catch(e){}
+ return h};
+
+const _dtcMonthly=dailyTickCore;
+dailyTickCore=function(){
+ const r=_dtcMonthly.apply(this,arguments);
+ try{
+  if(!G||G.sacked||G.boardCall)return r;
+  const obj=boardTarget();
+  if(!obj.agreed)return r;                 /* the season is not set yet */
+  const since=G.day-(G.lastMonthly||G.seasonStart||0);
+  if(since<30)return r;
+  /* not in the last fortnight — the end of season review covers that */
+  if((G.seasonStart||0)+280<G.day)return r;
+  G.lastMonthly=G.day;
+  boardSummon('monthly','The monthly review',
+   'The board would like half an hour on where the season stands.');
+ }catch(e){}
+ return r};
+
+/*#wA6_board.js#*/
+
+
+/*#wA7_context.js#*/
+
+/* =====================================================================
+   wA7_context — the game knows what it is playing for
+   ---------------------------------------------------------------------
+   Every match in this game went through the same door. A pre-season
+   friendly in Chicago, a League Cup second round tie at Rochdale and a
+   European quarter-final all arrived at applyPostMatch as a letter W, a
+   goals-for and a goals-against, and everything downstream reacted to
+   the letter.
+
+   So the supporters lost four percent of their approval over a July
+   friendly. The board's patience moved on it. The result went into the
+   club's form guide. The full-time mail read "Three points! League
+   position: 1st" in the last week of July, when nobody had played a
+   league game. And the fan feed — the thing that actually gave this
+   away — posted "Point away from home isn't the worst, calm down
+   everyone" after a goalless draw with a Bundesliga side in a stadium
+   in Maryland.
+
+   Three things go in.
+
+   ONE, A DESCRIPTION OF THE FIXTURE. fixCtx() is now the only place in
+   the game that decides what a match is: friendly, league or cup, which
+   cup, which round, whether it is a knockout, and how much it is worth.
+   Everything else reads it rather than re-deriving it from f.cup, which
+   is a boolean-ish key that cannot tell a first round from a final.
+
+   TWO, REACTION IN PROPORTION. A fan shift is now multiplied by what
+   the fixture was worth, and the reason recorded against it says which
+   competition it happened in. Beating Arsenal in the FA Cup quarter-
+   final and beating them in the League Cup second round are no longer
+   the same event. A final is worth roughly twice a league game; a first
+   round tie against lower-league opposition is worth a third of one.
+
+   THREE, A FRIENDLY IS NOT A MATCH. It is a training exercise with a
+   crowd. Nothing competitive is allowed to move: not approval, not
+   patience, not the form guide, not the manager's record. The friendly
+   gets its own report, written for what it is — minutes, fitness,
+   who looked sharp — and the press room, if it opens at all, asks
+   pre-season questions.
+
+   HOW THE FRIENDLY CASE IS ENFORCED. applyPostMatch is not one function,
+   it is seven, each wrapping the last, spread over thirty thousand
+   lines: gate receipts, patience, fan mood, the claims system, the
+   press office, the coverage engine. Gating them individually means
+   finding all of them and finding the next one somebody adds. Instead
+   the outermost wrapper takes a snapshot of every competitive number
+   before the chain runs and puts it back afterwards, then removes the
+   mail the chain generated and writes the right one. The chain is free
+   to keep doing what it does — it simply does not get to keep the
+   result when the match did not count.
+   ===================================================================== */
+
+/* ---------------------------------------------------------------------
+   1. WHAT IS THIS MATCH
+   ---------------------------------------------------------------------
+   Everything below reads this and nothing below re-derives it.
+
+   `stakes` is the number that does the work. 1.0 is an ordinary league
+   fixture. A friendly is zero because nothing that happens in one is
+   allowed to count. A cup tie climbs from a third of a league game in
+   the first round to twice one in a final, and Europe sits above the
+   domestic cups at every equivalent stage because it is.
+   --------------------------------------------------------------------- */
+const EURO_KEYS={CL:1,EL:1,EC:1};
+
+/* how much the last round of each cup is worth, and how steeply it
+   climbs to get there. Domestic cups start almost worthless and finish
+   enormous; Europe starts meaningful because the league phase is. */
+const COMP_WEIGHT={
+ FA:{floor:.32,final:2.00,name:'the FA Cup'},
+ LC:{floor:.26,final:1.55,name:'the League Cup'},
+ CL:{floor:.95,final:2.40,name:'the Champions League'},
+ EL:{floor:.70,final:1.85,name:'the Europa League'},
+ EC:{floor:.55,final:1.45,name:'the Conference League'}};
+
+function fixCtx(f){
+ const out={friendly:false,cup:false,euro:false,league:false,
+  key:'LEAGUE',comp:'',round:null,roundIx:null,label:'',
+  short:'the league',inThe:'in the league',article:'a league game',
+  knockout:false,isFinal:false,isSemi:false,leg:0,twoLegged:false,
+  stakes:1,neutral:false,trophy:false};
+ if(!f)return out;
+ out.neutral=!!f.neutral;
+
+ /* --- a friendly --------------------------------------------------- */
+ if(f.friendly||f.div==='FRIENDLY'){
+  out.friendly=true;out.key='FRIENDLY';out.stakes=0;
+  /* the last game of a tour can be an invitational final, which has a
+     trophy at the end of it and therefore a name of its own */
+  const nm=String(f.comp||'');
+  const tourInv=!!(G&&G.tour&&G.tour.inv&&G.tour.inv.name&&nm===G.tour.inv.name);
+  out.trophy=tourInv;
+  out.comp=tourInv?nm:'Pre-season friendly';
+  out.label=nm||'Pre-season friendly';
+  out.short=tourInv?'the '+nm:'a friendly';
+  out.inThe=tourInv?'in the '+nm:'in a pre-season friendly';
+  out.article=tourInv?'the '+nm+' final':'a pre-season friendly';
+  if(tourInv)out.stakes=.18;                 /* silverware, but in July */
+  return out}
+
+ /* --- a cup tie ----------------------------------------------------- */
+ if(f.cup){
+  const k=String(f.cup);
+  const def=(typeof CUP_DEFS!=='undefined'&&CUP_DEFS[k])||null;
+  const rn=(def&&def.rn)||[];
+  const r=f.r==null?0:f.r;
+  out.cup=true;out.key=k;out.euro=!!EURO_KEYS[k];
+  out.comp=(def&&def.name)||'Cup';
+  out.roundIx=r;
+  out.round=rn[r]||null;
+  out.label=f.comp||(out.comp+(out.round?' · '+out.round:''));
+  out.isFinal=!!(out.round&&/final/i.test(out.round)&&!/semi|quarter/i.test(out.round));
+  out.isSemi=!!(out.round&&/semi/i.test(out.round));
+  /* a European league-phase match is not a knockout and must not be
+     described as one — eight of them decide a table, not a tie */
+  out.knockout=!f.lg;
+  out.leg=f.leg||0;
+  /* a two-legged tie occupies two consecutive round indices — the draw
+     stores the second leg at r+1 — so both have to be checked or every
+     second leg reads as a single-match round */
+  out.twoLegged=!!(def&&def.legs&&(def.legs[r]===2||def.legs[r-1]===2));
+
+  const w=COMP_WEIGHT[k]||{floor:.4,final:1.6,name:'the cup'};
+  const last=Math.max(1,(rn.length||5)-1);
+  const t=Math.min(1,Math.max(0,r/last));
+  /* the climb is quadratic — the early rounds of the FA Cup really are
+     nearly worthless and the last four really are everything */
+  out.stakes=+(w.floor+(w.final-w.floor)*Math.pow(t,1.85)).toFixed(3);
+  out.short=w.name;
+  out.inThe='in '+w.name+(out.round?' '+out.round.toLowerCase():'');
+  out.article=out.round?'a '+out.comp+' '+out.round.toLowerCase():'a '+out.comp+' tie';
+  return out}
+
+ /* --- a league match ------------------------------------------------ */
+ out.league=true;out.key='LEAGUE';
+ const div=f.div||(typeof myDiv==='function'?myDiv():null);
+ out.comp=(typeof DIV_NAMES!=='undefined'&&DIV_NAMES[div])||'League';
+ out.round=f.r==null?null:'Matchday '+(f.r+1);
+ out.label=f.comp||(out.comp+(out.round?' · '+out.round:''));
+ out.short='the '+out.comp;
+ out.inThe='in the '+out.comp;
+ out.article='a league game';
+ /* the run-in matters more than August, and it should feel like it */
+ try{
+  const s=(G.seasonStart||0);
+  const late=(G.day-s)>250;
+  if(late)out.stakes=1.22}
+ catch(e){}
+ return out}
+
+/* the fixture the game is currently reacting to */
+function curCtx(){
+ try{return fixCtx((typeof MU!=='undefined'&&MU&&MU.fix)||null)}
+ catch(e){return fixCtx(null)}}
+
+/* ---------------------------------------------------------------------
+   2. A FAN SHIFT IS SCALED AND LABELLED
+   ---------------------------------------------------------------------
+   fansShift is called from a dozen places, most of which have nothing
+   to do with a match. Rather than find them, a scale is set around the
+   post-match chain and reset the instant it finishes — anything else
+   calling fansShift sees a scale of one, exactly as before.
+   --------------------------------------------------------------------- */
+let FAN_SCALE=1,FAN_TAG='';
+const _fansShiftCtx=fansShift;
+fansShift=function(n,why){
+ let d=n;
+ if(FAN_SCALE!==1)d=n*FAN_SCALE;
+ let w=why;
+ if(w&&FAN_TAG)w=w+' '+FAN_TAG;
+ return _fansShiftCtx(d,w)};
+
+/* ---------------------------------------------------------------------
+   3. THE SNAPSHOT
+   ---------------------------------------------------------------------
+   Everything a friendly is not allowed to change, captured before and
+   restored after. Kept in one place so that adding a number to the list
+   is a one-line change rather than an archaeology exercise.
+   --------------------------------------------------------------------- */
+function ctxSnapshot(f){
+ const my=G.clubs[G.my];
+ const other=f?(f.h===G.my?f.a:f.h):null;
+ const snap={
+  fans:G.fans,
+  patience:my?my.patience:null,
+  hype:G.hypePressure,
+  repLog:(G.repLog||[]).length,
+  fanLog:(G.fanLog||[]).slice(0,3),
+  inbox:new Set((G.inbox||[]).map(m=>m.id)),
+  unread:G.unread,
+  pressCtx:G.pressCtx||null,
+  recent:{},
+  morale:{}};
+ [G.my,other].forEach(ci=>{
+  if(ci==null)return;
+  const c=G.clubs[ci];if(!c)return;
+  snap.recent[ci]=(c.recent||[]).slice();
+  snap.morale[ci]=(c.players||[]).map(p=>p.morale)});
+ return snap}
+
+function ctxRestore(snap,f){
+ const my=G.clubs[G.my];
+ G.fans=snap.fans;
+ if(my&&snap.patience!=null)my.patience=snap.patience;
+ G.hypePressure=snap.hype;
+ /* a friendly must not appear in the manager's record of matches */
+ if(G.repLog&&G.repLog.length>snap.repLog)
+  G.repLog.splice(0,G.repLog.length-snap.repLog);
+ if(G.fanLog)G.fanLog=snap.fanLog.concat((G.fanLog||[]).slice(3)).slice(0,12);
+ for(const ci in snap.recent){
+  const c=G.clubs[ci];if(c)c.recent=snap.recent[ci]}
+ /* morale is the one thing a friendly is half-allowed to touch, so it
+    is restored and then a much smaller nudge applied by the caller */
+ for(const ci in snap.morale){
+  const c=G.clubs[ci];if(!c)continue;
+  (c.players||[]).forEach((p,i)=>{
+   const m=snap.morale[ci][i];
+   if(m!=null)p.morale=m})}
+ /* every letter the chain wrote about this match goes in the bin */
+ if(G.inbox)G.inbox=G.inbox.filter(m=>snap.inbox.has(m.id));
+ G.unread=(G.inbox||[]).filter(m=>!m.read).length;
+ G.pressCtx=snap.pressCtx}
+
+/* ---------------------------------------------------------------------
+   4. THE FRIENDLY REPORT
+   ---------------------------------------------------------------------
+   Written for what a friendly actually is: minutes in legs, who came
+   through it, who looked sharp, and nothing at all about a table.
+   --------------------------------------------------------------------- */
+function friendlyReport(res,gf,ga,C){
+ const f=MU.fix,my=G.clubs[G.my];
+ const opp=G.clubs[f.h===G.my?f.a:f.h];
+ /* f.rep is two arrays, home and away, already sorted by rating */
+ let mine=[];
+ try{mine=(f.rep&&(f.h===G.my?f.rep.h:f.rep.a))||[]}catch(e){mine=[]}
+ const star=mine.slice().sort((a,b)=>(b.r||0)-(a.r||0))[0];
+ const scorers=[];
+ try{(f.sc||[]).forEach(s=>{if(s.ci===G.my&&s.name)scorers.push(s.name)})}catch(e){}
+ const uniq=[...new Set(scorers)];
+ const played=mine.length;
+
+ const open=C.trophy
+  ?(res==='W'?'You have won the '+esc(C.comp)+'. '
+    :res==='L'?'Beaten in the '+esc(C.comp)+' final. ':'Level in the '+esc(C.comp)+' final. ')
+  :(res==='W'?'A win, and more importantly ninety minutes in the legs. '
+    :res==='L'?'A defeat that costs nothing but a headline. '
+    :'Honours even, which in July is nobody’s concern. ');
+
+ /* the tour builder writes f.comp as "Pre-season friendly · New York,
+    Chicago, Los Angeles" — the whole itinerary, which reads as nonsense
+    at the end of "in". The tour's own name is the thing to say. */
+ let where='a pre-season friendly';
+ try{
+  if(C.trophy)where='the '+C.comp;
+  else if(G.tour&&G.tour.name)where='a friendly on the '+
+   String(G.tour.name).replace(/&amp;/g,'&').replace(/\s+tour$/i,'')+' tour';}
+ catch(e){}
+
+ const body=open+
+  '<b>'+esc(G.clubs[f.h].name)+' '+f.hs+'–'+f.as+' '+esc(G.clubs[f.a].name)+'</b>'+
+  ', in '+esc(where)+'.'+
+  (uniq.length?'<br><br>On the scoresheet: <b>'+uniq.map(esc).join('</b>, <b>')+'</b>.':'')+
+  (star&&star.n?'<br><br><b>'+esc(star.n)+'</b> looked the sharpest of them, rated '+
+   (star.r||0).toFixed(1)+'.':'')+
+  (played?'<br><br>'+played+' players got minutes.':'')+
+  '<br><br><span class="xs faint">Pre-season. No points, no positions, and the supporters '+
+  'will judge you in August like everybody else.</span>';
+
+ mail('match',(C.trophy?'🏆 ':'✈️ ')+
+  (C.trophy?C.comp+': ':'Friendly: ')+
+  G.clubs[f.h].short+' '+f.hs+'–'+f.as+' '+G.clubs[f.a].short,body)}
+
+/* ---------------------------------------------------------------------
+   5. THE OUTERMOST WRAPPER
+   --------------------------------------------------------------------- */
+const _apmCtx=applyPostMatch;
+applyPostMatch=function(res,gf,ga){
+ const C=curCtx();
+ const f=MU&&MU.fix;
+
+ if(!C.friendly){
+  /* a real match: the chain runs untouched, except that fan reaction is
+     scaled by what the fixture was worth and labelled with where it
+     happened */
+  FAN_SCALE=Math.max(.35,Math.min(1.9,C.stakes));
+  FAN_TAG=C.league?'':(C.round?'in the '+C.comp+' '+C.round.toLowerCase()
+                              :'in '+C.comp);
+  try{return _apmCtx.apply(this,arguments)}
+  finally{FAN_SCALE=1;FAN_TAG=''}}
+
+ /* a friendly: run everything, keep none of it */
+ const snap=ctxSnapshot(f);
+ FAN_SCALE=0;FAN_TAG='';
+ try{_apmCtx.apply(this,arguments)}
+ catch(e){}
+ finally{FAN_SCALE=1;FAN_TAG=''}
+ try{ctxRestore(snap,f)}catch(e){}
+
+ /* what a friendly IS allowed to do */
+ try{
+  const my=G.clubs[G.my];
+  /* a small morale movement, because players are people, and a real one
+     if there was a trophy on it */
+  const m=C.trophy?(res==='W'?5:res==='L'?-3:0):(res==='W'?1.2:res==='L'?-1:0);
+  if(m)my.players.forEach(p=>{p.morale=clamp(p.morale+m,1,100)});
+  friendlyReport(res,gf,ga,C);
+ }catch(e){}
+
+ /* and the friendly is scrubbed from both clubs' form guide — the
+    MatchSim.finish hook wrote it there before applyPostMatch was ever
+    called, so the snapshot above already put it back, but a friendly
+    between two clubs that are not yours goes through the same hook and
+    never reaches here. That case is handled at the source, below. */
+};
+
+/* ---------------------------------------------------------------------
+   6. AND AT THE SOURCE: NO FRIENDLY EVER ENTERS A FORM GUIDE
+   ---------------------------------------------------------------------
+   c.recent is what formIndex, formStreak and every "they have won four
+   of five" line in the game read. A friendly in it is a lie told to the
+   match engine as well as to the reader.
+   --------------------------------------------------------------------- */
+const _finishNoFriendly=MatchSim.prototype.finish;
+MatchSim.prototype.finish=function(){
+ const f=this.fix;
+ const fr=!!(f&&(f.friendly||f.div==='FRIENDLY'));
+ let snap=null;
+ if(fr){
+  snap={};
+  [f.h,f.a].forEach(ci=>{const c=G.clubs[ci];if(c)snap[ci]=(c.recent||[]).slice()})}
+ const r=_finishNoFriendly.apply(this,arguments);
+ if(snap)[f.h,f.a].forEach(ci=>{const c=G.clubs[ci];if(c&&snap[ci])c.recent=snap[ci]});
+
+ /* --- and while we are here, a bug that predates all of this ---------
+    G.repLog is the manager's own match-report archive: twenty entries,
+    each one a game you were in charge of, and the reports screen reads
+    it straight. The line that writes it is gated on trackedMatch, which
+    used to mean "your club is playing" and was later widened to mean
+    "this division is simulated in full" so that other clubs' players
+    could accumulate real statistics.
+
+    That was the right change for statistics and the wrong one for this
+    log. Every match in every fully-simulated division started writing
+    an entry, ten a matchday, into a list that holds twenty — so the
+    reports screen showed you Championship fixtures you had nothing to
+    do with, and your own game from Saturday was pushed off the end
+    before you could open it.
+
+    The log is filtered back to what it says it is. Friendlies go too:
+    a July kickabout is not part of a manager's record.
+    ------------------------------------------------------------------ */
+ try{
+  if(G.repLog&&G.repLog.length)
+   G.repLog=G.repLog.filter(x=>x&&(x.h===G.my||x.a===G.my)&&!x.friendly);
+  if(fr&&G.repLog&&G.repLog.length&&G.repLog[0].day===G.day&&
+     (G.repLog[0].h===f.h&&G.repLog[0].a===f.a))G.repLog.shift();
+ }catch(e){}
+ return r};
+
+/* ---------------------------------------------------------------------
+   7. THE MATCH ITSELF KNOWS TOO
+   ---------------------------------------------------------------------
+   Motivation was a short list of special occasions. It had a line for a
+   European night and a line for a cup knockout and nothing for the two
+   situations at the ends of the scale: a final, and a friendly.
+
+   A pre-season friendly is played at about eighty per cent by both
+   sides, which is why they are so often strange scorelines. The engine
+   should produce those strange scorelines rather than a competitive
+   match with a different label on it.
+   --------------------------------------------------------------------- */
+const _bcCtx=buildContext;
+buildContext=function(fix){
+ const ctx=_bcCtx.apply(this,arguments);
+ try{
+  if(ctx._ctxDone)return ctx;
+  ctx._ctxDone=true;
+  const C=fixCtx(fix);
+  ctx.C=C;
+  if(C.friendly){
+   /* both sides drop off: less intensity, less structure, more goals of
+      the kind nobody would concede in September */
+   [ctx.h,ctx.a].forEach(s=>{
+    if(!s)return;
+    s.att*=.985;s.def*=.965;
+    s.motive=0;s.why=['pre-season']});
+   return ctx}
+  /* a final is the one occasion the whole list was missing */
+  if(C.isFinal||C.isSemi){
+   const lift=C.isFinal?.55:.35;
+   [ctx.h,ctx.a].forEach(s=>{
+    if(!s)return;
+    s.att*=1+lift*.013;
+    s.motive=(s.motive||0)+lift;
+    (s.why=s.why||[]).push(C.isFinal?'the final':'a semi-final')});}
+ }catch(e){}
+ return ctx};
+
+/* ---------------------------------------------------------------------
+   8. THE COVERAGE SAYS WHICH COMPETITION IT WAS
+   ---------------------------------------------------------------------
+   buildReport already named the competition, then finished every report
+   with the league position regardless of whether the match had anything
+   to do with the league. And the supporters' feed had one line for a
+   draw — "a point away from home isn't the worst" — which is the exact
+   sentence that gave this whole problem away.
+   --------------------------------------------------------------------- */
+const _mfCtx=matchFacts;
+matchFacts=function(fix){
+ const f=_mfCtx.apply(this,arguments);
+ try{
+  if(!f)return f;
+  const C=fixCtx(fix);
+  f.C=C;f.friendly=C.friendly;f.compName=C.label||f.compName;
+  /* a cup tie does not leave you anywhere in the table */
+  if(!C.league)f.pos=null;
+ }catch(e){}
+ return f};
+
+const _socCtx=socialPosts;
+socialPosts=function(f){
+ let out=[];
+ try{out=_socCtx.apply(this,arguments)||[]}catch(e){out=[]}
+ try{
+  const C=(f&&f.C)||fixCtx(f&&f.fix);
+  if(C.league)return out;
+  /* a draw in a cup tie is not a point, and in a friendly it is not
+     anything. The generic draw lines are replaced rather than added to,
+     because they are the ones that read as wrong. */
+  const r=mulberry(hashStr('socC'+G.day+G.season+f.gf+f.ga));
+  const like=()=>Math.round(200+r()*9000);
+  const H=(typeof HANDLES!=='undefined'&&HANDLES.length)?HANDLES:['@fan'];
+  const pick=s=>seededPick(H,G.day+s);
+  const them=f.opp?f.opp.short:'them';
+  if(C.friendly){
+   const set=f.res==='W'
+    ?[['Nice to see the lads back. Means nothing but I will take it.'],
+      ['Pre-season, calm down, but that looked a lot better than last July.'],
+      ['Whatever happens in August, that was a good watch.']]
+    :f.res==='L'
+    ?[['It is a friendly. IT IS A FRIENDLY. Put the phone down.'],
+      ['Losing in July has never once mattered and it does not now.'],
+      ['Fitness work. Nothing else. Move on.']]
+    :[['Ninety minutes in the legs. That is the whole point of it.'],
+      ['Goalless friendly. Riveting. Roll on the first game.']];
+   out=set.slice(0,3).map((x,i)=>({h:pick(i),t:x[0],l:like()}));
+   return out}
+  /* a cup tie */
+  const rd=C.round?C.round.toLowerCase():'tie';
+  if(f.res==='W'){
+   out=[{h:pick(0),t:'Through! '+(C.isFinal?'WE HAVE WON IT.':'Into the next round and I do not care how.'),l:like()},
+        {h:pick(1),t:C.isFinal?'Been waiting my whole life for this.'
+          :'People slate the '+C.comp+' until you get a run going. Now look at everyone.',l:like()}];
+  }else if(f.res==='L'){
+   out=[{h:pick(0),t:'Out of the '+C.comp+' at the '+rd+'. Every single year.',l:like()},
+        {h:pick(1),t:C.isFinal?'Losing a final is a completely different kind of pain.'
+          :'That was a chance to win something and we treated it like a Tuesday.',l:like()}];
+  }else{
+   out=[{h:pick(0),t:'Replay/extra time then. As if the fixture list needed it.',l:like()},
+        {h:pick(1),t:'Cup tie, nothing between them, and now we do it all again.',l:like()}]}
+  if(f.gk&&f.gk.sav>=5)out.push({h:pick(4),t:f.gk.n+' with '+f.gk.sav+' saves. Carried us.',l:like()});
+  return out.slice(0,4);
+ }catch(e){}
+ return out};
+
+/* ---------------------------------------------------------------------
+   9. THE PRESS ROOM KNOWS WHICH GAME IT IS ABOUT
+   ---------------------------------------------------------------------
+   pqFacts had F.cup, a truthy key, and F.cupRound, a string. It had no
+   idea a friendly existed, so every post-match rule fired after one —
+   and there is no post-match press room after a friendly any more, but
+   the PRE-match room still opens before the next one, and it was asking
+   about the table.
+   --------------------------------------------------------------------- */
+const _pqCtx=pqFacts;
+pqFacts=function(){
+ const F=_pqCtx.apply(this,arguments);
+ try{
+  if(!F)return F;
+  const nf=F.nextFix;
+  const NC=fixCtx(nf);
+  F.nextCtx=NC;
+  F.nextFriendly=NC.friendly;
+  F.nextComp=NC.comp;
+  F.nextRound=NC.round;
+  /* keep the old names honest as well */
+  F.cupTie=NC.cup;
+  F.cupRound=NC.round&&NC.cup?NC.round:null;
+  F.isFinal=NC.isFinal;F.isSemi=NC.isSemi;
+  /* and the match just gone */
+  const lf=(typeof MU!=='undefined'&&MU&&MU.fix)?MU.fix:null;
+  const LC=fixCtx(lf);
+  F.lastCtx=LC;
+  F.lastFriendly=LC.friendly;
+  if(F.post&&LC.friendly)F.post=false;    /* no post-mortem on a friendly */
+ }catch(e){}
+ return F};
+
+/* every rule that reads the table or the form is already gated on games
+   played. The rules that are not gated are the ones about the NEXT
+   match, and a friendly must not be described as a fixture with
+   anything riding on it. */
+(function gateFriendly(){
+ try{
+  if(typeof PQ==='undefined')return;
+  const OK=['pre-','tour','window','signings','young','summer','friendly'];
+  PQ.forEach(rule=>{
+   const id=String(rule.id||'');
+   if(OK.some(k=>id.indexOf(k)>=0))return;
+   const w0=rule.w;
+   rule.w=F=>{
+    try{
+     /* nothing competitive is asked while the only fixture on the
+        horizon is a friendly and nothing has been played */
+     if(F&&F.nextFriendly&&!(F.played>0))return false;
+     return !!w0(F)}
+    catch(e){return false}}});
+  /* and the room gets questions that fit a pre-season fixture */
+  PQ.push(
+   {id:'friendly-next',w:F=>F.nextFriendly&&!F.nextCtx.trophy,q:F=>[
+    'A friendly against '+PS(F.opp?F.opp.short:'them')+' tomorrow. What are you actually looking for?',
+    'How many minutes do the first-choice players get in a game like this?',
+    'Is a result in pre-season worth anything at all to you?',
+    'Do you learn more from these than from the training ground?']},
+   {id:'friendly-trophy',w:F=>F.nextFriendly&&F.nextCtx.trophy,q:F=>[
+    'There is a trophy at the end of this one. Does that change how you approach it?',
+    'Would you rather win the '+PS(F.nextComp)+' or come home with everybody fit?',
+    'Is a July trophy worth anything in May?']},
+   {id:'cup-round-next',w:F=>F.nextCtx&&F.nextCtx.cup&&!F.nextCtx.isFinal&&
+     !F.nextCtx.isSemi&&F.nextRound,q:F=>[
+    'The '+PS(F.nextRound.toLowerCase())+' of the '+PS(F.nextComp)+'. How strong a side do you send out?',
+    'Is the '+PS(F.nextComp)+' a competition you take seriously, honestly?',
+    'You are '+PS(F.nextRound.toLowerCase())+' stage. How far can this side go in it?']},
+   {id:'cup-final-next',w:F=>F.nextCtx&&F.nextCtx.isFinal,q:F=>[
+    'A '+PS(F.nextComp)+' final. How do you prepare a group for a day like that?',
+    'Have you let yourself think about lifting it?',
+    'What do you say to the ones who have never played in a final?',
+    'Does the league table matter this week at all?']},
+   {id:'cup-semi-next',w:F=>F.nextCtx&&F.nextCtx.isSemi,q:F=>[
+    'Ninety minutes from a '+PS(F.nextComp)+' final. How do you handle that?',
+    'Semi-finals are the ones nobody remembers losing well. Is that pressure?',
+    'Do you change anything for a one-off like this?']});
+ }catch(e){}
+})();
+
+/* ---------------------------------------------------------------------
+   10. THE PRE-MATCH LETTER NAMES THE COMPETITION PROPERLY
+   ---------------------------------------------------------------------
+   It said "tomorrow's game" for everything that was not a cup tie, and
+   "tomorrow's Champions League tie" for a league-phase fixture that is
+   not a tie at all.
+   --------------------------------------------------------------------- */
+const _preMediaCtx=maybePreMedia;
+maybePreMedia=function(){
+ const before=(G.inbox||[]).length;
+ const r=_preMediaCtx.apply(this,arguments);
+ try{
+  if((G.inbox||[]).length<=before)return r;
+  const m=G.inbox[0];
+  if(!m||!/press conference/i.test(m.title||''))return r;
+  const nf=nextUserMatch();
+  const C=fixCtx(nf);
+  const opp=nf?G.clubs[nf.h===G.my?nf.a:nf.h]:null;
+  if(!opp)return r;
+  const what=C.friendly?(C.trophy?'the '+esc(C.comp):'tomorrow’s friendly')
+   :C.cup?('tomorrow’s '+esc(C.comp)+(C.round?' '+esc(C.round.toLowerCase()):''))
+   :('tomorrow’s '+esc(C.comp)+' game');
+  m.body='The media room is full ahead of '+what+' against <b>'+esc(opp.name)+'</b>. '+
+   esc(G.pressCtx&&G.pressCtx.rep||'The first reporter')+' of '+
+   esc(G.pressCtx&&G.pressCtx.outlet||'the local paper')+' opens the questioning.';
+  if(C.friendly&&!C.trophy){
+   /* a July friendly does not fill a press room every time */
+   if(Math.random()<.55){G.inbox.shift();G.unread=Math.max(0,G.unread-1);G.pressCtx=null}}
+ }catch(e){}
+ return r};
+
+/* ---------------------------------------------------------------------
+   11. THE FIXTURE LIST AND THE DOCK SAY WHAT IT IS
+   ---------------------------------------------------------------------
+   compLabel already read f.comp when there was one. What it could not
+   do was tell you a European league-phase match from a knockout, or
+   mark a second leg, and it rendered a friendly as whatever string the
+   tour builder happened to write.
+   --------------------------------------------------------------------- */
+const _compLabelCtx=compLabel;
+compLabel=function(fix){
+ try{
+  const C=fixCtx(fix);
+  if(C.friendly)return C.trophy?C.comp:(fix.comp||'Pre-season friendly');
+  if(C.cup){
+   let s=C.comp+(C.round?' · '+C.round:'');
+   if(fix.lg)s=C.comp+' · League phase'+(fix.r!=null?', matchday '+(fix.r+1):'');
+   else if(C.twoLegged&&C.leg)s+=' · '+(C.leg===1?'first leg':'second leg');
+   return s}
+ }catch(e){}
+ return _compLabelCtx.apply(this,arguments)};
+
+/* ---------------------------------------------------------------------
+   12. AND THE HOME SCREEN COUNTS DOWN TO THE RIGHT THING
+   ---------------------------------------------------------------------
+   A one-line badge on the next fixture saying what is riding on it,
+   because "Everton, in 3d" tells you nothing about whether it is a
+   quarter-final.
+   --------------------------------------------------------------------- */
+(function ctxCSS(){
+ const old=document.getElementById('wA7');if(old)old.remove();
+ const st=document.createElement('style');st.id='wA7';
+ st.textContent=
+  '.fx-stake{display:inline-block;font-size:9.5px;letter-spacing:.09em;'+
+   'text-transform:uppercase;font-weight:800;padding:2px 7px;border-radius:99px;'+
+   'border:1px solid currentColor;opacity:.92;margin-top:5px}'+
+  '.fx-stake.s-fr{color:#7f8b93}'+
+  '.fx-stake.s-lg{color:var(--green,#57d38c)}'+
+  '.fx-stake.s-cup{color:#7fb3ff}'+
+  '.fx-stake.s-big{color:var(--gold,#fbe122)}';
+ document.head.appendChild(st)})();
+
+/* ---------------------------------------------------------------------
+   13. "NEXT MATCH" MEANS THE NEXT MATCH
+   ---------------------------------------------------------------------
+   nextUserFixture returned the first unplayed fixture in array order.
+   That was the same thing as the earliest one right up until the moment
+   something got appended to the list out of sequence — which is exactly
+   what booking a tour does: five friendlies in July, pushed onto the end
+   of a list whose first entry is the league opener in August.
+
+   So all summer the home screen counted down to the wrong game, the dock
+   offered the wrong opponent, and the press office prepared you for a
+   league match you would not play for three weeks. Sorting by date costs
+   one pass over a list of a few hundred and makes the answer true
+   regardless of what order anything was added in.
+   --------------------------------------------------------------------- */
+nextUserFixture=function(){
+ let best=null,past=null;
+ const list=G.fixtures||[];
+ for(let i=0;i<list.length;i++){
+  const f=list[i];
+  if(f.played)continue;
+  if(f.h!==G.my&&f.a!==G.my)continue;
+  if(f.day>=(G.day||0)){if(!best||f.day<best.day)best=f}
+  /* an unplayed fixture whose day has gone is a postponement waiting to
+     be dealt with, and it outranks anything in the future. A friendly is
+     never that — one that did not happen simply did not happen. */
+  else if(!f.friendly&&(!past||f.day>past.day))past=f}
+ return past||best||null};
+
+/* ---------------------------------------------------------------------
+   14. AND A TOUR IS BOOKED INTO THE DAYS THAT ARE LEFT
+   ---------------------------------------------------------------------
+   The booking window stays open to the eleventh of August and the tour
+   was always laid out from the second to the twelfth, so booking one on
+   the eighth scheduled four of the five friendlies into days that had
+   already gone. They could never be played. Before this they were merely
+   invisible; now that the home screen counts down to the earliest
+   fixture rather than the first one in the array, they would have sat
+   there as a match that never arrives.
+   --------------------------------------------------------------------- */
+const _tourBookCtx=ACTIONS.tourBook;
+if(_tourBookCtx)ACTIONS.tourBook=function(el){
+ const r=_tourBookCtx.apply(this,arguments);
+ try{
+  const w=preseasonWindow();
+  const from=Math.max(w.from,(G.day||0)+1);
+  const fr=(G.fixtures||[]).filter(f=>f.friendly&&!f.played).sort((a,b)=>a.day-b.day);
+  if(!fr.length)return r;
+  const span=Math.max(0,w.to-from);
+  fr.forEach((f,i)=>{f.day=from+Math.round(i*span/Math.max(1,fr.length-1))});
+  /* two friendlies on the same day is worse than a squeezed schedule */
+  let last=-1;
+  fr.forEach(f=>{if(f.day<=last)f.day=last+1;last=f.day});
+
+  /* and each game gets the city it is played in rather than the whole
+     itinerary. The tour stores where as "New York, Chicago, Los
+     Angeles", which the fixture list was printing in full on every
+     line: "Pre-season friendly · New York, Chicago, Los Angeles",
+     three times, for three different matches. */
+  const t=TOURS.find(x=>x.id===(G.tour&&G.tour.id));
+  if(t){
+   const cities=String(t.where||'').replace(/&amp;/g,'&').split(/,\s*|\s+&\s+/)
+    .map(s=>s.trim()).filter(Boolean);
+   if(cities.length)fr.forEach((f,i)=>{
+    /* the invitational final keeps its own name */
+    if(G.tour&&G.tour.inv&&f.comp===G.tour.inv.name)return;
+    f.comp='Pre-season friendly · '+cities[i%cities.length]});}
+ }catch(e){}
+ return r};
+
+/* a friendly that the calendar has passed is cancelled, not pending */
+const _dtcCtx=dailyTickCore;
+dailyTickCore=function(){
+ const r=_dtcCtx.apply(this,arguments);
+ try{
+  if(G.fixtures)G.fixtures=G.fixtures.filter(f=>
+   !(f.friendly&&!f.played&&f.day<(G.day||0)));
+ }catch(e){}
+ return r};
+
+function stakeChip(fix){
+ const C=fixCtx(fix);
+ if(C.friendly)return '<span class="fx-stake s-fr">'+(C.trophy?'Trophy game':'No points')+'</span>';
+ if(C.isFinal)return '<span class="fx-stake s-big">The final</span>';
+ if(C.isSemi)return '<span class="fx-stake s-big">Semi-final</span>';
+ if(C.cup)return '<span class="fx-stake s-cup">'+esc(C.knockout?'Knockout':'League phase')+'</span>';
+ return '<span class="fx-stake s-lg">3 points</span>'}
+
+/*#wA7_context.js#*/
 showStart();
 </script>
 </body>
