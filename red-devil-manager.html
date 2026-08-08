@@ -44019,6 +44019,154 @@ try{
 }catch(e){}
 
 /*#wA0_hair.js#*/
+
+
+/*#wA1_creator.js#*/
+
+/* =====================================================================
+   wA1_creator — you can see what you are choosing
+   ---------------------------------------------------------------------
+   The creator had the right controls and told you nothing. A hairstyle
+   was the word "Quiff" in a pill; a beard was the word "Goatee". You
+   picked one, looked up at the portrait, decided it was wrong, picked
+   another, looked up again. Eighteen haircuts and six beards, chosen by
+   reading a list of nouns.
+
+   Every one of those is a drawing the game already owns. So a hairstyle
+   chip IS that hairstyle, drawn on your own face with your own colour
+   and skin, at forty-eight pixels. Same for the beards and the face
+   shapes. You choose by looking, which is the only way anyone has ever
+   chosen a haircut.
+
+   Round it: the five cuts the players got in the rewrite are added to
+   the manager's list too — he was on thirteen while the squad had
+   eighteen — and the portrait gets a stage to stand on rather than
+   floating on a gradient.
+   ===================================================================== */
+
+/* the manager was missing the five cuts the players gained */
+try{
+ const have={};MGR_CUTS.forEach(c=>have[c[0]]=1);
+ [['slick','Side parting'],['spiky','Spiked'],['dreads','Dreadlocks'],
+  ['long','Long'],['receding','Receding']]
+  .forEach(c=>{if(!have[c[0]])MGR_CUTS.push(c)});
+}catch(e){}
+
+/* ---------------------------------------------------------------------
+   1. A CHIP THAT IS THE THING IT SELECTS
+   ---------------------------------------------------------------------
+   mgrFaceSVG draws whatever manager object it is handed, so a preview
+   is the current manager with one field changed. Nothing is duplicated
+   and nothing can drift: change how a quiff is drawn and the chip that
+   picks it changes with it.
+   --------------------------------------------------------------------- */
+function mgrPreview(kind,key,on,label,crop){
+ let svg='';
+ try{
+  const m=myManager();
+  const v={};for(const k in m)v[k]=m[k];
+  v[kind]=key;
+  svg=mgrFaceSVG(v,64,{round:11,uid:'pv'+kind+key,
+   bg1:'#20262e',bg2:'#0a0d11'});
+ }catch(e){svg=''}
+ return '<button class="mgr-pv'+(on?' on':'')+(crop?' '+crop:'')+
+  '" data-action="mgrSet" data-k="'+kind+'" data-v="'+key+'" '+
+  'title="'+esc(label||key)+'">'+
+  '<span class="mgr-pv-f">'+svg+'</span>'+
+  '<span class="mgr-pv-l">'+esc(label||key)+'</span></button>'}
+
+/* ---------------------------------------------------------------------
+   2. THE ROWS THAT BENEFIT SWAP OVER
+   ---------------------------------------------------------------------
+   Name, nationality and age stay as they were — there is nothing to
+   preview about a date of birth. Everything you would judge by eye
+   becomes a picture.
+   --------------------------------------------------------------------- */
+const _vMgrPv=vMgrCreate;
+vMgrCreate=function(){
+ let h=_vMgrPv.apply(this,arguments);
+ try{
+  const m=myManager();
+  const swap=(title,list,kind,cur,crop)=>{
+   const inner=list.map(c=>mgrPreview(kind,c[0],cur===c[0],c[1],crop)).join('');
+   /* Find the row by its heading and replace only its options.
+
+      mgrRow writes the title as a bare text node inside .mgr-lbl —
+      there is no span around it — so matching one found nothing and
+      every row quietly stayed as text chips. Worth saying out loud
+      because a regex that matches nothing fails silently: the screen
+      looks exactly like it did before and nothing is logged. */
+   const re=new RegExp('(<div class="mgr-lbl">'+title+
+     '[\\s\\S]*?<div class="mgr-opts">)[\\s\\S]*?(</div></div>)');
+   if(re.test(h))h=h.replace(re,'$1'+inner+'$2')};
+  swap('Hairstyle',MGR_CUTS,'cut',m.cut,'pv-top');
+  swap('Facial hair',MGR_BEARDS,'beard',m.beard,'pv-low');
+  swap('Face shape',MGR_JAWS,'jaw',m.jaw,'');
+  swap('On the touchline',MGR_WEAR,'wear',m.wear,'pv-low');
+ }catch(e){}
+ return h};
+
+/* ---------------------------------------------------------------------
+   3. THE LOOK OF IT
+   --------------------------------------------------------------------- */
+(function creatorCSS(){
+ const old=document.getElementById('wA1');if(old)old.remove();
+ const st=document.createElement('style');st.id='wA1';
+ st.textContent=[
+  /* the portrait stands on something */
+  '#mgrCreate{background:'+
+   'radial-gradient(120% 60% at 50% -6%,rgba(201,163,92,.14),transparent 62%),'+
+   'radial-gradient(1200px 700px at 50% -10%,#1d2530,#0a0d12 62%,#05070a)}',
+  '.mgr-head{position:relative}',
+  '.mgr-head::after{content:"";position:absolute;left:22px;bottom:8px;'+
+   'width:150px;height:16px;border-radius:50%;pointer-events:none;'+
+   'background:radial-gradient(50% 100% at 50% 50%,rgba(0,0,0,.6),transparent 72%)}',
+  '.mgr-port svg{width:150px;height:150px;'+
+   'box-shadow:0 22px 44px -14px rgba(0,0,0,.85),0 0 0 1px rgba(255,255,255,.07)}',
+  '@media(min-width:520px){.mgr-port svg{width:186px;height:186px}}',
+
+  /* the preview chips */
+  '.mgr-opts{gap:9px}',
+  '.mgr-pv{padding:0;border-radius:13px;cursor:pointer;width:66px;'+
+   'background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(0,0,0,.22));'+
+   'border:1px solid rgba(255,255,255,.10);color:#9fb0c4;'+
+   'display:flex;flex-direction:column;align-items:center;gap:0;'+
+   'overflow:hidden;transition:transform .14s cubic-bezier(.2,.9,.3,1),'+
+   'border-color .16s,box-shadow .16s;'+
+   'box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 3px 10px -6px #000}',
+  '.mgr-pv-f{display:block;width:64px;height:64px;line-height:0;overflow:hidden}',
+  /* a haircut is decided in the top half of a head and a beard in the
+     bottom, so each preview shows the half that matters */
+  '.mgr-pv.pv-top .mgr-pv-f{height:44px}',
+  '.mgr-pv.pv-low .mgr-pv-f{height:46px}',
+  '.mgr-pv.pv-low .mgr-pv-f svg{margin-top:-18px}',
+  '.mgr-pv-l{display:block;width:100%;font-size:8.5px;font-weight:800;'+
+   'letter-spacing:.2px;padding:4px 2px 5px;line-height:1.15;'+
+   'background:rgba(0,0,0,.42);white-space:nowrap;overflow:hidden;'+
+   'text-overflow:ellipsis}',
+  '.mgr-pv:active{transform:scale(.94)}',
+  '.mgr-pv.on{border-color:#e8c880;color:#f5e6c2;transform:translateY(-2px);'+
+   'box-shadow:0 0 0 2px rgba(232,200,128,.30),0 8px 18px -8px rgba(232,200,128,.5)}',
+  '.mgr-pv.on .mgr-pv-l{background:linear-gradient(180deg,#c9a35c,#a8843f);'+
+   'color:#1a1206}',
+
+  /* the swatches, given the same weight */
+  '.mgr-sw{width:42px;height:42px;border-radius:12px}',
+  '.mgr-sw.on{transform:scale(1.08)}',
+
+  /* the tab bar reads as a bar */
+  '.mgr-tabs{padding:0 14px 12px;gap:7px}',
+  '.mgr-tab{border-radius:12px;padding:10px 14px;'+
+   'box-shadow:inset 0 1px 0 rgba(255,255,255,.05)}',
+  '.mgr-tab.on{box-shadow:0 6px 16px -8px rgba(232,200,128,.7),'+
+   'inset 0 1px 0 rgba(255,255,255,.35)}',
+
+  /* and the row headings */
+  '.mgr-lbl{border-bottom:1px solid rgba(255,255,255,.06);padding-bottom:6px}'
+ ].join('\n');
+ document.head.appendChild(st)})();
+
+/*#wA1_creator.js#*/
 showStart();
 </script>
 </body>
