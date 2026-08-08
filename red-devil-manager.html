@@ -38492,6 +38492,476 @@ if(typeof signAppeal==='function'){
   return v}}
 
 /*#w82_pledges.js#*/
+
+/*#w83_dressing.js#*/
+
+/* =====================================================================
+   w83_dressingroom — half time, and you are in the room
+   ---------------------------------------------------------------------
+   Half time was a modal with four chips in it. You pressed one, a number
+   was multiplied across eleven players, and you went back to the pitch.
+   Nothing about it was a dressing room: you never saw who had had a
+   shocker, you could not say a word to one man, and the four options
+   never changed whatever was happening in the game.
+
+   This is the room. Your eleven are on the benches under their shirts,
+   in the state they are actually in — the rating as it stands, the legs,
+   the man on a booking, the one who has not touched it. The whiteboard
+   carries the half you have just watched. You are stood in front of them.
+
+   And you can do the thing the old screen could not: single somebody out.
+   An arm round a young player who is drowning. A hairdryer at a senior
+   man who has hidden. A specific job for somebody, in front of everyone.
+   Each lands on him — and the rest of the room watches you do it, which
+   is the whole reason a dressing room is a difficult place to manage.
+   ===================================================================== */
+
+const DR={open:false,sel:null};
+
+function drSide(){
+ try{const m=MU&&MU.m;if(!m)return null;return m.sides[mySideIx()]||null}
+ catch(e){return null}}
+
+function drScore(){
+ try{
+  const f=MU.fix,mine=f.h===G.my?f.hs:f.as,theirs=f.h===G.my?f.as:f.hs;
+  const opp=G.clubs[f.h===G.my?f.a:f.h];
+  return{mine,theirs,opp:opp?(opp.short||opp.name):'them',
+   state:mine>theirs?'ahead':mine<theirs?'behind':'level'}}
+ catch(e){return{mine:0,theirs:0,opp:'them',state:'level'}}}
+
+/* what the room feels like, which is what a manager actually reads */
+function drMood(){
+ const s=drSide();if(!s)return{avg:6,low:[],high:[],leaders:0,nervous:0};
+ const on=(s.onfield||[]).filter(p=>!p.off);
+ const avg=on.length?on.reduce((a,p)=>a+(p.rating||6),0)/on.length:6;
+ return{
+  avg,
+  low:on.filter(p=>(p.rating||6)<6).sort((a,b)=>a.rating-b.rating),
+  high:on.filter(p=>(p.rating||6)>=7.3).sort((a,b)=>b.rating-a.rating),
+  leaders:on.filter(p=>{try{return hasTrait(p,'Leader')}catch(e){return false}}).length,
+  nervous:on.filter(p=>(p.p.pressure||10)<=9).length,
+  tired:on.filter(p=>(p.cond||100)<62).length,
+  booked:on.filter(p=>p.yc>0).length}}
+
+/* ---------------------------------------------------------------------
+   A WORD WITH ONE MAN
+   The group talk multiplies everybody. This does not: it lands on him,
+   hard, and it moves the room a little in the other direction, because
+   that is what happens when eleven people watch you do it.
+   --------------------------------------------------------------------- */
+const DR_WORDS=[
+ {k:'arm',   icon:'🤝', lbl:'Arm round him',
+  hint:'settles a man who is struggling — costs nothing, gains less',
+  fits:pl=>(pl.rating||6)<6.6||(pl.p.pressure||10)<=9},
+ {k:'demand',icon:'😤', lbl:'Demand more',
+  hint:'lifts a strong character, flattens a fragile one',
+  fits:pl=>(pl.p.pressure||10)>=12},
+ {k:'hair',  icon:'🔥', lbl:'Hairdryer',
+  hint:'a big swing either way, and the room will feel it',
+  fits:pl=>(pl.rating||6)<5.8},
+ {k:'job',   icon:'🎯', lbl:'Give him a job',
+  hint:'a clear instruction — small, reliable, never backfires',
+  fits:()=>true},
+ {k:'praise',icon:'👏', lbl:'Praise him',
+  hint:'rewards the man having a good one; the others notice',
+  fits:pl=>(pl.rating||6)>=7.2}];
+
+function drApplyWord(pl,kind){
+ const s=drSide();if(!s||!pl)return '';
+ const p=pl.p;
+ const pres=p.pressure||10;
+ const ldr=(()=>{try{return hasTrait(pl,'Leader')}catch(e){return false}})();
+ let b=1, mor=0, room=0, line='';
+ /* How he plays and how he feels move TOGETHER. The first cut let a
+    hairdryer take eleven points off a man's morale and still make him
+    play one per cent better, because the two were banded differently.
+    They are the same bands now: if it lands, it lands on both. */
+ if(kind==='arm'){
+  b=pres<=9?1.055:1.02; mor=pres<=9?8:5; room=.002;
+  line=pres<=9?p.name+' needed that. His shoulders drop half an inch.'
+              :p.name+' nods. It will not hurt.'}
+ else if(kind==='demand'){
+  b=pres>=13?1.07:pres>=10?1.01:0.955; mor=pres>=13?5:pres>=10?0:-6; room=.004;
+  line=pres>=13?p.name+' straightens up. He wanted to be asked.'
+       :pres>=10?p.name+' takes it on board and says nothing.'
+              :p.name+' does not look at you. That was the wrong man.'}
+ else if(kind==='hair'){
+  b=pres>=14?1.09:pres>=12?0.985:0.93; mor=pres>=14?3:pres>=12?-6:-13; room=.006;
+  line=pres>=14?'The room goes silent. '+p.name+' has taken it exactly as you meant it.'
+       :pres>=12?'The room goes silent. '+p.name+' takes it, but he did not enjoy it.'
+              :'The room goes silent. '+p.name+' has taken it badly, and everyone saw.'}
+ else if(kind==='job'){
+  b=1.035; mor=3; room=.001;
+  line=p.name+' repeats it back to you. He knows what he is doing after the break.'}
+ else{ /* praise */
+  b=1.05; mor=9; room=-.001;
+  line=p.name+' grins. The two next to him are grinning as well.'}
+ /* the group talk sets the room; a word with one man moves him from
+    there, in either direction */
+ pl.talk=(pl.talk||1)*b;
+ p.morale=clamp(p.morale+mor,1,100);
+ /* the rest of the room reacts to having watched it */
+ (s.onfield||[]).forEach(o=>{
+  if(o===pl||o.off)return;
+  o.talk=(o.talk||1)*(1+room)});
+ DR.said=DR.said||{};
+ DR.said[p.id]=kind;
+ return line}
+
+/* =====================================================================
+   THE ROOM ITSELF
+   ---------------------------------------------------------------------
+   Shirts on pegs, a bench under them, boots on the floor, a whiteboard
+   with the half you have just watched, and you stood in front of it.
+   Every player is his own portrait, not a row in a list, because the
+   whole point is that you are looking at them.
+   ===================================================================== */
+function drShirt(pl,ix){
+ const p=pl.p;
+ let c1='#8a1420',c2='#fff';
+ try{const c=G.clubs[G.my];if(c){c1=c.c1||c1;c2=(c.c2&&c.c2!==c.c1)?c.c2:'#fff'}}catch(e){}
+ const r=pl.rating||6;
+ const tone=r>=7.3?'good':r<6?'poor':'ok';
+ const cond=Math.round(pl.cond||100);
+ const sel=DR.sel===p.id?' is-sel':'';
+ const said=(DR.said&&DR.said[p.id])||'';
+ const tell=r<5.6?'head down':r<6.2?'quiet':r>=7.6?'buzzing':r>=7?'up for it':
+            cond<58?'blowing':(p.pressure||10)<=8?'nervy':'ready';
+ return '<button class="dr-p'+sel+'" data-action="drPick" data-id="'+p.id+'">'+
+  '<div class="dr-peg"></div>'+
+  '<div class="dr-shirt" style="--k1:'+c1+';--k2:'+c2+'">'+
+   '<span class="dr-num">'+(ix+1)+'</span></div>'+
+  '<div class="dr-face">'+face(p,44)+
+   (said?'<span class="dr-said">'+({arm:'🤝',demand:'😤',hair:'🔥',job:'🎯',praise:'👏'}[said]||'')+'</span>':'')+
+  '</div>'+
+  '<div class="dr-n">'+esc(surname(p.name))+'</div>'+
+  '<div class="dr-r r-'+tone+'">'+r.toFixed(1)+
+   (pl.yc?' <span class="dr-yc"></span>':'')+'</div>'+
+  '<div class="dr-tell">'+esc(tell)+'</div>'+
+ '</button>'}
+
+function vDressingRoom(){
+ const s=drSide();
+ const sc=drScore();
+ const mood=drMood();
+ const on=s?(s.onfield||[]).filter(x=>!x.off):[];
+ let stats='';
+ try{
+  const st=MU.m.stats?MU.m.stats[mySideIx()]:null;
+  const ot=MU.m.stats?MU.m.stats[1-mySideIx()]:null;
+  if(st&&ot)stats='<span>'+(st.sh||0)+' shots</span><span>'+(st.sot||0)+' on target</span>'+
+   '<span>'+Math.round((st.pos!=null?st.pos:50))+'% ball</span>';
+ }catch(e){}
+
+ const sel=DR.sel!=null?on.filter(x=>x.p.id===DR.sel)[0]:null;
+
+ return '<div class="dr-wrap">'+
+  /* the wall */
+  '<div class="dr-top">'+
+   '<div class="dr-board">'+
+    '<div class="dr-bh">HALF TIME</div>'+
+    '<div class="dr-sc">'+sc.mine+' – '+sc.theirs+'</div>'+
+    '<div class="dr-opp">v '+esc(sc.opp)+'</div>'+
+    (stats?'<div class="dr-st">'+stats+'</div>':'')+
+   '</div>'+
+   '<div class="dr-you">'+mgrFace(66,{round:12,uid:'dr'})+
+    '<div class="dr-you-n">'+esc((myManager()||{}).name||'You')+'</div>'+
+    '<div class="dr-you-s">'+esc(drRead(mood,sc))+'</div>'+
+   '</div>'+
+  '</div>'+
+
+  /* the benches */
+  '<div class="dr-room">'+
+   '<div class="dr-bench">'+on.map((pl,i)=>drShirt(pl,i)).join('')+'</div>'+
+  '</div>'+
+
+  /* what you say */
+  '<div class="dr-say">'+
+   (sel
+    ?'<div class="dr-one">'+
+      '<div class="dr-one-h">A word with <b>'+esc(sel.p.name)+'</b>'+
+       '<button class="dr-x" data-action="drPick" data-id="">×</button></div>'+
+      '<div class="dr-one-b">'+DR_WORDS.map(w=>
+       '<button class="dr-w'+(w.fits(sel)?' fits':'')+'" data-action="drWord" '+
+       'data-k="'+w.k+'" data-id="'+sel.p.id+'">'+
+       '<span class="dr-w-i">'+w.icon+'</span>'+
+       '<span class="dr-w-l">'+w.lbl+'</span>'+
+       '<span class="dr-w-h">'+esc(w.hint)+'</span></button>').join('')+
+      '</div></div>'
+    :'<div class="dr-grp">'+
+      '<div class="dr-grp-h">To the group</div>'+
+      '<div class="dr-grp-b">'+TALKS.map(t=>
+       '<button class="dr-t'+(DR.talk===t?' on':'')+'" data-action="drTalk" data-v="'+t+'">'+
+       t+'<span class="dr-t-h">'+esc(drTalkRead(t,mood))+'</span></button>').join('')+
+      '</div>'+
+      '<div class="dr-hint">Tap a player to have a word with him on his own.</div>'+
+     '</div>')+
+  '</div>'+
+
+  '<div class="dr-foot">'+
+   '<button class="btn btn-ghost btn-sm" data-action="drSubs">↔ Changes</button>'+
+   '<button class="btn btn-gold dr-go" data-action="drOut">Back out for the second half →</button>'+
+  '</div></div>'}
+
+/* the manager's own read of the room, in one line */
+function drRead(mood,sc){
+ if(mood.low.length>=4)return 'Half of them have not turned up.';
+ if(sc.state==='behind'&&mood.avg>=6.8)return 'They are playing well and losing. Careful.';
+ if(sc.state==='behind')return 'Losing, and they know why.';
+ if(sc.state==='ahead'&&mood.tired>=3)return 'Ahead, but the legs are going.';
+ if(sc.state==='ahead')return 'In front, and comfortable with it.';
+ if(mood.high.length>=3)return 'Level, but there is a lot to work with here.';
+ return 'Nothing between the sides. This is yours to decide.'}
+
+/* and what each group talk would do to THIS room, rather than in general */
+function drTalkRead(t,mood){
+ if(t==='Calm')return mood.nervous>=3?'suits a nervous room':'little effect on this lot';
+ if(t==='Encourage')return 'safe with anybody';
+ if(t==='Demand more')return mood.nervous>=4?'risky — too many nervy heads'
+  :mood.leaders>=2?'this room can take it':'a fair ask';
+ return mood.nervous>=3?'could go badly wrong':'big swing, and they may love it'}
+
+/* =====================================================================
+   OPENING IT, AND THE THINGS YOU PRESS
+   ===================================================================== */
+function paintDressingRoom(){
+ const h=document.getElementById('drRoom');
+ if(h)h.innerHTML=vDressingRoom()}
+
+function openDressingRoom(){
+ if(document.getElementById('drRoom'))return;
+ if(!drSide())return;
+ DR.open=true;DR.sel=null;DR.said={};DR.talk=null;
+ const d=document.createElement('div');
+ d.id='drRoom';
+ document.body.appendChild(d);
+ paintDressingRoom();
+ try{sfx('tap')}catch(e){}}
+
+function closeDressingRoom(){
+ DR.open=false;
+ const d=document.getElementById('drRoom');
+ if(d)d.remove()}
+
+ACTIONS.dressingRoom=()=>openDressingRoom();
+
+ACTIONS.drPick=el=>{
+ const id=el.dataset.id;
+ DR.sel=(id===''||String(DR.sel)===String(id))?null:(isNaN(+id)?id:+id);
+ paintDressingRoom();
+ try{sfx('tap')}catch(e){}};
+
+ACTIONS.drWord=el=>{
+ const s=drSide();if(!s)return;
+ const id=el.dataset.id;
+ const pl=(s.onfield||[]).filter(x=>String(x.p.id)===String(id))[0];
+ if(!pl)return;
+ /* one word each — you do not get to hairdryer a man three times */
+ if(DR.said&&DR.said[pl.p.id]){try{toast('You have already had your word with him')}catch(e){}return}
+ const line=drApplyWord(pl,el.dataset.k);
+ DR.sel=null;
+ paintDressingRoom();
+ try{toast(line)}catch(e){}
+ try{sfx('tap')}catch(e){}};
+
+ACTIONS.drTalk=el=>{
+ const s=drSide();if(!s)return;
+ if(DR.talk){try{toast('You have said your piece to the group')}catch(e){}return}
+ DR.talk=el.dataset.v;
+ applyTalk(s,DR.talk);
+ paintDressingRoom();
+ try{toast('🗣️ '+DR.talk)}catch(e){}
+ try{sfx('tap')}catch(e){}};
+
+ACTIONS.drSubs=()=>{
+ closeDressingRoom();
+ try{if(typeof ACTIONS.subsOpen==='function')ACTIONS.subsOpen();
+  else if(typeof ACTIONS.benchOpen==='function')ACTIONS.benchOpen();
+  else renderMCtl()}
+ catch(e){}};
+
+ACTIONS.drOut=()=>{
+ closeDressingRoom();
+ try{renderMCtl()}catch(e){}};
+
+/* ---------------------------------------------------------------------
+   AND IT IS WHERE HALF TIME TAKES YOU
+   The old Talk button opened a modal with four chips. It opens the room.
+   The chips are still in there, and so is everything they could not do.
+   --------------------------------------------------------------------- */
+ACTIONS.htTalkOpen=()=>openDressingRoom();
+
+/* it also comes up on its own when the whistle goes, because a manager
+   does not stand in the tunnel waiting to be invited in */
+const _mctlDR=renderMCtl;
+renderMCtl=function(){
+ const r=_mctlDR.apply(this,arguments);
+ try{
+  const m=MU&&MU.m;
+  if(!m||m.stage!=='HT'||m.done)return r;
+  if(MU._ffing||MU.speed===9)return r;
+  if(DR.seen===MU.fix)return r;
+  DR.seen=MU.fix;
+  setTimeout(()=>{try{if(MU&&MU.m&&MU.m.stage==='HT'&&!MU.m.done)openDressingRoom()}catch(e){}},260);
+ }catch(e){}
+ return r};
+
+/* a new match is a new dressing room */
+const _openMatchDR=(typeof openMatch==='function')?openMatch:null;
+if(_openMatchDR)openMatch=function(){DR.seen=null;DR.said={};DR.talk=null;
+ return _openMatchDR.apply(this,arguments)};
+
+/* =====================================================================
+   HOW THE ROOM LOOKS
+   ===================================================================== */
+(function drCSS(){
+ const st=document.createElement('style');st.id='w83';
+ st.textContent=
+ '#drRoom{position:fixed;inset:0;z-index:8200;display:flex;flex-direction:column;'+
+  'background:'+
+   'radial-gradient(900px 500px at 50% 0%,rgba(255,235,200,.10),transparent 60%),'+
+   'linear-gradient(180deg,#1b1f26 0%,#14181e 42%,#0d1014 100%);'+
+  'color:#e9edf2;overflow:hidden}'+
+ '.dr-wrap{display:flex;flex-direction:column;height:100%;width:100%;'+
+  'max-width:760px;margin:0 auto}'+
+
+ /* whiteboard + you */
+ '.dr-top{display:flex;gap:12px;align-items:stretch;padding:14px 14px 10px;flex:0 0 auto}'+
+ '.dr-board{flex:1;border-radius:12px;padding:10px 12px;'+
+  'background:linear-gradient(180deg,#f4f6f8,#dfe4ea);color:#161a1f;'+
+  'box-shadow:0 8px 22px rgba(0,0,0,.45);border:3px solid #9aa3ad;position:relative}'+
+ '.dr-bh{font-size:9px;letter-spacing:2.6px;font-weight:900;color:#5d6771}'+
+ '.dr-sc{font-family:var(--disp,inherit);font-size:34px;font-weight:900;line-height:1.05}'+
+ '.dr-opp{font-size:11px;font-weight:800;color:#5d6771;margin-top:-2px}'+
+ '.dr-st{display:flex;gap:10px;margin-top:6px;font-size:9px;font-weight:800;color:#4a535c}'+
+ '.dr-you{flex:0 0 auto;width:96px;text-align:center;display:flex;'+
+  'flex-direction:column;align-items:center;gap:4px}'+
+ '.dr-you svg{box-shadow:0 6px 16px rgba(0,0,0,.5)}'+
+ '.dr-you-n{font-size:10px;font-weight:900;letter-spacing:.2px}'+
+ '.dr-you-s{font-size:9px;color:#93a1b1;line-height:1.3}'+
+
+ /* the benches */
+ '.dr-room{flex:1 1 auto;overflow-y:auto;padding:2px 10px 8px;'+
+  '-webkit-overflow-scrolling:touch}'+
+ '.dr-bench{display:grid;grid-template-columns:repeat(auto-fill,minmax(78px,1fr));'+
+  'gap:6px;padding-bottom:6px}'+
+ '.dr-p{position:relative;background:none;border:0;padding:26px 2px 6px;'+
+  'cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;'+
+  'border-radius:12px}'+
+ '.dr-p.is-sel{background:rgba(232,200,128,.13);box-shadow:inset 0 0 0 1px rgba(232,200,128,.4)}'+
+ '.dr-peg{position:absolute;top:4px;left:50%;transform:translateX(-50%);'+
+  'width:26px;height:3px;border-radius:2px;background:#5a6169}'+
+ '.dr-shirt{position:absolute;top:7px;left:50%;transform:translateX(-50%);'+
+  'width:52px;height:44px;border-radius:6px 6px 10px 10px;'+
+  'background:linear-gradient(180deg,var(--k1),color-mix(in srgb,var(--k1) 72%,#000));'+
+  'opacity:.5;display:flex;align-items:flex-end;justify-content:center}'+
+ '.dr-num{font-size:11px;font-weight:900;color:var(--k2);opacity:.8;padding-bottom:2px}'+
+ '.dr-face{position:relative;z-index:1;margin-top:14px}'+
+ '.dr-face svg{box-shadow:0 4px 10px rgba(0,0,0,.5)}'+
+ '.dr-said{position:absolute;right:-5px;bottom:-3px;font-size:13px;'+
+  'filter:drop-shadow(0 2px 3px rgba(0,0,0,.6))}'+
+ '.dr-n{font-size:10px;font-weight:800;max-width:74px;overflow:hidden;'+
+  'text-overflow:ellipsis;white-space:nowrap}'+
+ '.dr-r{font-size:12px;font-weight:900;font-variant-numeric:tabular-nums}'+
+ '.dr-r.r-good{color:#4fd18b}.dr-r.r-poor{color:#ef6a5c}.dr-r.r-ok{color:#c8d2de}'+
+ '.dr-yc{display:inline-block;width:6px;height:8px;border-radius:1px;'+
+  'background:#f2c53d;vertical-align:middle}'+
+ '.dr-tell{font-size:8px;letter-spacing:.4px;text-transform:uppercase;'+
+  'color:#7f8b99;font-weight:800}'+
+
+ /* what you say */
+ '.dr-say{flex:0 0 auto;padding:8px 12px 4px;'+
+  'border-top:1px solid rgba(255,255,255,.07);'+
+  'background:linear-gradient(180deg,rgba(8,10,13,.5),rgba(8,10,13,.85))}'+
+ '.dr-grp-h,.dr-one-h{font-size:10px;letter-spacing:1.8px;text-transform:uppercase;'+
+  'color:#8492a2;font-weight:800;margin-bottom:7px;display:flex;'+
+  'justify-content:space-between;align-items:center}'+
+ '.dr-one-h b{color:#f0dcae;letter-spacing:0;text-transform:none;font-size:13px}'+
+ '.dr-x{background:none;border:0;color:#8492a2;font-size:20px;cursor:pointer;'+
+  'line-height:1;padding:0 4px}'+
+ '.dr-grp-b{display:grid;grid-template-columns:repeat(2,1fr);gap:6px}'+
+ '.dr-t{padding:9px 10px;border-radius:11px;cursor:pointer;text-align:left;'+
+  'background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.10);'+
+  'color:#dbe4ee;font-size:12px;font-weight:800;line-height:1.2}'+
+ '.dr-t.on{background:rgba(232,200,128,.2);border-color:#c9a35c;color:#f6e6c2}'+
+ '.dr-t-h{display:block;font-size:9px;font-weight:600;color:#8492a2;margin-top:3px}'+
+ '.dr-one-b{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px}'+
+ '.dr-w{display:flex;flex-direction:column;align-items:flex-start;gap:1px;'+
+  'padding:9px 11px;border-radius:11px;cursor:pointer;text-align:left;'+
+  'background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.10);color:#dbe4ee}'+
+ '.dr-w.fits{border-color:rgba(232,200,128,.45);background:rgba(232,200,128,.10)}'+
+ '.dr-w-i{font-size:15px}'+
+ '.dr-w-l{font-size:12px;font-weight:800}'+
+ '.dr-w-h{font-size:9px;color:#8492a2;font-weight:600;line-height:1.3}'+
+ '.dr-hint{font-size:10px;color:#6f7c8b;margin-top:7px;font-style:italic}'+
+
+ '.dr-foot{flex:0 0 auto;display:flex;gap:9px;padding:9px 12px '+
+  'calc(11px + env(safe-area-inset-bottom,0px))}'+
+ '.dr-go{flex:1;font-size:13px}'+
+ '@media(max-width:430px){.dr-sc{font-size:28px}.dr-you{width:80px}'+
+  '.dr-bench{grid-template-columns:repeat(auto-fill,minmax(70px,1fr))}}';
+ document.head.appendChild(st)})();
+
+/*#w83_dressing.js#*/
+/*#w84_canvas.js#*/
+
+/* =====================================================================
+   w84_canvas — two thousand eight hundred exceptions a match
+   ---------------------------------------------------------------------
+   Found while testing the dressing room, and it predates it. Instrumenting
+   createRadialGradient during a single match turned up 2,870 calls in
+   three seconds with non-finite arguments — every one of them throwing,
+   and every throw abandoning the rest of that frame's drawing.
+
+   The cause is one undefined property. The pitch is drawn in pitch
+   coordinates and scaled by cv._sx / cv._sy, which are stamped on the
+   canvas when it is measured and fitted:
+
+       cv._sx = cv.width/105;  cv._sy = cv.height/68;
+
+   If a frame is drawn before that has happened — the canvas still at its
+   default 300x150, or laid out after the first tick — _sx is undefined,
+   every x*sx is NaN, and the first gradient that receives one throws.
+
+   Nothing checked. The loop simply drew again next frame and threw again.
+
+   Two lines of defence, both cheap:
+     1. If the canvas has not been measured, measure it now.
+     2. If it still cannot be measured — no layout, zero size, a hidden
+        tab — skip the frame instead of drawing a frame's worth of NaN.
+   ===================================================================== */
+
+function pitchReady(cv){
+ if(!cv)return false;
+ /* stamp the scale if whoever owns this canvas has not got to it yet */
+ if(!(cv._sx>0)||!(cv._sy>0)){
+  try{
+   if(cv.width>0&&cv.height>0){cv._sx=cv.width/105;cv._sy=cv.height/68}
+  }catch(e){}}
+ return (cv._sx>0&&cv._sy>0&&cv.width>0&&cv.height>0)}
+
+const _drawPitchSafe=drawPitch;
+drawPitch=function(){
+ try{
+  const cv=document.getElementById('pitchCanvas');
+  if(!pitchReady(cv))return;
+ }catch(e){return}
+ return _drawPitchSafe.apply(this,arguments)};
+
+/* the background builder is called from more than one place, and a
+   gradient built from a NaN radius is not worth attempting either */
+if(typeof buildPitchBg==='function'){
+ const _bpb=buildPitchBg;
+ buildPitchBg=function(W,H,sx,sy){
+  if(!(W>0&&H>0&&sx>0&&sy>0)){
+   /* something the caller can safely drawImage without throwing */
+   const c=document.createElement('canvas');
+   c.width=Math.max(1,W|0)||1;c.height=Math.max(1,H|0)||1;
+   return c}
+  return _bpb.apply(this,arguments)}}
+
+/*#w84_canvas.js#*/
 showStart();
 </script>
 </body>
