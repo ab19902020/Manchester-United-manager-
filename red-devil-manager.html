@@ -38962,6 +38962,447 @@ if(typeof buildPitchBg==='function'){
   return _bpb.apply(this,arguments)}}
 
 /*#w84_canvas.js#*/
+/*#w85_boardroom.js#*/
+
+/* =====================================================================
+   w85_boardroom — you have been asked to come up
+   ---------------------------------------------------------------------
+   The board in this game was a number and an occasional letter. Patience
+   fell, a mail arrived saying results were a concern, patience hit zero
+   and you were sacked. You never met them. You never argued. The one time
+   you could speak to them at all was a button marked "Request more
+   transfer funds" that rolled a die behind your back.
+
+   This is the room. A long table, the chairman and two directors on the
+   far side of it, you on this side, and a conversation with consequences
+   — because what you say to a board is exactly the kind of thing that
+   should bind you, and the press system already knows how to hold you to
+   a promise.
+
+   Four reasons you end up in here:
+
+     OBJECTIVES  in August, they tell you what the season is for. You can
+                 take it, push back for something softer, or promise more
+                 and be given more to do it with.
+     SUMMONED    when patience goes, they want an explanation. Ask for
+                 time and you have named a date. Blame the squad and you
+                 had better be right.
+     BROKEN      you told the country something and did the opposite.
+     REVIEW      in May, they hold the season up against what was agreed.
+
+   Everything you say in here becomes a pledge, which means the press room
+   asks you about it and May decides it.
+   ===================================================================== */
+
+const BR={open:false,scene:null,step:0};
+
+function boardPeople(){
+ try{
+  const c=G.clubs[G.my];
+  const rng=mulberry(hashStr('board'+(c.key||c.name)));
+  const nm=()=>{try{return wName(c.cc||'ENG',rng)}catch(e){
+   return FN[Math.floor(rng()*FN.length)]+' '+LN[Math.floor(rng()*LN.length)]}};
+  if(!G.boardRoom)G.boardRoom={chair:nm(),ceo:nm(),dir:nm()};
+  return G.boardRoom}
+ catch(e){return{chair:'The chairman',ceo:'The chief executive',dir:'A director'}}}
+
+/* how they are feeling, which decides how the room sounds */
+function boardTemper(){
+ const c=G.clubs[G.my];
+ const p=c.patience==null?60:c.patience;
+ return p>=80?'delighted':p>=60?'content':p>=40?'watchful':p>=22?'unhappy':'hostile'}
+
+function boardTarget(){
+ try{
+  if(G.boardObj&&G.boardObj.season===G.season)return G.boardObj;
+  const exp=expectPos(G.my);
+  G.boardObj={season:G.season,pos:exp,agreed:false,extra:null};
+  return G.boardObj}
+ catch(e){return{season:G.season,pos:10,agreed:false}}}
+
+/* ---------------------------------------------------------------------
+   THE SCENES
+   Each is a line from the room and a set of replies, and every reply does
+   something you can point at afterwards.
+   --------------------------------------------------------------------- */
+function boardScene(kind){
+ const P=boardPeople();
+ const c=G.clubs[G.my];
+ const t=boardTemper();
+ const obj=boardTarget();
+ let pos=null;try{pos=leaguePos(G.my)}catch(e){}
+
+ if(kind==='objectives'){
+  return{
+   kind,who:P.chair,
+   say:'Welcome back. Before a ball is kicked, let us be clear about what this season is for. '+
+       'The board expects <b>'+ordinal(obj.pos)+'</b> or better. Are we agreed?',
+   opts:[
+    {lbl:'Agreed',sub:'take the target as it stands',
+     go:()=>{obj.agreed=true;
+      return'The chairman nods. Nobody in the room writes anything down, which is its own kind of pressure.'}},
+    {lbl:'That is too much',sub:'ask for a softer target — they will think less of you',
+     go:()=>{obj.pos=Math.min(20,obj.pos+3);obj.agreed=true;
+      c.patience=clamp(c.patience-5,0,100);
+      return'A pause. "'+ordinal(obj.pos)+', then." They agreed rather more quickly than you would have liked.'}},
+    {lbl:'We will do better than that',sub:'promise more, and ask to be backed for it',
+     go:()=>{obj.pos=Math.max(1,obj.pos-3);obj.agreed=true;
+      const extra=Math.round((10+Math.random()*22)*1e6);
+      c.budget+=extra;c.patience=clamp(c.patience+6,0,100);
+      makePledge('finish','I told the board we would finish in the top '+obj.pos,null,
+       {target:obj.pos,label:'finish '+ordinal(obj.pos)+' or better'});
+      return'"Then you will want the money to do it." <b>'+fmtM(extra)+'</b> has been added to your budget, '+
+       'and <b>'+ordinal(obj.pos)+'</b> is now what you have promised them.'}}]}}
+
+ if(kind==='summoned'){
+  return{
+   kind,who:P.chair,
+   say:'We will not dress this up. '+(pos?'<b>'+ordinal(pos)+'</b>':'Where we are')+
+       ' is not what was agreed, and the mood downstairs is worse than the table. '+
+       'What are you going to tell us?',
+   opts:[
+    {lbl:'Give me until Christmas',sub:'name a date and be judged on it',
+     go:()=>{
+      const due=G.day+70;
+      makePledge('deadline','I asked the board for time',null,
+       {due,label:'turn it round by the winter',target:Math.max(1,(obj.pos||10))});
+      c.patience=clamp(c.patience+14,0,100);
+      return'"You have until the winter." You have bought ten weeks and spent your last credit doing it.'}},
+    {lbl:'This squad is not good enough',sub:'ask for money and put it on the players',
+     go:()=>{
+      const ok=c.patience>=25&&Math.random()<.55;
+      if(ok){const extra=Math.round((12+Math.random()*20)*1e6);c.budget+=extra;
+       c.patience=clamp(c.patience-3,0,100);
+       try{G.clubs[G.my].players.forEach(p=>p.morale=clamp(p.morale-4,1,100))}catch(e){}
+       return'They agree, and <b>'+fmtM(extra)+'</b> appears. It will be in a newspaper by Friday, '+
+        'and the dressing room reads newspapers.'}
+      c.patience=clamp(c.patience-8,0,100);
+      try{G.clubs[G.my].players.forEach(p=>p.morale=clamp(p.morale-5,1,100))}catch(e){}
+      return'"We bought you those players." It did not land, and it will get back to them.'}},
+    {lbl:'It is on me and I will fix it',sub:'take it, and hope they believe you',
+     go:()=>{c.patience=clamp(c.patience+8,0,100);
+      return'The chairman looks at you for a long moment. "That is the first honest thing anyone has said in this room all month."'}},
+    {lbl:'Then sack me',sub:'call it — this can go either way',
+     go:()=>{
+      if(c.patience<=14){sackManager();return'"If that is how you want it." It is done.'}
+      c.patience=clamp(c.patience+18,0,100);
+      return'Nobody expected that. The room recalculates, and you walk out with more time than you came in with.'}}]}}
+
+ if(kind==='broken'){
+  const b=(G.pledges||[]).filter(p=>p.state==='broken').sort((a,b)=>(b.judged||0)-(a.judged||0))[0];
+  return{
+   kind,who:P.ceo,
+   say:'You said something in public and then did the opposite. '+
+       (b?'<b>'+esc(pledgeLine(b))+'</b>. ':'')+
+       'We find out what this club is doing from the back pages now. Explain that.',
+   opts:[
+    {lbl:'I got it wrong',sub:'own it',
+     go:()=>{c.patience=clamp(c.patience+5,0,100);
+      return'"Then do not say it next time." Taken, if not forgiven.'}},
+    {lbl:'Circumstances changed',sub:'defend it',
+     go:()=>{c.patience=clamp(c.patience-2,0,100);
+      return'They have heard that before, from better-placed managers than you.'}},
+    {lbl:'I will not be told what to say',sub:'stand your ground',
+     go:()=>{c.patience=clamp(c.patience-7,0,100);
+      try{fansShift(2,'stood up to the board')}catch(e){}
+      return'The temperature drops. Outside the building, one or two people will like that.'}}]}}
+
+ /* review */
+ const hit=pos!=null&&obj.pos!=null&&pos<=obj.pos;
+ const won=(G.honours||[]).filter(h=>h.season===G.season).length;
+ return{
+  kind:'review',who:P.chair,
+  say:(hit?'You said '+ordinal(obj.pos)+'. You finished <b>'+ordinal(pos)+'</b>. '
+          :'The target was '+ordinal(obj.pos)+'. You finished <b>'+(pos?ordinal(pos):'short')+'</b>. ')+
+      (won?'And there is silverware in the cabinet that was not there in August. ':'')+
+      'So. Next season.',
+  opts:[
+   {lbl:'Back me and we go again',sub:'ask for the tools',
+    go:()=>{
+     const give=hit||won;
+     const extra=Math.round(((give?14:5)+Math.random()*(give?24:10))*1e6);
+     c.budget+=extra;
+     return'<b>'+fmtM(extra)+'</b> for the summer'+(give?'. They are enjoying this.':'. It is not much, and you know why.')}},
+   {lbl:'I want to build, not buy',sub:'youth over money',
+    go:()=>{
+     try{if(c.stad)c.stad.youth=Math.min(5,(c.stad.youth||1)+1)}catch(e){}
+     c.patience=clamp(c.patience+6,0,100);
+     return'The academy gets the money instead. It is a slower answer and they respect you for it.'}},
+   {lbl:'Say nothing',sub:'let the results talk',
+    go:()=>{c.patience=clamp(c.patience+2,0,100);
+     return'You thank them and leave. Some rooms are best left early.'}}]}}
+
+/* =====================================================================
+   THE ROOM
+   A long table seen end-on, three of them across it, you on this side.
+   ===================================================================== */
+function boardFace(seed,sz){
+ /* the directors are drawn from the same portrait engine as everybody
+    else, so a boardroom looks like a room with people in it */
+ const r=mulberry(hashStr('bd|'+seed));
+ const sk=Object.keys(SKIN2),hr=Object.keys(HAIR2);
+ const m={sk:sk[Math.floor(r()*sk.length)],
+  hr:r()<.55?'grey':hr[Math.floor(r()*hr.length)],
+  cut:['short','taper','bald','crop','mid'][Math.floor(r()*5)],
+  beard:['none','none','stubble','moustache'][Math.floor(r()*4)],
+  jaw:MGR_JAWS[Math.floor(r()*MGR_JAWS.length)][0],
+  eye:MGR_EYES[Math.floor(r()*MGR_EYES.length)][0],
+  brow:r()<.5?'thick':'straight',ear:r()<.3?1:0,
+  age:52+Math.floor(r()*18),wear:'suit',name:String(seed)};
+ return mgrFaceSVG(m,sz||54,{round:11,uid:'bd'+Math.abs(hashStr(String(seed)))%9999,
+  bg1:'#2a2f38',bg2:'#12151a'})}
+
+function vBoardRoom(){
+ const s=BR.scene;if(!s)return '';
+ const P=boardPeople();
+ const c=G.clubs[G.my];
+ const t=boardTemper();
+ const mood={delighted:'The room is warm.',content:'Businesslike.',
+  watchful:'Nobody offers you a drink.',unhappy:'The door closes behind you.',
+  hostile:'Nobody stands up when you come in.'}[t];
+ return '<div class="br-wrap">'+
+  '<div class="br-head">'+
+   '<div class="br-k">The boardroom</div>'+
+   '<div class="br-n">'+esc(c.name)+'</div>'+
+   '<div class="br-m">'+esc(mood)+'</div>'+
+  '</div>'+
+
+  '<div class="br-table">'+
+   '<div class="br-side">'+
+    ['chair','ceo','dir'].map((k,i)=>
+     '<div class="br-p'+(P[k]===s.who?' is-speaking':'')+'">'+
+      boardFace(P[k]||('d'+i),56)+
+      '<div class="br-p-n">'+esc(P[k]||'')+'</div>'+
+      '<div class="br-p-r">'+['Chairman','Chief executive','Director'][i]+'</div>'+
+     '</div>').join('')+
+   '</div>'+
+   '<div class="br-wood"></div>'+
+   '<div class="br-you">'+mgrFace(58,{round:12,uid:'brme'})+
+    '<div class="br-p-n">'+esc((myManager()||{}).name||'You')+'</div>'+
+    '<div class="br-p-r">Manager</div></div>'+
+  '</div>'+
+
+  (BR.reply
+   ?'<div class="br-say"><div class="br-said">'+BR.reply+'</div>'+
+     '<button class="btn btn-gold br-go" data-action="brDone">Leave the room</button></div>'
+   :'<div class="br-say">'+
+     '<div class="br-who">'+esc(s.who)+'</div>'+
+     '<div class="br-line">'+s.say+'</div>'+
+     '<div class="br-opts">'+s.opts.map((o,i)=>
+      '<button class="br-o" data-action="brPick" data-v="'+i+'">'+
+      '<span class="br-o-l">'+esc(o.lbl)+'</span>'+
+      '<span class="br-o-s">'+esc(o.sub)+'</span></button>').join('')+
+     '</div></div>')+
+ '</div>'}
+
+function paintBoardRoom(){
+ const h=document.getElementById('brRoom');
+ if(h)h.innerHTML=vBoardRoom()}
+
+function openBoardRoom(kind){
+ if(document.getElementById('brRoom'))return;
+ if(!G||G.sacked)return;
+ BR.scene=boardScene(kind);BR.reply=null;BR.open=true;
+ const d=document.createElement('div');d.id='brRoom';
+ document.body.appendChild(d);
+ paintBoardRoom();
+ try{document.body.style.overflow='hidden'}catch(e){}
+ try{sfx('tap')}catch(e){}}
+
+function closeBoardRoom(){
+ BR.open=false;BR.scene=null;BR.reply=null;
+ const d=document.getElementById('brRoom');if(d)d.remove();
+ try{document.body.style.overflow=''}catch(e){}
+ try{render()}catch(e){}}
+
+ACTIONS.brPick=el=>{
+ const s=BR.scene;if(!s)return;
+ const o=s.opts[+el.dataset.v];if(!o)return;
+ let line='';
+ try{line=o.go()||''}catch(e){line=''}
+ BR.reply=line;
+ paintBoardRoom();
+ try{sfx('tap')}catch(e){}};
+
+ACTIONS.brDone=()=>closeBoardRoom();
+ACTIONS.boardRoom=()=>openBoardRoom(BR.next||'summoned');
+
+/* =====================================================================
+   WHEN YOU GET CALLED IN
+   ---------------------------------------------------------------------
+   Not at random. In August when the season is set, when patience drops
+   through the floor, the week after you have publicly broken your word,
+   and in May.
+   ===================================================================== */
+function boardSummon(kind,title,body){
+ G.boardCall={kind,day:G.day};
+ mail('board','🏛️ '+title,body+
+  '<br><br><span class="xs faint">They are waiting for you upstairs.</span>',
+  [{lbl:'Go up',act:'boardGo'}]);
+ try{toast('🏛️ The board want a word')}catch(e){}}
+
+ACTIONS.boardGo=el=>{
+ try{const m=(G.inbox||[]).filter(x=>x.id===(el&&el.dataset&&el.dataset.mid))[0];
+  if(m)m.actions=null}catch(e){}
+ const k=(G.boardCall&&G.boardCall.kind)||'summoned';
+ G.boardCall=null;
+ openBoardRoom(k)};
+
+const _dtcBoard=dailyTickCore;
+dailyTickCore=function(){
+ const r=_dtcBoard.apply(this,arguments);
+ try{
+  if(!G||G.sacked)return r;
+  const c=G.clubs[G.my];
+  /* 1. the season's terms, once, in August */
+  const obj=boardTarget();
+  if(!obj.agreed&&!obj.called&&G.day-(G.seasonStart||0)<=6){
+   obj.called=true;
+   boardSummon('objectives','What this season is for',
+    'The board would like to agree your objectives before the season starts.');
+   return r}
+  /* 2. summoned when it is going badly, but not every week */
+  if(c.patience<=30&&(G.day-(G.lastSummon||-999))>52){
+   G.lastSummon=G.day;
+   boardSummon('summoned','The board want an explanation',
+    'Results have gone past the point where a letter will do.');
+   return r}
+  /* 3. and the week after you break your word in public */
+  const b=(G.pledges||[]).filter(p=>p.state==='broken'&&!p.boarded)[0];
+  if(b&&G.day-(b.judged||0)>=3){
+   b.boarded=true;
+   boardSummon('broken','A word about what you said',
+    'The chief executive has asked to see you about your comments.');
+   return r}
+ }catch(e){}
+ return r};
+
+/* the season review, before the world rolls over */
+const _endSeasonBoard=endSeason;
+endSeason=function(){
+ let want=false;
+ try{want=!!G&&!G.sacked}catch(e){}
+ if(want)try{
+  const obj=boardTarget();
+  obj.reviewed=true;
+  /* judged before the tables reset, shown after */
+  G.boardReview={season:G.season,pos:leaguePos(G.my),target:obj.pos}}
+ catch(e){}
+ const r=_endSeasonBoard.apply(this,arguments);
+ try{
+  if(want&&G&&!G.sacked)
+   boardSummon('review','Your end-of-season review',
+    'The board would like to go through the season with you.')}
+ catch(e){}
+ return r};
+
+/* the deadline you asked for, judged when it comes */
+const _dtcDeadline=dailyTickCore;
+dailyTickCore=function(){
+ const r=_dtcDeadline.apply(this,arguments);
+ try{
+  (G.pledges||[]).forEach(p=>{
+   if(p.kind!=='deadline'||p.state!=='open')return;
+   if(G.day<(p.due||0))return;
+   let pos=null;try{pos=leaguePos(G.my)}catch(e){}
+   if(pos!=null&&pos<=(p.target||10))
+    pledgeKept(p,'You bought time and you used it',
+     'You asked the board for until the winter and you are <b>'+ordinal(pos)+'</b>. '+
+     'That is what asking for time is supposed to look like.',5,10);
+   else
+    pledgeBroken(p,'THE TIME HAS RUN OUT',
+     'You asked for until the winter. The winter is here and you are <b>'+
+     (pos!=null?ordinal(pos):'no better off')+'</b>.',-8,16)});
+ }catch(e){}
+ return r};
+
+/* the old funds button becomes a conversation */
+const _askFundsBoard=ACTIONS.askFunds;
+ACTIONS.askFunds=()=>{
+ if(G.fundsAsked===G.season){try{toast('You have already gone to the board this season.')}catch(e){}return}
+ G.fundsAsked=G.season;
+ openBoardRoom('review')};
+
+/* and a door to it, so you can go up rather than only be sent for */
+const _vClubBoardDoor=vClubFinal;
+vClubFinal=function(){
+ let h=_vClubBoardDoor.apply(this,arguments);
+ try{
+  if((UI.clubTab||'')==='finances'){
+   const c=G.clubs[G.my];
+   const obj=boardTarget();
+   h+='<div class="chip-lbl" style="margin-top:14px">The board</div>'+
+    '<div class="card tight"><div class="spread" style="padding:6px 2px">'+
+    '<span class="small" style="font-weight:800">This season’s target</span>'+
+    '<span class="small" style="font-weight:800;color:var(--gold)">'+ordinal(obj.pos||10)+'</span></div>'+
+    '<div class="spread" style="padding:6px 2px">'+
+    '<span class="small" style="font-weight:800">Their patience</span>'+
+    '<span class="small" style="font-weight:700">'+esc(boardTemper())+'</span></div>'+
+    '<button class="btn btn-ghost btn-block btn-sm" style="margin-top:8px" '+
+    'data-action="boardRoom">🏛️ Go up to the boardroom</button></div>'}
+ }catch(e){}
+ return h};
+vClub=function(){return vClubFinal()};
+
+const _newGameBoard=newGame;
+newGame=function(){
+ const r=_newGameBoard.apply(this,arguments);
+ try{if(G){G.boardRoom=null;G.boardObj=null;G.boardCall=null;G.lastSummon=-999}}catch(e){}
+ return r};
+
+(function brCSS(){
+ const st=document.createElement('style');st.id='w85';
+ st.textContent=
+ '#brRoom{position:fixed;inset:0;z-index:8300;display:flex;flex-direction:column;'+
+  'background:radial-gradient(900px 600px at 50% 8%,#2b2a26,#16150f 55%,#0b0a07);'+
+  'color:#eae4d6;overflow:hidden}'+
+ '.br-wrap{display:flex;flex-direction:column;height:100%;width:100%;'+
+  'max-width:720px;margin:0 auto}'+
+ '.br-head{padding:16px 18px 6px;flex:0 0 auto;text-align:center}'+
+ '.br-k{font-size:10px;letter-spacing:3px;text-transform:uppercase;'+
+  'color:#a8967a;font-weight:800}'+
+ '.br-n{font-family:var(--disp,inherit);font-size:20px;font-weight:900;margin-top:2px}'+
+ '.br-m{font-size:11px;color:#8d8168;font-style:italic;margin-top:3px}'+
+
+ '.br-table{flex:0 0 auto;padding:8px 12px 4px}'+
+ '.br-side{display:flex;justify-content:center;gap:14px}'+
+ '.br-p{text-align:center;width:88px;opacity:.72;transition:opacity .2s}'+
+ '.br-p.is-speaking{opacity:1}'+
+ '.br-p.is-speaking svg{box-shadow:0 0 0 2px #c9a35c,0 8px 18px rgba(0,0,0,.55)}'+
+ '.br-p svg{margin:0 auto;box-shadow:0 8px 18px rgba(0,0,0,.5)}'+
+ '.br-p-n{font-size:10px;font-weight:800;margin-top:4px;overflow:hidden;'+
+  'text-overflow:ellipsis;white-space:nowrap}'+
+ '.br-p-r{font-size:8.5px;letter-spacing:.6px;text-transform:uppercase;color:#8d8168;font-weight:800}'+
+ /* the table itself, seen end-on */
+ '.br-wood{height:26px;margin:10px -4px 8px;border-radius:40%/70%;'+
+  'background:linear-gradient(180deg,#5a4429,#3a2a17 55%,#241a0e);'+
+  'box-shadow:0 10px 26px rgba(0,0,0,.6),inset 0 2px 0 rgba(255,225,170,.18)}'+
+ '.br-you{text-align:center;width:96px;margin:0 auto}'+
+ '.br-you svg{margin:0 auto;box-shadow:0 -6px 18px rgba(0,0,0,.5)}'+
+
+ '.br-say{flex:1 1 auto;overflow-y:auto;padding:10px 16px '+
+  'calc(16px + env(safe-area-inset-bottom,0px));'+
+  'border-top:1px solid rgba(255,220,160,.10);'+
+  'background:linear-gradient(180deg,rgba(10,9,6,.35),rgba(10,9,6,.8))}'+
+ '.br-who{font-size:10px;letter-spacing:2px;text-transform:uppercase;'+
+  'color:#c9a35c;font-weight:800;margin-bottom:5px}'+
+ '.br-line{font-size:14px;line-height:1.55;margin-bottom:14px}'+
+ '.br-line b{color:#f3e2b8}'+
+ '.br-opts{display:flex;flex-direction:column;gap:8px}'+
+ '.br-o{display:flex;flex-direction:column;align-items:flex-start;gap:2px;'+
+  'padding:11px 13px;border-radius:12px;cursor:pointer;text-align:left;width:100%;'+
+  'background:rgba(255,255,255,.05);border:1px solid rgba(255,220,160,.16);color:#eae4d6}'+
+ '.br-o:active{background:rgba(201,163,92,.2)}'+
+ '.br-o-l{font-size:13px;font-weight:800}'+
+ '.br-o-s{font-size:10px;color:#94886f;font-weight:600}'+
+ '.br-said{font-size:14px;line-height:1.6;padding:12px 14px;border-radius:12px;'+
+  'background:rgba(201,163,92,.10);border:1px solid rgba(201,163,92,.3);margin-bottom:12px}'+
+ '.br-said b{color:#f3e2b8}'+
+ '.br-go{width:100%}'+
+ '@media(max-width:420px){.br-side{gap:8px}.br-p{width:74px}}';
+ document.head.appendChild(st)})();
+
+/*#w85_boardroom.js#*/
 showStart();
 </script>
 </body>
