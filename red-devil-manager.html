@@ -42965,6 +42965,1060 @@ crest=function(c,size){
  document.head.appendChild(st)})();
 
 /*#w96_badges.js#*/
+
+/*#w97_room.js#*/
+
+/* =====================================================================
+   w97_room — the trophy room becomes a room
+   ---------------------------------------------------------------------
+   It was a cylinder. A beige tube eleven and a half metres across, a
+   parquet disc on the bottom, a disc painted 0x120c07 on the top, one
+   torus for a cornice and six point lights. Everything above head height
+   was black, which is what "there is a black sky above it" means: the
+   ceiling is there, it is simply the darkest colour in the scene with
+   nothing pointing at it.
+
+   Four things make a room read as a room, and none of them is more
+   polygons.
+
+   THE CEILING HAS TO BE LIT. A dark ceiling is a hole. A coffer ring, a
+   plaster colour that can take light, and a cove of uplights hidden
+   behind a pelmet — so the light you see on it comes from somewhere you
+   can point at.
+
+   WALLS NEED HORIZONTALS. A blank cylinder has no scale: nothing tells
+   you whether it is three metres tall or thirty. Skirting, a dado, a
+   panelled field, a frieze and a cornice give it five, and the eye reads
+   height off them instantly.
+
+   AND VERTICALS. Twelve pilasters standing proud of the wall. This is
+   the only real geometry added, and it is worth it because it is the
+   one thing a texture cannot fake: as you walk, the pilasters move
+   against the wall behind them and the room acquires depth.
+
+   THE FLOOR NEEDS A CENTRE. An inlaid border and a medallion under your
+   feet, so the parquet is a floor that was laid rather than a tile that
+   repeats.
+   ===================================================================== */
+
+/* the room's own numbers, which have to match the ones it was built with */
+const RM={CZ:4, RR:11.5, H:6.2, BAYS:12};
+
+/* ---------------------------------------------------------------------
+   1. THE WALL, AS A DRAWING
+   ---------------------------------------------------------------------
+   One bay, tiled twelve times round. A texture is the right tool for
+   panelling: it is flat in reality too, and twelve raised frames of real
+   geometry would cost more than every trophy in the room.
+   --------------------------------------------------------------------- */
+function roomWallTex(bump){
+ const W=512,H=512;
+ const c=document.createElement('canvas');c.width=W;c.height=H;
+ const x=c.getContext('2d');
+ /* in bump mode everything is grey and only relief matters */
+ const P=bump?'#808080':'#8d8271';      /* plaster */
+ const DK=bump?'#4e4e4e':'#5f5648';     /* in shadow */
+ const LT=bump?'#c8c8c8':'#a99c86';     /* catching light */
+ const WD=bump?'#6a6a6a':'#3a2b1c';     /* woodwork */
+ x.fillStyle=P;x.fillRect(0,0,W,H);
+
+ /* canvas top is the top of the wall: three.js flips textures by default */
+ const band=(y0,y1,fill)=>{x.fillStyle=fill;x.fillRect(0,y0,W,y1-y0)};
+ /* cornice and frieze */
+ band(0,H*.055,LT);
+ band(H*.055,H*.075,DK);
+ band(H*.075,H*.135,bump?'#9a9a9a':'#968b78');
+ /* the tall panelled field */
+ const fy0=H*.16, fy1=H*.70;
+ x.fillStyle=bump?'#707070':'#847969';
+ x.fillRect(0,fy0,W,fy1-fy0);
+ const inset=W*.13;
+ /* the panel: light on its top and left, dark on its bottom and right */
+ x.fillStyle=DK;x.fillRect(inset,fy0+H*.03,W-inset*2,fy1-fy0-H*.06);
+ x.fillStyle=bump?'#8e8e8e':'#8b806e';
+ x.fillRect(inset+4,fy0+H*.03+4,W-inset*2-8,fy1-fy0-H*.06-8);
+ x.fillStyle=LT;x.fillRect(inset,fy0+H*.03,W-inset*2,4);
+ x.fillStyle=LT;x.fillRect(inset,fy0+H*.03,4,fy1-fy0-H*.06);
+ /* dado rail */
+ band(fy1,fy1+H*.022,LT);
+ band(fy1+H*.022,fy1+H*.042,DK);
+ /* the dado panelling below it, two squat panels per bay */
+ const dy0=fy1+H*.05, dy1=H*.94;
+ x.fillStyle=bump?'#767676':'#877c6a';
+ x.fillRect(0,dy0,W,dy1-dy0);
+ [0,1].forEach(i=>{
+  const px=W*.06+i*W*.47, pw=W*.41;
+  x.fillStyle=DK;x.fillRect(px,dy0+6,pw,dy1-dy0-12);
+  x.fillStyle=bump?'#8e8e8e':'#8d8270';x.fillRect(px+4,dy0+10,pw-8,dy1-dy0-20);
+  x.fillStyle=LT;x.fillRect(px,dy0+6,pw,3)});
+ /* skirting */
+ band(dy1,H,WD);
+ x.fillStyle=LT;x.fillRect(0,dy1,W,3);
+
+ if(!bump){
+  /* age: the wall is not one flat colour anywhere in the world */
+  for(let i=0;i<900;i++){
+   x.globalAlpha=.02+Math.random()*.05;
+   x.fillStyle=Math.random()<.5?'#5a5044':'#a89c86';
+   const r=1+Math.random()*4;
+   x.fillRect(Math.random()*W,Math.random()*H,r,r)}
+  x.globalAlpha=1}
+
+ const t=new THREE.CanvasTexture(c);
+ t.wrapS=t.wrapT=THREE.RepeatWrapping;
+ t.repeat.set(RM.BAYS,1);
+ t.anisotropy=8;
+ if(!bump)t.encoding=THREE.sRGBEncoding;
+ return t}
+
+/* the ceiling: a plaster rose in the middle and two coffer rings */
+function roomCeilTex(){
+ const S=1024;
+ const c=document.createElement('canvas');c.width=S;c.height=S;
+ const x=c.getContext('2d');
+ x.fillStyle='#6f6555';x.fillRect(0,0,S,S);
+ const mid=S/2;
+ const ring=(r,w,fill)=>{x.beginPath();x.arc(mid,mid,r,0,Math.PI*2);
+  x.lineWidth=w;x.strokeStyle=fill;x.stroke()};
+ /* coffers: broad shallow rings, lit on the inside edge */
+ [[.86,'#5c5343'],[.84,'#8b8070'],[.60,'#5c5343'],[.58,'#8b8070'],
+  [.34,'#5c5343'],[.32,'#8b8070']].forEach(([f,col],i)=>
+  ring(mid*f,i%2?7:22,col));
+ /* radial ribs */
+ for(let i=0;i<RM.BAYS*2;i++){
+  const a=i/(RM.BAYS*2)*Math.PI*2;
+  x.save();x.translate(mid,mid);x.rotate(a);
+  x.fillStyle='#7d7362';x.fillRect(-5,-mid*.88,10,mid*.56);
+  x.fillStyle='#948977';x.fillRect(-5,-mid*.88,3,mid*.56);
+  x.restore()}
+ /* the rose */
+ const g=x.createRadialGradient(mid,mid,4,mid,mid,mid*.30);
+ g.addColorStop(0,'#b6ab96');g.addColorStop(.5,'#8d8271');g.addColorStop(1,'#655c4c');
+ x.beginPath();x.arc(mid,mid,mid*.30,0,Math.PI*2);x.fillStyle=g;x.fill();
+ ring(mid*.30,6,'#4f4739');
+ for(let i=0;i<24;i++){
+  const a=i/24*Math.PI*2;
+  x.beginPath();
+  x.ellipse(mid+Math.cos(a)*mid*.20,mid+Math.sin(a)*mid*.20,mid*.055,mid*.022,a,0,Math.PI*2);
+  x.fillStyle=i%2?'#a49a86':'#7a7060';x.fill()}
+ const t=new THREE.CanvasTexture(c);
+ t.anisotropy=8;t.encoding=THREE.sRGBEncoding;
+ return t}
+
+/* ---------------------------------------------------------------------
+   2. DRESSING IT
+   --------------------------------------------------------------------- */
+function dressTheRoom(scene){
+ if(!scene||scene.userData.dressed)return;
+ scene.userData.dressed=true;
+ const CZ=RM.CZ, RR=RM.RR, HT=RM.H;
+ const mid=new THREE.Vector3(0,0,CZ);
+
+ /* -- the wall gets its panelling ---------------------------------- */
+ scene.traverse(o=>{
+  if(!o.isMesh||!o.geometry)return;
+  const g=o.geometry;
+  if(g.type==='CylinderGeometry'&&g.parameters&&g.parameters.openEnded&&
+     Math.abs((g.parameters.radiusTop||0)-RR)<.6){
+   o.material.map=roomWallTex(false);
+   o.material.bumpMap=roomWallTex(true);
+   o.material.bumpScale=.09;
+   o.material.color=new THREE.Color(0xffffff);
+   o.material.roughness=.92;
+   o.material.envMapIntensity=.16;
+   o.material.needsUpdate=true}
+  /* -- and the ceiling stops being a hole -- */
+  if(g.type==='CircleGeometry'&&Math.abs(o.position.y-HT)<.3){
+   o.material.map=roomCeilTex();
+   o.material.color=new THREE.Color(0xffffff);
+   o.material.roughness=.94;
+   o.material.envMapIntensity=.10;
+   o.material.needsUpdate=true}
+  /* the floor takes a little more of the room's light back */
+  if(g.type==='CircleGeometry'&&Math.abs(o.position.y)<.05){
+   o.material.envMapIntensity=.34;
+   o.material.roughness=.30;
+   o.material.needsUpdate=true}
+ });
+
+ const plaster=new THREE.MeshStandardMaterial({color:0x9d9280,roughness:.9,
+  metalness:0,envMapIntensity:.16});
+ const stoneL=new THREE.MeshStandardMaterial({color:0xcdc2ab,roughness:.82,
+  metalness:.02,envMapIntensity:.2});
+ const wood=new THREE.MeshStandardMaterial({color:0x3a2b1c,roughness:.55,
+  metalness:.06,envMapIntensity:.18});
+ const brass=new THREE.MeshStandardMaterial({color:0xc9a227,roughness:.28,
+  metalness:1,envMapIntensity:.55});
+
+ const put=(m,y)=>{m.position.set(0,y,CZ);m.rotation.x=Math.PI/2;scene.add(m);return m};
+ const ringMesh=(r,tube,mat,seg)=>
+  new THREE.Mesh(new THREE.TorusGeometry(r,tube,8,seg||64),mat);
+
+ /* -- a cornice with a profile instead of one tube ------------------ */
+ put(ringMesh(RR-.06,.20,stoneL),HT-.30);
+ put(ringMesh(RR-.26,.13,stoneL),HT-.62);
+ put(ringMesh(RR-.02,.09,stoneL),HT-.06);
+ /* -- skirting and dado -------------------------------------------- */
+ put(ringMesh(RR-.05,.13,wood),.13);
+ put(ringMesh(RR-.06,.07,stoneL),1.72);
+ put(ringMesh(RR-.06,.05,brass,48),1.86);
+
+ /* -- twelve pilasters, the one thing a texture cannot fake --------- */
+ const pilGeo=new THREE.BoxGeometry(.62,HT-.5,.30);
+ const capGeo=new THREE.BoxGeometry(.86,.22,.42);
+ for(let i=0;i<RM.BAYS;i++){
+  const a=i/RM.BAYS*Math.PI*2;
+  const sx=Math.sin(a),sz=Math.cos(a);
+  const px=sx*(RR-.14), pz=CZ-sz*(RR-.14);
+  const p=new THREE.Mesh(pilGeo,plaster);
+  p.position.set(px,(HT-.5)/2,pz);
+  p.lookAt(mid.x,p.position.y,mid.z);
+  p.castShadow=false;p.receiveShadow=true;
+  scene.add(p);
+  const cap=new THREE.Mesh(capGeo,stoneL);
+  cap.position.set(px,HT-.62,pz);cap.rotation.y=p.rotation.y;scene.add(cap);
+  const base=new THREE.Mesh(capGeo,wood);
+  base.position.set(px,.20,pz);base.rotation.y=p.rotation.y;scene.add(base)}
+
+ /* -- the cove: a pelmet, and the light it hides -------------------- */
+ const pelmet=new THREE.Mesh(
+  new THREE.CylinderGeometry(RR-.85,RR-.85,.5,48,1,true),
+  new THREE.MeshStandardMaterial({color:0x6d6250,roughness:.95,
+   side:THREE.DoubleSide,envMapIntensity:.1}));
+ pelmet.position.set(0,HT-.62,CZ);scene.add(pelmet);
+ /* THE LIGHT THAT FIXES THE BLACK SKY. Eight lamps sitting on top of the
+    pelmet, above the pelmet's rim and below the ceiling, pointing at
+    nothing in particular — a cove works by bouncing, and a point light
+    at the right height bounces. */
+ for(let i=0;i<8;i++){
+  const a=i/8*Math.PI*2;
+  const L=new THREE.PointLight(0xffd9a4,.55,7.5,2.0);
+  L.position.set(Math.sin(a)*(RR-1.5),HT-.34,CZ-Math.cos(a)*(RR-1.5));
+  scene.add(L)}
+ /* and a soft fill aimed straight up, so the middle of the ceiling is
+    not darker than its edges */
+ const up=new THREE.PointLight(0xffe3ba,.5,9,2.0);
+ up.position.set(0,HT-1.1,CZ);scene.add(up);
+
+ /* -- the floor was laid, not tiled --------------------------------- */
+ const border=new THREE.Mesh(new THREE.RingGeometry(RR-1.5,RR-1.15,64),
+  new THREE.MeshStandardMaterial({color:0x2f2114,roughness:.4,metalness:.15,
+   envMapIntensity:.3}));
+ border.rotation.x=-Math.PI/2;border.position.set(0,.004,CZ);scene.add(border);
+ const medal=new THREE.Mesh(new THREE.CircleGeometry(2.3,48),
+  new THREE.MeshStandardMaterial({color:0x25190e,roughness:.34,metalness:.2,
+   envMapIntensity:.35}));
+ medal.rotation.x=-Math.PI/2;medal.position.set(0,.005,CZ);scene.add(medal);
+ const medalR=new THREE.Mesh(new THREE.RingGeometry(2.3,2.46,48),brass);
+ medalR.rotation.x=-Math.PI/2;medalR.position.set(0,.006,CZ);scene.add(medalR);
+
+ /* -- THE CREST, MOUNTED ON A WALL THAT CURVES ---------------------
+    The wall is a cylinder of radius 11.5 centred on (0, CZ), so the
+    surface is only at z = CZ-RR dead ahead. Two metres off to the side
+    it has already come forward by two tenths. A flat 4.4-wide panel
+    parked at CZ-RR+0.12 therefore has its middle in front of the wall
+    and both its edges behind it, which is exactly what the badge was
+    doing: cut off down both sides with the plaster showing through.
+
+    So the surround is built from cylinder segments on the same axis —
+    they follow the wall by construction — and the badge itself is
+    pulled forward far enough to clear the curve across its full width.
+    The forward distance is not guessed: at half-width w the wall has
+    come forward by RR - sqrt(RR^2 - w^2). */
+ const bulge=w=>RR-Math.sqrt(Math.max(0,RR*RR-w*w));
+ const arcPanel=(r,h,halfW,mat,y)=>{
+  const th=(halfW*2)/r;
+  const m=new THREE.Mesh(new THREE.CylinderGeometry(r,r,h,28,1,true,
+    Math.PI-th/2,th),mat);
+  m.position.set(0,y,CZ);m.material.side=THREE.BackSide;
+  scene.add(m);return m};
+ arcPanel(RR-.03,5.6,3.05,new THREE.MeshStandardMaterial({color:0x2a1d11,
+   roughness:.58,metalness:.08,envMapIntensity:.18}),3.3);
+ arcPanel(RR-.10,4.9,2.62,new THREE.MeshStandardMaterial({color:0x150e07,
+   roughness:.85,envMapIntensity:.1}),3.3);
+ /* a brass bead round the opening, in the plane the badge sits in */
+ const beadZ=CZ-RR+bulge(2.75)+.06;
+ const bead=new THREE.Mesh(new THREE.TorusGeometry(2.55,.055,8,64),brass);
+ bead.position.set(0,3.3,beadZ);scene.add(bead);
+ /* and the badge, forward of the curve across its own width */
+ scene.traverse(o=>{
+  if(o.isMesh&&o.geometry&&o.geometry.type==='PlaneGeometry'&&
+     o.geometry.parameters&&Math.abs(o.geometry.parameters.width-4.4)<.01){
+   o.position.z=CZ-RR+bulge(2.3)+.10;
+   if(o.material){
+    /* it was emissive AND about to be spotlit, which blew it out */
+    o.material.emissiveIntensity=.06;
+    o.material.roughness=.62;
+    o.material.needsUpdate=true}}});
+ /* lit from above, the way a thing on a wall is */
+ const cl=new THREE.SpotLight(0xffe9c6,3.2,10,.62,.7,1.6);
+ cl.position.set(0,5.4,CZ-RR+3.0);
+ cl.target.position.set(0,3.2,CZ-RR+.4);
+ scene.add(cl);scene.add(cl.target);
+
+ /* -- and the room is no longer pitch dark between the plinths ------ */
+ scene.add(new THREE.HemisphereLight(0xffe0b4,0x2a1d12,.34));
+}
+
+/* ---------------------------------------------------------------------
+   3. THE HOOK
+   The builder ends by publishing everything on TR.dbg, so the room can
+   be dressed from outside without owning a second copy of a four
+   hundred line function.
+   --------------------------------------------------------------------- */
+const _buildRoomDress=buildTrophyRoom;
+buildTrophyRoom=function(host){
+ const r=_buildRoomDress.apply(this,arguments);
+ try{
+  if(TR&&TR.dbg&&TR.dbg.scene){
+   dressTheRoom(TR.dbg.scene);
+   /* the environment was a brown box, which is most of why polished
+      silver read as bronze across the whole hall */
+   roomEnv(TR.dbg.scene,TR.rend)}
+ }catch(e){}
+ return r};
+
+/* a warmer, brighter box than the old one — still a lit room rather than
+   a studio, but with enough light in it that chrome is chrome */
+function roomEnv(scene,rend){
+ if(!rend)return;
+ const c=document.createElement('canvas');c.width=1024;c.height=512;
+ const x=c.getContext('2d');
+ const sky=x.createLinearGradient(0,0,0,512);
+ sky.addColorStop(0,'#efe3cd');       /* the lit ceiling */
+ sky.addColorStop(.34,'#9b8f79');
+ sky.addColorStop(.62,'#5a5044');
+ sky.addColorStop(1,'#2a2018');
+ x.fillStyle=sky;x.fillRect(0,0,1024,512);
+ /* the cove, as a bright band right round the top */
+ x.fillStyle='#fff3dc';x.fillRect(0,52,1024,26);
+ /* the sconces */
+ for(let i=0;i<8;i++){x.fillStyle='#ffe8c0';x.fillRect(60+i*126,120,44,54)}
+ /* the floor */
+ x.fillStyle='#3a2a19';x.fillRect(0,430,1024,82);
+ const tex=new THREE.CanvasTexture(c);
+ tex.mapping=THREE.EquirectangularReflectionMapping;
+ const pm=new THREE.PMREMGenerator(rend);
+ pm.compileEquirectangularShader();
+ scene.environment=pm.fromEquirectangular(tex).texture;
+ tex.dispose();pm.dispose()}
+
+/*#w97_room.js#*/
+
+/*#w98_clubroom.js#*/
+
+/* =====================================================================
+   w98_clubroom — the room belongs to the club you manage
+   ---------------------------------------------------------------------
+   Two things were still generic in a room that is supposed to be yours.
+
+   THE BADGE ON THE BACK WALL was drawn by hallCrestTex, which builds its
+   own shield from scratch: one bezier outline, a vertical fade from the
+   club's first colour to its second, a white outline and the letters.
+   That is the badge the whole game used to have and it was replaced
+   everywhere else — so the one place in the game where a crest is four
+   metres tall was the one place still showing the old one. It renders
+   the real badge now, the same function the header and the team sheets
+   use, so redesigning a badge redesigns this too.
+
+   THE RIBBONS were the competition's colours: blue for the FA Cup, red
+   for the Premier League, orange for the Europa League. But ribbons on
+   a trophy are not the competition's, they are the winner's — they go
+   on when somebody lifts it, in that club's colours. So they are yours
+   now, and only on the trophies you have actually won. On a trophy you
+   have never lifted there are no ribbons at all, which turns them into
+   the fastest read in the room: colour means you won it.
+   ===================================================================== */
+
+/* ---------------------------------------------------------------------
+   1. THE BADGE, FOUR METRES TALL
+   ---------------------------------------------------------------------
+   The badge is SVG and the wall wants a texture, so it goes through an
+   Image. That is asynchronous, which is fine — the texture is handed
+   back immediately and repaints itself when the raster lands.
+
+   The lettering is drawn on the canvas rather than left in the SVG.
+   An SVG loaded through an img is its own document and cannot reach the
+   page's fonts, so Archivo Black would silently become whatever the
+   platform felt like. Canvas can reach them.
+   --------------------------------------------------------------------- */
+hallCrestTex=function(){
+ const S=1024;
+ const c=document.createElement('canvas');c.width=S;c.height=S;
+ const x=c.getContext('2d');
+ const t=new THREE.CanvasTexture(c);
+ t.anisotropy=8;
+ t.encoding=THREE.sRGBEncoding;
+ try{
+  const club=(typeof G!=='undefined'&&G&&G.clubs)?G.clubs[G.my]:null;
+  if(!club)return t;
+  const mark=crestMark(club);
+  /* the same decision badgeSVG makes about what colour the letters have
+     to be, made again here because the letters are drawn separately */
+  const c1=club.c1||'#33404a';
+  const trim=badgeTrim(c1,club.c2);
+  const kind=kitPattern(club);
+  const seed=Math.abs(hashStr('dev|'+(club.key||club.name||'?')));
+  const variant=[0,0,1,2,3,3][seed%6];
+  const onBar=(kind==='plain'&&variant<3)||kind==='sleeve';
+  const base=onBar?trim:c1;
+  const ink=bLum(base)>.58?'#14181e':'#ffffff';
+  const edge=bLum(base)>.58?'rgba(255,255,255,.55)':'rgba(0,0,0,.55)';
+
+  /* THE ONE THAT MAKES IT APPEAR AT ALL. An SVG inlined into the page
+     inherits the HTML namespace and works without a declaration; the
+     same string handed to an <img> is parsed as a standalone document
+     and is rejected outright without xmlns. First attempt rendered a
+     brass ring around nothing. */
+  const svg=badgeSVG(club,S)
+   .replace(/<text[\s\S]*?<\/text>/,'')
+   .replace('<svg ','<svg xmlns="http://www.w3.org/2000/svg" ');
+  const img=new Image();
+  img.onload=()=>{
+   try{
+    x.clearRect(0,0,S,S);
+    x.drawImage(img,0,0,S,S);
+    x.textAlign='center';x.textBaseline='middle';
+    x.font='900 '+(mark.length<=2?400:mark.length===3?320:265)+
+      'px "Archivo Black",Impact,sans-serif';
+    x.lineWidth=S*.030;x.strokeStyle=edge;
+    x.lineJoin='round';
+    x.strokeText(mark,S/2,S*.615);
+    x.fillStyle=ink;x.fillText(mark,S/2,S*.615);
+    t.needsUpdate=true}
+   catch(e){}};
+  /* and if it still will not rasterise, the wall gets a plain shield
+     rather than an empty frame */
+  img.onerror=()=>{
+   try{
+    x.clearRect(0,0,S,S);
+    x.fillStyle=c1;
+    x.beginPath();
+    x.moveTo(S*.5,S*.09);x.lineTo(S*.88,S*.21);x.lineTo(S*.88,S*.53);
+    x.bezierCurveTo(S*.88,S*.75,S*.68,S*.86,S*.5,S*.93);
+    x.bezierCurveTo(S*.32,S*.86,S*.12,S*.75,S*.12,S*.53);
+    x.lineTo(S*.12,S*.21);x.closePath();x.fill();
+    x.strokeStyle=trim;x.lineWidth=S*.022;x.stroke();
+    x.textAlign='center';x.textBaseline='middle';
+    x.font='900 '+(mark.length<=2?400:320)+'px "Archivo Black",Impact,sans-serif';
+    x.fillStyle=ink;x.fillText(mark,S/2,S*.58);
+    t.needsUpdate=true}
+   catch(e){}};
+  img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg);
+ }catch(e){}
+ return t};
+
+/* ---------------------------------------------------------------------
+   2. THE RIBBONS ARE YOURS, AND ONLY ON WHAT YOU HAVE WON
+   --------------------------------------------------------------------- */
+function trophyWonCount(code){
+ let n=0;
+ try{(myTrophies()||[]).forEach(t=>{if(t&&t.code===code)n++})}
+ catch(e){}
+ return n}
+
+function clubRibbonMat(){
+ let c1='#c8102e',c2='#7a0a17',word='CHAMPIONS';
+ try{
+  const cl=G.clubs[G.my];
+  if(cl){
+   c1=cl.c1||c1;
+   /* a second colour only if it is actually a second colour — plenty of
+      clubs store two that are within a few per cent of each other, and
+      a two-tone ribbon out of those is just a muddy one */
+   c2=(cl.c2&&cl.c2!==cl.c1&&Math.abs(bLum(cl.c1)-bLum(cl.c2))>=.14)
+      ?cl.c2:bMix(c1,'#000000',.45);
+   word=String(cl.short||cl.name||'').toUpperCase().slice(0,16)||word}}
+ catch(e){}
+ return new THREE.MeshStandardMaterial({
+  map:tRibbonTex(c1,c2,word),
+  roughness:.86,metalness:0,side:THREE.DoubleSide})}
+
+/* trophyBuild is where a sculpt becomes a specific trophy — it is handed
+   the code, which is the one thing the builders themselves never know */
+const _tbRibbons=trophyBuild;
+trophyBuild=function(code){
+ const g=_tbRibbons.apply(this,arguments);
+ try{
+  if(!g)return g;
+  const rib=[];
+  g.traverse(o=>{if(o.userData&&o.userData.ribbon)rib.push(o)});
+  if(!rib.length)return g;
+  if(!trophyWonCount(code)){
+   /* never lifted, so no ribbons. It also stops the cabinet looking
+      like you have won all twenty-two of them. */
+   rib.forEach(o=>{if(o.parent)o.parent.remove(o)});
+   return g}
+  const mat=clubRibbonMat();
+  rib.forEach(o=>{o.material=mat});
+ }catch(e){}
+ return g};
+
+/*#w98_clubroom.js#*/
+
+/*#w99_trophy2.js#*/
+
+/* =====================================================================
+   w99_trophy2 — engraving you can read, plinths worth standing on, and
+                 the Champions League trophy done properly
+   ---------------------------------------------------------------------
+   THE ENGRAVING was a bump map and nothing else. A bump map only tilts
+   the surface normal, so on polished silver — which is almost entirely
+   reflection — a letter is the same colour as the metal around it and
+   shows up only where the reflection happens to break. That is why the
+   winners' bands read as texture rather than as names. Real engraving is
+   a cut with oxide in the bottom of it: darker than the metal, always,
+   whatever it is reflecting. So the band gets a colour map as well as
+   its bump, and the letters go dark.
+
+   THE PLINTHS were a tapered box, a stone cap and a plaque, all in one
+   flat light wood. They are furniture in a room that now has cornices
+   and pilasters, so they get the same treatment: a moulded base, a
+   moulded cap, a brass-framed plaque and a rail round the glass.
+
+   THE CHAMPIONS LEAGUE TROPHY had the right ears on the wrong cup. The
+   bowl was too small under them and the stem too long, so it read as a
+   teacup carrying somebody else's handles. The real one is 74cm and the
+   bowl is more than half of it: heavy, deep, and wider at the shoulder
+   than anything else in the room.
+   ===================================================================== */
+
+/* ---------------------------------------------------------------------
+   1. ENGRAVING THAT IS DARKER THAN THE METAL
+   ---------------------------------------------------------------------
+   tEngraveBand keeps returning the bump texture, because forty places
+   pass its result straight into bumpMap. The matching colour texture is
+   built at the same time and parked on it, and trophyBuild hangs it on
+   whatever material turned out to be using it.
+   --------------------------------------------------------------------- */
+const _engraveTint=tEngraveBand;
+tEngraveBand=function(lines,opt){
+ const bump=_engraveTint.apply(this,arguments);
+ try{
+  const o=opt||{};
+  const W=tS(2048,4096),H=tS(256,512);
+  const tint=tCanvas(W,H,(x,w,h)=>{
+   /* the metal itself is left white so the material's own colour and
+      its environment come through untouched */
+   x.fillStyle='#ffffff';x.fillRect(0,0,w,h);
+   x.strokeStyle='#6d6d6d';x.lineWidth=h*.016;
+   x.strokeRect(h*.10,h*.10,w-h*.20,h-h*.20);
+   const n=Math.max(1,lines.length),slot=w/n;
+   x.textAlign='center';x.textBaseline='middle';
+   const cut=(s,cx,cy,font,max)=>{
+    x.font=font;x.fillStyle='#2a2a2a';x.fillText(s,cx,cy,max)};
+   lines.forEach((s,i)=>{
+    const cx=i*slot+slot/2;
+    if(i){x.strokeStyle='#9a9a9a';x.lineWidth=h*.008;
+     x.beginPath();x.moveTo(i*slot,h*.24);x.lineTo(i*slot,h*.76);x.stroke();
+     x.strokeStyle='#6d6d6d';x.lineWidth=h*.016}
+    const m=String(s).match(/^S(\d+)\s+(.+)$/);
+    if(m&&!o.oneLine){
+     cut('SEASON '+m[1],cx,h*.36,
+      '600 '+Math.round(h*.15)+'px "Helvetica Neue",Arial,sans-serif',slot*.88);
+     cut(m[2].toUpperCase(),cx,h*.62,
+      'bold '+Math.round(h*.235)+'px "Helvetica Neue",Arial,sans-serif',slot*.90);
+    }else{
+     cut(String(s).toUpperCase(),cx,h*.5,
+      'bold '+Math.round(h*.26)+'px "Helvetica Neue",Arial,sans-serif',slot*.90)}
+   });
+  });
+  tint.encoding=THREE.sRGBEncoding;
+  bump.userData=bump.userData||{};
+  bump.userData.tint=tint;
+ }catch(e){}
+ return bump};
+
+const _tbEngrave=trophyBuild;
+trophyBuild=function(code){
+ const g=_tbEngrave.apply(this,arguments);
+ try{
+  if(!g)return g;
+  g.traverse(o=>{
+   const m=o.material;
+   if(!m||!m.bumpMap||m.map)return;
+   const tint=m.bumpMap.userData&&m.bumpMap.userData.tint;
+   if(!tint)return;
+   m.map=tint;
+   /* a cut catches more light than the polish around it */
+   m.roughness=Math.min(.95,(m.roughness||.15)+.10);
+   m.needsUpdate=true});
+ }catch(e){}
+ return g};
+
+/* ---------------------------------------------------------------------
+   2. THE CHAMPIONS LEAGUE TROPHY, REBUILT
+   ---------------------------------------------------------------------
+   Proportions taken off the real one: 74cm tall, and the bowl from the
+   waist to the rim is a shade over half of that. The stem is short, the
+   foot is a broad splayed disc, and the ears come off the rim rather
+   than off the belly.
+   --------------------------------------------------------------------- */
+TB.CL=function(){
+ const M=tMaterials(),g=new THREE.Group();
+ const S=M.silver,SS=M.silverSoft;
+
+ /* the foot: wide, flat, and quickly gathered into a narrow waist */
+ g.add(tLathe2([[5.0,0],[5.0,.5],[4.7,.8],[3.1,1.35],[1.85,1.85],[1.55,2.35]],SS));
+ g.add(tFillet(.54,5.02,.09,S));
+ const ring=new THREE.Mesh(new THREE.CylinderGeometry(5.02,5.02,.62,tS(64,128)),
+  new THREE.MeshStandardMaterial({color:0xffffff,metalness:1,roughness:.16,
+   bumpMap:tEngraveBand(tChampionLines()),bumpScale:.042}));
+ ring.position.y=.28;g.add(ring);
+
+ /* THE BOWL. A short knop, then straight out into a deep heavy body
+    that carries its widest point high — the old profile put the waist
+    at 40% of the height and never recovered, which is what made it look
+    like a teacup with borrowed handles. */
+ g.add(tLathe2([[1.55,2.35],[1.6,2.95],[2.5,3.55],[1.75,4.15],[2.5,4.9],
+   [5.0,6.3],[6.9,8.5],[7.8,11.2],[8.0,14.0],[7.7,16.5],[7.1,18.0],
+   [7.3,18.35]],S,tS(48,128)));
+ g.add(tFillet(3.7,2.32,.09,SS));
+ const rim=new THREE.Mesh(new THREE.TorusGeometry(7.28,.24,tS(14,28),tS(80,150)),SS);
+ rim.position.y=18.3;rim.rotation.x=Math.PI/2;g.add(rim);
+ g.add(tBeads(17.6,7.32,tS(32,60),.11,SS));
+
+ /* THE EARS. Off the rim, out past the widest point of the bowl and
+    back in under it, tapering as they go. */
+ [1,-1].forEach(s=>{
+  /* The reach matters as much as the shape. At 13.5 against a bowl of
+     8.0 the trophy was 27 wide and 20 tall, so every camera framed it
+     on its width and the bowl — the part you recognise — came out
+     small. The real ears end a little outside the widest point of the
+     bowl, not half as far again. */
+  const pts=[[7.0*s,17.4],[9.7*s,18.7],[11.4*s,16.2],[11.5*s,11.6],
+             [9.7*s,8.2],[7.0*s,7.3],[5.3*s,8.7]];
+  g.add(tFlatBand(pts,t=>1.44-t*.80,.32,S));
+  if(tHi())g.add(tFlatBand(pts,()=>.17,.50,SS));
+ });
+
+ /* the band of stars round the shoulder */
+ const NST=tS(8,12);
+ for(let i=0;i<NST;i++){
+  const a=i/NST*Math.PI*2;
+  const st=tStar(.62,.26,.12,SS);
+  st.position.set(Math.cos(a)*7.82,13.4,Math.sin(a)*7.82);
+  st.rotation.y=-a+Math.PI/2;
+  g.add(st)}
+ tRibbons(g,{a:'#0b1f5c',b:'#050d2c',word:'CHAMPIONS LEAGUE',
+   r:7.0,y:17.9,len:10.0});
+ return g};
+
+/* ---------------------------------------------------------------------
+   3. THE PLINTHS
+   ---------------------------------------------------------------------
+   Wrapped rather than rebuilt: the geometry underneath is fine, it was
+   the finish that let it down. Darker wood, a moulded base and cap, a
+   brass frame round the plaque and a rail round the glass.
+   --------------------------------------------------------------------- */
+const _pedPolish=hallPedestal;
+hallPedestal=function(row,ix,M){
+ const g=_pedPolish.apply(this,arguments);
+ try{
+  const PH=1.14, PW=0.94;
+  const brass=new THREE.MeshStandardMaterial({color:0xc9a227,roughness:.26,
+   metalness:1,envMapIntensity:.7});
+  const dark=new THREE.MeshStandardMaterial({color:0x2b1d10,roughness:.34,
+   metalness:.12,envMapIntensity:.4});
+
+  /* the wood was a light honey that read as pine. A trophy cabinet is
+     mahogany. */
+  g.traverse(o=>{
+   if(o.isMesh&&o.material&&o.material.map&&o.material.map===M.woodMap){
+    o.material.color=new THREE.Color(0x53331c);
+    o.material.roughness=.34;
+    o.material.envMapIntensity=.65;
+    o.material.needsUpdate=true}});
+
+  const box=(w,h,d,mat,y)=>{
+   const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+   m.position.y=y;m.rotation.y=Math.PI/4;
+   m.castShadow=true;m.receiveShadow=true;g.add(m);return m};
+  /* a moulded base and a moulded cap, which is what stops a column
+     looking like a box */
+  box(PW*1.06,.09,PW*1.06,dark,.045);
+  box(PW*.99,.06,PW*.99,brass,.105);
+  box(PW*1.02,.07,PW*1.02,dark,PH-.02);
+
+  /* the plaque, in a brass surround */
+  const FACE=PW*.66/Math.SQRT2+.012;
+  const fr=new THREE.Mesh(new THREE.PlaneGeometry(FACE*1.74,FACE*1.04),brass);
+  fr.position.set(0,PH*.42,FACE-.004);g.add(fr);
+
+  /* a rail round the top of the glass so the case has an edge */
+  const gl=[];
+  g.children.forEach(o=>{
+   if(o.isMesh&&o.geometry&&o.geometry.type==='BoxGeometry'&&
+      o.material&&o.material.transparent&&o.material.opacity<.4)gl.push(o)});
+  gl.forEach(o=>{
+   const P=o.geometry.parameters;
+   const w=P.width*o.scale.x, h=P.height, d=P.depth*o.scale.z;
+   const top=new THREE.Mesh(new THREE.BoxGeometry(w+.035,.035,d+.035),brass);
+   top.position.set(o.position.x,o.position.y+h/2,o.position.z);
+   g.add(top);
+   const foot=new THREE.Mesh(new THREE.BoxGeometry(w+.05,.03,d+.05),brass);
+   foot.position.set(o.position.x,o.position.y-h/2,o.position.z);
+   g.add(foot);
+   /* glass with a visible surface rather than a tinted hole */
+   o.material.opacity=.055;
+   o.material.roughness=.02;
+   o.material.metalness=.05;
+   o.material.envMapIntensity=3.2;
+   o.material.needsUpdate=true});
+
+  /* a strip of light under the cap, so a trophy is lit from its own case
+     and not only from the ceiling */
+  if(row&&row.count){
+   const gl2=new THREE.PointLight(0xfff0d4,.42,1.6,2.0);
+   gl2.position.set(0,PH+.30,.12);g.add(gl2)}
+ }catch(e){}
+ return g};
+
+/*#w99_trophy2.js#*/
+
+
+
+/*#wA0_hair.js#*/
+
+/* =====================================================================
+   wA0_hair — the haircuts, rebuilt on one skull
+   ---------------------------------------------------------------------
+   Rendering every cut on every jaw side by side is the only way to see
+   what these actually look like, and it was not flattering.
+
+     BALD drew a crescent across the front of the head at 35% opacity.
+     It was meant to be the ghost of a receding hairline; what it looks
+     like is a bald man with a strip of hair stuck on his forehead. This
+     is the one that got reported.
+
+     CORNROWS drew three nested arcs on the forehead. Concentric circles
+     on a face read as a bullseye, not as braids. Braids run front to
+     back, which in a straight-on portrait is a fan of near-vertical
+     lines over the crown with scalp showing between them.
+
+     AFRO was a low wide ellipse that read as a motorcycle helmet.
+
+     CURLS put three circles above the cap with a gap under them, so the
+     curls floated off the head.
+
+     AND SEVEN OF THE THIRTEEN were the same dark cap with the hairline
+     within a unit of each other. Buzz, fade, crop, taper, short, mid and
+     quiff are meant to be seven different haircuts.
+
+   All of them are drawn from one skull now. hCap() takes how far the
+   sides come down, how tall the hair stands, how far it bulges, and
+   where the hairline sits at the centre and at the temples — and those
+   four numbers are what actually distinguishes a fade from a mid. Each
+   cut then adds only what makes it itself: spikes, braids, a parting, a
+   bulk of curls.
+
+   Six cuts are added on top: a receding hairline (so a thirty-four year
+   old loses it gradually instead of overnight), a side parting, spikes,
+   dreadlocks, long hair, and a proper shaved head.
+   ===================================================================== */
+
+/* A palette note, because getting this wrong is silent: the cut
+   functions are handed (H,S). H is the HAIR entry and has exactly two
+   keys, b and h. S is the SKIN entry and has b, s, d and l. Anything a
+   cut needs for scalp showing between braids or down a parting has to
+   come from S — H.s does not exist, and an undefined colour in an SVG
+   fill is not an error, it just quietly paints black.
+
+   ---------------------------------------------------------------------
+   THE SKULL
+   ---------------------------------------------------------------------
+   Outer edge up the left side, over the crown and down the right, then
+   the hairline back across. Every short cut in the game is this shape
+   with four numbers changed.
+
+     side    how far down the sides the hair reaches (bigger = longer)
+     top     the crown; smaller means the hair stands taller
+     wide    how far it bulges past the skull
+     front   the hairline in the middle of the forehead
+     temple  the hairline at the temples (bigger = more recession)
+   --------------------------------------------------------------------- */
+function hCap(o){
+ o=o||{};
+ const side=o.side==null?14.8:o.side;
+ const top=o.top==null?3.3:o.top;
+ const wide=o.wide==null?0:o.wide;
+ const front=o.front==null?11.0:o.front;
+ const temple=o.temple==null?front+2.6:o.temple;
+ const L=(10.4-wide).toFixed(2), R=(29.6+wide).toFixed(2);
+ const cw=(6.4+wide*.6).toFixed(2);
+ return 'M'+L+' '+side+
+  'C'+L+' '+(top+4.6).toFixed(2)+' '+(20-cw)+' '+top+' 20 '+top+
+  'C'+(20-(-cw))+' '+top+' '+R+' '+(top+4.6).toFixed(2)+' '+R+' '+side+
+  'L'+(R-1.5).toFixed(2)+' '+temple.toFixed(2)+
+  'C'+(R-2.7).toFixed(2)+' '+front.toFixed(2)+' 24.3 '+(front-.45).toFixed(2)+
+   ' 20 '+(front-.45).toFixed(2)+
+  'C15.7 '+(front-.45).toFixed(2)+' '+(+L+2.7).toFixed(2)+' '+front.toFixed(2)+
+   ' '+(+L+1.5).toFixed(2)+' '+temple.toFixed(2)+'Z'}
+
+/* a scatter of short strokes, which is what a clipped head actually is */
+function hStipple(H,n,y0,y1,seed){
+ let s='<g stroke="'+H.h+'" stroke-width=".28" opacity=".34" fill="none">';
+ const r=mulberry(hashStr('stip'+seed));
+ for(let i=0;i<n;i++){
+  const x=11.2+r()*17.6, y=y0+r()*(y1-y0);
+  s+='<path d="M'+x.toFixed(1)+' '+y.toFixed(1)+'l'+(r()*.8-.4).toFixed(1)+' -1"/>'}
+ return s+'</g>'}
+
+/* ---------------------------------------------------------------------
+   THE CUTS
+   --------------------------------------------------------------------- */
+const CUTS3={
+ /* clipped all over, one length */
+ buzz(H){return '<path d="'+hCap({side:14.9,top:3.5,front:10.9,temple:13.4})+
+  '" fill="'+H.b+'" opacity=".94"/>'+hStipple(H,42,5,13,'buzz')},
+
+ /* long on top, skin at the sides — the fade is the gradient, so it is
+    drawn as two passes rather than one flat cap */
+ fade(H){return '<path d="'+hCap({side:15.6,top:3.4,front:10.7,temple:13.8})+
+   '" fill="'+H.b+'" opacity=".34"/>'+
+  '<path d="'+hCap({side:11.8,top:3.4,front:10.4,temple:11.6})+
+   '" fill="'+H.b+'"/>'+
+  '<path d="M11.4 11.0C12.9 6.6 16.0 4.4 20 4.4s7.1 2.2 8.6 6.6c-2.1-3.2-5-4.7-8.6-4.7s-6.5 1.5-8.6 4.7z" fill="'+H.h+'" opacity=".5"/>'},
+
+ /* a French crop: the fringe is a blunt straight line and that is the
+    entire point of it */
+ crop(H){return '<path d="'+hCap({side:13.9,top:3.4,front:10.0,temple:10.4})+
+   '" fill="'+H.b+'"/>'+
+  '<path d="M12.2 10.2h15.6v1.5H12.2z" fill="'+H.b+'"/>'+
+  '<path d="M12.4 10.5h15.2" stroke="'+H.h+'" stroke-width=".55" opacity=".4"/>'+
+  hStipple(H,26,5.5,9.5,'crop')},
+
+ /* short sides, a clean line above the ear, a little length on top */
+ taper(H){return '<path d="'+hCap({side:12.9,top:3.3,front:10.6,temple:12.6})+
+   '" fill="'+H.b+'"/>'+
+  '<path d="M11.9 12.7c.7-.6 1.4-.9 2.1-1M28.1 12.7c-.7-.6-1.4-.9-2.1-1" stroke="'+H.h+
+   '" stroke-width=".65" fill="none" opacity=".45"/>'+
+  '<path d="M12.6 8.8c1.8-2.6 4.3-3.9 7.4-3.9s5.6 1.3 7.4 3.9c-2.2-1.8-4.6-2.7-7.4-2.7s-5.2.9-7.4 2.7z" fill="'+H.h+'" opacity=".45"/>'},
+
+ /* the ordinary short back and sides most of a squad has */
+ short(H){return '<path d="'+hCap({side:15.1,top:3.3,front:11.2,temple:13.9})+
+   '" fill="'+H.b+'"/>'+
+  '<path d="M12.6 9.2c1.8-2.3 4.2-3.4 7.4-3.4s5.6 1.1 7.4 3.4" fill="none" stroke="'+H.h+
+   '" stroke-width=".85" opacity=".4"/>'},
+
+ /* medium: over the ears, a bit of weight */
+ mid(H){return '<path d="'+hCap({side:16.6,top:3.0,wide:.5,front:11.5,temple:14.3})+
+   '" fill="'+H.b+'"/>'+
+  '<path d="M13.7 8.0c1.9 1.4 4 2.1 6.3 2.1s4.4-.7 6.3-2.1" fill="none" stroke="'+H.h+
+   '" stroke-width=".9" opacity=".42"/>'+
+  '<path d="M10.2 12.4c.2 2.0.6 3.6 1.2 4.8M29.8 12.4c-.2 2.0-.6 3.6-1.2 4.8" '+
+   'stroke="'+H.b+'" stroke-width="1.5" fill="none" stroke-linecap="round"/>'},
+
+ /* height at the front, swept up and back */
+ quiff(H){return '<path d="'+hCap({side:14.3,top:1.5,front:10.3,temple:13.3})+
+   '" fill="'+H.b+'"/>'+
+  '<path d="M13.1 5.4c1.4-2.6 3.6-3.9 6.6-3.9 2.6 0 4.7 1.0 6.3 3.0-2.3-1.1-4.5-1.4-6.6-.9-2.1.5-4.2 1.4-6.3 1.8z" fill="'+H.h+'" opacity=".5"/>'+
+  '<path d="M15.2 3.4c1.9-1.1 3.7-1.5 5.4-1.2" stroke="'+H.h+'" stroke-width=".7" '+
+   'fill="none" opacity=".55"/>'},
+
+ /* a side parting, combed over */
+ slick(H,S){return '<path d="'+hCap({side:14.9,top:2.9,front:10.5,temple:13.5})+
+   '" fill="'+H.b+'"/>'+
+  /* the parting itself, off-centre, with the sweep running away from it */
+  '<path d="M16.6 4.2C16.2 6.6 16.1 8.6 16.3 10.4" stroke="'+S.d+
+   '" stroke-width=".52" fill="none" opacity=".5"/>'+
+  '<g stroke="'+H.h+'" stroke-width=".5" fill="none" opacity=".5">'+
+   '<path d="M17.2 4.2c3.4.5 6.2 2.2 8.4 5.2"/>'+
+   '<path d="M17.4 6.4c2.9.6 5.3 2.1 7.2 4.4"/>'+
+   '<path d="M15.4 4.4c-1.6.8-2.8 2.2-3.6 4.2"/>'+
+  '</g>'},
+
+ /* spikes, which is a real haircut and a footballer's favourite */
+ spiky(H){
+  let s='<path d="'+hCap({side:14.2,top:4.0,front:10.7,temple:13.2})+
+   '" fill="'+H.b+'"/>';
+  const N=9;
+  for(let i=0;i<N;i++){
+   const t=i/(N-1);
+   const x=12.4+t*15.2;
+   /* the middle spikes are the tallest, as they are on a real head */
+   const h=2.0+Math.sin(t*Math.PI)*2.6;
+   const base=4.4+Math.pow(t-.5,2)*7.0;
+   s+='<path d="M'+(x-1.0).toFixed(1)+' '+base.toFixed(1)+
+      'L'+(x+.25).toFixed(1)+' '+(base-h).toFixed(1)+
+      'L'+(x+1.0).toFixed(1)+' '+base.toFixed(1)+'z" fill="'+H.b+'"/>'}
+  return s},
+
+ /* curls: the cap's own edge is scalloped, so nothing floats */
+ curls(H){
+  let s='<path d="'+hCap({side:15.4,top:3.6,wide:.5,front:11.2,temple:13.8})+
+   '" fill="'+H.b+'"/>';
+  /* clumps sitting ON the edge, centres inside the cap */
+  [[12.3,8.6,2.0],[14.9,5.6,2.3],[18.2,4.0,2.5],[21.8,4.0,2.5],
+   [25.1,5.6,2.3],[27.7,8.6,2.0],[16.4,6.6,1.8],[23.6,6.6,1.8]]
+   .forEach(([x,y,r])=>{s+='<circle cx="'+x+'" cy="'+y+'" r="'+r+'" fill="'+H.b+'"/>'});
+  [[15.2,5.0,.9],[19.0,3.6,1.0],[24.4,5.2,.85]]
+   .forEach(([x,y,r])=>{s+='<circle cx="'+x+'" cy="'+y+'" r="'+r+'" fill="'+H.h+'" opacity=".34"/>'});
+  return s},
+
+ /* dreads: a tight cap and locks hanging past the jaw */
+ dreads(H){
+  let s='<path d="'+hCap({side:13.6,top:3.4,front:10.8,temple:12.9})+
+   '" fill="'+H.b+'"/>';
+  const locks=[[10.9,12.0,22.0],[12.0,10.4,20.0],[28.0,10.4,20.0],[29.1,12.0,22.0],
+               [10.6,13.6,18.0],[29.4,13.6,18.0]];
+  locks.forEach(([x,y0,y1],i)=>{
+   const bend=(x<20?-.9:.9);
+   s+='<path d="M'+x+' '+y0+'C'+(x+bend)+' '+((y0+y1)/2).toFixed(1)+' '+
+      (x+bend*.4)+' '+(y1-2)+' '+(x+bend*1.4)+' '+y1+
+      '" stroke="'+H.b+'" stroke-width="'+(1.5-i*.06).toFixed(2)+
+      '" fill="none" stroke-linecap="round"/>'});
+  return s},
+
+ /* an afro: a mass ABOVE the skull, not a helmet around it */
+ /* NOTE the operand on the same line as `return`. Written across two
+    lines, automatic semicolon insertion turns `return` into `return;`
+    and the function hands back undefined — which the portrait happily
+    concatenates into the SVG as the text "undefined" and draws nothing.
+    That is why the afro rendered as a bald head. */
+ afro(H){return '<ellipse cx="20" cy="7.6" rx="11.4" ry="8.6" fill="'+H.b+'"/>'+
+  '<path d="'+hCap({side:14.4,top:3.4,wide:1.0,front:11.4,temple:13.6})+
+   '" fill="'+H.b+'"/>'+
+  /* the outline is not smooth on a real one */
+  '<g fill="'+H.b+'">'+
+   [[10.0,6.4,2.1],[11.6,3.2,2.0],[15.6,1.0,2.2],[20,.4,2.3],[24.4,1.0,2.2],
+    [28.4,3.2,2.0],[30.0,6.4,2.1],[9.6,10.4,1.9],[30.4,10.4,1.9]]
+   .map(([x,y,r])=>'<circle cx="'+x+'" cy="'+y+'" r="'+r+'"/>').join('')+
+  '</g>'+
+  '<ellipse cx="16.2" cy="4.6" rx="3.6" ry="2.1" fill="'+H.h+'" opacity=".26"/>'},
+
+ /* cornrows: braids running front to back, with scalp between them */
+ cornrows(H,S){
+  /* No scalp fill. Painting one in S.d at 85% put a dark cap over the
+     whole crown, and braids drawn on top of it did not separate from
+     it — the whole thing read as bars lying on a dark forehead. The
+     head underneath is already the right colour; all that is needed is
+     a little hair at the sides and behind the ears. */
+  let s='<path d="M10.6 12.4c.2 2.2.7 4.0 1.4 5.4-.2-2.1-.2-4.0 0-5.7z" fill="'+
+   H.b+'" opacity=".9"/>'+
+   '<path d="M29.4 12.4c-.2 2.2-.7 4.0-1.4 5.4.2-2.1.2-4.0 0-5.7z" fill="'+
+   H.b+'" opacity=".9"/>';
+  const N=7;
+  /* thinner and started higher: at 1.15 wide from y=11 they were bars
+     lying across the forehead rather than braids running over a scalp */
+  s+='<g stroke="'+H.b+'" stroke-width=".82" fill="none" stroke-linecap="round">';
+  for(let i=0;i<N;i++){
+   const t=i/(N-1);
+   const x0=13.2+t*13.6;
+   const x1=20+(x0-20)*.42;
+   const y0=10.2+Math.pow(t-.5,2)*6.4;
+   s+='<path d="M'+x0.toFixed(1)+' '+y0.toFixed(1)+
+      'C'+((x0+x1)/2).toFixed(1)+' '+(y0-4.0).toFixed(1)+' '+
+      x1.toFixed(1)+' 6.4 '+x1.toFixed(1)+' 3.8"/>'}
+  s+='</g>';
+  s+='<g stroke="'+H.h+'" stroke-width=".34" fill="none" opacity=".45">'+
+     '<path d="M13.4 10.4C15.2 7.6 17.4 5.6 20 4.2"/>'+
+     '<path d="M26.6 10.4C24.8 7.6 22.6 5.6 20 4.2"/></g>';
+  return s},
+
+ /* a centre parting falling either side */
+ curtains(H,S){return '<path d="'+hCap({side:16.2,top:2.7,wide:.4,front:10.2,temple:13.6})+
+   '" fill="'+H.b+'"/>'+
+  '<path d="M20 3.0v8.2" stroke="'+S.d+'" stroke-width=".75" opacity=".8"/>'+
+  '<path d="M19.4 4.0c-2.6 1.2-4.6 3.4-6.0 6.6 2.0-2.0 4.2-3.2 6.6-3.6z" fill="'+H.h+'" opacity=".42"/>'+
+  '<path d="M20.6 4.0c2.6 1.2 4.6 3.4 6.0 6.6-2.0-2.0-4.2-3.2-6.6-3.6z" fill="'+H.h+'" opacity=".42"/>'},
+
+ /* long, past the ears and onto the shoulders */
+ long(H){return '<path d="'+hCap({side:21.5,top:2.8,wide:1.1,front:11.0,temple:14.0})+
+   '" fill="'+H.b+'"/>'+
+  '<path d="M9.3 16.5c-.3 3.6.1 6.6 1.2 9.0 1.0-2.6 1.4-5.6 1.2-9.0z" fill="'+H.b+'"/>'+
+  '<path d="M30.7 16.5c.3 3.6-.1 6.6-1.2 9.0-1.0-2.6-1.4-5.6-1.2-9.0z" fill="'+H.b+'"/>'+
+  '<path d="M13.4 7.6c1.9 1.5 4.1 2.2 6.6 2.2s4.7-.7 6.6-2.2" fill="none" stroke="'+H.h+
+   '" stroke-width=".9" opacity=".4"/>'},
+
+ /* a knot, sitting on the crown rather than hovering above it */
+ bun(H,S){return '<path d="'+hCap({side:15.0,top:3.2,front:11.0,temple:13.8})+
+   '" fill="'+H.b+'"/>'+
+  '<ellipse cx="20" cy="3.4" rx="3.2" ry="2.4" fill="'+H.b+'"/>'+
+  '<ellipse cx="20" cy="4.4" rx="3.4" ry="1.5" fill="'+S.d+'" opacity=".30"/>'+
+  '<ellipse cx="19.2" cy="2.9" rx="1.2" ry=".9" fill="'+H.h+'" opacity=".45"/>'+
+  '<g stroke="'+H.h+'" stroke-width=".4" fill="none" opacity=".4">'+
+   '<path d="M13.6 9.4c2.2-2.4 4.4-3.8 6.4-4.2"/>'+
+   '<path d="M26.4 9.4c-2.2-2.4-4.4-3.8-6.4-4.2"/></g>'},
+
+ /* going, but not gone: a widow's peak between two deep temples */
+ receding(H,S){return '<path d="'+hCap({side:15.2,top:3.3,front:8.0,temple:13.9})+
+   '" fill="'+H.b+'"/>'+
+  /* the temples cut back in, which is the shape of the thing */
+  '<path d="M11.9 13.9C12.6 11.2 14.4 9.4 17.2 8.6 14.8 9.0 13.1 10.6 11.9 13.4z" fill="'+S.d+'" opacity=".55"/>'+
+  '<path d="M28.1 13.9C27.4 11.2 25.6 9.4 22.8 8.6 25.2 9.0 26.9 10.6 28.1 13.4z" fill="'+S.d+'" opacity=".55"/>'+
+  '<path d="M20 7.6l1.4 1.6h-2.8z" fill="'+H.b+'"/>'+
+  hStipple(H,18,5,9,'rec')},
+
+ /* SHAVED. Nothing on top. The old one drew a band across the forehead
+    at 35% and that is precisely the thing that was reported. What is
+    left is what is actually left: a shadow low at the sides where the
+    hair would still grow, and nothing above it. */
+ bald(H){return '<path d="M10.7 13.2c.2 2.0.6 3.6 1.2 4.9-.1-1.9-.1-3.6.1-5.2z" fill="'+H.b+'" opacity=".42"/>'+
+  '<path d="M29.3 13.2c-.2 2.0-.6 3.6-1.2 4.9.1-1.9.1-3.6-.1-5.2z" fill="'+H.b+'" opacity=".42"/>'+
+  '<path d="M12.0 12.0c-.5 1.6-.7 3.2-.6 4.8M28.0 12.0c.5 1.6.7 3.2.6 4.8" '+
+   'stroke="'+H.b+'" stroke-width=".9" fill="none" opacity=".22"/>'}
+};
+
+/* CUTS2 is consulted before the original switch, so putting the new
+   drawings there replaces the old ones by name without removing them */
+Object.keys(CUTS3).forEach(k=>{CUTS2[k]=CUTS3[k]});
+
+/* ---------------------------------------------------------------------
+   AND THE NEW CUTS GET DEALT OUT
+   ---------------------------------------------------------------------
+   CUT_POOL and CUT_POOL_DEEP are const, so the six new styles are mixed
+   in afterwards: a share of each existing style becomes the one it is
+   closest to. The draw is seeded on the player, so a man does not get a
+   new haircut every time the list redraws.
+
+   And going bald now goes through receding first. A thirty-two year old
+   waking up with a shaved head overnight was the old behaviour.
+   --------------------------------------------------------------------- */
+/* _specCuts is already taken further up the file. Every module in here
+   wraps something, so the capture variable has to be unique or the whole
+   script dies at parse time with "Identifier has already been declared"
+   — and a single-file game that fails to parse is a black screen. */
+const _specCutsA0=faceSpec;
+faceSpec=function(p){
+ const s=_specCutsA0.apply(this,arguments);
+ try{
+  if(!p)return s;
+  /* the hand-authored United faces keep the cut they were given */
+  if(typeof MUN_FACES!=='undefined'&&MUN_FACES&&MUN_FACES[p.name])return s;
+  const r=mulberry(hashStr('cut2|'+(p.id||0)+'|'+(p.name||'')));
+  const v=r(), age=p.age||27;
+  if(s.cut==='bald'){
+   if(age<35&&v<.55)s.cut='receding'}
+  else if(s.cut==='short'&&v<.28)s.cut='slick';
+  else if(s.cut==='mid'&&v<.34)s.cut='long';
+  else if(s.cut==='buzz'&&v<.16)s.cut='spiky';
+  else if(s.cut==='curls'&&v<.38)s.cut='dreads';
+  else if(s.cut==='crop'&&v>.88)s.cut='spiky';
+ }catch(e){}
+ return s};
+
+
+/* ---------------------------------------------------------------------
+   AND ONE TYPO THAT HAS BEEN SHIPPING FOR A WHILE
+   ---------------------------------------------------------------------
+   HAIR2.lightbrown carries h:'#9d7banything'. It is not a colour. Every
+   light-brown-haired player in the game has been drawing his highlight
+   in whatever the renderer falls back to, which on an SVG fill is
+   black — a dark smear across the top of the head on one hair colour
+   out of twelve.
+   --------------------------------------------------------------------- */
+try{
+ if(HAIR2.lightbrown&&!/^#[0-9a-f]{6}$/i.test(HAIR2.lightbrown.h))
+  HAIR2.lightbrown.h='#9d7b4e';
+ /* and a sweep for any other that is not a real colour */
+ Object.keys(HAIR2).forEach(k=>{
+  const e=HAIR2[k];
+  if(e&&!/^#[0-9a-f]{3,8}$/i.test(String(e.h||'')))e.h=e.b;
+  if(e&&!/^#[0-9a-f]{3,8}$/i.test(String(e.b||'')))e.b='#3a2a1c'});
+}catch(e){}
+
+/*#wA0_hair.js#*/
 showStart();
 </script>
 </body>
