@@ -37883,6 +37883,615 @@ const _hallPanelMgr=(typeof showPanel==='function')?null:null;
  document.head.appendChild(st)})();
 
 /*#w81_manager.js#*/
+
+/*#w82_pledges.js#*/
+
+/* =====================================================================
+   w82_pledges — what you say binds you
+   ---------------------------------------------------------------------
+   The press room already reads the state of your club and asks about it,
+   and it already records two things you can say: a boast that you will
+   win on Saturday, and a dig at the side you are about to play. Both are
+   checked afterwards. That is the whole of it.
+
+   Everything else you say evaporates. You can stand in front of the
+   cameras and tell the country a player is not for sale, sell him in
+   January, and nobody in the game notices. You can back a man publicly
+   and then not pick him for two months. You can call another manager's
+   side ordinary and meet him again in April with the slate wiped.
+
+   This makes the whole room binding. Six things you can promise, each
+   with a way of being kept and a way of being broken:
+
+     FINISH     a position you claim you will reach
+     SURVIVE    that you will not go down
+     TROPHY     that you are going to win something
+     KEEP       that a named player is not for sale
+     BACK       that a named player has your backing — which he will
+                read as minutes, because that is what it means
+     GRUDGE     what you said about another manager, which he keeps
+
+   A pledge is written down with the club you made it at, shown on the
+   board screen while it is open, judged when its moment comes, and — this
+   is the part that makes it a mechanic rather than a bookkeeping exercise
+   — asked about in the press room while it is still hanging over you.
+   ===================================================================== */
+
+/* ---------------------------------------------------------------------
+   1. WHO A QUESTION IS ABOUT
+   The bank builds every question from your squad, so the rule that asked
+   it knows which player it meant. Reading that back is how "he is not for
+   sale" attaches to a name.
+   --------------------------------------------------------------------- */
+function pressSubject(rule,F){
+ if(!F)return null;
+ const first=a=>(a&&a.length)?a[0]:null;
+ switch(rule){
+  case 'top-scorer': case 'one-man':            return F.top;
+  case 'best': case 'motm-run':                 return F.best;
+  case 'worst':                                 return F.worst;
+  case 'dry':                                   return first(F.dry);
+  case 'kid': case 'pre-young': case 'kids-many': return first(F.kids);
+  case 'old': case 'old-squad':                 return first(F.olds);
+  case 'expiring': case 'window-expiring':      return first(F.expiring);
+  case 'unhappy':                               return first(F.unhappy);
+  case 'listed': case 'many-listed':            return first(F.listed);
+  case 'bench':                                 return first(F.bench);
+  case 'captain':                               return F.capt;
+  case 'keeper': case 'gk-form':                return F.gk;
+  case 'retrain':                               return first(F.retrain);
+  case 'injury-key':
+   return (F.injured||[]).filter(x=>x.ovr>=78).sort((a,b)=>b.ovr-a.ovr)[0]||null;
+  case 'suspensions':                           return first(F.susp);
+  case 'hat-trick':
+   try{return (G.clubs[G.my].players||[]).filter(p=>p.name===F.hatTrick.name)[0]}catch(e){return null}
+  case 'motm':                                  return F.motm;
+  case 'assist':
+   return (F.squad||[]).filter(x=>x.stats&&x.stats.assists>=3)
+    .sort((a,b)=>b.stats.assists-a.stats.assists)[0]||null;
+  case 'apps':
+   return (F.squad||[]).filter(x=>x.stats&&x.stats.apps>=20)
+    .sort((a,b)=>b.stats.apps-a.stats.apps)[0]||null;
+  case 'homegrown':
+   return (F.squad||[]).filter(x=>x.age<=21&&x.stats&&x.stats.apps>=5)[0]||null;
+  case 'discipline':
+   return (F.squad||[]).filter(x=>x.seasonYellows>=5)
+    .sort((a,b)=>b.seasonYellows-a.seasonYellows)[0]||null;
+  case 'wage-top':
+   return (F.squad||[]).slice().sort((a,b)=>(b.wage||0)-(a.wage||0))[0]||null;
+ }
+ return null}
+
+/* ---------------------------------------------------------------------
+   2. READING A PROMISE OUT OF AN ANSWER
+   The rule narrows what a sentence can possibly mean, which is what makes
+   this reliable. "He is going nowhere" is a transfer promise when the
+   question was about your top scorer's future and a figure of speech
+   when it was about the league table.
+   --------------------------------------------------------------------- */
+/* These are matched against the answers the game itself offers, not
+   against phrasings invented for the purpose. A detector that fires on
+   "we will win the league" and misses "we intend to win it" — which is
+   the exact sentence the room hands you when you are in a title race —
+   is a detector that never fires in a real save. */
+const PLEDGE_RX={
+ title:   /(win the league|win the title|title is ours|intend to win it|we will win it|be champions|champions this season|winning the league)/i,
+ topfour: /(top four|challenging at the top|challenge at the top|europe is what we are chasing|europe is the target|chasing europe|in the mix at the top)/i,
+ survive: /(get out of it|we will stay up|will not go down|are not going down|we will survive|keep this club up|keep them up)/i,
+ trophy:  /(win a trophy|win something|chasing the trophy|going for it|going for silverware|we are going for|want silverware|win the (fa )?cup)/i,
+ keep:    /(not for sale|going nowhere|he is staying|will still be here|we want him here|we want .{2,24} here|he is not going anywhere|not going anywhere)/i,
+ back:    /(my full backing|has my backing|full backing|he is my number one|he will score|he will play|he is ready|i trust him|back him|he has earned|he plays this week|in the side on saturday)/i};
+
+const PLEDGE_RULES={
+ keep:['top-scorer','expiring','window-expiring','motm-run','best','listed','unhappy','wage-top','assist','kid','homegrown','hat-trick','motm'],
+ back:['worst','dry','keeper','gk-form','kid','homegrown','bench','retrain','captain','unhappy','pre-young','one-man'],
+ trophy:['cup','cup-run','cup-final','cup-semi','honours','pre-summer','legacy','open-12#1'],
+ survive:['pos-bad','race-drop','streak-l','winless','board','awkward-job'],
+ topfour:['pos-euro','pos-top','pos-mid','vs-expect','pre-summer','open-4#4','open-12#1','legacy'],
+ title:['pos-top','race-title','title-talk','pre-summer','anniversary','open-12#1']};
+
+function pledgeFits(kind,rule){
+ const list=PLEDGE_RULES[kind];
+ if(!list)return false;
+ const base=String(rule||'').split('#')[0];
+ return list.indexOf(base)>=0||list.indexOf(rule)>=0}
+
+/* one entry, with everything needed to judge it later */
+function makePledge(kind,text,sub,extra){
+ G.pledges=G.pledges||[];
+ const p={id:'pl'+(G.day)+'_'+G.pledges.length,
+  kind,made:G.day,season:G.season,state:'open',
+  club:(G.clubs[G.my]||{}).name||'',
+  said:String(text||'').slice(0,180)};
+ if(sub){p.pid=sub.id;p.pname=sub.name}
+ if(extra)for(const k in extra)p[k]=extra[k];
+ /* the same promise twice is one promise */
+ const dupe=(G.pledges||[]).filter(x=>x.state==='open'&&x.kind===kind&&
+  (x.pid===p.pid||(!x.pid&&!p.pid))&&x.season===p.season)[0];
+ if(dupe)return dupe;
+ G.pledges.push(p);
+ while(G.pledges.length>60)G.pledges.shift();
+ return p}
+
+/* ---------------------------------------------------------------------
+   3. TAKEN DOWN AT THE TIME
+   Every answer is paired with the rule that drew the question out of it,
+   so the pass over a finished conference knows both what was asked and
+   what you said back.
+   --------------------------------------------------------------------- */
+function readPledges(){
+ const c=G.pressCtx;if(!c)return;
+ let F=null;try{F=pqFacts()}catch(e){}
+ const quotes=c.quotes||[], asked=c._asked||[];
+ const made=[];
+ for(let i=0;i<quotes.length;i++){
+  const said=String(quotes[i]||'');
+  if(!said||/^No comment/i.test(said)||/^\(Your assistant\)/.test(said))continue;
+  const rule=asked[i]||'';
+  const sub=pressSubject(String(rule).split('#')[0],F);
+
+  if(PLEDGE_RX.keep.test(said)&&sub&&pledgeFits('keep',rule))
+   made.push(makePledge('keep',said,sub));
+
+  else if(PLEDGE_RX.back.test(said)&&sub&&pledgeFits('back',rule))
+   made.push(makePledge('back',said,sub,{
+    /* what backing him means, in the only unit that counts */
+    baseApps:(sub.stats&&sub.stats.apps)||0,
+    baseGames:myGamesPlayed(),need:4,within:8}));
+
+  if(PLEDGE_RX.title.test(said)&&pledgeFits('title',rule))
+   made.push(makePledge('finish',said,null,{target:1,label:'win the league'}));
+  else if(PLEDGE_RX.topfour.test(said)&&pledgeFits('topfour',rule))
+   made.push(makePledge('finish',said,null,{target:4,label:'finish in the top four'}));
+
+  if(PLEDGE_RX.survive.test(said)&&pledgeFits('survive',rule))
+   made.push(makePledge('survive',said,null,{label:'keep this club up'}));
+
+  if(PLEDGE_RX.trophy.test(said)&&pledgeFits('trophy',rule))
+   made.push(makePledge('trophy',said,null,{label:'win something this season'}));
+
+  /* and what you said about the man in the other dugout */
+  if(String(rule).indexOf('opp-mgr')===0||String(rule).indexOf('awkward-rival')===0||
+     String(rule).indexOf('derby')===0){
+   const nasty=(typeof DIG_WORDS!=='undefined')&&DIG_WORDS.some(w=>said.toLowerCase().indexOf(w)>=0);
+   const pointed=/they have had it their way|they are not untouchable|they will find that out|do our talking on the pitch|we will do our talking/i.test(said);
+   if(nasty||pointed)addGrudge(c.oppI,said);}
+ }
+ if(made.length)announcePledges(made)}
+
+/* how many league and cup games your club has played this season */
+function myGamesPlayed(){
+ try{return (G.fixtures||[]).filter(f=>f.played&&(f.h===G.my||f.a===G.my)).length}
+ catch(e){return 0}}
+
+function announcePledges(list){
+ try{
+  const lines=list.map(p=>'<li>'+esc(pledgeLine(p))+'</li>').join('');
+  mail('news','🗞️ You have given them something to hold you to',
+   'The back pages will run this. What you said in there is now on the record:'+
+   '<ul style="margin:8px 0 0 16px;padding:0;line-height:1.7">'+lines+'</ul>'+
+   '<br><span class="xs faint">Open promises are listed on the board screen. '+
+   'Keeping one is worth a great deal. Breaking one is worth rather more.</span>');
+ }catch(e){}}
+
+function pledgeLine(p){
+ switch(p.kind){
+  case 'keep':   return p.pname+' is not for sale';
+  case 'back':   return p.pname+' has your public backing — he will expect to play';
+  case 'finish': return 'You will '+(p.label||'finish well');
+  case 'survive':return 'You will keep this club up';
+  case 'trophy': return 'You are going to win something this season';
+ }
+ return 'You made a promise'}
+
+/* ---------------------------------------------------------------------
+   4. A MANAGER WHO REMEMBERS
+   ---------------------------------------------------------------------
+   The existing mind game lasts one fixture and then is deleted. A grudge
+   does not expire: it is a thing between two men, it deepens every time
+   you go at him again, and it is still there next season when the fixture
+   comes round.
+   --------------------------------------------------------------------- */
+function addGrudge(oppI,said){
+ try{
+  const c=G.clubs[oppI];if(!c)return;
+  G.grudges=G.grudges||{};
+  const key=c.key||String(oppI);
+  const who=(typeof managerOf==='function')?managerOf(c):'';
+  const g=G.grudges[key]||(G.grudges[key]={club:c.name,mgr:who,level:0,since:G.season,last:0});
+  g.mgr=who||g.mgr;
+  g.level=Math.min(5,(g.level||0)+1);
+  g.last=G.day;
+  g.said=String(said||'').slice(0,140);
+  mail('news','🗣️ '+esc(who||c.name)+' has been asked about your comments',
+   '<b>'+esc(who||'The '+c.name+' manager')+'</b> was read your quotes this afternoon. '+
+   (g.level>=3
+    ?'He did not smile this time. Whatever this is between the two of you, it is no longer a bit of fun.'
+    :'He gave a short answer and moved on. He will not have forgotten it.')+
+   '<br><br><span class="xs faint">He gets his teams up for you now. That works both ways.</span>');
+ }catch(e){}}
+
+function grudgeWith(clubIx){
+ try{
+  const c=G.clubs[clubIx];if(!c)return null;
+  const g=(G.grudges||{})[c.key||String(clubIx)];
+  return (g&&g.level>0)?g:null}
+ catch(e){return null}}
+
+/* his side plays like it means something */
+const _ctxGrudge=buildContext;
+buildContext=function(fix){
+ const ctx=_ctxGrudge.apply(this,arguments);
+ try{
+  if(ctx._grudgeDone)return ctx;
+  ctx._grudgeDone=true;
+  if(fix.h!==G.my&&fix.a!==G.my)return ctx;
+  const oppIx=(fix.h===G.my)?fix.a:fix.h;
+  const g=grudgeWith(oppIx);
+  if(!g)return ctx;
+  const side=(fix.h===oppIx)?ctx.h:ctx.a;
+  /* a manager with something to prove gets a lift, and it does not fade */
+  const k=1+Math.min(.045,g.level*.011);
+  side.att*=k;side.def*=k;
+  ctx.grudge=g;
+ }catch(e){}
+ return ctx};
+
+const _dossierGrudge=contextCard;
+contextCard=function(fix){
+ let h=_dossierGrudge.apply(this,arguments);
+ try{
+  const ctx=buildContext(fix);
+  if(ctx.grudge){
+   const g=ctx.grudge;
+   h+='<div class="card tight" style="border-color:rgba(239,68,68,.45);margin-top:-6px">'+
+    '<div class="xs" style="font-weight:800;color:var(--danger)">🗣️ He has not forgotten</div>'+
+    '<div class="xs muted">'+esc(g.mgr||'Their manager')+' has been carrying this since season '+
+    g.since+'. His side will be up for this one'+(g.level>=3?', and he has made sure they know why':'')+
+    '.</div></div>'}
+ }catch(e){}
+ return h};
+
+/* =====================================================================
+   5. AND THEN THEY HOLD YOU TO IT
+   ---------------------------------------------------------------------
+   A promise nobody checks is a line of dialogue. These are checked: the
+   transfer ones every day, the selection ones every match, and the season
+   ones in May.
+   ===================================================================== */
+function pledgeKept(p,head,body,fans,pat){
+ p.state='kept';p.judged=G.day;
+ try{
+  fansShift(fans==null?4:fans,'kept your word');
+  const my=G.clubs[G.my];
+  my.patience=clamp(my.patience+(pat==null?3:pat),0,100);
+  mail('news','✅ '+head,body+
+   '<br><br><span class="xs faint">You said it in front of the cameras and you stood by it. '+
+   'That is worth more in this game than people think.</span>');
+ }catch(e){}}
+
+function pledgeBroken(p,head,body,fans,pat){
+ p.state='broken';p.judged=G.day;
+ try{
+  fansShift(fans==null?-7:fans,'went back on your word');
+  const my=G.clubs[G.my];
+  my.patience=clamp(my.patience-(pat==null?6:pat),0,100);
+  G.brokenWord=(G.brokenWord||0)+1;
+  mail('news','📰 '+head,body+
+   '<br><br><span class="xs faint">Every paper has run your quote back at you. '+
+   'The dressing room reads them too.</span>');
+ }catch(e){}}
+
+/* ---- the transfer promise, checked every day ---- */
+function checkKeepPledges(){
+ (G.pledges||[]).forEach(p=>{
+  if(p.kind!=='keep'||p.state!=='open')return;
+  const pl=playerById(p.pid);
+  const gone=!pl||pl.club!==G.my;
+  if(gone){
+   pledgeBroken(p,'“HE IS NOT FOR SALE”',
+    'You said <b>'+esc(p.pname)+'</b> was going nowhere. He has gone. '+
+    'The supporters who believed you are not taking it well.',-9,8);
+   return}
+  /* survive the window with him and the promise is kept */
+  const shut=(typeof windowOpen==='function')&&!windowOpen();
+  if(shut&&G.day>p.made+20)
+   pledgeKept(p,'He stayed',
+    'The window has shut with <b>'+esc(p.pname)+'</b> still at this football club, '+
+    'exactly as you said it would.',3,2)});}
+
+/* ---- the backing promise, checked in matches ---- */
+function checkBackPledges(){
+ const games=myGamesPlayed();
+ (G.pledges||[]).forEach(p=>{
+  if(p.kind!=='back'||p.state!=='open')return;
+  const pl=playerById(p.pid);
+  if(!pl||pl.club!==G.my){
+   /* backing a man and then moving him on is its own kind of broken */
+   pledgeBroken(p,'“HE HAS MY FULL BACKING”',
+    'You backed <b>'+esc(p.pname)+'</b> in public and he is no longer your player. '+
+    'That is not how anybody read it at the time.',-8,7);
+   return}
+  const played=((pl.stats&&pl.stats.apps)||0)-(p.baseApps||0);
+  const since=games-(p.baseGames||0);
+  if(played>=(p.need||4)){
+   pledgeKept(p,'You backed him and you played him',
+    'You said <b>'+esc(pl.name)+'</b> had your backing, and he has had '+played+
+    ' games since. He knows the difference between being defended and being picked.',3,2);
+   pl.morale=clamp(pl.morale+14,1,100);
+   return}
+  if(since>=(p.within||8)){
+   pledgeBroken(p,'“WORDS ARE CHEAP”',
+    'You defended <b>'+esc(pl.name)+'</b> in front of the cameras and then gave him '+
+    played+' game'+(played===1?'':'s')+' in '+since+'. '+
+    'He has read the quotes, and so has everybody else in that dressing room.',-6,5);
+   pl.morale=clamp(pl.morale-26,1,100);
+   /* a man told he was backed and then left out asks to leave */
+   try{
+    if(pl.morale<38&&!pl.wantAway){
+     pl.wantAway=true;pl.listed=true;
+     mail('board','😤 '+pl.name+' has asked to leave',
+      '<b>'+esc(pl.name)+'</b> has been in to see you. He is not angry about not playing — '+
+      'he is angry that you told the country he had your backing and then did not pick him. '+
+      'He wants a move.')}}
+   catch(e){}}});}
+
+/* ---- the season promises, judged in May ---- */
+function judgeSeasonPledges(){
+ const open=(G.pledges||[]).filter(p=>p.state==='open'&&
+  ['finish','survive','trophy'].indexOf(p.kind)>=0&&p.season===G.season);
+ if(!open.length)return;
+ let pos=null;try{pos=leaguePos(G.my)}catch(e){}
+ const wonThis=(G.honours||[]).filter(h=>h.season===G.season).length;
+ let relegated=false;
+ try{
+  const rows=tableRows(G.clubs[G.my].league)||[];
+  relegated=pos!=null&&rows.length>=6&&pos>rows.length-3}
+ catch(e){}
+ open.forEach(p=>{
+  if(p.kind==='finish'){
+   if(pos!=null&&pos<=(p.target||4))
+    pledgeKept(p,'You said it and you did it',
+     'You told them you would '+esc(p.label||'deliver')+'. You finished <b>'+ordinal(pos)+'</b>.',
+     p.target===1?12:6,p.target===1?10:5);
+   else
+    pledgeBroken(p,'THE PROMISE THAT WASN’T',
+     'You told the world you would '+esc(p.label||'deliver')+'. You finished <b>'+
+     (pos!=null?ordinal(pos):'short')+'</b>.',
+     p.target===1?-10:-7,p.target===1?9:6)}
+  else if(p.kind==='survive'){
+   if(!relegated)
+    pledgeKept(p,'You kept them up',
+     'You promised this club would stay in this division, and it has.',7,8);
+   else
+    pledgeBroken(p,'RELEGATED, AND HE SAID IT WOULD NOT HAPPEN',
+     'You stood in that room and promised these supporters they would not go down.',-14,14)}
+  else if(p.kind==='trophy'){
+   if(wonThis>0)
+    pledgeKept(p,'You went for it and you got it',
+     'You said this club was going to win something. It has.',9,8);
+   else
+    pledgeBroken(p,'ANOTHER SEASON WITH NOTHING',
+     'You told them you were going for silverware and the cabinet is no fuller than it was.',-6,5)}});}
+
+/* ---- when each check runs ---- */
+const _dtcPledge=dailyTickCore;
+dailyTickCore=function(){
+ const r=_dtcPledge.apply(this,arguments);
+ try{checkKeepPledges();checkBackPledges()}catch(e){}
+ return r};
+
+const _endSeasonPledge=endSeason;
+endSeason=function(){
+ try{judgeSeasonPledges()}catch(e){}
+ return _endSeasonPledge.apply(this,arguments)};
+
+/* and the conference itself now leaves a record behind it */
+const _wrapPledge=pressWrap;
+pressWrap=function(){
+ try{readPledges()}catch(e){}
+ return _wrapPledge.apply(this,arguments)};
+
+/* =====================================================================
+   6. AND THE ROOM ASKS YOU ABOUT THEM
+   ---------------------------------------------------------------------
+   This is the part that turns a ledger into a mechanic. An open promise
+   is a thing hanging over you, so the press bring it up — by name, with
+   the number of games since you made it — and the answers you get offered
+   are the real ones: stand by it, soften it, or take it back.
+   ===================================================================== */
+function openPledges(){return (G.pledges||[]).filter(p=>p.state==='open')}
+function pledgeOf(kind){return openPledges().filter(p=>p.kind===kind)[0]||null}
+
+(function pledgeQuestions(){
+ if(typeof PQ==='undefined'||!PQ.push)return;
+ PQ.push(
+  {id:'pl-keep',w:F=>!!pledgeOf('keep'),q:F=>{
+   const p=pledgeOf('keep');
+   return['You told us '+PS(p.pname)+' was not for sale. Is that still the case?',
+    'Has anybody been in for '+PS(p.pname)+' since you said he was going nowhere?',
+    'If the money were big enough, would '+PS(p.pname)+' still be here?']}},
+  {id:'pl-back',w:F=>!!pledgeOf('back'),q:F=>{
+   const p=pledgeOf('back');
+   const n=Math.max(0,myGamesPlayed()-(p.baseGames||0));
+   return['You backed '+PS(p.pname)+' publicly. He has started '+
+     ((playerById(p.pid)||{stats:{}}).stats.apps-(p.baseApps||0))+' of the '+n+' since. Is that backing?',
+    'What does backing a player actually mean, if he is not in the side?',
+    'Does '+PS(p.pname)+' know where he stands with you?']}},
+  {id:'pl-season',w:F=>!!(pledgeOf('finish')||pledgeOf('trophy')||pledgeOf('survive')),q:F=>{
+   const p=pledgeOf('finish')||pledgeOf('trophy')||pledgeOf('survive');
+   return['You said you would '+PS(p.label||'deliver')+'. Do you stand by that?',
+    'That promise is on every back page. Do you regret making it?',
+    'What happens to you if you do not '+PS(p.label||'deliver')+'?']}},
+  {id:'pl-broken',w:F=>(G.pledges||[]).some(p=>p.state==='broken'&&G.day-(p.judged||0)<26),q:F=>{
+   const p=(G.pledges||[]).filter(x=>x.state==='broken').sort((a,b)=>(b.judged||0)-(a.judged||0))[0];
+   return['You went back on what you said about '+PS(p.pname||'this season')+'. How do you answer that?',
+    'Why should anybody believe the next thing you tell us?',
+    'Was it a promise you should never have made?']}},
+  {id:'pl-grudge',w:F=>!!grudgeWith(F.opp?F.opp.i:-1),q:F=>{
+   const g=grudgeWith(F.opp.i);
+   return[PS(g.mgr||'Their manager')+' has not forgotten what you said. Is there still bad blood?',
+    'You and '+PS(g.mgr||'him')+' have history now. Does it add anything to the game?',
+    'Would you shake his hand afterwards?']}});
+})();
+
+/* the answers, written for those questions */
+if(typeof PANS==='object'){
+ PANS['pl-keep']=F=>{
+  const p=pledgeOf('keep')||{pname:'him'};
+  return[
+  ['🔒 Stand by it','Nothing has changed. '+p.pname+' is not for sale and he will not be for sale in January either.'],
+  ['🧊 Nobody has called','Nobody has been in for him. When somebody is, you will hear it from the club and not from me.'],
+  ['💬 Every player has a price','I said he is not for sale, and that is true. I am not going to pretend this club could turn down anything.'],
+  ['🛡️ Leave him alone','He is playing brilliantly and he does not need this every week. Ask me about the football.']]};
+ PANS['pl-back']=F=>{
+  const p=pledgeOf('pl-back')||pledgeOf('back')||{pname:'him'};
+  return[
+  ['🎯 He plays this week','He is in the side on Saturday. That is what backing a player looks like and you can hold me to it.'],
+  ['💬 Backing is not selection','Backing a man means telling him the truth and picking him when he is right. Those are not the same week.'],
+  ['🙋 Fair criticism','That is a fair hit and I will take it. If I say a player has my backing, he should be playing.'],
+  ['🧊 He knows exactly where he stands','He and I speak every day. What he knows about his situation is not something I will discuss in here.']]};
+ PANS['pl-season']=F=>{
+  const p=pledgeOf('finish')||pledgeOf('trophy')||pledgeOf('survive')||{label:'deliver'};
+  return[
+  ['🔥 Every word','Every word of it. I said we would '+p.label+' and I have seen nothing since to change my mind.'],
+  ['🧊 Judge me in May','Ask me in May. Talking about it now does not put a single point on the board.'],
+  ['💬 It was for them','I said it for the dressing room more than for you. Sometimes you put a target up so people aim at it.'],
+  ['🙋 Regret it','If I am honest it was a mistake to say it. The weight of that should be on me, not on the players.']]};
+ PANS['pl-broken']=F=>[
+  ['🙋 Take it','I said it and it did not happen. There is no clever answer to that — it is on me.'],
+  ['💬 Explain it','Circumstances changed. That does not make me right, but it is the truth of what happened.'],
+  ['🧊 Move on','It is done. I am not going to spend the season apologising for one sentence.'],
+  ['🔥 Judge the whole thing','Judge me on where this club is, not on one line from a press conference in September.']];
+ PANS['pl-grudge']=F=>{
+  const g=grudgeWith(F.opp?F.opp.i:-1)||{mgr:'him'};
+  return[
+  ['🤝 Draw a line','There is nothing between us. I said what I said, he has said his, and it stops there.'],
+  ['⚔️ Keep it going','If he wants to carry it, he can carry it. It does not change how we set up on Saturday.'],
+  ['🧊 Not interested','I have not thought about it once. You are more interested in this than either of us.'],
+  ['💬 Be honest','There is history, yes. That is football, and it makes the fixture better for everybody watching.']]};
+}
+
+/* ---------------------------------------------------------------------
+   7. AND THE BOARD KEEPS THE LIST
+   --------------------------------------------------------------------- */
+function vPledges(){
+ const open=openPledges();
+ const done=(G.pledges||[]).filter(p=>p.state!=='open').slice(-6).reverse();
+ const gr=Object.keys(G.grudges||{}).map(k=>G.grudges[k]).filter(g=>g.level>0);
+ if(!open.length&&!done.length&&!gr.length)return '';
+ let h='<div class="chip-lbl" style="margin-top:14px">On the record</div><div class="card tight">';
+ if(open.length)h+=open.map(p=>{
+  let note='';
+  if(p.kind==='back'){
+   const pl=playerById(p.pid);
+   const played=pl?(((pl.stats&&pl.stats.apps)||0)-(p.baseApps||0)):0;
+   const since=myGamesPlayed()-(p.baseGames||0);
+   note=played+' of '+Math.max(played,since)+' games since';}
+  else if(p.kind==='keep')note='while the window is open';
+  else note='judged in May';
+  return '<div class="pl-row is-open">'+
+   '<span class="pl-dot"></span>'+
+   '<div style="flex:1"><div class="pl-t">'+esc(pledgeLine(p))+'</div>'+
+   '<div class="pl-s">'+esc(note)+'</div></div></div>'}).join('');
+ else h+='<div class="small muted" style="padding:6px 2px">'+
+  'Nothing outstanding. Whatever you say in the press room lands here.</div>';
+ h+='</div>';
+ if(done.length)h+='<div class="card tight" style="margin-top:8px">'+done.map(p=>
+  '<div class="pl-row is-'+p.state+'">'+
+  '<span class="pl-mark">'+(p.state==='kept'?'✅':'❌')+'</span>'+
+  '<div style="flex:1"><div class="pl-t">'+esc(pledgeLine(p))+'</div>'+
+  '<div class="pl-s">'+(p.state==='kept'?'kept':'broken')+' · '+esc(p.club||'')+'</div></div></div>').join('')+
+  '</div>';
+ if(gr.length)h+='<div class="chip-lbl" style="margin-top:14px">Managers who remember</div>'+
+  '<div class="card tight">'+gr.map(g=>
+   '<div class="pl-row"><span class="pl-mark">🗣️</span><div style="flex:1">'+
+   '<div class="pl-t">'+esc(g.mgr||'—')+'</div>'+
+   '<div class="pl-s">'+esc(g.club||'')+' · since season '+g.since+
+   (g.level>=3?' · it has gone past banter':'')+'</div></div></div>').join('')+'</div>';
+ return h}
+
+(function pledgeCSS(){
+ const st=document.createElement('style');st.id='w82';
+ st.textContent=
+  '.pl-row{display:flex;gap:10px;align-items:center;padding:7px 2px;'+
+   'border-bottom:1px solid var(--chalk,rgba(255,255,255,.06))}'+
+  '.pl-row:last-child{border-bottom:0}'+
+  '.pl-t{font-size:12px;font-weight:800;line-height:1.35}'+
+  '.pl-s{font-size:10px;color:var(--ink-faint,#8b96a4);font-weight:700;margin-top:2px}'+
+  '.pl-dot{width:8px;height:8px;border-radius:50%;background:#e8c880;flex:0 0 auto;'+
+   'box-shadow:0 0 0 3px rgba(232,200,128,.18)}'+
+  '.pl-mark{font-size:14px;flex:0 0 auto;width:18px;text-align:center}'+
+  '.pl-row.is-broken .pl-t{opacity:.72}';
+ document.head.appendChild(st)})();
+
+/* it belongs on the Media screen, which is where everything you have said
+   already lives */
+const _vClubPledge=vClubFinal;
+vClubFinal=function(){
+ let h=_vClubPledge.apply(this,arguments);
+ try{if((UI.clubTab||'')==='media')h+=vPledges()}catch(e){}
+ return h};
+vClub=function(){return vClubFinal()};
+
+/* a new career starts with a clean record */
+const _newGamePledge=newGame;
+newGame=function(){
+ const r=_newGamePledge.apply(this,arguments);
+ try{if(G){G.pledges=[];G.grudges={};G.brokenWord=0}}catch(e){}
+ return r};
+
+/* ---------------------------------------------------------------------
+   8. AND A REPUTATION FOR IT
+   ---------------------------------------------------------------------
+   Breaking your word repeatedly is not three separate incidents, it is a
+   character. The board notice the pattern rather than each event, and so
+   do players deciding whether to sign for you.
+   --------------------------------------------------------------------- */
+function wordIsWorth(){
+ const all=(G.pledges||[]).filter(p=>p.state!=='open');
+ if(all.length<2)return null;
+ const kept=all.filter(p=>p.state==='kept').length;
+ const r=kept/all.length;
+ return{kept,total:all.length,ratio:r,
+  label:r>=.8?'a man of his word':r>=.55?'mostly reliable':r>=.3?'says a lot':'all talk'}}
+
+/* it shows on your own card */
+const _mgrCardWord=ACTIONS.mgrCard;
+ACTIONS.mgrCard=function(){
+ const r=_mgrCardWord.apply(this,arguments);
+ try{
+  const w=wordIsWorth();
+  if(!w)return r;
+  const host=document.getElementById('sheetBody')||document.getElementById('modalBody');
+  if(!host)return r;
+  const d=document.createElement('div');
+  d.className='card tight';d.style.marginTop='10px';
+  d.innerHTML='<div class="spread" style="padding:5px 2px">'+
+   '<span class="small" style="font-weight:800">Your word</span>'+
+   '<span class="small" style="font-weight:700;color:'+
+    (w.ratio>=.55?'var(--green,#3fb37f)':'var(--danger,#e0564a)')+'">'+
+    esc(w.label)+'</span></div>'+
+   '<div class="xs faint" style="padding:0 2px 4px">'+w.kept+' of '+w.total+
+   ' public promises kept</div>';
+  const btn=host.querySelector('[data-action="closeModal"]');
+  if(btn&&btn.parentNode)btn.parentNode.insertBefore(d,btn);
+  else host.appendChild(d);
+ }catch(e){}
+ return r};
+
+/* and a manager who never keeps his word finds players harder to convince */
+if(typeof signAppeal==='function'){
+ const _appealWord=signAppeal;
+ signAppeal=function(){
+  let v=_appealWord.apply(this,arguments);
+  try{
+   const w=wordIsWorth();
+   if(w&&w.total>=3&&typeof v==='number')v*=(0.9+w.ratio*0.16);
+  }catch(e){}
+  return v}}
+
+/*#w82_pledges.js#*/
 showStart();
 </script>
 </body>
