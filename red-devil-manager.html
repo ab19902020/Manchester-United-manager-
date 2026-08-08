@@ -44167,6 +44167,232 @@ vMgrCreate=function(){
  document.head.appendChild(st)})();
 
 /*#wA1_creator.js#*/
+
+/*#wA2_metal.js#*/
+
+/* =====================================================================
+   wA2_metal — the trophies stop looking like porcelain
+   ---------------------------------------------------------------------
+   They are already metal. Every cup in the room is metalness 1 with a
+   roughness in the low hundredths, which is physically a mirror. And
+   they were coming out matte white, like glazed ceramic.
+
+   THE REASON IS THAT A MIRROR HAS NO COLOUR OF ITS OWN. A dielectric —
+   plastic, plaster, skin — has a diffuse colour you can light. A metal
+   has none: one hundred per cent of what you see on polished silver is
+   the room reflected in it. So the entire appearance of every trophy in
+   this game is decided by one thing, and it is not the trophy. It is
+   the environment map.
+
+   Both environments here were smooth vertical gradients with a couple
+   of soft rectangles in them. Reflect a smooth gradient in a curved
+   mirror and you get... a smooth gradient on a curved surface. Which is
+   exactly what porcelain looks like. The metal was working perfectly
+   and faithfully reflecting nothing worth reflecting.
+
+   What makes metal read as metal is CONTRAST AND EDGES:
+
+     A HARD HORIZON. The single most important feature. Real metal has a
+     visible line across it where the bright half of the world meets the
+     dark half, and that line bends with the curvature — which is how
+     your eye reads the shape as reflective at all.
+
+     SOURCES WITH SHAPE. Not a wash: rectangles with defined edges, so
+     the highlight running down a stem is a streak rather than a smudge.
+
+     BLACKS. Somewhere in the reflection has to be genuinely dark. A
+     mirror with nothing dark in it cannot look like a mirror.
+
+     AND FALL-OFF BETWEEN THEM, so the gradient does the polishing.
+
+   Plus one bug sweep: three colour textures in the room were still not
+   declaring sRGB, so the parquet, the plaques and the tactics board
+   were being decoded as linear and came out chalky. Rather than hunt
+   for the next one, any canvas texture used as a material's `map` is
+   swept — `map` is colour by definition, so the rule is safe to apply
+   without looking.
+   ===================================================================== */
+
+/* ---------------------------------------------------------------------
+   1. A STUDIO WORTH REFLECTING
+   ---------------------------------------------------------------------
+   Drawn as an equirectangular panorama: u is the way round, v is up and
+   down, with the horizon dead centre.
+   --------------------------------------------------------------------- */
+function studioPano(opt){
+ const o=opt||{};
+ const W=1024,H=512;
+ const c=document.createElement('canvas');c.width=W;c.height=H;
+ const x=c.getContext('2d');
+ const warm=o.warm||0;
+ const mix=(a,b)=>{
+  /* let the room tint the studio without turning silver into bronze */
+  const A=a.match(/\w\w/g).map(v=>parseInt(v,16));
+  const B=b.match(/\w\w/g).map(v=>parseInt(v,16));
+  return '#'+A.map((v,i)=>Math.round(v+(B[i]-v)*warm)
+   .toString(16).padStart(2,'0')).join('')};
+
+ /* DARK IS THE DEFAULT. This is the thing the first attempt got
+    backwards. A convex mirror samples the whole sphere, so if most of
+    the sphere is bright the trophy is mostly bright — which is
+    porcelain. A product studio is mostly black with a few hard sources
+    in it, and that is what gives chrome its signature: a dark body with
+    two or three blazing streaks running down it. */
+ x.fillStyle=mix('090b0e','0d0a07');x.fillRect(0,0,W,H);
+
+ /* a little atmosphere just above the horizon, and nothing else up there */
+ const haze=x.createLinearGradient(0,H*.28,0,H*.5);
+ haze.addColorStop(0,'rgba(0,0,0,0)');
+ haze.addColorStop(1,mix('3d444e','453a2a'));
+ x.fillStyle=haze;x.fillRect(0,H*.28,W,H*.22);
+
+ /* THE HORIZON. Hard, and one pixel of it is worth more than any amount
+    of gradient — this is the line that bends across a curved surface
+    and tells your eye it is looking at a mirror. */
+ const flr=x.createLinearGradient(0,H*.5,0,H);
+ flr.addColorStop(0,mix('2a3038','2b2318'));
+ flr.addColorStop(.22,mix('121519','13100b'));
+ flr.addColorStop(1,mix('050607','070504'));
+ x.fillStyle=flr;x.fillRect(0,H*.5,W,H*.5);
+ x.fillStyle='rgba(255,255,255,.85)';x.fillRect(0,H*.5-1.5,W,3);
+
+ /* the ceiling strip: one long hard source right over the top */
+ x.fillStyle='#ffffff';x.fillRect(0,0,W,H*.055);
+ const cei=x.createLinearGradient(0,H*.055,0,H*.14);
+ cei.addColorStop(0,'rgba(255,255,255,.9)');
+ cei.addColorStop(1,'rgba(255,255,255,0)');
+ x.fillStyle=cei;x.fillRect(0,H*.055,W,H*.085);
+
+ /* the softboxes: hard-edged, because a hard edge is what makes a
+    highlight a streak instead of a smear */
+ const box=(cx,cw,cy,ch,peak)=>{
+  const g=x.createLinearGradient(cx-cw/2,0,cx+cw/2,0);
+  g.addColorStop(0,'rgba(255,255,255,0)');
+  g.addColorStop(.10,'rgba(255,255,255,'+peak+')');
+  g.addColorStop(.90,'rgba(255,255,255,'+peak+')');
+  g.addColorStop(1,'rgba(255,255,255,0)');
+  x.fillStyle=g;x.fillRect(cx-cw/2,cy,cw,ch)};
+ box(W*.16,W*.115,H*.05,H*.42,1);
+ box(W*.61,W*.085,H*.09,H*.36,.95);
+ box(W*.83,W*.045,H*.13,H*.28,.62);
+ /* two narrow strip lights, which read as the long thin highlights that
+    run the length of a stem */
+ box(W*.40,W*.016,H*.06,H*.42,1);
+ box(W*.955,W*.013,H*.08,H*.38,.85);
+
+ /* a bounce card off the floor, so the underside of a bowl is not black */
+ const bnc=x.createLinearGradient(0,H*.5,0,H*.66);
+ bnc.addColorStop(0,'rgba(255,246,230,.42)');
+ bnc.addColorStop(1,'rgba(255,246,230,0)');
+ x.fillStyle=bnc;x.fillRect(W*.06,H*.5,W*.40,H*.16);
+ /* and the reflection of the two main boxes in the floor */
+ [[W*.16,W*.10],[W*.61,W*.075]].forEach(([cx,cw])=>{
+  const g=x.createLinearGradient(0,H*.5,0,H*.78);
+  g.addColorStop(0,'rgba(255,255,255,.30)');
+  g.addColorStop(1,'rgba(255,255,255,0)');
+  x.fillStyle=g;x.fillRect(cx-cw/2,H*.5,cw,H*.28)});
+
+ const t=new THREE.CanvasTexture(c);
+ t.mapping=THREE.EquirectangularReflectionMapping;
+ return t}
+
+function studioEnvFor(rend,warm){
+ const tex=studioPano({warm:warm||0});
+ const pm=new THREE.PMREMGenerator(rend);
+ pm.compileEquirectangularShader();
+ const env=pm.fromEquirectangular(tex).texture;
+ tex.dispose();pm.dispose();
+ return env}
+
+/* ---------------------------------------------------------------------
+   2. THE METALS THEMSELVES
+   ---------------------------------------------------------------------
+   With a real environment to reflect, the roughness values can come
+   down and the intensities can go up. A trophy is not uniformly
+   polished either: the body is mirror, the cast detail is satin, and
+   the difference between them is most of what says "this is silver".
+   --------------------------------------------------------------------- */
+const _matsMetal=tMaterials;
+tMaterials=function(){
+ const M=_matsMetal.apply(this,arguments);
+ if(!M._metalTuned){
+  M._metalTuned=1;
+  const set=(m,r,e,c)=>{
+   if(!m)return;
+   m.roughness=r;m.envMapIntensity=e;
+   if(c)m.color=new THREE.Color(c);
+   m.metalness=1;m.needsUpdate=true};
+  /* mirror-polished silver */
+  set(M.silver,.035,2.05,0xf7f9fb);
+  /* the cast and chased parts, which are never mirror */
+  set(M.silverSoft,.155,1.5,0xe9edf1);
+  set(M.pewter,.30,1.1,0xd7dde3);
+  /* gold has a colour even as a mirror, and it is not yellow paint */
+  set(M.gold,.055,2.0,0xffc23a);
+  set(M.goldBright,.04,2.25,0xffd257);
+  set(M.goldWarm,.17,1.5,0xd9a02a);
+  set(M.brass,.24,1.35,0xc79a3e);
+  if(M.dark){M.dark.metalness=.65;M.dark.roughness=.34;
+   M.dark.envMapIntensity=.9;M.dark.needsUpdate=true}
+  if(M.crystal){M.crystal.roughness=.02;M.crystal.envMapIntensity=2.4;
+   M.crystal.needsUpdate=true}
+  if(M.stone){M.stone.envMapIntensity=.55;M.stone.needsUpdate=true}
+ }
+ return M};
+
+/* ---------------------------------------------------------------------
+   3. A SWEEP, APPLIED TO EVERY TROPHY AS IT IS BUILT
+   ---------------------------------------------------------------------
+   Two jobs. Any canvas texture on a material's `map` is colour, so it
+   is declared sRGB — this catches the parquet, the plaques and anything
+   added later without anyone having to remember. And any metal that is
+   still on the default environment intensity of 1 is lifted, so a
+   trophy sculpted before this module still benefits.
+   --------------------------------------------------------------------- */
+function srgbSweep(root){
+ try{
+  root.traverse(o=>{
+   const mats=o.material?(Array.isArray(o.material)?o.material:[o.material]):[];
+   mats.forEach(m=>{
+    if(!m)return;
+    if(m.map&&m.map.isTexture&&m.map.encoding!==THREE.sRGBEncoding){
+     m.map.encoding=THREE.sRGBEncoding;m.map.needsUpdate=true;m.needsUpdate=true}
+    if(m.emissiveMap&&m.emissiveMap.encoding!==THREE.sRGBEncoding){
+     m.emissiveMap.encoding=THREE.sRGBEncoding;m.emissiveMap.needsUpdate=true}
+    if(m.metalness>=.9&&m.envMapIntensity<1.2){
+     m.envMapIntensity=1.7;m.needsUpdate=true}})});
+ }catch(e){}}
+
+const _tbMetal=trophyBuild;
+trophyBuild=function(code){
+ const g=_tbMetal.apply(this,arguments);
+ if(g)srgbSweep(g);
+ return g};
+
+/* ---------------------------------------------------------------------
+   4. AND BOTH SCENES GET THE STUDIO
+   ---------------------------------------------------------------------
+   The hall keeps a warm tint so the room still feels like a room, but
+   it gets the same horizon and the same hard sources. Held up on its
+   own, a trophy gets the studio neutral.
+   --------------------------------------------------------------------- */
+const _buildRoomMetal=buildTrophyRoom;
+buildTrophyRoom=function(host){
+ const r=_buildRoomMetal.apply(this,arguments);
+ try{
+  const D=TR&&TR.dbg;
+  if(D&&TR.rend){
+   if(D.scene){
+    D.scene.environment=studioEnvFor(TR.rend,.55);
+    srgbSweep(D.scene)}
+   if(D.iScene)D.iScene.environment=studioEnvFor(TR.rend,0);
+   /* the old exposure was set for a scene with no real highlights in it */
+   TR.rend.toneMappingExposure=1.0;
+  }
+ }catch(e){}
+ return r};
+
+/*#wA2_metal.js#*/
 showStart();
 </script>
 </body>
