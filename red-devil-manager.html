@@ -49809,6 +49809,555 @@ if(typeof ACTIONS.faOpen==='function'){
   return r}}
 
 /*#wB8_fixes.js#*/
+
+
+
+
+/*#wB9_market.js#*/
+
+/* =====================================================================
+   wB9_market — a transfer market you can shop in at every level
+   ---------------------------------------------------------------------
+   Take the National League job and open the transfer tab. Nine thousand
+   eight hundred and seventy-nine players are listed. Every single one of
+   them is unaffordable. Not most of them — all of them, measured:
+
+     Truro City    budget £120,000    players you can buy: 0
+
+   Two separate faults stack up to produce that.
+
+   THE ASKING PRICE HAD A FLOOR OF THREE HUNDRED THOUSAND POUNDS and was
+   rounded to the nearest hundred thousand. Those were sensible numbers
+   when the cheapest footballer in the game was worth £238,000, which was
+   true until the finance rebuild gave the lower leagues a real value
+   curve. Now the tenth-percentile player is worth £240,000 and the
+   cheapest is worth £2,500 — and every one of them still asked exactly
+   £300,000, because that was the floor. A hundred and twenty times what
+   the man was worth. The whole bottom of the market was one flat wall.
+
+   THE FILTER PANEL WAS BUILT FOR THE PREMIER LEAGUE. The cheapest fee
+   you could ask for was "under £5M" and the cheapest wage "under £25k a
+   week". A National League club's entire transfer budget is £120,000 and
+   its entire weekly wage bill is around £16,000. So no filter narrowed
+   anything, the default sort by ability stood, and the tab showed you
+   the forty best footballers on earth — none of whom you could sign, and
+   none of whom you could filter out.
+
+   Both are fixed here, along with everything downstream that had the
+   same Premier League number baked into it: the negotiation rounds, the
+   bump buttons, the counter-offer arithmetic, the wage a player asks for
+   and the bids the computer makes for your own players. A £30,000
+   transfer now works the way a £30,000,000 one does.
+
+   WHAT DOES NOT MOVE: prices above two million pounds. The rounding
+   there is still to the nearest hundred thousand and the multipliers are
+   untouched, so a Premier League save prices identically to before.
+   ===================================================================== */
+
+/* ---------------------------------------------------------------------
+   1. MONEY HAS A DIFFERENT GRAIN AT DIFFERENT SIZES
+   ---------------------------------------------------------------------
+   Clubs deal in round numbers, but how round depends on how big. Forty
+   million goes to the nearest hundred thousand; three thousand goes to
+   the nearest hundred. One step function, used everywhere a fee is
+   quoted, so the whole market speaks in figures that fit its level.
+   --------------------------------------------------------------------- */
+function mktStep(v){
+ const x=Math.abs(+v||0);
+ return x>=2e6?1e5:x>=5e5?25e3:x>=1e5?5e3:x>=2e4?1000:x>=5e3?250:100}
+function mktRound(v){const s=mktStep(v);return Math.max(s,Math.round(v/s)*s)}
+
+/* wages have their own grain — a week's pay is three orders of
+   magnitude smaller than a transfer fee */
+function wgStep(v){
+ const x=Math.abs(+v||0);
+ return x>=5e4?2500:x>=1e4?500:x>=2e3?100:50}
+function wgRound(v){const s=wgStep(v);return Math.max(s,Math.round(v/s)*s)}
+
+/* the numbers a person would actually type into a box */
+const NICE=[50,100,250,500,1e3,2500,5e3,1e4,25e3,5e4,1e5,25e4,5e5,1e6,25e5,5e6,1e7,25e6];
+function niceAt(x){
+ let i=0;
+ for(let k=0;k<NICE.length;k++)if(NICE[k]<=x)i=k;
+ return i}
+/* a big step and a small step, both proportionate to what is on screen */
+function bumpPair(scale,floor){
+ const i=niceAt(Math.max(floor||NICE[0],(+scale||0)/5));
+ return {big:NICE[i],small:NICE[Math.max(0,i-2)]}}
+
+/* ---------------------------------------------------------------------
+   2. WHAT A CLUB WILL SELL HIM FOR
+   ---------------------------------------------------------------------
+   The multipliers are exactly as they were — his standing in the squad,
+   his contract, his mood, his age, an injury, a bad run of form. Only
+   the last line changes: the price is rounded on its own scale instead
+   of being rounded to £100,000 and then shoved up to £300,000.
+   --------------------------------------------------------------------- */
+const _askMkt=askPrice;
+askPrice=function(p){
+ try{
+  const c=G.clubs[p.club];
+  if(!c)return _askMkt.apply(this,arguments);
+  const top3=[...c.players].sort((a,b)=>b.ovr-a.ovr).slice(0,3);
+  let m=top3.indexOf(p)>=0?1.40:(squadBestAt(c,POSGROUP(p.pos))===p?1.24:1.10);
+  if(p.contract<=0)m*=.45; else if(p.contract===1)m*=.78; else if(p.contract===2)m*=.92;
+  const mor=p.morale==null?60:p.morale;
+  if(mor<32)m*=.78; else if(mor<45)m*=.88;
+  if(p.listed)m*=.68;
+  if(p.age>=34)m*=.50; else if(p.age>=32)m*=.68; else if(p.age>=30)m*=.84;
+  if(p.injury)m*=(p.injury.days>60?.70:.85);
+  try{const apps=(p.stats&&p.stats.apps)||0;
+   if(apps>=6&&formAvg(p)&&formAvg(p)<6.2)m*=.90}catch(e){}
+  const v=p.value||valueFor(p);
+  return mktRound(Math.max(v*m,v*repFloor(p)));
+ }catch(e){return _askMkt.apply(this,arguments)}};
+
+/* the counter-offer had the same floor and the same rounding */
+feeCounter=function(p,offer){
+ const n=negoState(p.id),b=feeBand(p);
+ const soften=Math.min(.14,n.rounds*.035);
+ let want=Math.round(b.ask*(1-soften));
+ if(offer>0)want=Math.max(want,Math.round(offer*1.04));
+ want=Math.min(want,b.ask);
+ return mktRound(want)};
+
+/* ---------------------------------------------------------------------
+   3. WHAT HE ASKS TO BE PAID
+   ---------------------------------------------------------------------
+   expectedWage floored every contract in the game at £1,500 a week. A
+   National League club has about £7,000 a week of headroom in total, so
+   the floor alone was a quarter of everything it had to spend, on any
+   player, however ordinary. It is a proportionate floor now.
+   --------------------------------------------------------------------- */
+expectedWage=function(p,renew){
+ let w=wageFor(p.ovr,G.clubs[G.my].rep)*(1+((p.ambition||10)-10)/45);
+ if(renew)w=Math.max(w,p.wage*1.1)*(1-((p.loyalty||10)-10)/90);
+ else w=Math.max(w*1.14,p.wage*1.22);
+ return Math.max(300,wgRound(w))};
+
+/* ---------------------------------------------------------------------
+   4. THE BOXES YOU TYPE INTO
+   ---------------------------------------------------------------------
+   Both negotiation sheets are built by four layers of wrappers, and all
+   four hard-code the same Premier League increments: bid in steps of
+   £100,000, nudge by a quarter of a million, wages in steps of £500,
+   nudge by ten thousand. On a thirty-thousand-pound signing the smallest
+   button on screen moves eight times the whole fee.
+
+   Rather than rewrite four sheets, the fields are re-scaled after they
+   are drawn, from the actual numbers in front of you.
+   --------------------------------------------------------------------- */
+function rescaleField(id,scale,floor,fmt){
+ const i=document.getElementById(id);if(!i)return;
+ const {big,small}=bumpPair(scale,floor);
+ i.step=String(small);
+ /* the row of nudge buttons that drives this field */
+ const chip=document.querySelector('[data-t="'+id+'"]');
+ if(!chip||!chip.parentNode)return;
+ const lbl=v=>(v<0?'-':'+')+fmt(Math.abs(v));
+ chip.parentNode.innerHTML=[-big,-small,small,big,big*4].map(v=>
+  '<button class="chip" data-action="bump" data-t="'+id+'" data-v="'+v+'">'+lbl(v)+'</button>').join('')}
+
+const _bidSheetMkt=openBidSheet;
+openBidSheet=function(pid,note,prefill){
+ const r=_bidSheetMkt.apply(this,arguments);
+ try{
+  const p=playerById(pid);if(!p)return r;
+  const ask=askPrice(p);
+  const i=document.getElementById('bidFee');
+  /* Where the box opens. The base filled it with the player's raw
+     valuation rounded to £100,000, which is zero for anybody below
+     fifty thousand pounds and nearly double the asking price for a
+     Courtois. An opening bid is a shade under what they want. The
+     negotiation passes its own figure in as the third argument and
+     that is always left alone. */
+  if(i&&!prefill)i.value=String(Math.max(mktStep(ask),
+   Math.min(G.clubs[G.my].budget,mktRound(ask*.85))));
+  rescaleField('bidFee',ask,250,fmtM);
+ }catch(e){}
+ return r};
+
+const _termsMkt=openContractSheet;
+openContractSheet=function(p,opt){
+ const r=_termsMkt.apply(this,arguments);
+ try{
+  const exp=(G.negotiation&&G.negotiation.exp)||expectedWage(p,opt&&opt.renew);
+  rescaleField('tWage',exp,50,fmtW);
+  /* the sign-on default was three weeks' wages rounded to £50,000,
+     which is nothing at all below about seventeen thousand a week */
+  const s=document.getElementById('tSign');
+  if(s){
+   const on=exp*3;
+   s.step=String(bumpPair(exp*4,100).small);
+   s.value=String(on<2000?0:mktRound(on))}
+  const cl=document.getElementById('tClause');
+  if(cl)cl.step=String(bumpPair(p.value||exp*40,1000).big);
+ }catch(e){}
+ return r};
+
+/* ---------------------------------------------------------------------
+   5. AND THE BIDS THAT COME IN FOR YOUR PLAYERS
+   ---------------------------------------------------------------------
+   Both of these rounded to £100,000 as well, which below League One
+   produced an offer of nothing at all — a genuine "Bid received: £0" in
+   the inbox. Reimplemented rather than wrapped, because the rounding is
+   in the middle of the function both times.
+   --------------------------------------------------------------------- */
+aiBidForUserPlayer=function(){
+ const mine=G.clubs[G.my];
+ const targets=mine.players.filter(p=>!p.injury&&!p.loan&&
+  !(typeof windowId==='function'&&p.movedWindow===windowId())&&
+  !G.pendingOffers.some(o=>o.pid===p.id));
+ if(!targets.length)return;
+ const listed=targets.filter(x=>x.listed);
+ const p=pick(listed.length&&Math.random()<.7?listed:targets);
+ const rich=G.clubs.filter(c=>c.i!==G.my&&c.budget>p.value*.9);if(!rich.length)return;
+ const buyer=pick(rich);
+ const fee=mktRound(p.value*(p.listed?(.9+Math.random()*.25):(1.0+Math.random()*.35)));
+ if(fee>buyer.budget)return;
+ const oid='of'+(Math.random().toString(36).slice(2));
+ G.pendingOffers.push({id:oid,pid:p.id,buyer:buyer.i,fee,expires:G.day+5,stage:0});
+ mail('transfer','Bid received: '+p.name,'<b>'+esc(buyer.name)+'</b> have offered <b>'+fmtM(fee)+
+  '</b> for <b>'+esc(p.name)+'</b>. Market value '+fmtM(p.value)+'. The offer expires in 5 days.',
+  [{lbl:'Accept '+fmtM(fee),act:'offerAccept',arg:oid},
+   {lbl:'Demand more',act:'offerCounter',arg:oid},
+   {lbl:'Reject',act:'offerReject',arg:oid,ghost:1}])};
+
+ACTIONS.offerCounter=el=>{
+ const o=offerById(el.dataset.arg);
+ if(!o){closeMail(el,'This bid is no longer on the table.');closeModal();
+  toast('That bid has already been dealt with');render();return}
+ const p=playerById(o.pid),buyer=G.clubs[o.buyer];
+ const demand=mktRound(o.fee*1.22);
+ if(o.stage>=1||demand>buyer.budget||Math.random()<.35){
+  G.pendingOffers=G.pendingOffers.filter(x=>x.id!==o.id);
+  mail('transfer','Bid withdrawn: '+p.name,
+   esc(buyer.name)+' were unwilling to go higher and have pulled out of the deal.')}
+ else{
+  o.stage++;o.fee=demand;o.expires=G.day+4;
+  mail('transfer','Improved bid: '+p.name,esc(buyer.name)+
+   ' return with an improved offer of <b>'+fmtM(demand)+'</b>.',
+   [{lbl:'Accept '+fmtM(demand),act:'offerAccept',arg:o.id},
+    {lbl:'Reject',act:'offerReject',arg:o.id,ghost:1}])}
+ closeMail(el,'You demanded more money.');closeModal();render()};
+
+/* ---------------------------------------------------------------------
+   6. THE SEARCH, SCALED TO THE CLUB YOU ACTUALLY MANAGE
+   ---------------------------------------------------------------------
+   A filter is only useful if its rungs bracket the numbers you care
+   about. £5M / £15M / £30M brackets nothing for a club with £120,000,
+   and £10k / £25k / £50k would bracket nothing for Manchester City.
+
+   So the rungs are chosen from one ladder of round numbers, and where
+   the window sits on that ladder is decided by your budget and your
+   wage room. Truro gets £10,000 to £500,000. United gets £5M to £200M.
+   Nobody has to think about it; the panel just fits.
+   --------------------------------------------------------------------- */
+const FEE_RUNGS=[1e4,25e3,5e4,1e5,25e4,5e5,1e6,25e5,5e6,1e7,2e7,35e6,5e7,8e7,12e7,2e8];
+const WAGE_RUNGS=[500,1e3,2e3,4e3,8e3,15e3,25e3,4e4,6e4,1e5,15e4,25e4,4e5,6e5];
+
+function rungWindow(rungs,top,n){
+ let hi=rungs.findIndex(r=>r>=top);
+ if(hi<0)hi=rungs.length-1;
+ return rungs.slice(Math.max(0,hi-(n-1)),hi+1)}
+
+function myBudget(){try{return G.clubs[G.my].budget||0}catch(e){return 0}}
+function myRoom(){
+ try{const c=G.clubs[G.my];return Math.max(0,(c.wageCap||0)-squadWage(c))}
+ catch(e){return 0}}
+/* What he would want to be paid HERE — not what his current club pays
+   him, which is the number the list used to print.
+
+   This has to be the SAME number his agent will ask for, or the search
+   lies. The going rate at your club is only the start of it: a man on
+   £7,200 a week in the Championship does not sign for a National League
+   club on £6,000 because that is what the National League pays, and
+   expectedWage knows it — it never asks for less than twenty-two per
+   cent above his current deal. Filtering on the going rate alone put
+   players in the affordable list who then wanted half as much again.
+
+   So the list asks the agent. */
+function wageHere(p){
+ try{return expectedWage(p,false)}catch(e){return p.wage||0}}
+
+function feeRungs(){return rungWindow(FEE_RUNGS,Math.max(5e4,myBudget()*4),8)}
+function wageRungs(){return rungWindow(WAGE_RUNGS,Math.max(2e3,myRoom()*4),8)}
+
+/* ability and potential against the division you are in, not against
+   the Premier League: "65+" is meaningless in the National League,
+   where the average player is a 45 and the best one a 55 */
+function abilityRungs(){
+ let s=50;
+ try{s=Math.round(divStandardFor(G.clubs[G.my]))}catch(e){}
+ const set=[s-10,s-6,s-3,s,s+3,s+6,s+10,s+14].map(x=>clamp(Math.round(x),30,94));
+ return [...new Set(set)]}
+function potRungs(){
+ let s=50;
+ try{s=Math.round(divStandardFor(G.clubs[G.my]))}catch(e){}
+ const set=[s-2,s+2,s+6,s+10,s+14,s+18,s+22].map(x=>clamp(Math.round(x),34,96));
+ return [...new Set(set)]}
+
+/* the two new controls */
+TR_DEF.trFeeMin='0';
+if(UI.trAfford===undefined)UI.trAfford=true;
+ACTIONS.trAfford=()=>{UI.trAfford=!UI.trAfford;render()};
+const _ngMkt=newGame;
+newGame=function(){const r=_ngMkt.apply(this,arguments);
+ try{if(UI.trAfford===undefined)UI.trAfford=true}catch(e){}
+ return r};
+
+/* can I sign him at all — the fee out of the budget and his wage out of
+   the room that is left. This is the one control that answers the
+   question every manager below the Premier League is actually asking. */
+function canAfford(p,ask){
+ const a=ask==null?askPrice(p):ask;
+ return a<=myBudget()&&wageHere(p)<=myRoom()}
+
+const _vTrFiltersMkt=vTrFilters;
+vTrFilters=function(){
+ const active=trAnyActive();
+ const more=!!UI.trMore;
+ const allAttrs=[].concat(TECH,MENT,PHYS);
+ const fr=feeRungs(),wr=wageRungs(),ar=abilityRungs(),pr=potRungs();
+ const opt=(v,lbl,cur)=>'<option value="'+v+'"'+(String(cur)===String(v)?' selected':'')+'>'+lbl+'</option>';
+
+ let h='<div class="card tight">'+
+ '<div class="grid2" style="margin-bottom:10px">'+
+ '<div class="field" style="margin-bottom:0"><label>Position</label><select data-live="trPos">'+
+  '<option'+(UI.trPos==='Any'?' selected':'')+'>Any</option>'+
+  POSN.map(p=>'<option'+(UI.trPos===p?' selected':'')+'>'+p+'</option>').join('')+'</select></div>'+
+ '<div class="field" style="margin-bottom:0"><label>Max age</label><select data-live="trAge">'+
+  ['40','33','29','26','23','21','19'].map(a=>'<option'+(UI.trAge===a?' selected':'')+' value="'+a+'">'+
+  (a==='40'?'Any':a+' & under')+'</option>').join('')+'</select></div></div>'+
+ '<div class="field" style="margin-bottom:10px"><label>Name search</label>'+
+  '<input type="text" data-live="trQ" placeholder="e.g. Haaland" value="'+esc(UI.trQ||'')+'"></div>';
+
+ /* the money — a range now, and the rungs sized for this club */
+ h+='<div class="grid2" style="margin-bottom:10px">'+
+ '<div class="field" style="margin-bottom:0"><label>Fee from</label><select data-live="trFeeMin">'+
+  opt('0','Any',trGet('trFeeMin'))+
+  fr.map(v=>opt(v,fmtM(v),trGet('trFeeMin'))).join('')+'</select></div>'+
+ '<div class="field" style="margin-bottom:0"><label>Fee up to</label><select data-live="trFee">'+
+  opt('0','Any',trGet('trFee'))+
+  fr.map(v=>opt(v,fmtM(v),trGet('trFee'))).join('')+'</select></div></div>'+
+ '<div class="field" style="margin-bottom:10px"><label>Wage he would want here, up to</label>'+
+  '<select data-live="trWage">'+opt('0','Any',trGet('trWage'))+
+  wr.map(v=>opt(v,fmtW(v),trGet('trWage'))).join('')+'</select></div>';
+
+ h+='<button class="chip'+(more?' on':'')+'" data-action="trMore" style="margin-bottom:'+(more?'10px':'2px')+'">'+
+  (more?'▴ Fewer filters':'▾ More filters')+'</button>';
+
+ if(more){
+  h+='<div class="grid2" style="margin-bottom:10px">'+
+  '<div class="field" style="margin-bottom:0"><label>Min ability</label><select data-live="trOvr">'+
+   opt('0','Any',trGet('trOvr'))+ar.map(a=>opt(a,a+'+',trGet('trOvr'))).join('')+'</select></div>'+
+  '<div class="field" style="margin-bottom:0"><label>Min potential</label><select data-live="trPot">'+
+   opt('0','Any',trGet('trPot'))+pr.map(a=>opt(a,a+'+',trGet('trPot'))).join('')+'</select></div></div>';
+
+  h+='<div class="grid2" style="margin-bottom:10px">'+
+  '<div class="field" style="margin-bottom:0"><label>Contract</label><select data-live="trCon">'+
+   [['any','Any'],['1','A year or less left'],['2','Two years or less'],['0','Out of contract']]
+   .map(x=>opt(x[0],x[1],trGet('trCon'))).join('')+'</select></div>'+
+  '<div class="field" style="margin-bottom:0"><label>Mood</label><select data-live="trMood">'+
+   [['any','Any'],['unhappy','Unsettled or worse'],['angry','Deeply unhappy']]
+   .map(x=>opt(x[0],x[1],trGet('trMood'))).join('')+'</select></div></div>';
+
+  h+='<div class="grid2" style="margin-bottom:10px">'+
+  '<div class="field" style="margin-bottom:0"><label>Fitness</label><select data-live="trFit">'+
+   [['any','Any'],['fit','Fit only'],['inj','Injured only']]
+   .map(x=>opt(x[0],x[1],trGet('trFit'))).join('')+'</select></div>'+
+  '<div class="field" style="margin-bottom:0"><label>Role at his club</label><select data-live="trRole">'+
+   [['any','Any'],['bench','Not first choice'],['star','First choice']]
+   .map(x=>opt(x[0],x[1],trGet('trRole'))).join('')+'</select></div></div>';
+
+  h+='<div class="grid2" style="margin-bottom:10px">'+
+  '<div class="field" style="margin-bottom:0"><label>Attribute</label><select data-live="trAttr">'+
+   '<option value=""'+(!trGet('trAttr')?' selected':'')+'>Any</option>'+
+   allAttrs.map(a=>'<option value="'+a+'"'+(trGet('trAttr')===a?' selected':'')+'>'+
+    (ATTR_LABEL[a]||a)+'</option>').join('')+'</select></div>'+
+  '<div class="field" style="margin-bottom:0"><label>At least</label><select data-live="trAttrMin">'+
+   ['10','12','14','15','16','17','18'].map(a=>opt(a,a,trGet('trAttrMin'))).join('')+'</select></div></div>';
+
+  h+='<div class="field" style="margin-bottom:10px"><label>Nationality</label><select data-live="trNat">'+
+   '<option value="any"'+(trGet('trNat')==='any'?' selected':'')+'>Any</option>'+
+   trNations().map(n=>'<option value="'+n+'"'+(trGet('trNat')===n?' selected':'')+'>'+
+    ccFlag(n)+' '+esc(natName(n))+'</option>').join('')+'</select></div>';
+ }
+
+ h+='<div class="chips">'+
+  '<button class="chip'+(UI.trAfford?' on':'')+'" data-action="trAfford" title="Fee within budget and wages within the room you have left">💰 Within my means</button>'+
+  '<button class="chip'+(UI.trListed?' on':'')+'" data-action="trToggleListed">💷 Transfer-listed</button>'+
+  '<button class="chip'+(UI.trShort?' on':'')+'" data-action="trShortOnly">⭐ Shortlist ('+shortlist().length+')</button>'+
+  (active?'<button class="chip" data-action="trReset">✕ Clear filters</button>':'')+
+ '</div>'+
+ '<div class="xs faint" style="padding:6px 2px 0;line-height:1.6">Budget <b>'+fmtM(myBudget())+
+  '</b> · wage room <b>'+fmtW(myRoom())+'</b></div>'+
+ '<div class="chip-lbl">Sort by</div><div class="chips">'+
+  [['ovr','Ability'],['val','Value'],['age','Youngest'],['pot','Potential'],['wage','Wage'],['ask','Cheapest']]
+  .map(x=>'<button class="chip'+((UI.trSort||'ovr')===x[0]?' on':'')+'" data-action="trSort" data-v="'+x[0]+'">'+
+  x[1]+'</button>').join('')+'</div>';
+ return h+'</div>'};
+
+/* ---------------------------------------------------------------------
+   7. THE LIST
+   ---------------------------------------------------------------------
+   Same filters as before plus the fee floor and the affordability
+   toggle, and the wage tested is the one he would be on here rather
+   than the one his current club pays him — which for anybody moving
+   between divisions is a different number entirely, and the only one
+   that matters to your wage bill.
+   --------------------------------------------------------------------- */
+trResultsHtml=function(){
+ const q=(UI.trQ||'').trim().toLowerCase();
+ const sl=shortlist();
+ const fOvr=+trGet('trOvr'),fPot=+trGet('trPot');
+ const fFee=+trGet('trFee'),fFeeMin=+trGet('trFeeMin'),fWage=+trGet('trWage');
+ const fCon=trGet('trCon'),fMood=trGet('trMood'),fFit=trGet('trFit'),fRole=trGet('trRole');
+ const fAttr=trGet('trAttr'),fAttrMin=+trGet('trAttrMin'),fNat=trGet('trNat');
+ const bud=myBudget(),room=myRoom();
+ let list=[],blocked=0;
+ G.clubs.forEach(c=>{if(c.i===G.my)return;c.players.forEach(p=>{
+  if(UI.trShort&&sl.indexOf(p.id)<0)return;
+  if(UI.trPos!=='Any'&&p.pos!==UI.trPos)return;
+  if(p.age>+(UI.trAge||'40'))return;
+  if(UI.trListed&&!p.listed)return;
+  if(q&&!p.name.toLowerCase().includes(q))return;
+  if(fOvr&&p.ovr<fOvr)return;
+  if(fPot&&(p.pot||p.ovr)<fPot)return;
+  if(fCon!=='any'){const cc=p.contract==null?3:p.contract;
+   if(fCon==='0'&&cc>0)return;
+   if(fCon==='1'&&cc>1)return;
+   if(fCon==='2'&&cc>2)return}
+  if(fMood!=='any'){const m=p.morale==null?60:p.morale;
+   if(fMood==='unhappy'&&m>=45)return;
+   if(fMood==='angry'&&m>=32)return}
+  if(fFit==='fit'&&p.injury)return;
+  if(fFit==='inj'&&!p.injury)return;
+  if(fRole==='bench'&&trStarter(p))return;
+  if(fRole==='star'&&!trStarter(p))return;
+  if(fNat!=='any'&&natOf(p)!==fNat)return;
+  if(fAttr&&((p.attrs&&p.attrs[fAttr])||0)<fAttrMin)return;
+  const w=wageHere(p);
+  if(fWage&&w>fWage)return;
+  const ask=askPrice(p);
+  if(fFee&&ask>fFee)return;
+  if(fFeeMin&&ask<fFeeMin)return;
+  if(UI.trAfford&&(ask>bud||w>room)){blocked++;return}
+  list.push(p)})});
+ const s=UI.trSort||'ovr';
+ list.sort((a,b)=>
+  s==='val'?b.value-a.value:
+  s==='age'?a.age-b.age||b.ovr-a.ovr:
+  s==='pot'?(b.pot||b.ovr)-(a.pot||a.ovr)||b.ovr-a.ovr:
+  s==='wage'?wageHere(a)-wageHere(b)||b.ovr-a.ovr:
+  s==='ask'?askPrice(a)-askPrice(b)||b.ovr-a.ovr:
+  b.ovr-a.ovr);
+ const shown=list.slice(0,40);
+
+ const bits=[];
+ if(UI.trPos!=='Any')bits.push(UI.trPos);
+ if(UI.trAge!=='40')bits.push(UI.trAge+' & under');
+ if(fOvr)bits.push(fOvr+'+ ability');
+ if(fPot)bits.push(fPot+'+ potential');
+ if(fFeeMin&&fFee)bits.push(fmtM(fFeeMin)+'–'+fmtM(fFee));
+ else if(fFee)bits.push('under '+fmtM(fFee));
+ else if(fFeeMin)bits.push('over '+fmtM(fFeeMin));
+ if(fWage)bits.push('under '+fmtW(fWage));
+ if(UI.trAfford)bits.push('within my means');
+ if(fCon==='0')bits.push('out of contract');else if(fCon!=='any')bits.push(fCon+'y or less left');
+ if(fMood==='unhappy')bits.push('unsettled');else if(fMood==='angry')bits.push('deeply unhappy');
+ if(fFit==='fit')bits.push('fit');else if(fFit==='inj')bits.push('injured');
+ if(fRole==='bench')bits.push('not first choice');else if(fRole==='star')bits.push('first choice');
+ if(fNat!=='any')bits.push(natName(fNat));
+ if(fAttr)bits.push((ATTR_LABEL[fAttr]||fAttr)+' '+fAttrMin+'+');
+
+ let h='<div class="sec"><div class="t">Market</div><div class="ln"></div>'+
+  '<div class="sub">'+list.length+' match'+(list.length===1?'':'es')+'</div></div>';
+ if(bits.length)h+='<div class="xs faint" style="padding:0 4px 7px;line-height:1.6">Looking for: '+
+  esc(bits.join(' · '))+'</div>';
+ if(UI.trAfford&&blocked)h+='<div class="xs faint" style="padding:0 4px 7px;line-height:1.6">'+
+  blocked.toLocaleString()+' more match the rest of the search but are beyond '+
+  fmtM(bud)+' or '+fmtW(room)+' — turn off <b>Within my means</b> to see them.</div>';
+ h+='<div class="card tight" style="padding:4px 8px">';
+ if(!shown.length)h+=emptyBox('🔍','Nobody matches those filters',
+  UI.trShort?'Star a player from the market to build a shortlist.':
+  UI.trAfford&&blocked?'Everything that fits is out of your price range. Sell somebody, or turn off "Within my means" to look anyway.':
+  'Loosen one of them — the fee range and the minimum ability are usually the two doing the work.');
+ else h+='<div class="plist">'+shown.map(trRow).join('')+'</div>';
+ h+='</div>';
+ if(list.length>40)h+='<div class="xs faint" style="padding:6px 4px;text-align:center">Showing the top 40 of '+
+  list.length+' — tighten the filters to see further down the list.</div>';
+ return h};
+
+/* ---------------------------------------------------------------------
+   8. AND THE ROW SHOWS BOTH HALVES OF THE DEAL
+   ---------------------------------------------------------------------
+   The list printed the fee and, underneath it, his current wage — the
+   number his present club pays him, which tells you nothing about what
+   he will cost you. It prints what he would want here, ticked if it
+   fits inside the room you have got, so the fee and the wage are
+   visibly the same conversation.
+   --------------------------------------------------------------------- */
+trRow=function(p){
+ const c=G.clubs[p.club]||{name:'Free agent',short:'FA'};
+ const my=G.clubs[G.my];
+ const ask=askPrice(p);
+ const w=wageHere(p);
+ const okFee=ask<=my.budget, okWage=w<=myRoom();
+ const gap=(p.pot||p.ovr)-p.ovr;
+ const meta=(typeof crest==='function'?crest(c,15):'')+' '+esc(c.short||c.name)+' · '+p.age+
+  (p.scouted?'':' · <span style="color:var(--blue)">unscouted</span>');
+ const rail=trInterest(p)+
+  '<span class="num" style="color:'+(okFee?'var(--green)':'var(--ink-faint)')+';font-weight:800">'+
+   (okFee?'✓ ':'')+fmtM(ask)+' ask</span>'+
+  (gap>=6&&p.age<=23?'<span class="xs" style="color:var(--gold);font-weight:800">↗ '+gap+'</span>':'');
+ return pRow(p,{
+  meta:meta,
+  rail:rail,
+  sub:'<span style="color:'+(okWage?'var(--green)':'var(--ink-faint)')+'">'+fmtW(w)+' wanted</span>'+
+   (p.wage&&Math.abs(p.wage-w)/Math.max(1,w)>.15?'<span class="faint"> · on '+fmtW(p.wage)+' now</span>':''),
+  tags:(p.listed?'<span class="tag-pill tp-list">Listed</span>':'')+
+   (p.injury?'<span class="tag-pill tp-inj">🚑 '+humanDays(p.injury.days)+'</span>':'')+
+   (p.loan&&G.clubs[p.loan.club]?'<span class="tag-pill" style="background:rgba(59,130,246,.16);color:#7fb3ff">🛫 On loan at '+
+    esc(G.clubs[p.loan.club].short)+'</span>':''),
+  btns:'<button class="star-btn'+(isShort(p)?' on':'')+'" data-action="trStar" data-id="'+p.id+
+   '" title="Add to shortlist">'+(isShort(p)?'⭐':'☆')+'</button>'})};
+
+/* ---------------------------------------------------------------------
+   9. A CLUB CAN ONLY LOOK DOWN SO FAR
+   ---------------------------------------------------------------------
+   A National League club that filters to what it can afford is looking
+   at League One and League Two squad players, which is right. What it
+   must not do is fail to sign any of them because the interest test
+   only ever compares reputations — a 45-rated League Two reserve has no
+   reason to refuse Truro, but the tier rule said he was dropping down
+   and that was that.
+
+   The rule stays for anyone with a career worth protecting. Below the
+   division's own standard, a player who is not getting a game is
+   available to anybody who will play him, wherever they are.
+   --------------------------------------------------------------------- */
+const _interestMkt=interestCheck;
+interestCheck=function(p){
+ const base=_interestMkt.apply(this,arguments);
+ try{
+  if(base!=='no')return base;
+  const my=G.clubs[G.my],cur=G.clubs[p.club];
+  if(!my||!cur)return base;
+  /* only the fringe, and only where the money is genuinely better */
+  const std=divStandardFor(cur);
+  if(p.ovr>std+3)return base;                    /* he is good enough there */
+  if(trStarter(p))return base;                   /* he is playing every week */
+  if(p.ovr>=68)return base;                      /* a real career to protect */
+  const here=wageHere(p);
+  const raise=here/Math.max(250,p.wage||250);
+  const keen=(p.contract<=1?.22:0)+(p.listed?.30:0)+
+   (p.morale!=null&&p.morale<45?.18:0)+(p.age>=31?.20:0)+(p.age<=20?.12:0);
+  /* a rise plus a reason, or a big enough rise on its own */
+  return (raise>=1.35&&keen>=.18)||raise>=1.9?'ok':base;
+ }catch(e){return base}};
+
+/*#wB9_market.js#*/
 showStart();
 </script>
 </body>
