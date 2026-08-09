@@ -23,6 +23,9 @@
 - Fixed the instant-simulation integration test, which slept a fixed 120 ms for a
   path that takes about 300 ms in a real browser and 1.5 s under JSDOM. Tests now
   wait on the condition through a shared `waitFor` harness helper.
+- Kept date-only fixtures on their intended calendar day in timezones west of UTC.
+  They previously rendered one day early because UTC midnight was formatted in the
+  device timezone.
 
 ### Improved
 
@@ -38,3 +41,8 @@
 - Added an installable PWA shell and offline caching for core game assets.
 - Added keyboard focus, semantic labels, zoom support and reduced-motion handling.
 - Added bounded runtime diagnostics, modular save/simulation code, automated tests and GitHub Actions.
+- Replaced generated first-team identities across League One, League Two and the
+  National League with a sourced 9 August 2026 snapshot. Championship membership
+  is refreshed with it so promotion and relegation remain consistent, while the
+  existing squad shape, ratings, contracts and economy remain game-balanced.
+- Added a validated ESPN roster updater and cached its generated data in the PWA.

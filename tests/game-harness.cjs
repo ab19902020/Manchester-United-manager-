@@ -14,6 +14,8 @@ function gameHtml() {
   let html = fs.readFileSync(path.join(root, 'red-devil-manager.html'), 'utf8');
   for (const filename of [
     'src/simulation-model.js',
+    'src/lower-league-data.js',
+    'src/lower-league-squads.js',
     'src/career-store.js',
     'src/runtime-enhancements.js',
   ]) {

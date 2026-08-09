@@ -1,6 +1,54 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createGame, startCareer, waitFor } = require('./game-harness.cjs');
+const lowerLeagueData = require('../src/lower-league-data.js');
+
+function checkLowerLeagueSquads(game) {
+  const pickerNames = JSON.parse(game.eval(`JSON.stringify(buildRoster()
+    .filter(club=>['L1','L2','NL'].includes(club.league)).map(club=>club.name))`));
+  const live = JSON.parse(game.eval(`JSON.stringify(['L1','L2','NL'].flatMap(division=>
+    G.clubs.filter(club=>club.league===division).map(club=>({
+      division,name:club.name,size:club.players.length,
+      names:club.players.map(player=>player.name),
+      positions:club.players.map(player=>player.pos),
+      ratings:club.players.map(player=>player.ovr),
+      contracts:club.players.map(player=>player.contract),
+      source:club.rosterSource,readDate:club.rosterReadDate
+    }))))`));
+
+  assert.equal(live.length, 72);
+  assert.deepEqual(pickerNames.slice().sort(), live.map((club) => club.name).sort());
+  const divisionAverages = {};
+  for (const division of ['L1', 'L2', 'NL']) {
+    const actual = live.filter((club) => club.division === division);
+    const sourced = lowerLeagueData.divisions[division];
+    assert.equal(actual.length, 24);
+    assert.equal(sourced.readDate, lowerLeagueData.readDate);
+    assert.match(sourced.source, /^https:\/\/site\.api\.espn\.com\//);
+    assert.deepEqual(
+      actual.map((club) => club.name).sort(),
+      Object.keys(sourced.teams).sort(),
+    );
+    for (const club of actual) {
+      const sourceTeam = sourced.teams[club.name];
+      const sourceNames = new Set(sourceTeam.players.map((player) => player.name));
+      assert.equal(club.size, 19, `${club.name} squad depth changed`);
+      assert.ok(club.names.every((name) => sourceNames.has(name)), `${club.name} contains an unsourced player`);
+      assert.equal(club.source, sourceTeam.source);
+      assert.equal(club.readDate, lowerLeagueData.readDate);
+      assert.ok(club.positions.includes('GK'), `${club.name} has no goalkeeper slot`);
+      assert.ok(club.positions.some((position) => ['DL', 'DC', 'DR', 'WBL', 'WBR'].includes(position)));
+      assert.ok(club.positions.some((position) => ['DM', 'MC', 'ML', 'MR', 'AMC'].includes(position)));
+      assert.ok(club.positions.some((position) => ['AML', 'AMR', 'ST'].includes(position)));
+      assert.ok(club.contracts.every((years) => years >= 1 && years <= 5));
+    }
+    const ratings = actual.flatMap((club) => club.ratings);
+    divisionAverages[division] = ratings.reduce((sum, rating) => sum + rating, 0) / ratings.length;
+  }
+  assert.ok(divisionAverages.L1 > divisionAverages.L2);
+  assert.ok(divisionAverages.L2 > divisionAverages.NL);
+  assert.ok(live.find((club) => club.name === 'Leicester City').names.includes('Wout Faes'));
+}
 
 test('new careers save the complete world and manual slots never evict one another', { timeout: 60000 }, async () => {
   const game = await createGame();
@@ -11,6 +59,7 @@ test('new careers save the complete world and manual slots never evict one anoth
     assert.ok(live.players >= 9800);
     assert.equal(live.fixtures, 8781);
     assert.equal(live.day, 0);
+    checkLowerLeagueSquads(game);
 
     const auto = await game.window.RBSSaves.store.get('auto');
     assert.ok(auto);

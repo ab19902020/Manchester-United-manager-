@@ -1,10 +1,12 @@
-const CACHE_NAME = 'results-business-v1';
+const CACHE_NAME = 'results-business-v2';
 const CORE_ASSETS = [
   './',
   './index.html',
   './red-devil-manager.html',
   './manifest.webmanifest',
   './src/simulation-model.js',
+  './src/lower-league-data.js',
+  './src/lower-league-squads.js',
   './src/career-store.js',
   './src/runtime-enhancements.js',
   './vendor/three.min.js',
