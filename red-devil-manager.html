@@ -52060,6 +52060,357 @@ drawDugout=function(){
  return r};
 
 /*#wC4_dugout.js#*/
+
+
+/*#wC5_dugout2.js#*/
+
+/* =====================================================================
+   wC5_dugout2 — kits, turf, and a crowd that is behind the players
+   ---------------------------------------------------------------------
+   The camera got close enough to see the football. This is the pass
+   over what you can now see, and all of it is 2D canvas — no library,
+   no build step, nothing fetched.
+
+   FOUR THINGS, in the order they matter.
+
+   THE KITS. Every shirt in the game is one flat club colour, so
+   Newcastle, Juventus and Sheffield United all run out in plain black
+   and Celtic in plain green. The game already knows better — kitPattern()
+   has read the club name and returned 'stripe', 'hoop', 'half', 'sash',
+   'band' or 'sleeve' since the badge work, and nothing on the pitch has
+   ever asked it. Asking it is the single biggest thing that makes this
+   look like football rather than like two sets of counters.
+
+   THE TURF. One flat green wash, one light pool and five stripes at
+   three and a half per cent. A televised pitch is mown in a
+   chequerboard, worn brown in the goalmouths and down the middle, and
+   lit in four overlapping pools by four separate pylons. All of that is
+   a dozen gradient fills, drawn once per frame, under everybody.
+
+   THE CROWD. It is drawn as sharp as the players are, so the eye has
+   nowhere to settle — thirty thousand pin-sharp dots compete with the
+   twenty-two people the match is about. A couple of pixels of blur on
+   the stand is what a long lens does anyway, and it puts the players in
+   front of it instead of in among it.
+
+   THE BALL SPINS. It is big enough to see now, so it gets panels that
+   turn over as it travels.
+   ===================================================================== */
+
+/* ---------------------------------------------------------------------
+   1. GETTING UNDERNEATH THE PLAYERS
+   ---------------------------------------------------------------------
+   The grass, the markings and the goals are drawn inline inside
+   drawDugout with no seam to hook, and the players come afterwards in
+   one depth-sorted loop. There is exactly one moment between the two:
+   the first call to dugFigure of each frame. A flag set before the
+   frame starts is spent by whoever gets drawn first, which lands the
+   overlay on top of the pitch and underneath all twenty-two of them.
+   --------------------------------------------------------------------- */
+DUG.turfPending=false;
+
+function dugTurf(g,P,W,H){
+ try{
+  const far=P(0,68,0)[1];
+  const quad=(a,b,c2,d2)=>{g.beginPath();g.moveTo(a[0],a[1]);g.lineTo(b[0],b[1]);
+   g.lineTo(c2[0],c2[1]);g.lineTo(d2[0],d2[1]);g.closePath();g.fill()};
+
+  g.save();
+  /* the pitch is the only thing this may touch */
+  g.beginPath();
+  const c1=P(0,0,0),c2=P(105,0,0),c3=P(105,68,0),c4=P(0,68,0);
+  g.moveTo(c1[0],H);g.lineTo(c1[0],c1[1]);g.lineTo(c2[0],c2[1]);
+  g.lineTo(c3[0],c3[1]);g.lineTo(c4[0],c4[1]);g.closePath();
+  g.rect(0,far,W,H-far);
+  g.clip();
+
+  /* the mow: bands across the pitch, and a lighter set the other way,
+     which is the chequer you see from a camera gantry */
+  for(let i=0;i<9;i++){
+   const y0=i*68/9,y1=(i+1)*68/9;
+   g.fillStyle=(i%2)?'rgba(232,255,220,.038)':'rgba(0,30,8,.026)';
+   quad(P(0,y0,0),P(105,y0,0),P(105,y1,0),P(0,y1,0))}
+  /* A cross-mow was tried here and taken out again. At the alpha it
+     needed to look like mowing rather than bunting it was worth about
+     two per cent of contrast and cost eight more quads a frame — four
+     frames a second, measured, for something you cannot see. The bands
+     one way are what reads. */
+
+  /* where the season has worn it: both goalmouths, the centre, and the
+     scuffed strip along each touchline where the play is thickest */
+  const wear=(cx,cy,rx,ry,a)=>{
+   const p=P(cx,cy,0),s=p[2];
+   const rg=g.createRadialGradient(p[0],p[1],0,p[0],p[1],rx*s);
+   rg.addColorStop(0,'rgba(96,74,38,'+a+')');
+   rg.addColorStop(.65,'rgba(96,74,38,'+(a*.45)+')');
+   rg.addColorStop(1,'rgba(96,74,38,0)');
+   g.save();g.translate(p[0],p[1]);g.scale(1,(ry/rx)*.5);g.translate(-p[0],-p[1]);
+   g.fillStyle=rg;g.beginPath();g.arc(p[0],p[1],rx*s,0,7);g.fill();g.restore()};
+  wear(5.5,34,11,7,.11);            /* the six-yard box, near end   */
+  wear(99.5,34,11,7,.11);           /* and the far one              */
+  wear(11,34,4,3,.08);              /* penalty spots                */
+  wear(94,34,4,3,.08);
+  wear(52.5,34,9,6,.06);            /* the centre circle            */
+
+  /* four pylons, four pools. One central glow lights the pitch like a
+     table lamp; four overlapping ones light it like a stadium. */
+  [[26,.040],[52.5,.034],[79,.040]].forEach(([px,a])=>{
+   const p=P(px,30,0);
+   const rg=g.createRadialGradient(p[0],p[1],0,p[0],p[1],W*.34);
+   rg.addColorStop(0,'rgba(255,252,232,'+a+')');
+   rg.addColorStop(1,'rgba(255,252,232,0)');
+   g.fillStyle=rg;g.fillRect(0,far,W,H-far)});
+
+  g.restore()}
+ catch(e){}}
+
+const _dugDrawWC5=drawDugout;
+drawDugout=function(){
+ DUG.turfPending=true;
+ return _dugDrawWC5.apply(this,arguments)};
+
+/* ---------------------------------------------------------------------
+   2. THE SHIRT HE ACTUALLY WEARS
+   ---------------------------------------------------------------------
+   kitPattern() has been sitting there knowing that Newcastle play in
+   stripes. The shirt is drawn as a path, so the pattern is drawn inside
+   that same path with a clip — which means it follows the shoulders and
+   the hem for free and can never leak onto the grass.
+   --------------------------------------------------------------------- */
+const DUG_KIT={};
+function dugKitOf(c){
+ const k=c&&(c.key||c.short||c.name);
+ if(!k)return 'plain';
+ if(DUG_KIT[k]==null)DUG_KIT[k]=(typeof kitPattern==='function')?kitPattern(c):'plain';
+ return DUG_KIT[k]}
+
+/* the second colour, guaranteed to be visible against the first */
+function dugAlt(kit,trim){
+ try{
+  const a=kHex(kit),b=kHex(trim);
+  const la=a[0]*.299+a[1]*.587+a[2]*.114;
+  const lb=b[0]*.299+b[1]*.587+b[2]*.114;
+  if(Math.abs(la-lb)>46)return trim;
+  return la>128?'#16181c':'#f2f4f6'}
+ catch(e){return trim}}
+
+function dugKitPaint(g,pat,px,torsoT,hipY,u,kit,trim){
+ const alt=dugAlt(kit,trim);
+ const L=px-u*.95,R=px+u*.95,T=torsoT-u*.20,B=hipY+u*.10;
+ g.fillStyle=alt;
+ if(pat==='stripe'){
+  for(let i=-2;i<=2;i++){
+   const w=u*.30;
+   g.fillRect(px+i*u*.52-w/2,T,w,B-T)}}
+ else if(pat==='hoop'){
+  const n=4;
+  for(let i=0;i<n;i++){
+   const y=T+(B-T)*(i+.35)/n;
+   g.fillRect(L,y,R-L,(B-T)/(n*2.3))}}
+ else if(pat==='half'){
+  g.fillRect(px,T,R-px,B-T)}
+ else if(pat==='band'){
+  g.fillRect(px-u*.30,T,u*.60,B-T)}
+ else if(pat==='sash'){
+  g.save();
+  g.translate(px,(T+B)/2);g.rotate(-0.62);
+  g.fillRect(-u*1.6,-u*.24,u*3.2,u*.48);
+  g.restore()}
+ /* 'sleeve' and 'plain-white' are already carried by the sleeve blocks
+    and the base colour, so they add nothing here */}
+
+/* ---------------------------------------------------------------------
+   3. THE FIGURE
+   ---------------------------------------------------------------------
+   Same skeleton as before — the run cycle, the proportions and the
+   rounded limbs all stay. What is added is the kit pattern, a neck so
+   the head is attached to something, and a lean into a sprint.
+   --------------------------------------------------------------------- */
+const _dugFigWC5=dugFigure;
+dugFigure=function(g,d,c,P,W,now){
+ /* the one seam between the pitch and the players */
+ if(DUG.turfPending){
+  DUG.turfPending=false;
+  try{dugTurf(g,P,g.canvas.width,g.canvas.height)}catch(e){}}
+
+ const pl=d.pl;
+ const gk=pl.slot==='GK';
+ const p=P(d.x,d.y,0);
+ const s=p[2];
+ if(p[1]<0||p[1]>1e5)return;
+ const kit=gk?'#e9c400':c.c1;
+ const trim=gk?'#8a7400':(c.c2&&c.c2!==c.c1?c.c2:shade(c.c1,.5));
+ const HT=1.82;
+ const px=p[0],py=p[1];
+ const u=s*HT/8;
+ if(u<.6)return;
+ const sp=Math.hypot(d.vx||0,d.vy||0);
+ const ph=DUG.phase;
+ ph[pl.p.id]=(ph[pl.p.id]==null?pl.p.id%6:ph[pl.p.id])+(0.09+Math.min(sp,.55)*1.9);
+ const t=ph[pl.p.id];
+ const swing=Math.sin(t)*Math.min(1,.25+sp*7);
+ const bob=Math.abs(Math.cos(t))*u*.22*Math.min(1,.3+sp*6);
+ const face=(d.vx||0)>=0?1:-1;
+ const y0=py-bob;
+ const rr=u*.30;
+ const hipY=y0-u*3.7,torsoT=y0-u*6.3,headR=u*.66;
+
+ g.save();
+ /* he leans the way he is going, from the feet, when he is moving */
+ const lean=clamp(sp*1.5,0,.16)*face;
+ if(lean){g.translate(px,py);g.rotate(lean);g.translate(-px,-py)}
+
+ /* shadow */
+ g.beginPath();
+ g.ellipse(px-DUG_LIGHT*u*.22,py+u*.05,u*1.55,u*.52,0,0,7);
+ g.fillStyle='rgba(0,0,0,.40)';g.fill();
+ if(pl.off)g.globalAlpha=.35;
+
+ /* legs */
+ [[-1,swing],[1,-swing]].forEach(([sgn,sw])=>{
+  g.save();
+  g.translate(px+sgn*u*.42,hipY);
+  g.rotate(sw*.55);
+  g.fillStyle=trim;                dugRR(g,-u*.42,0,u*.84,u*1.55,rr);
+  g.fillStyle=shade(trim,1.5);     dugRR(g,-u*.34,u*1.55,u*.68,u*.62,rr*.8);
+  g.fillStyle='#f0f3f0';           dugRR(g,-u*.33,u*2.05,u*.66,u*1.32,rr*.7);
+  g.fillStyle='#14181c';
+  const bw=u*1.0*(sgn===1?1:-1)+u*.36;
+  dugRR(g,Math.min(-u*.36,-u*.36+bw),u*3.28,Math.abs(bw),u*.46,rr*.6);
+  g.restore()});
+
+ /* arms */
+ [[-1,-swing],[1,swing]].forEach(([sgn,sw])=>{
+  g.save();
+  g.translate(px+sgn*u*.92,torsoT+u*.6);
+  g.rotate(sw*.7);
+  g.fillStyle=kit;      dugRR(g,-u*.26,0,u*.52,u*1.12,rr*.8);
+  g.fillStyle='#e2b493';dugRR(g,-u*.24,u*1.05,u*.48,u*1.02,rr*.8);
+  g.restore()});
+
+ /* the shirt, as a path, so the pattern can be clipped to it */
+ const shirt=()=>{
+  g.beginPath();
+  g.moveTo(px-u*.95,torsoT+u*.35);
+  g.quadraticCurveTo(px,torsoT-u*.20,px+u*.95,torsoT+u*.35);
+  g.lineTo(px+u*.82,hipY+u*.08);
+  g.lineTo(px-u*.82,hipY+u*.08);
+  g.closePath()};
+ shirt();
+ const sg=g.createLinearGradient(px-u,torsoT,px+u,hipY);
+ sg.addColorStop(0,shade(kit,1.18));sg.addColorStop(.55,kit);sg.addColorStop(1,shade(kit,.74));
+ g.fillStyle=sg;g.fill();
+
+ /* the pattern, inside the shirt and nowhere else */
+ const pat=gk?'plain':dugKitOf(c);
+ if(pat!=='plain'&&u>1.1){
+  g.save();shirt();g.clip();
+  dugKitPaint(g,pat,px,torsoT,hipY,u,kit,trim);
+  /* the shading has to go back on top of the pattern or the shirt
+     goes flat the moment it stops being one colour */
+  const sh=g.createLinearGradient(px-u,torsoT,px+u,hipY);
+  sh.addColorStop(0,'rgba(255,255,255,.14)');
+  sh.addColorStop(.55,'rgba(255,255,255,0)');
+  sh.addColorStop(1,'rgba(0,0,0,.22)');
+  g.fillStyle=sh;shirt();g.fill();
+  g.restore()}
+
+ /* sleeves and collar */
+ g.fillStyle=trim;
+ dugRR(g,px-u*.95,torsoT+u*.30,u*.30,u*.68,rr*.6);
+ dugRR(g,px+u*.65,torsoT+u*.30,u*.30,u*.68,rr*.6);
+ dugRR(g,px-u*.30,torsoT-u*.02,u*.60,u*.22,rr*.5);
+
+ /* the floodlight rim */
+ if(u>1.6){
+  g.save();
+  g.globalCompositeOperation='lighter';
+  g.globalAlpha=pl.off?.10:.26;
+  g.fillStyle='#dfe9ff';
+  dugRR(g,px+DUG_LIGHT*u*.95,torsoT+u*.30,u*.17,(hipY-torsoT)*.86,rr*.5);
+  g.restore()}
+
+ if(u>2.0){
+  g.font='800 '+Math.round(u*1.5)+'px Inter,sans-serif';
+  g.textAlign='center';g.textBaseline='middle';
+  g.fillStyle=kitInk(kit);
+  g.globalAlpha=(pl.off?.35:.92);
+  g.fillText(String(shirtNo(pl.p,c)||''),px,torsoT+u*1.45);
+  g.globalAlpha=pl.off?.35:1;g.textBaseline='alphabetic'}
+
+ /* a neck, so the head is attached to the shoulders */
+ const skin=['#f0c6a4','#dda87f','#b3784f','#8a5a3a','#6b4226'][pl.p.id%5];
+ g.fillStyle=shade(skin,.86);
+ dugRR(g,px-u*.20,torsoT-u*.30,u*.40,u*.42,rr*.5);
+
+ /* head and hair */
+ g.beginPath();g.arc(px,torsoT-headR*.55,headR,0,7);
+ g.fillStyle=skin;g.fill();
+ g.beginPath();
+ g.arc(px,torsoT-headR*.72,headR*.98,Math.PI*1.02,Math.PI*2.02);
+ g.fillStyle=['#241a12','#12100e','#4a3520','#6b4a25','#161616'][(pl.p.id>>2)%5];g.fill();
+ if(u>2.4){
+  g.fillStyle='rgba(20,20,20,.55)';
+  g.fillRect(px+face*headR*.30,torsoT-headR*.62,headR*.20,headR*.16)}
+ g.restore();
+ g.globalAlpha=1};
+
+/* ---------------------------------------------------------------------
+   4. THE CROWD SITS BACK
+   ---------------------------------------------------------------------
+   dugSky caches the whole stand to an offscreen canvas and only rebuilds
+   it when the size or the clubs change, so the blur is paid for once per
+   match rather than once per frame. Two pixels is enough: the dots stop
+   competing with the players and the floodlight glows spread the way
+   they do through a long lens.
+   --------------------------------------------------------------------- */
+const _dugSkyWC5=dugSky;
+dugSky=function(W,H,hc,ac){
+ const s=_dugSkyWC5.apply(this,arguments);
+ try{
+  if(!s||!s.cv||s._dof)return s;
+  const src=s.cv;
+  const out=document.createElement('canvas');
+  out.width=src.width;out.height=src.height;
+  const o=out.getContext('2d');
+  o.filter='blur('+Math.max(1.0,src.width*0.0010)+'px)';
+  o.drawImage(src,0,0);
+  o.filter='none';
+  s.cv=out;s._dof=1}
+ catch(e){}
+ return s};
+
+/* ---------------------------------------------------------------------
+   5. AND THE BALL TURNS OVER
+   --------------------------------------------------------------------- */
+const _dugDrawBall=drawDugout;
+drawDugout=function(){
+ const r=_dugDrawBall.apply(this,arguments);
+ try{
+  const cv=$('#dugCanvas'),m=MU.m;
+  if(!cv||!m||!MU.ball)return r;
+  const g=cv.getContext('2d');
+  const P=dugProject(cv.width,cv.height);
+  const b=MU.ball,h=MU.ballH||0;
+  const a=P(b.x,b.y,h);
+  const rad=Math.max(1.1,a[2]*0.115);
+  if(rad<2.2)return r;
+  DUG.spin=(DUG.spin||0)+Math.hypot((MU.ballT.x-b.x),(MU.ballT.y-b.y))*0.09+0.02;
+  g.save();
+  g.translate(a[0],a[1]);g.rotate(DUG.spin);
+  const bg=g.createRadialGradient(-rad*.35,-rad*.4,rad*.1,0,0,rad);
+  bg.addColorStop(0,'#ffffff');bg.addColorStop(1,'#bfc6bf');
+  g.beginPath();g.arc(0,0,rad,0,7);g.fillStyle=bg;g.fill();
+  g.fillStyle='rgba(22,26,22,.88)';
+  g.beginPath();
+  for(let i=0;i<5;i++){const an=i/5*Math.PI*2;
+   g[i?'lineTo':'moveTo'](Math.cos(an)*rad*.44,Math.sin(an)*rad*.44)}
+  g.closePath();g.fill();
+  g.restore()}
+ catch(e){}
+ return r};
+
+/*#wC5_dugout2.js#*/
 showStart();
 </script>
 </body>
