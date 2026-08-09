@@ -365,7 +365,7 @@ const pick=a=>a[Math.floor(Math.random()*a.length)];
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 function hashStr(s){let h=1779033703;for(let i=0;i<s.length;i++){h=Math.imul(h^s.charCodeAt(i),3432918353);h=h<<13|h>>>19}return h>>>0}
 function mulberry(seed){let a=seed>>>0;return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
-const fmtM=v=>{const n=Math.abs(v);let s;if(n>=1e9)s=(v/1e9).toFixed(2)+'B';else if(n>=1e6)s=(v/1e6).toFixed(1).replace(/\.0$/,'')+'M';else if(n>=1e3)s=(v/1e3).toFixed(0)+'K';else s=String(Math.round(v));return '£'+s};
+const fmtM=v=>{const x=isFinite(+v)?+v:0,g=x<0?'-':'',n=Math.abs(x);let s;if(n>=1e9)s=(n/1e9).toFixed(2)+'B';else if(n>=1e6)s=(n/1e6).toFixed(1).replace(/\.0$/,'')+'M';else if(n>=1e3)s=(n/1e3).toFixed(0)+'K';else s=String(Math.round(n));return g+'£'+s};
 const fmtW=v=>fmtM(v)+'/w';
 const DAY=86400000;
 function dateOf(day){return new Date(G.epoch+day*DAY)}
@@ -49367,6 +49367,448 @@ vFreeAgents=function(){
 if(typeof ACTIONS.ccTrials==='function')ACTIONS.ccTrials=()=>ACTIONS.faOpen();
 
 /*#wB7_freeagents.js#*/
+
+
+
+
+
+
+
+
+/*#wB8_fixes.js#*/
+
+/* =====================================================================
+   wB8_fixes — things the bug hunt turned up
+   ===================================================================== */
+
+/* ---------------------------------------------------------------------
+   1. A NEGATIVE AMOUNT PUTS THE MINUS OUTSIDE THE POUND SIGN
+   ---------------------------------------------------------------------
+   fmtM took the absolute value to pick the unit and then formatted the
+   signed number, so the sign came out inside the currency symbol:
+   "£-28.8M". It reads as a typo, and it appears wherever money can go
+   negative — the financial fair play line, a bank overdraft, a net
+   spend. Every other part of the string was already right.
+
+   fmtM is declared `const`, so unlike almost everything else in this
+   file it cannot be wrapped from a later layer. It is fixed where it is
+   declared instead — a one-line change at the top of the file, which is
+   the right place for it anyway. fmtW is built on fmtM and reads it at
+   call time, so it inherits the fix. */
+
+/* ---------------------------------------------------------------------
+   2. THE SAVE IS WITHIN A WHISKER OF THE STORAGE LIMIT
+   ---------------------------------------------------------------------
+   A League Two save two seasons in came to 4.9 MB against a
+   localStorage budget of about five, and I have already watched that
+   break once this session: writeSlot fails, the slot silently keeps the
+   previous write, and loading it hands back an older world.
+
+   Most of the obvious fat is already gone — saveBlob trims each
+   player's match log to twenty-four rows for your own squad, four for
+   the rest of your division and none for the other four hundred and
+   sixty clubs, and career totals are packed positionally. What was
+   still there was the shape of what remains. A kept log row looked like
+   this:
+
+     {"d":298,"s":1,"o":13,"gf":0,"ga":0,"h":1,"r":6,"g":0,"a":0,
+      "m":23,"pos":"AML","c":"Premier League · Matchday 33","yc":1,"rc":0}
+
+   A hundred and twenty-seven bytes, of which about fifty are the same
+   fourteen key names written again and thirty are a competition label
+   spelled out in full — the same few hundred strings over and over.
+
+   The keys become positions in an array and the labels become indices
+   into a dictionary, both written into the save so it reads back
+   exactly. Worth about 180 kB, which is not the whole answer but is
+   free and loses nothing.
+   --------------------------------------------------------------------- */
+
+/* the key order and the label dictionary travel with the save */
+function tblKeys(list,key){
+ const seen={},out=[];
+ list.forEach(rows=>{(rows||[]).forEach(r=>{
+  if(!r||typeof r!=='object'||Array.isArray(r))return;
+  for(const k in r)if(!seen[k]){seen[k]=1;out.push(k)}})});
+ return out}
+
+const _packGRows=packG;
+packG=function(g){
+ const out=_packGRows.apply(this,arguments);
+ try{
+  if(!out||!out.g||!out.pk)return out;
+  const iLog=out.pk.indexOf('log'), iHist=out.pk.indexOf('hist');
+  if(iLog<0&&iHist<0)return out;
+  /* gather every row so the key order is decided once for the file */
+  const logs=[],hists=[];
+  (out.g.clubs||[]).forEach(c=>['players','youth'].forEach(f=>{
+   (c[f]||[]).forEach(r=>{
+    if(iLog>=0&&Array.isArray(r[iLog+2]))logs.push(r[iLog+2]);
+    if(iHist>=0&&Array.isArray(r[iHist+2]))hists.push(r[iHist+2])})}));
+  const LK=tblKeys(logs), HK=tblKeys(hists);
+  /* the competition label is the same handful of strings over and over */
+  const dict=[],dix={};
+  const put=v=>{if(typeof v!=='string')return v;
+   if(dix[v]==null){dix[v]=dict.length;dict.push(v)}
+   return {$:dix[v]}};
+  const strCols=new Set(['c','comp','div']);
+  const packRows=(rows,KEYS)=>rows.map(r=>{
+   if(!r||typeof r!=='object'||Array.isArray(r))return r;
+   const a=KEYS.map(k=>{
+    const v=r[k];
+    if(v===undefined)return null;
+    return strCols.has(k)?put(v):v});
+   let n=a.length;while(n>0&&(a[n-1]===null||a[n-1]===undefined))n--;
+   return a.slice(0,n)});
+  (out.g.clubs||[]).forEach(c=>['players','youth'].forEach(f=>{
+   (c[f]||[]).forEach(r=>{
+    if(iLog>=0&&Array.isArray(r[iLog+2]))r[iLog+2]=packRows(r[iLog+2],LK);
+    if(iHist>=0&&Array.isArray(r[iHist+2]))r[iHist+2]=packRows(r[iHist+2],HK)})}));
+  out.g._lk=LK;out.g._hk=HK;out.g._ld=dict;
+ }catch(e){}
+ return out};
+
+const _unpackGRows=unpackG;
+unpackG=function(g,pk,ak,sk){
+ const r=_unpackGRows.apply(this,arguments);
+ try{
+  if(!r||!r._lk&&!r._hk)return r;
+  const LK=r._lk||[],HK=r._hk||[],D=r._ld||[];
+  const take=v=>(v&&typeof v==='object'&&!Array.isArray(v)&&v.$!=null)?D[v.$]:v;
+  const unRows=(rows,KEYS)=>rows.map(a=>{
+   if(!Array.isArray(a))return a;
+   const o={};
+   for(let i=0;i<KEYS.length;i++){const v=a[i];if(v!==null&&v!==undefined)o[KEYS[i]]=take(v)}
+   return o});
+  (r.clubs||[]).forEach(c=>['players','youth'].forEach(f=>{
+   (c[f]||[]).forEach(p=>{
+    if(Array.isArray(p.log)&&p.log.length&&Array.isArray(p.log[0]))p.log=unRows(p.log,LK);
+    if(Array.isArray(p.hist)&&p.hist.length&&Array.isArray(p.hist[0]))p.hist=unRows(p.hist,HK)})}));
+  delete r._lk;delete r._hk;delete r._ld;
+ }catch(e){}
+ return r};
+
+/* ---------------------------------------------------------------------
+   3. WHAT I DID NOT BUILD, AND WHY
+   ---------------------------------------------------------------------
+   I wrote a retry that shed match logs when a save would not fit, and a
+   warning for when it still would not. Then I found both already there,
+   a few thousand lines up: on a quota failure the save deletes the
+   autosave, retries, deletes the other unused slots, retries again, and
+   if it still fails it mails you once — not once a day — telling you to
+   export the file.
+
+   Mine was worse. It duplicated the warning, so a full save would have
+   produced two letters saying the same thing, and it sat outside the
+   existing retry, so it would only ever have run after the other code
+   had already deleted your other save slots. Deleted, then shortened —
+   exactly the wrong order.
+
+   So it is gone, and what stays is the compression above, which is the
+   part that helps: about 180 kB of headroom means the destructive path
+   — throwing away your other saves to make room — is reached later or
+   not at all.
+   --------------------------------------------------------------------- */
+
+/* ---------------------------------------------------------------------
+   4. AND THE FIXTURE LIST, WHICH HAS THE SAME PROBLEM
+   ---------------------------------------------------------------------
+   Weighing the real written file rather than the live object:
+
+     clubs      3,483 kB
+     fixtures     724 kB      ← 16% of the save
+     everything else ~330 kB
+
+   Eight thousand seven hundred fixtures at about eighty-four bytes each,
+   and trimFixtures has already thrown away the scorers and events for
+   every game that is not yours. What is left is
+   {"r":11,"day":118,"h":204,"a":57,"played":true,"hs":1,"as":2,
+    "div":"ITA2"} — where "r","day","h","a","played","hs","as","div" is
+   forty-one characters of the same eight key names, written out eight
+   thousand seven hundred times.
+
+   Same treatment as the match logs: positions instead of keys, and the
+   division and competition strings into the same dictionary. Roughly
+   three hundred kilobytes, which on a save that has been bumping the
+   storage ceiling is the difference between the game quietly deleting
+   your other save slots to make room and not having to.
+   --------------------------------------------------------------------- */
+const _packGFix=packG;
+packG=function(g){
+ const out=_packGFix.apply(this,arguments);
+ try{
+  if(!out||!out.g||!Array.isArray(out.g.fixtures)||!out.g.fixtures.length)return out;
+  if(Array.isArray(out.g.fixtures[0]))return out;          /* already packed */
+  const FK=tblKeys([out.g.fixtures]);
+  if(!FK.length)return out;
+  /* share the label dictionary the logs already built, if there is one */
+  const dict=out.g._ld||[];
+  const dix={};dict.forEach((s,i)=>{dix[s]=i});
+  const put=v=>{if(typeof v!=='string')return v;
+   if(dix[v]==null){dix[v]=dict.length;dict.push(v)}
+   return {$:dix[v]}};
+  const strCols=new Set(['div','comp','cup']);
+  out.g.fixtures=out.g.fixtures.map(f=>{
+   if(!f||typeof f!=='object'||Array.isArray(f))return f;
+   const a=FK.map(k=>{
+    const v=f[k];
+    if(v===undefined)return null;
+    return strCols.has(k)?put(v):v});
+   let n=a.length;while(n>0&&(a[n-1]===null||a[n-1]===undefined))n--;
+   return a.slice(0,n)});
+  out.g._fk=FK;out.g._ld=dict;
+ }catch(e){}
+ return out};
+
+const _unpackGFix=unpackG;
+unpackG=function(g,pk,ak,sk){
+ /* the fixture list has to come back before the log unpacker runs, and
+    both read the same dictionary, so this wrapper does its work first
+    and then hands on */
+ try{
+  if(g&&Array.isArray(g.fixtures)&&g.fixtures.length&&Array.isArray(g.fixtures[0])&&g._fk){
+   const FK=g._fk,D=g._ld||[];
+   const take=v=>(v&&typeof v==='object'&&!Array.isArray(v)&&v.$!=null)?D[v.$]:v;
+   g.fixtures=g.fixtures.map(a=>{
+    if(!Array.isArray(a))return a;
+    const o={};
+    for(let i=0;i<FK.length;i++){const v=a[i];if(v!==null&&v!==undefined)o[FK[i]]=take(v)}
+    return o});
+   delete g._fk}
+ }catch(e){}
+ return _unpackGFix.apply(this,arguments)};
+
+/* ---------------------------------------------------------------------
+   5. THE CHAIRMEN WERE STILL PAYING IN OLD MONEY
+   ---------------------------------------------------------------------
+   Rebuilding the finances rescaled every wage in the game and left the
+   three create-a-club chairmen where they were, which quietly broke all
+   three of them. Their ceilings were set when a National League squad
+   cost £45,000 a week; a National League squad now costs £16,000. So
+   the generous chairman's £210,000 ceiling was thirteen times the
+   division, the tight chairman's £62,000 was four times it, and
+   measured across a season all three built the same squad and none of
+   them went up:
+
+     generous  spent £33k of a £210k ceiling, squad mean 45.2
+     sensible  spent £10k of £120k, squad mean 37.5
+     tight     spent £29k of £62k,  squad mean 44.2
+
+   Two things were wrong and only one of them was the number.
+
+   THE NUMBER. The ceilings are now multiples of what the division
+   actually spends — about three times for the generous owner, half as
+   much again for the sensible one, and roughly the division's own rate
+   for the tight one — so the difference between them means something
+   again.
+
+   AND WHAT THE MONEY BUYS. Even with the ceiling fixed, nobody worth
+   signing would come: faAppeal reads the gap between a player's rating
+   and the division's, and a fifty-five rated player looking at a
+   National League club scored six out of a hundred however much he was
+   offered. That is wrong about football. Money is exactly what persuades
+   a good player to drop a division, and a rich owner in a poor league is
+   the whole premise of the mode. Appeal now reads how far the club can
+   pay above its division, so the generous chairman's money reaches
+   players the division could not otherwise attract — and the tight
+   chairman's does not.
+   --------------------------------------------------------------------- */
+try{
+ if(typeof CC_CHAIRS!=='undefined'){
+  const set=(id,o)=>{const c=CC_CHAIRS.filter(x=>x.id===id)[0];if(c)for(const k in o)c[k]=o[k]};
+  set('gen',{budget:12e5,bank:6e5,wage:72000,
+   blurb:'Three times what anyone else in this division can pay. Spend it well and you go up.'});
+  set('sen',{budget:45e4,bank:25e4,wage:38000,
+   blurb:'Half as much again as the rest of the division. Enough to compete, not to buy it.'});
+  set('tig',{budget:15e4,bank:12e4,wage:22000,
+   blurb:'About what everybody else has. You are not getting out of here on money.'});
+ }
+}catch(e){}
+
+/* what a club can pay relative to the league it is in */
+function payClout(){
+ try{
+  const me=G.clubs[G.my];
+  const mem=divMembers(me.league)||[];
+  let n=0,s=0;
+  mem.forEach(i=>{if(i===G.my)return;const c=G.clubs[i];
+   const b=squadWage(c);if(b>0){s+=b;n++}});
+  if(!n)return 1;
+  return clamp((me.wageCap||0)/(s/n),.4,4)}
+ catch(e){return 1}}
+
+if(typeof faAppeal==='function'){
+ const _faAppealPay=faAppeal;
+ faAppeal=function(p){
+  let a=_faAppealPay.apply(this,arguments);
+  try{
+   /* a club that can pay well over the division's rate can talk a better
+      player into dropping into it, which is the entire point of a rich
+      owner in a poor league */
+   a+=(payClout()-1)*20;
+  }catch(e){}
+  return clamp(Math.round(a),2,98)}}
+
+/* ---------------------------------------------------------------------
+   6. A SQUAD OF TWENTY TAKING THE FIELD AS ONE MAN
+   ---------------------------------------------------------------------
+   The worst thing this hunt found. Build a club, sign twenty players
+   through the free-agent market, and the team that runs out is one
+   footballer.
+
+   The selection is a list of eleven player ids. When the first signing
+   arrives the code asks autoPick for an eleven, and autoPick — handed a
+   squad of one — returns eleven slots with one id in the first and ten
+   nulls after it. The guard that would refill it reads the LENGTH of
+   that list, which is eleven, so it never runs again. Nineteen more
+   players arrive and none of them is ever selected.
+
+   Measured: squad of twenty, best eleven averaging 52.5, and the team
+   sheet holding a single left wing-back.
+
+   It matters beyond a built club — any squad that empties out and
+   refills, through a rebuild or a run of departures, lands in the same
+   place. The check counts players who are actually AT the club rather
+   than counting slots, and it runs on the daily tick so nothing has to
+   remember to call it. A deliberate selection is never overwritten:
+   it only acts when the sheet cannot field a full side.
+   --------------------------------------------------------------------- */
+function xiValidCount(){
+ try{
+  const ids=(G.tacs&&G.tacs.xi)||[];
+  const mine={};
+  (G.clubs[G.my].players||[]).forEach(p=>{if(!p.loan)mine[p.id]=1});
+  let n=0;
+  ids.forEach(id=>{if(id!=null&&mine[id])n++});
+  return n}
+ catch(e){return 0}}
+
+function ensureXI(){
+ try{
+  if(!G||!G.clubs||G.sacked||!G.tacs)return false;
+  const avail=(G.clubs[G.my].players||[]).filter(p=>!p.loan&&!(p.injury&&p.injury.days>0)).length;
+  const want=Math.min(11,avail);
+  if(want<1)return false;
+  if(xiValidCount()>=want)return false;
+  G.tacs.xi=autoPick(G.my,G.tacs.formation);
+  return true}
+ catch(e){return false}}
+
+const _dtcXI=dailyTickCore;
+dailyTickCore=function(){
+ const r=_dtcXI.apply(this,arguments);
+ try{ensureXI()}catch(e){}
+ return r};
+
+/* and immediately after a signing, so the squad screen tells the truth
+   before the day has even turned */
+['faSign','dlBuy','ccSign'].forEach(k=>{
+ const f=ACTIONS[k];
+ if(typeof f!=='function')return;
+ ACTIONS[k]=function(){
+  const r=f.apply(this,arguments);
+  try{ensureXI()}catch(e){}
+  return r}});
+
+/* a match must never kick off with a half-empty team sheet */
+if(typeof buildContext==='function'){
+ const _bcXI=buildContext;
+ buildContext=function(fix){
+  try{if(fix&&(fix.h===G.my||fix.a===G.my))ensureXI()}catch(e){}
+  return _bcXI.apply(this,arguments)}}
+
+/* ---------------------------------------------------------------------
+   7. NOBODY TELLS YOU THE SQUAD HAS NO FORWARDS
+   ---------------------------------------------------------------------
+   Building a club through the free-agent list by signing the twenty
+   best-rated players available produces a squad of eight centre-backs
+   and no strikers, and the game says nothing at all. Played out over a
+   season that is four points from forty-six games and a hundred and
+   forty-four conceded.
+
+   It is not the engine being wrong. Signing the same money's worth with
+   an eye on the shape — a keeper, four defenders, four midfielders, two
+   forwards and cover — wins the division:
+
+     the same twenty best players    4 pts, 45:144, bottom
+     twenty players in a shape      94 pts, 54:5,  champions
+
+   That is a fair thing to get wrong and a terrible thing to be told
+   about in May. squadIssues already refuses to let you kick off with
+   ten men or no goalkeeper; it now also notices when the eleven has
+   nobody up front or is mostly playing out of position. And the
+   free-agent list — where the mistake is actually made — shows what the
+   squad is short of while you are shopping.
+   --------------------------------------------------------------------- */
+const SQUAD_WANT={GK:2,D:7,M:7,A:4};
+
+function squadShape(ci){
+ const c=G.clubs[ci==null?G.my:ci];
+ const n={GK:0,D:0,M:0,A:0};
+ (c.players||[]).forEach(p=>{if(p.loan)return;
+  const g=POSGROUP(p.pos);if(n[g]!=null)n[g]++});
+ return n}
+
+function squadShortOf(){
+ const n=squadShape();
+ const out=[];
+ ['GK','D','M','A'].forEach(g=>{
+  const gap=SQUAD_WANT[g]-n[g];
+  if(gap>0)out.push({g,gap})});
+ return out}
+
+const SHAPE_LBL={GK:'goalkeeper',D:'defender',M:'midfielder',A:'forward'};
+
+if(typeof squadIssues==='function'){
+ const _squadIssuesShape=squadIssues;
+ squadIssues=function(){
+  const out=_squadIssuesShape.apply(this,arguments)||[];
+  try{
+   const picked=(G.tacs.xi||[]).filter(Boolean).map(id=>playerById(id)).filter(Boolean);
+   if(picked.length<11)return out;
+   const att=picked.filter(p=>POSGROUP(p.pos)==='A').length;
+   if(!att)out.push({k:'noatt',t:'Nobody up front',
+    s:'Not one of your eleven is a forward. You will not score.',
+    fix:'Pick the best available XI'});
+   const shape=(FORMATIONS&&FORMATIONS[G.tacs.formation])||null;
+   if(shape){
+    let wrong=0;
+    picked.forEach((p,i)=>{
+     const slot=shape[i]&&shape[i][0];
+     if(slot&&POSGROUP(slot)!==POSGROUP(p.pos))wrong++});
+    if(wrong>=4)out.push({k:'shape',
+     t:wrong+' players out of position',
+     s:'Most of this eleven is being asked to play somewhere it does not play. '+
+       'It will cost you more than any of them are worth.',
+     fix:'Pick the best available XI'})}
+  }catch(e){}
+  return out}}
+
+/* and the free-agent list says what is missing while you are in it */
+if(typeof ACTIONS.faOpen==='function'){
+ const _faOpenShape=ACTIONS.faOpen;
+ ACTIONS.faOpen=function(){
+  const r=_faOpenShape.apply(this,arguments);
+  try{
+   const host=document.querySelector('#sheetBody');
+   if(!host)return r;
+   const n=squadShape(),short=squadShortOf();
+   const line=short.length
+    ? 'Short of '+short.map(s=>s.gap+' '+SHAPE_LBL[s.g]+(s.gap>1?'s':'')).join(', ')
+    : 'The squad has a full shape.';
+   const html='<div class="card tight" style="margin-bottom:10px;border-color:'+
+    (short.length?'rgba(240,182,73,.4)':'rgba(87,211,140,.35)')+'">'+
+    '<div class="xs" style="font-weight:800;letter-spacing:.06em">SQUAD SHAPE</div>'+
+    '<div class="small" style="margin-top:4px">'+
+    ['GK','D','M','A'].map(g=>'<b>'+n[g]+'</b> '+SHAPE_LBL[g]+(n[g]===1?'':'s')).join(' · ')+
+    '</div><div class="xs faint" style="margin-top:4px;line-height:1.45">'+esc(line)+
+    ' — a squad of the twenty best players and no shape finishes bottom.</div></div>';
+   const h3=host.querySelector('h3');
+   if(h3)h3.insertAdjacentHTML('afterend',html);
+  }catch(e){}
+  return r}}
+
+/*#wB8_fixes.js#*/
 showStart();
 </script>
 </body>
