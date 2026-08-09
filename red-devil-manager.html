@@ -53152,6 +53152,177 @@ newGame=function(){
  return r};
 
 /*#wC9_gk.js#*/
+
+
+/*#wD0_offball.js#*/
+
+/* =====================================================================
+   wD0_offball — the foot meets the ball, and the other ten react
+   ---------------------------------------------------------------------
+   Two things left over from the animation pass.
+
+   THE KICK WAS LATE. The pose fires the moment the ball starts moving,
+   and it opens with a backlift — so the ball leaves while the boot is
+   still travelling backwards, and the leg swings through a fortnight
+   after the pass has gone. Every kick in the game is out of time with
+   the thing it is supposed to be causing.
+
+   It cannot be fixed by moving the pose, because at the moment we hear
+   about a pass the ball has already gone. It has to be ANTICIPATED, and
+   it can be: while a player is holding the ball the engine has already
+   decided when he will play it and written it down —
+
+     p.nextAt   the timestamp the next action fires
+
+   So the backlift is started before that time and timed to finish on
+   it. The foot arrives at the ball on the frame the ball departs. If a
+   turnover cancels the pass the backlift just reads as a shift of
+   weight, which is what it looks like anyway.
+
+   NOBODY OFF THE BALL WAS DOING ANYTHING. Ten players per side jogged
+   in whatever direction the shape sent them, facing wherever they
+   happened to be going, and reacted to nothing. Two cheap things fix
+   most of that:
+
+     a player who is not going anywhere turns and watches the ball
+     a man who has just put a chance wide puts his hands on his head
+
+   The engine still decides everything. This reads it earlier.
+   ===================================================================== */
+
+/* how long a backlift takes, in real milliseconds before contact */
+const KICK_WIND=190;
+
+/* ---------------------------------------------------------------------
+   1. SEEING THE KICK COMING
+   ---------------------------------------------------------------------
+   Added to the watcher rather than replacing it: the existing pass,
+   save, tackle and goal detection all stay exactly as they were.
+   --------------------------------------------------------------------- */
+const _dugWatchWD0=dugWatch;
+dugWatch=function(){
+ const r=_dugWatchWD0.apply(this,arguments);
+ try{
+  const m=MU.m;if(!m||m.done||m.stage==='HT')return r;
+  const p=(typeof playState==='function')?playState():null;
+  if(!p)return r;
+  const now=performance.now();
+
+  /* THE BACKLIFT. He is on the ball and the engine has already decided
+     when he plays it, so the leg goes back in time to come through. */
+  if(p.mode==='hold'&&p.holder&&p.holder.p&&p.nextAt){
+   const id=p.holder.p.id;
+   const wind=dugMs(KICK_WIND);
+   const left=p.nextAt-now;
+   if(left>0&&left<=wind){
+    const cur=DUG.anim[id];
+    /* never over-write a dive, a slide or an existing windup */
+    if(!cur||(cur.a!=='dive'&&cur.a!=='slide'&&cur.a!=='windup'&&now>=cur.t1)){
+     DUG.anim[id]={a:'windup',t0:now-(wind-left),t1:p.nextAt}}}}
+
+  /* THE MISS. A shot going wide is known the instant it is struck and
+     so is the moment it arrives, so he reacts when it lands rather than
+     when he hits it.
+
+     The shooter is still p.holder while the ball is in flight — the
+     engine does not clear it — which is why the first version of this,
+     waiting for holder to go null, never fired once in a full match. */
+  const shootNow=p.shooting||null;
+  if(shootNow==='wide'&&DUG._prevShoot!=='wide'&&p.holder&&p.holder.p){
+   DUG._missPend={id:p.holder.p.id,at:p.t0+(p.ms||400)};
+  }
+  DUG._prevShoot=shootNow;
+  if(DUG._missPend&&now>=DUG._missPend.at){
+   const id=DUG._missPend.id;DUG._missPend=null;
+   dugSet(id,'dejected',1500);
+  }
+  if(DUG._missPend&&now>DUG._missPend.at+2500)DUG._missPend=null;
+ }catch(e){}
+ return r};
+
+const _initDotsWD0=initDots;
+initDots=function(){const r=_initDotsWD0.apply(this,arguments);
+ DUG._missPend=null;DUG._prevShoot=null;return r};
+
+/* ---------------------------------------------------------------------
+   2. THE NEW SHAPES
+   ---------------------------------------------------------------------
+   The kick is re-cut so that k=0 IS the contact. It used to spend the
+   first third of its life winding up, which is the part that now
+   happens beforehand under its own pose.
+   --------------------------------------------------------------------- */
+const _dugPoseWD0=dugPose;
+dugPose=function(id,sp,swing,bob,face){
+ const a=(typeof dugAnimOf==='function')?dugAnimOf(id):null;
+ if(a){
+  const k=clamp((performance.now()-a.t0)/Math.max(1,a.t1-a.t0),0,1);
+
+  if(a.a==='windup'){
+   /* the leg travels back and the body loads over the standing foot,
+      arriving at full backlift exactly as the ball is played */
+   const e=k*k;                       /* slow, then quick */
+   return {legA:-0.88*e,legB:-0.12*e,
+    armA:0.30*e,armB:-0.22*e,
+    rot:0.05*e,lift:0,bob:bob*(1-e),down:0}}
+
+  if(a.a==='kick'){
+   /* CONTACT IS NOW AT k=0. The boot is already through the ball on the
+      first frame, follows through, and the leg comes back under him. */
+   const power=a.power||.8;
+   const through=Math.sin(Math.min(1,k*1.7)*Math.PI*0.5);   /* 0 -> 1 fast */
+   const back=k>0.42?(k-0.42)/0.58:0;                       /* then recover */
+   const e=(0.55+0.45*through)*(1-back);
+   return {legA:1.15*power*e,legB:-0.16*power*e,
+    armA:-0.52*power*e,armB:0.34*power*e,
+    rot:-0.09*power*e,lift:0,bob:0,down:0}}
+
+  if(a.a==='dejected'){
+   /* Hands on HIPS, not on the head. The arm is one piece rotating at
+      the shoulder with no elbow, so a hand cannot be put on a head —
+      the first attempt just threw both arms in the air and was
+      indistinguishable from the goal celebration two players along.
+
+      Rotating each arm inwards instead brings the hands to the hips and
+      pushes the elbows out, which this rig can do and which reads as
+      the right thing. The shoulders drop with it. */
+   const up=Math.sin(Math.min(1,k*3)*Math.PI*0.5);
+   const go=k>0.72?(k-0.72)/0.28:0;
+   const e=up*(1-go);
+   return {legA:swing*.14,legB:-swing*.14,
+    armA:-0.62*e,armB:0.62*e,
+    rot:0,lift:0,bob:bob*.30,down:e*0.62}}
+ }
+ return _dugPoseWD0.apply(this,arguments)};
+
+/* ---------------------------------------------------------------------
+   3. WATCHING THE BALL
+   ---------------------------------------------------------------------
+   The figure works out which way a man is looking from the sign of his
+   horizontal velocity, which is right while he is running and means
+   nothing at all when he is standing still — so a stationary player
+   faces whichever way he last happened to drift.
+
+   Rather than reopen the figure to change that, the velocity handed to
+   it is nudged: for a man who is not going anywhere, the SIGN of vx is
+   pointed at the ball and the magnitude left far too small to register
+   as movement. He turns to watch the play; the run cycle still sees a
+   man standing still.
+   --------------------------------------------------------------------- */
+const _dugFigureWD0=dugFigure;
+dugFigure=function(g,d,c,P,W,now){
+ let vx=null;
+ try{
+  const sp=Math.hypot(d.vx||0,d.vy||0);
+  if(sp<0.012&&MU.ball){
+   vx=d.vx;
+   const want=(MU.ball.x>=d.x)?1:-1;
+   /* small enough that Math.hypot still reads as stationary */
+   d.vx=want*1e-4}}
+ catch(e){vx=null}
+ try{return _dugFigureWD0.call(this,g,d,c,P,W,now)}
+ finally{if(vx!==null)d.vx=vx}};
+
+/*#wD0_offball.js#*/
 showStart();
 </script>
 </body>
