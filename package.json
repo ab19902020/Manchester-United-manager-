@@ -1,0 +1,18 @@
+{
+  "name": "the-results-business",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A mobile-first football management career game.",
+  "scripts": {
+    "serve": "node scripts/serve.cjs",
+    "lint": "eslint src tests scripts service-worker.js",
+    "test": "node --test --test-reporter=spec",
+    "check": "npm run lint && npm test"
+  },
+  "devDependencies": {
+    "eslint": "^9.33.0",
+    "fake-indexeddb": "^6.2.2",
+    "globals": "^16.3.0",
+    "jsdom": "^26.1.0"
+  }
+}

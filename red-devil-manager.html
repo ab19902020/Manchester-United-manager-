@@ -2,10 +2,17 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
-<title>Red Devil Manager 26/27 — Football Management Sim</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#080c09">
+<meta name="description" content="The Results Business — build a football management career across 484 clubs and twenty countries.">
+<meta property="og:title" content="The Results Business">
+<meta property="og:description" content="A deep, mobile-first football management career.">
+<meta property="og:type" content="website">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="assets/results-business-icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="assets/results-business-icon-192.png">
+<title>The Results Business — A Football Management Career</title>
+<script src="src/simulation-model.js"></script>
 <style>
 /* ============ FLOODLIT PITCH DESIGN SYSTEM ============ */
 :root{
@@ -29,8 +36,8 @@
   --nav-h:62px;
   --hdr-h:58px;
   --radius:16px;
-  --disp:'Archivo Black',system-ui,sans-serif;
-  --body:'Inter',-apple-system,'Segoe UI',Roboto,sans-serif;
+  --disp:Impact,'Arial Narrow',system-ui,sans-serif;
+  --body:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
 }
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{height:100%}
@@ -46,6 +53,8 @@ body{
 #app{max-width:520px;margin:0 auto;min-height:100dvh;position:relative;display:flex;flex-direction:column;background:linear-gradient(180deg,rgba(20,30,21,.35),rgba(8,12,9,0) 200px)}
 button{font-family:var(--body);border:none;cursor:pointer;color:inherit;background:none}
 input,select{font-family:var(--body)}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,[tabindex]:focus-visible{
+  outline:3px solid var(--gold);outline-offset:3px}
 ::-webkit-scrollbar{width:0;height:0}
 
 /* ---------- Header ---------- */
@@ -346,7 +355,7 @@ textarea.presstx:focus{border-color:var(--gold);box-shadow:0 0 0 2px rgba(251,22
 
 <div id="matchScreen"></div>
 <div id="modalHost"><div class="scrim" data-action="closeModal"></div><div class="sheet" id="sheetBody"></div></div>
-<div id="toast"></div>
+<div id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 <div id="startScreen"></div>
 
 <script>
@@ -562,6 +571,13 @@ const DB=[
 
 /* ================= PLAYER GENERATION & WORLD STATE ================= */
 let G=null;
+
+/* SVG ids are document-wide. A render-instance suffix prevents repeated
+   portraits and cached crests from binding to another row's gradients. */
+let SVG_INSTANCE_SEQ=0;
+function svgInstanceId(prefix){
+ SVG_INSTANCE_SEQ=(SVG_INSTANCE_SEQ+1)%2147483647;
+ return String(prefix||'s')+SVG_INSTANCE_SEQ.toString(36)}
 
 function ovrOf(p,slot){slot=slot||p.pos;const wts=W[slot];let s=0,tw=0;const pen=posPenalty(p,slot);
  for(const a in wts){let v=p.attrs[a];if(pen>0&&(TECH.includes(a)||MENT.includes(a)))v*=(1-pen);s+=v*wts[a];tw+=wts[a]}
@@ -981,9 +997,17 @@ class MatchSim{
   let shot=(10+(rawS-10)*0.42)*(.85+Math.random()*.35)*A.mm.att*(A.home?1.03:1)*(hasTrait(shooter,'Finisher')?1.04:1)*(creator&&hasTrait(creator,'Playmaker')?1.03:1);
   if(shooter.goals>=1)shot*=.9;if(shooter.goals>=2)shot*=.82; // defences key on the man in form
   const save=((10+(rawK-10)*.42)*(.79+Math.random()*.43)+.92)*(hasTrait(g,'Wall')?1.045:1);
-  A.st.sh++;A.st.xg+=clamp(.13*shot/save,.02,.75);
-  if(shot>save*1.098){this.goal(A,D,shooter,creator,fromCorner?null:creator,false)}
-  else if(shot>save*.86){A.st.sot++;D.st.sv++;g.rating+=.22;
+  const model=(typeof RBSMatchModel!=='undefined'&&RBSMatchModel)||null;
+  const ratio=shot/Math.max(.01,save);
+  const xg=model?model.shotXg(ratio):clamp(.13*ratio,.02,.75);
+  A.st.sh++;A.st.xg+=xg;
+  if(Math.random()<xg){
+   const hs=this.fix.hs,as=this.fix.as,sot=A.st.sot;
+   this.goal(A,D,shooter,creator,fromCorner?null:creator,false);
+   /* A goal is a shot on target. Save/woodwork interceptors count their
+      own outcome, so only add it when the score actually changed. */
+   if((this.fix.hs!==hs||this.fix.as!==as)&&A.st.sot===sot)A.st.sot++}
+  else if(Math.random()<(model?model.onTargetChance(ratio):clamp(.38+ratio*.22,.35,.72))){A.st.sot++;D.st.sv++;g.rating+=.22;
    this.say(this.dispMin(),A,cf(COMM.save,{b:shooter.p.name,g:g.p.name}),'big');
    if(Math.random()<.52){A.st.cor++;this.cornerEvent(A,D)}}
   else{this.say(this.dispMin(),A,cf(COMM.miss,{b:shooter.p.name}));shooter.rating-=.03}}
@@ -1470,7 +1494,7 @@ function trResultsHtml(){
   '<td>'+posBadge(p.pos)+'</td><td class="c num">'+p.age+'</td><td class="c">'+ovrPill(p)+'</td><td class="r num" style="font-weight:700">'+fmtM(p.value)+'</td></tr>'});
  h+='</tbody></table>'+(list.length>40?'<div class="xs faint" style="padding:6px 2px">Showing top 40 of '+list.length+' — tighten the filters.</div>':'')+'</div>';
  return h}
-ACTIONS.trToggleListed=()=>{UI.trListed=!UI.trListed;render()};
+ACTIONS.trToggleListed=()=>{UI.trListed=!UI.trListed;UI.trPage=0;render()};
 
 /* ---------- CLUB ---------- */
 function vClub(){
@@ -1533,7 +1557,7 @@ function vSave(){
 ACTIONS.exportSave=()=>{
  const blob=new Blob([JSON.stringify(G)],{type:'application/json'});
  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
- a.download='red-devil-manager-s'+G.season+'-day'+G.day+'.json';
+ a.download='results-business-s'+G.season+'-day'+G.day+'.json';
  document.body.appendChild(a);a.click();a.remove();
  setTimeout(()=>URL.revokeObjectURL(a.href),4e3);
  toast('💾 Save file downloading')};
@@ -1555,6 +1579,7 @@ document.addEventListener('input',e=>{
  const lv=e.target.closest('[data-live]');
  if(!lv)return;
  UI[lv.dataset.live]=lv.value;
+ if(lv.dataset.live.indexOf('tr')===0)UI.trPage=0;
  if(lv.dataset.live==='trQ'){clearTimeout(UI._qt);UI._qt=setTimeout(()=>{const r=$('#trResults');if(r)r.innerHTML=trResultsHtml()},220)}
  else render()});
 document.addEventListener('change',e=>{
@@ -3695,7 +3720,7 @@ newGame=function(i){
    real contracts & wages, correct player appearances
    ===================================================================== */
 /* United's actual 38 fixtures (opponent key, home?, day offset from 1 Aug 2026) */
-const REAL_MUN_FIX=[['HUL',0,21],['IPS',1,28],['EVE',0,35],['MCI',1,42],['FUL',0,49],['TOT',1,70],['LEE',0,77],['BOU',1,84],['CHE',0,91],['AVL',1,98],['LIV',0,112],['BRE',1,119],['NEW',0,123],['COV',1,126],['CRY',0,133],['ARS',0,140],['NFO',1,147],['SUN',1,151],['BHA',0,154],['NEW',1,158],['AVL',0,168],['LIV',1,175],['BRE',0,182],['CHE',1,189],['BHA',1,193],['NFO',0,203],['ARS',1,210],['SUN',0,214],['EVE',1,224],['MCI',0,231],['HUL',1,252],['IPS',0,259],['CRY',1,266],['COV',0,273],['BOU',0,280],['LEE',1,287],['TOT',0,295],['FUL',1,302]];
+const REAL_MUN_FIX=[['HUL',0,21],['IPS',1,29],['EVE',0,36],['MCI',1,43],['FUL',0,49],['TOT',1,70],['LEE',0,77],['BOU',1,84],['CHE',0,91],['AVL',1,98],['LIV',0,112],['BRE',1,119],['NEW',0,123],['COV',1,126],['CRY',0,133],['ARS',0,140],['NFO',1,147],['SUN',1,151],['BHA',0,154],['NEW',1,158],['AVL',0,168],['LIV',1,175],['BRE',0,182],['CHE',1,189],['BHA',1,193],['NFO',0,203],['ARS',1,210],['SUN',0,214],['EVE',1,224],['MCI',0,231],['HUL',1,252],['IPS',0,259],['CRY',1,266],['COV',0,273],['BOU',0,280],['LEE',1,287],['TOT',0,295],['FUL',1,302]];
 /* real contracts & weekly wages (2026/27) */
 const MUN_CONTRACTS={'Senne Lammens':[65000,4],'Altay Bayındır':[50000,2],'Karl Darlow':[30000,2],
 'Diogo Dalot':[120000,2],'Noussair Mazraoui':[100000,2],'Matthijs de Ligt':[195000,3],'Leny Yoro':[60000,3],
@@ -5762,14 +5787,18 @@ vHome=function(){
 /* =====================================================================
    SCREEN — fullscreen toggle, portrait & landscape layouts
    ===================================================================== */
-ACTIONS.fullscreen=()=>{
+ACTIONS.fullscreen=async()=>{
  const el=document.documentElement;
  try{
   if(!document.fullscreenElement&&!document.webkitFullscreenElement){
-   (el.requestFullscreen||el.webkitRequestFullscreen||el.msRequestFullscreen||function(){}).call(el);
+   const enter=el.requestFullscreen||el.webkitRequestFullscreen||el.msRequestFullscreen;
+   if(!enter){toast('Fullscreen isn\u2019t available here \u2014 try Add to Home Screen');return}
+   await Promise.resolve(enter.call(el));
    if(screen.orientation&&screen.orientation.lock)screen.orientation.lock('any').catch(()=>{});
    toast('\u26f6 Fullscreen \u2014 tap again to exit')}
-  else{(document.exitFullscreen||document.webkitExitFullscreen||function(){}).call(document)}
+  else{
+   const exit=document.exitFullscreen||document.webkitExitFullscreen;
+   if(exit)await Promise.resolve(exit.call(document))}
  }catch(e){toast('Fullscreen isn\u2019t available in this browser')}};
 const _hdrFS=renderHdr;
 renderHdr=function(){
@@ -8893,8 +8922,10 @@ ACTIONS.resumeCareer=el=>{loadSlot(el.dataset.v||'auto')};
 const _ngSave=newGame;
 newGame=function(i){
  _ngSave(i);
- if(HAS_STORE){try{localStorage.removeItem(SAVE_KEY+':auto')}catch(e){}}
- autoSave()};
+ /* Saving here used to capture the small, pre-expansion world because
+    dozens of later newGame layers had not run yet. The career-ready hook
+    at the end of the file owns the first save now. */
+ if(HAS_STORE){try{localStorage.removeItem(SAVE_KEY+':auto')}catch(e){}}};
 /* importing a file drops straight into the autosave slot too */
 const _impSave=ACTIONS.importSave;
 if(typeof _impSave==='function')ACTIONS.importSave=()=>{_impSave()};
@@ -8927,11 +8958,10 @@ writeSlot=function(slot,quiet){
    if(!quiet)toast('\ud83d\udcbe Saved (trimmed to fit)');
    return true}
   catch(e2){
-   try{['3','2'].forEach(s=>{if(s!==slot)localStorage.removeItem(SAVE_KEY+':'+s)});
-    localStorage.setItem(key,leanState(true));
-    if(!quiet)toast('\ud83d\udcbe Saved \u2014 older slots cleared for space');
-    return true}
-   catch(e3){if(!quiet)toast('\u26a0\ufe0f Storage full \u2014 export a save file instead');return false}}}};
+   /* Never destroy another career to make this one fit. IndexedDB is the
+      primary store; this legacy fallback fails safely and keeps its data. */
+   if(!quiet)toast('\u26a0\ufe0f Storage full \u2014 no other saves were changed');
+   return false}}};
 /* the trimmed arrays are rebuilt harmlessly on load */
 const _loadSlotFix=loadSlot;
 loadSlot=function(slot){
@@ -8969,7 +8999,7 @@ ACTIONS.exportSave=()=>{
  try{
   const blob=new Blob([JSON.stringify(G,roundRepl)],{type:'application/json'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);
-  a.download='red-devil-manager-'+G.clubs[G.my].short.replace(/\s/g,'')+'-S'+G.season+'.json';
+  a.download='results-business-'+G.clubs[G.my].short.replace(/\s/g,'')+'-S'+G.season+'.json';
   a.click();URL.revokeObjectURL(a.href);
   toast('\u2b07\ufe0f Save file exported')}
  catch(e){_exportRound()}};
@@ -11611,6 +11641,7 @@ ACTIONS.pressOpen=()=>{
   G.inbox.forEach(m=>{if(m.press){m.actions=null;m.press=false}});
   toast('Nothing waiting in the press room.');render();return}
  if(G.pressCtx.day==null)G.pressCtx.day=G.day;
+ G.pressCtx.entered=true;G.pressCtx.left=false;
  openPressSheet('')};
 /* a conference left hanging over a match day is handled by the assistant */
 const _dtcPressExpire=dailyTickCore;
@@ -11636,8 +11667,10 @@ ACTIONS.pressSkip=()=>{
 function pressLive(){return !!(G.pressCtx&&!G.sacked)}
 ACTIONS.pressResume=()=>{
  if(!pressLive()){toast('Nothing waiting in the press room.');return}
+ G.pressCtx.entered=true;G.pressCtx.left=false;
  openPressSheet('You take your seat again. '+esc(G.pressCtx.rep||'The room')+' picks up where you left off.')};
 ACTIONS.pressLeave=()=>{
+ if(G.pressCtx){G.pressCtx.entered=true;G.pressCtx.left=true}
  closeModal();
  toast('🎙️ Step outside — tap “Back to the press room” when you are ready.')};
 /* the sheet says how to get back, and stepping out is a deliberate choice */
@@ -11664,11 +11697,12 @@ vHome=function(){
  let h=_vHomePress();
  if(!pressLive())return h;
  const c=G.pressCtx;
+ const left=!!c.left;
  const card='<div class="card" style="margin-bottom:12px;border-color:rgba(251,225,34,.55);'+
   'background:linear-gradient(160deg,rgba(251,225,34,.10),rgba(255,255,255,.01))" data-action="pressResume">'+
   '<div class="row" style="gap:9px"><span style="font-size:19px">🎙️</span><div style="flex:1">'+
-  '<div class="small" style="font-weight:800">You walked out mid-press conference</div>'+
-  '<div class="xs muted">Question '+((c.q||0)+1)+' of '+(c.qTotal||2)+' is still on the table. Tap to go back in.</div>'+
+  '<div class="small" style="font-weight:800">'+(left?'You stepped out of the press conference':'The press conference is waiting')+'</div>'+
+  '<div class="xs muted">Question '+((c.q||0)+1)+' of '+(c.qTotal||2)+(left?' is still on the table. Tap to go back in.':' is ready. Tap to enter the room.')+'</div>'+
   '</div></div></div>';
  return card+h};
 
@@ -17036,7 +17070,8 @@ MatchSim.prototype.shotEvent=function(A,D,sh,cr,head){
    allowed=false;
    this.say(this.dispMin(),A,'Off the woodwork! Inches away.','big');
    try{if(liveMatch(this))sfx('post')}catch(e){}
-   A.st.sh++;A.st.sot++;
+   /* the originating shot was already counted by shotEvent */
+   A.st.sot++;
    return}
   return realGoal.apply(this,arguments)};
  try{return _shotReal.apply(this,arguments)}
@@ -17889,11 +17924,12 @@ function fastSim(fix){
  const rng=mulberry(hashStr('fs'+fix.h+'|'+fix.a+'|'+fix.day+'|'+G.season+'|'+(fix.r||0)));
  const sH=clubStrength(H),sA=clubStrength(A);
  const neutral=!!fix.neutral;
- // 1.32 goals a side before anything else, home advantage worth the same
+ // One shared target drives both this model and the detailed engine.
  // 1.17/0.87 split the full engine settles on
  const edge=(sH-sA)/13;
- let lH=1.32*Math.exp(edge*.5)*(neutral?1:1.17);
- let lA=1.32*Math.exp(-edge*.5)*(neutral?1:.87);
+ const fastBase=(typeof RBSMatchModel!=='undefined')?RBSMatchModel.fastBase():1.35;
+ let lH=fastBase*Math.exp(edge*.5)*(neutral?1:1.17);
+ let lA=fastBase*Math.exp(-edge*.5)*(neutral?1:.87);
  lH=clamp(lH,.25,4.6);lA=clamp(lA,.2,4.4);
  const hs=Math.min(8,poisson(lH,rng)),as=Math.min(8,poisson(lA,rng));
  fix.hs=hs;fix.as=as;fix.played=true;fix.sc=fix.sc||[];
@@ -20861,11 +20897,11 @@ ACTIONS.trStar=el=>{
  if(ix>=0){sl.splice(ix,1);if(p)toast(p.name+' removed from your shortlist')}
  else{sl.push(id);if(p)toast('⭐ '+p.name+' added to your shortlist')}
  const r=$('#trResults');if(r)r.innerHTML=trResultsHtml();else render()};
-ACTIONS.trSort=el=>{UI.trSort=el.dataset.v;const r=$('#trResults');
+ACTIONS.trSort=el=>{UI.trSort=el.dataset.v;UI.trPage=0;const r=$('#trResults');
  if(r)r.innerHTML=trResultsHtml();else render()};
-ACTIONS.trShortOnly=()=>{UI.trShort=!UI.trShort;const r=$('#trResults');
+ACTIONS.trShortOnly=()=>{UI.trShort=!UI.trShort;UI.trPage=0;const r=$('#trResults');
  if(r)r.innerHTML=trResultsHtml();else render()};
-ACTIONS.trReset=()=>{UI.trPos='Any';UI.trAge='40';UI.trQ='';UI.trListed=false;UI.trShort=false;render()};
+ACTIONS.trReset=()=>{UI.trPos='Any';UI.trAge='40';UI.trQ='';UI.trListed=false;UI.trShort=false;UI.trPage=0;render()};
 
 function vScouts(){
  let h='<div class="card tight"><div class="chip-lbl" style="margin-top:2px">Scouting team</div>';
@@ -20947,6 +20983,7 @@ function trRow(p){
   btns:'<button class="star-btn'+(isShort(p)?' on':'')+'" data-action="trStar" data-id="'+p.id+
    '" title="Add to shortlist">'+(isShort(p)?'⭐':'☆')+'</button>'})}
 
+let TR_RENDER_COST=null;
 trResultsHtml=function(){
  const q=(UI.trQ||'').trim().toLowerCase();
  const sl=shortlist();
@@ -28561,7 +28598,7 @@ face=function(p,sz){
   const kit=p.pos==='GK'?'#f0d040':c.c1;
   const kit2=(c.c2&&c.c2!==c.c1)?c.c2:'#0d0d12';
   const jaw=JAWS[sp.jaw]||JAWS.oval;
-  const uid='g'+(p.id||0)+'_'+Math.abs(hashStr(p.name))%9999;
+  const uid='g'+(p.id||0)+'_'+Math.abs(hashStr(p.name))%9999+'_'+svgInstanceId('f');
   const bald=sp.cut==='bald';
   const iris=(sp.sk==='pale'||sp.sk==='fair')?'#4a6b52':'#33231a';
   return '<svg width="'+sz+'" height="'+sz+'" viewBox="0 0 40 40" '+
@@ -31501,7 +31538,8 @@ if(_vHonRoom)vHonours=function(){
 
 /* [day offset from 1 August, home?, opponent key] */
 const PL_MUN_2627=[
- [21,0,'HUL'],[28,1,'IPS'],[35,0,'EVE'],[42,1,'MCI'],[49,0,'FUL'],
+ /* Broadcast-confirmed opening dates: 22 Aug, 30 Aug, 6 Sep, 13 Sep. */
+ [21,0,'HUL'],[29,1,'IPS'],[36,0,'EVE'],[43,1,'MCI'],[49,0,'FUL'],
  [70,1,'TOT'],[77,0,'LEE'],[84,1,'BOU'],[91,0,'CHE'],[98,1,'AVL'],
  [112,0,'LIV'],[119,1,'BRE'],[123,0,'NEW'],[126,1,'COV'],[133,0,'CRY'],
  [140,0,'ARS'],[147,1,'NFO'],[151,1,'SUN'],[154,0,'BHA'],[158,1,'NEW'],
@@ -37002,17 +37040,23 @@ saveBlob=function(){
  const restore=trimCareers();
  try{
   const P=packG(G);
-  return JSON.stringify({v:5,t:Date.now(),
+  return JSON.stringify({v:6,schema:'results-business-career',build:'2026.08.09',t:Date.now(),
    club:G.clubs[G.my].name,short:G.clubs[G.my].short,crest:G.clubs[G.my].c1,
    season:G.season,day:G.day,date:fmtDate(G.day),pos:leaguePos(G.my),
    div:DIV_NAMES[myDiv()],pts:(tableRows().find(r=>r.i===G.my)||{}).pts||0,
    fans:Math.round(G.fans==null?60:G.fans),
+   world:{clubs:G.clubs.length,fixtures:G.fixtures.length,
+    players:G.clubs.reduce((n,c)=>n+(c.players||[]).length+(c.youth||[]).length,0),
+    epoch:'2026-06-30'},
    pk:P.pk,ak:P.ak,sk:P.sk,ck:ck,G:P.g},saveRound)}
  catch(e){
   /* if the packer ever fails, an unpacked save is better than none */
-  try{return JSON.stringify({v:3,t:Date.now(),
+  try{return JSON.stringify({v:6,schema:'results-business-career',build:'2026.08.09',t:Date.now(),
    club:G.clubs[G.my].name,short:G.clubs[G.my].short,crest:G.clubs[G.my].c1,
    season:G.season,day:G.day,date:fmtDate(G.day),
+   world:{clubs:G.clubs.length,fixtures:G.fixtures.length,
+    players:G.clubs.reduce((n,c)=>n+(c.players||[]).length+(c.youth||[]).length,0),
+    epoch:'2026-06-30'},
    G:G},saveRound)}
   catch(e2){return _saveBlobLean()}}
  finally{restore();undoFix();undoCar()}};
@@ -37055,17 +37099,9 @@ if(typeof _impCar==='function')ACTIONS.importSave=function(){
    --------------------------------------------------------------------- */
 const _writeSlotRoom=writeSlot;
 writeSlot=function(slot,quiet){
- if(_writeSlotRoom.apply(this,arguments))return true;
- try{
-  /* the autosave is rewritten on the next day that passes */
-  if(String(slot)!=='auto'){
-   try{localStorage.removeItem(SAVE_KEY+':auto')}catch(e){}
-   if(_writeSlotRoom.apply(this,arguments))return true}
-  /* then any slot that is not the one being written */
-  ['auto','3','2','1'].forEach(s=>{
-   if(String(s)!==String(slot)){try{localStorage.removeItem(SAVE_KEY+':'+s)}catch(e){}}});
-  return _writeSlotRoom.apply(this,arguments);
- }catch(e){return false}};
+ /* A failed write is a failed write. It must never become permission to
+    erase autosaves or another manual career. */
+ return _writeSlotRoom.apply(this,arguments)};
 
 /* ---------------------------------------------------------------------
    AND IF IT STILL WILL NOT FIT, SAY SO WHILE IT CAN STILL BE HELPED
@@ -42636,11 +42672,14 @@ function badgeTrim(c1,c2){
 
 /* ---- 4. THE BADGE --------------------------------------------------- */
 const BADGE_CACHE={};
+const BADGE_UID_TOKEN='__RBS_BADGE_UID__';
+function badgeInstance(svg){
+ return String(svg||'').split(BADGE_UID_TOKEN).join(svgInstanceId('b'))}
 function badgeSVG(c,size){
  const c1=(c&&c.c1)||'#33404a';
  const c2=(c&&c.c2)||'';
  const key=[(c&&c.key)||(c&&c.name)||'?',size,c1,c2,(c&&c.abbr)||''].join('|');
- if(BADGE_CACHE[key])return BADGE_CACHE[key];
+ if(BADGE_CACHE[key])return badgeInstance(BADGE_CACHE[key]);
 
  const shape=BADGE_SHAPE[badgeShape(c)]||BADGE_SHAPE.shield;
  const trim=badgeTrim(c1,c2);
@@ -42650,7 +42689,7 @@ function badgeSVG(c,size){
  /* weighted so the quiet ordinaries are the common ones: a badge full
     of the secondary colour is the exception on a real shirt too */
  const variant=[0,0,1,2,3,3][seed%6];
- const uid='b'+Math.abs(hashStr('crest|'+key))%1000000;
+ const uid=BADGE_UID_TOKEN;
  const dark=bMix(c1,'#000000',.42);
  const lite=bMix(c1,'#ffffff',.20);
  /* the trim ring is metal, so it is a gradient rather than a flat fill */
@@ -42705,7 +42744,7 @@ function badgeSVG(c,size){
     tick, so the string is built once per club per size. */
  if(Object.keys(BADGE_CACHE).length>3000)for(const k in BADGE_CACHE)delete BADGE_CACHE[k];
  BADGE_CACHE[key]=svg;
- return svg}
+ return badgeInstance(svg)}
 
 /* the game calls crest() from about forty places; none of them change */
 crest=function(c,size){
@@ -44182,17 +44221,18 @@ monthlyDecline=function(){
    halves rather than resetting, so the estimate keeps a memory and does
    not jitter on a run of high-scoring Saturdays.
    --------------------------------------------------------------------- */
-const GOAL_TARGET=2.80;      /* real top-flight football */
-const GOAL_WINDOW=120;       /* matches in a division before re-solving */
+const GOAL_TARGET=(typeof RBSMatchModel!=='undefined')?RBSMatchModel.config.targetGoals:2.80;
+const GOAL_WINDOW=(typeof RBSMatchModel!=='undefined')?RBSMatchModel.config.calibrationWindow:120;
 
 /* PER DIVISION. One shared controller held the whole world at 2.80,
    which meant the Premier League sat at 3.05 to make up for the leagues
    below it scoring less. Each division is solved on its own numbers. */
 function goalCal(div){
- if(typeof G==='undefined'||!G)return{n:0,g:0,trim:.12};
+ const initial=(typeof RBSMatchModel!=='undefined')?RBSMatchModel.config.initialTrim:.06;
+ if(typeof G==='undefined'||!G)return{n:0,g:0,trim:initial};
  if(!G.gcal||G.gcal.trim!=null)G.gcal={};
  const k=div||'_';
- if(!G.gcal[k])G.gcal[k]={n:0,g:0,trim:.12};
+ if(!G.gcal[k])G.gcal[k]={n:0,g:0,trim:initial};
  return G.gcal[k]}
 
 function goalRetune(c){
@@ -47163,9 +47203,9 @@ ACTIONS.dlToutGo=el=>{
 
 /* every sale on the day counts toward the summary */
 const _offAccDl=ACTIONS.offerAccept;
-ACTIONS.offerAccept=el=>{
+ACTIONS.offerAccept=function(el){
  const live=dlLive();
- const r=_offAccDl.apply(this,arguments);
+ const r=_offAccDl.call(this,el);
  try{if(live&&G.dl){G.dl.sold=(G.dl.sold||0)+1;
   dlFeed('📤','A sale is confirmed.')}}catch(e){}
  return r};
@@ -50100,7 +50140,7 @@ function potRungs(){
 /* the two new controls */
 TR_DEF.trFeeMin='0';
 if(UI.trAfford===undefined)UI.trAfford=true;
-ACTIONS.trAfford=()=>{UI.trAfford=!UI.trAfford;render()};
+ACTIONS.trAfford=()=>{UI.trAfford=!UI.trAfford;UI.trPage=0;render()};
 const _ngMkt=newGame;
 newGame=function(){const r=_ngMkt.apply(this,arguments);
  try{if(UI.trAfford===undefined)UI.trAfford=true}catch(e){}
@@ -50216,6 +50256,11 @@ trResultsHtml=function(){
  const fAttr=trGet('trAttr'),fAttrMin=+trGet('trAttrMin'),fNat=trGet('trNat');
  const bud=myBudget(),room=myRoom();
  let list=[],blocked=0;
+ const costs=new Map();
+ const costOf=p=>{
+  let v=costs.get(p.id);
+  if(!v){v={ask:askPrice(p),wage:wageHere(p)};costs.set(p.id,v)}
+  return v};
  G.clubs.forEach(c=>{if(c.i===G.my)return;c.players.forEach(p=>{
   if(UI.trShort&&sl.indexOf(p.id)<0)return;
   if(UI.trPos!=='Any'&&p.pos!==UI.trPos)return;
@@ -50237,9 +50282,9 @@ trResultsHtml=function(){
   if(fRole==='star'&&!trStarter(p))return;
   if(fNat!=='any'&&natOf(p)!==fNat)return;
   if(fAttr&&((p.attrs&&p.attrs[fAttr])||0)<fAttrMin)return;
-  const w=wageHere(p);
+  const w=costOf(p).wage;
   if(fWage&&w>fWage)return;
-  const ask=askPrice(p);
+  const ask=costOf(p).ask;
   if(fFee&&ask>fFee)return;
   if(fFeeMin&&ask<fFeeMin)return;
   if(UI.trAfford&&(ask>bud||w>room)){blocked++;return}
@@ -50249,10 +50294,13 @@ trResultsHtml=function(){
   s==='val'?b.value-a.value:
   s==='age'?a.age-b.age||b.ovr-a.ovr:
   s==='pot'?(b.pot||b.ovr)-(a.pot||a.ovr)||b.ovr-a.ovr:
-  s==='wage'?wageHere(a)-wageHere(b)||b.ovr-a.ovr:
-  s==='ask'?askPrice(a)-askPrice(b)||b.ovr-a.ovr:
+  s==='wage'?costOf(a).wage-costOf(b).wage||b.ovr-a.ovr:
+  s==='ask'?costOf(a).ask-costOf(b).ask||b.ovr-a.ovr:
   b.ovr-a.ovr);
- const shown=list.slice(0,40);
+ const perPage=20,pages=Math.max(1,Math.ceil(list.length/perPage));
+ const page=clamp(UI.trPage||0,0,pages-1);UI.trPage=page;
+ const shown=list.slice(page*perPage,page*perPage+perPage);
+ TR_RENDER_COST=costs;
 
  const bits=[];
  if(UI.trPos!=='Any')bits.push(UI.trPos);
@@ -50285,9 +50333,16 @@ trResultsHtml=function(){
   'Loosen one of them — the fee range and the minimum ability are usually the two doing the work.');
  else h+='<div class="plist">'+shown.map(trRow).join('')+'</div>';
  h+='</div>';
- if(list.length>40)h+='<div class="xs faint" style="padding:6px 4px;text-align:center">Showing the top 40 of '+
-  list.length+' — tighten the filters to see further down the list.</div>';
+ if(pages>1)h+='<div class="spread" style="gap:8px;padding:7px 2px 2px">'+
+  '<button class="btn btn-ghost btn-sm" data-action="trPage" data-v="'+(page-1)+'"'+(page<=0?' disabled':'')+'>← Previous</button>'+
+  '<span class="xs faint">Page '+(page+1)+' of '+pages+' · '+list.length+' players</span>'+
+  '<button class="btn btn-ghost btn-sm" data-action="trPage" data-v="'+(page+1)+'"'+(page>=pages-1?' disabled':'')+'>Next →</button></div>';
  return h};
+
+ACTIONS.trPage=el=>{
+ UI.trPage=Math.max(0,+el.dataset.v||0);
+ const r=$('#trResults');if(r)r.innerHTML=trResultsHtml();else render();
+ try{const top=$('#trResults');if(top)top.scrollIntoView({block:'start',behavior:'smooth'})}catch(e){}};
 
 /* ---------------------------------------------------------------------
    8. AND THE ROW SHOWS BOTH HALVES OF THE DEAL
@@ -50301,8 +50356,9 @@ trResultsHtml=function(){
 trRow=function(p){
  const c=G.clubs[p.club]||{name:'Free agent',short:'FA'};
  const my=G.clubs[G.my];
- const ask=askPrice(p);
- const w=wageHere(p);
+ const cached=TR_RENDER_COST&&TR_RENDER_COST.get(p.id);
+ const ask=cached?cached.ask:askPrice(p);
+ const w=cached?cached.wage:wageHere(p);
  const okFee=ask<=my.budget, okWage=w<=myRoom();
  const gap=(p.pot||p.ovr)-p.ovr;
  const meta=(typeof crest==='function'?crest(c,15):'')+' '+esc(c.short||c.name)+' · '+p.age+
@@ -51133,7 +51189,7 @@ showStart=function(){
     '<span class="fd">What is in the game, and how to play it</span>'+
     '<span class="fi">📖</span></button>'+
   '</div>'+
-  '<div class="ffoot">'+BRAND.season+' · single-file edition · everything runs offline</div>'+
+  '<div class="ffoot">'+BRAND.season+' · installable · core game works offline</div>'+
   '<div class="fspacer"></div></div>';
  FRONT.cv=$('#frontCv');FRONT.t0=performance.now();FRONT.bg=null;
  frontStop();FRONT.cv=$('#frontCv');
@@ -54925,6 +54981,7 @@ const KOKO={
  state:'off',        /* off | loading | ready | failed */
  tts:null, err:'', pct:0, mb:0,
  cache:new Map(),    /* voice|text -> AudioBuffer, so a repeated line is instant */
+ cacheSizes:new Map(),cacheBytes:0,
  order:[],
  token:null,         /* the current utterance; changing it cancels the queue */
  node:null,          /* what is playing right now */
@@ -54936,7 +54993,12 @@ const KOKO={
 function kokoPref(k,d){try{return localStorage.getItem(k)||d}catch(e){return d}}
 function kokoSet(k,v){try{v?localStorage.setItem(k,v):localStorage.removeItem(k)}catch(e){}}
 function kokoEngine(){return kokoPref('rdmTtsEngine','device')}
-function kokoQuality(){return KOKO_Q[kokoPref('rdmKokoQ','standard')]?kokoPref('rdmKokoQ','standard'):'standard'}
+function kokoDefaultQuality(){
+ try{
+  if((navigator.deviceMemory&&navigator.deviceMemory<=4)||
+     (matchMedia&&matchMedia('(pointer:coarse)').matches))return 'small'}catch(e){}
+ return 'standard'}
+function kokoQuality(){const d=kokoDefaultQuality(),q=kokoPref('rdmKokoQ',d);return KOKO_Q[q]?q:d}
 function kokoVoicePref(){return kokoPref('rdmKokoVoice','')}
 
 /* ---------------------------------------------------------------------
@@ -55104,8 +55166,17 @@ function kokoCacheGet(k){
  if(v){const i=KOKO.order.indexOf(k);if(i>=0)KOKO.order.splice(i,1);KOKO.order.push(k)}
  return v}
 function kokoCachePut(k,v){
- KOKO.cache.set(k,v);KOKO.order.push(k);
- while(KOKO.order.length>70){const old=KOKO.order.shift();KOKO.cache.delete(old)}}
+ const oldBytes=KOKO.cacheSizes.get(k)||0;
+ const bytes=Math.max(0,((v&&v.length)||0)*((v&&v.numberOfChannels)||1)*4);
+ KOKO.cache.set(k,v);KOKO.cacheSizes.set(k,bytes);
+ KOKO.cacheBytes=Math.max(0,KOKO.cacheBytes-oldBytes+bytes);
+ const oldIx=KOKO.order.indexOf(k);if(oldIx>=0)KOKO.order.splice(oldIx,1);
+ KOKO.order.push(k);
+ let limit=32*1024*1024;
+ try{if(kokoDefaultQuality()==='small')limit=12*1024*1024}catch(e){}
+ while(KOKO.cacheBytes>limit&&KOKO.order.length){
+  const old=KOKO.order.shift(),n=KOKO.cacheSizes.get(old)||0;
+  KOKO.cache.delete(old);KOKO.cacheSizes.delete(old);KOKO.cacheBytes=Math.max(0,KOKO.cacheBytes-n)}}
 
 async function kokoGen(text,voice,speed){
  const key=voice+'|'+speed+'|'+text;
@@ -55133,20 +55204,20 @@ async function kokoSay(text,who,opt){
     hole while a phone thinks about it */
  let next=kokoGen(clauses[0],voice,speed);
  let ducked=false;
- for(let i=0;i<clauses.length;i++){
-  let buf;
-  try{buf=await next}catch(e){throw e}
-  if(KOKO.token!==token)return true;                 /* something else spoke */
-  if(i+1<clauses.length)next=kokoGen(clauses[i+1],voice,speed).catch(()=>null);
-  if(!buf)continue;
-  if(!ducked&&o.duck!==false){kokoDuck(true);ducked=true}
-  await kokoPlay(buf,{vol:(sfxCfg().vol||.7)*(o.vol||1),wet:o.wet||0});
-  if(KOKO.token!==token)return true;
-  /* a beat at a full stop, a shorter one at a comma */
-  const gap=(i===clauses.length-1)?0:(/[.!?]$/.test(clauses[i])?150:60);
-  if(gap)await new Promise(r=>setTimeout(r,gap))}
- if(ducked)kokoDuck(false);
- return true}
+ try{
+  for(let i=0;i<clauses.length;i++){
+   const buf=await next;
+   if(KOKO.token!==token)return true;                 /* something else spoke */
+   if(i+1<clauses.length)next=kokoGen(clauses[i+1],voice,speed).catch(()=>null);
+   if(!buf)continue;
+   if(!ducked&&o.duck!==false){kokoDuck(true);ducked=true}
+   await kokoPlay(buf,{vol:(sfxCfg().vol||.7)*(o.vol||1),wet:o.wet||0});
+   if(KOKO.token!==token)return true;
+   /* a beat at a full stop, a shorter one at a comma */
+   const gap=(i===clauses.length-1)?0:(/[.!?]$/.test(clauses[i])?150:60);
+   if(gap)await new Promise(r=>setTimeout(r,gap))}
+  return true}
+ finally{if(ducked)kokoDuck(false)}}
 
 /* ---------------------------------------------------------------------
    6. TAKING OVER FROM THE DEVICE VOICES
@@ -55186,6 +55257,7 @@ ttsSay=function(text,who,opt){
  else o.wet=0.10;
  kokoSay(raw,who,o).catch(e=>{
   /* it broke mid-career. Say so once, drop back, and carry on. */
+  kokoStop();
   KOKO.state='failed';KOKO.err=kokoWhy(e);
   kokoSet('rdmTtsEngine','device');
   try{toast('🗣️ Neural voices stopped — back to the device voice')}catch(e2){}
@@ -55236,7 +55308,8 @@ ACTIONS.kokoQual=el=>{
  const v=el.dataset.v;
  if(!KOKO_Q[v])return;
  if(KOKO.state==='ready'&&v!==kokoQuality()){
-  KOKO.state='off';KOKO.tts=null;kokoLoading=null;KOKO.cache.clear();KOKO.order.length=0}
+  KOKO.state='off';KOKO.tts=null;kokoLoading=null;KOKO.cache.clear();KOKO.cacheSizes.clear();
+  KOKO.cacheBytes=0;KOKO.order.length=0}
  kokoSet('rdmKokoQ',v);
  ACTIONS.sfxVoicePick()};
 
@@ -55341,5 +55414,7 @@ ACTIONS.sfxVoicePick=()=>{
 /*#wD7_kokoro.js#*/
 showStart();
 </script>
+<script src="src/career-store.js"></script>
+<script src="src/runtime-enhancements.js"></script>
 </body>
 </html>

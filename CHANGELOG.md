@@ -1,0 +1,23 @@
+# Changelog
+
+## Unreleased
+
+### Fixed
+
+- Prevented the first autosave from capturing the incomplete 84-club world.
+- Replaced silent save-slot eviction with validated IndexedDB careers and rotating autosave recovery points.
+- Fixed incoming transfer acceptance crashing because an arrow function referenced `arguments`.
+- Made detailed shot conversion probabilistic and driven by the same xG value displayed by the match engine.
+- Corrected the first broadcast-confirmed Manchester United fixture changes: Ipswich, Everton and Manchester City.
+- Corrected press-conference copy before the manager has entered the room.
+- Made fullscreen feedback reflect actual API success or failure.
+- Prevented repeated player and club SVG gradient IDs.
+- Restored crowd audio after neural-voice interruption and bounded its decoded-audio cache by memory.
+
+### Improved
+
+- Added transfer-market pagination and per-render fee/wage caching.
+- Added static branding and social metadata for The Results Business.
+- Added an installable PWA shell and offline caching for core game assets.
+- Added keyboard focus, semantic labels, zoom support and reduced-motion handling.
+- Added bounded runtime diagnostics, modular save/simulation code, automated tests and GitHub Actions.

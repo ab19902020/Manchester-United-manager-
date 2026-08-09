@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title id="title">The Results Business</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#17271b"/>
+      <stop offset="1" stop-color="#050806"/>
+    </linearGradient>
+    <linearGradient id="red" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ff4a3c"/>
+      <stop offset="1" stop-color="#a91810"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="104" fill="url(#bg)"/>
+  <path d="M84 132h344v54H84zm0 98h248v54H84zm0 98h344v54H84z" fill="#eef3ee" opacity=".96"/>
+  <path d="M330 207h98v98h-98z" fill="url(#red)" transform="rotate(12 379 256)"/>
+  <path d="M68 418h376" stroke="#fbe122" stroke-width="14" stroke-linecap="round"/>
+</svg>
