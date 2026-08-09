@@ -52411,6 +52411,333 @@ drawDugout=function(){
  return r};
 
 /*#wC5_dugout2.js#*/
+/*#wC6_anim.js#*/
+
+/* =====================================================================
+   wC6_anim — twenty-two people who are doing different things
+   ---------------------------------------------------------------------
+   Everybody on this pitch has exactly one animation. Legs swing, arms
+   swing the other way, and the whole thing turns over faster the quicker
+   he moves. That single cycle plays whether he is jogging back into
+   shape, standing still waiting for a corner, striking it from the edge
+   of the box, or picking the ball out of his own net.
+
+   It is the reason the match still reads as counters moving about even
+   now the camera is close enough to see kits. Nothing anybody does
+   LOOKS like the thing they are doing. A shot and a stroll are the same
+   picture at a different speed.
+
+   The simulation already knows all of it and has never been asked:
+
+     p.mode      hold, carry, pass, dead
+     p.holder    who has it
+     p.shooting  'block' | 'save' | 'wide' while an attempt is in flight
+     p.si        which side is in possession, so a change of it is a
+                 turnover and somebody has just won the ball
+     MU.fix.sc   the goals, so the length of it changing is a goal
+
+   Five poses hang off those, on top of the run cycle:
+
+     KICK       plants one foot and swings the other through the ball,
+                arms out for balance — fired at whoever the ball just
+                left, and bigger for a shot than a five-yard pass
+     DIVE       the keeper goes full length toward the corner the shot
+                is actually heading for, and gets there in time to make
+                the save the engine has already decided on
+     SLIDE      the man who has just won it goes to ground
+     CELEBRATE  the scoring side, arms up, for a few seconds
+     IDLE       a man standing still stops jogging on the spot
+
+   The engine decides everything as it did before. This only reads it.
+   ===================================================================== */
+
+DUG.anim=DUG.anim||{};
+DUG.watch=DUG.watch||{mode:null,holder:null,si:null,goals:0,shot:null};
+
+/* animations run against the match clock, so a kick at 4x does not
+   outlast the pass it belongs to */
+function dugMs(ms){
+ try{return ms/Math.max(1,(typeof tScale==='function')?tScale():1)}
+ catch(e){return ms}}
+
+function dugSet(id,a,ms,extra){
+ if(id==null)return;
+ const now=performance.now();
+ const cur=DUG.anim[id];
+ /* a dive is the only thing that outranks anything else — a keeper who
+    has committed does not stop to celebrate */
+ if(cur&&cur.a==='dive'&&now<cur.t1&&a!=='dive')return;
+ DUG.anim[id]=Object.assign({a,t0:now,t1:now+dugMs(ms)},extra||{})}
+
+function dugAnimOf(id){
+ const a=DUG.anim[id];
+ if(!a)return null;
+ if(performance.now()>=a.t1){delete DUG.anim[id];return null}
+ return a}
+
+/* ---------------------------------------------------------------------
+   1. WATCHING THE SIMULATION
+   ---------------------------------------------------------------------
+   One pass per frame, before anything is drawn, comparing what the play
+   state says now against what it said last frame. Everything here is a
+   read — nothing in this function can change what happens in the match.
+   --------------------------------------------------------------------- */
+function dugWatch(){
+ try{
+  const m=MU.m;if(!m||m.done)return;
+  const p=(typeof playState==='function')?playState():null;
+  if(!p)return;
+  const w=DUG.watch;
+  const hid=p.holder&&p.holder.p?p.holder.p.id:null;
+
+  /* THE KICK. The ball has just left somebody: mode has turned to
+     'pass' this frame. Whoever was holding it a frame ago struck it. */
+  if(p.mode==='pass'&&w.mode!=='pass'){
+   const kicker=w.holder;
+   if(kicker!=null){
+    const shot=!!p.shooting;
+    dugSet(kicker,'kick',shot?460:330,{
+     power:shot?1:(p.lofted?.8:.6),
+     dir:(p.to&&p.from&&p.to.x>=p.from.x)?1:-1})}
+
+   /* THE SAVE. The engine has already decided this one is saved, and
+      it knows where it is going and when it gets there. The keeper is
+      sent now, timed so he is full length as it arrives rather than
+      afterwards. */
+   if(p.shooting==='save'&&p.to){
+    const gk=(m.sides[1-p.si].onfield||[]).find(z=>z.slot==='GK'&&!z.off);
+    if(gk&&gk.p){
+     const d=(typeof dotOf==='function')?dotOf(gk):null;
+     const side=(d&&p.to.y<d.y)?-1:1;
+     DUG.anim[gk.p.id]={a:'dive',
+      t0:performance.now()+(p.ms||300)*.35,
+      t1:performance.now()+(p.ms||300)*.35+dugMs(820),
+      side}}}}
+
+  /* THE TACKLE. Possession has changed hands without the ball being
+     played, so somebody has taken it off somebody. */
+  if(w.si!=null&&p.si!==w.si&&p.mode!=='pass'&&hid!=null){
+   if(Math.random()<.42)dugSet(hid,'slide',560);
+  }
+
+  /* THE GOAL. */
+  const goals=(MU.fix&&MU.fix.sc)?MU.fix.sc.length:0;
+  if(goals>w.goals){
+   w.goals=goals;
+   /* a goal records the CLUB index that scored it, not the side index,
+      so it has to be looked up against the two sides in this match */
+   const last=MU.fix.sc[MU.fix.sc.length-1];
+   let si=p.si;
+   if(last&&last.ci!=null){
+    if(m.sides[0]&&m.sides[0].ci===last.ci)si=0;
+    else if(m.sides[1]&&m.sides[1].ci===last.ci)si=1}
+   ((m.sides[si]||{}).onfield||[]).forEach(z=>{
+    if(z&&z.p&&!z.off)dugSet(z.p.id,'celebrate',2600+Math.random()*900)});
+  }
+  if(goals<w.goals)w.goals=goals;      /* a new match */
+
+  w.mode=p.mode;w.holder=hid;w.si=p.si;
+ }catch(e){}}
+
+const _dugDrawWC6=drawDugout;
+drawDugout=function(){
+ dugWatch();
+ return _dugDrawWC6.apply(this,arguments)};
+
+/* a fresh match starts everybody standing still */
+const _initDotsWC6=initDots;
+initDots=function(){
+ const r=_initDotsWC6.apply(this,arguments);
+ DUG.anim={};DUG.watch={mode:null,holder:null,si:null,goals:0,shot:null};
+ return r};
+
+/* ---------------------------------------------------------------------
+   2. WHAT EACH ONE LOOKS LIKE
+   ---------------------------------------------------------------------
+   A pose is six numbers: the two legs, the two arms, how far the body
+   is leaning, and how far off the ground it is. Everything the figure
+   draws goes through them, so adding a pose is adding a case here
+   rather than another copy of the drawing code.
+   --------------------------------------------------------------------- */
+function dugRunPose(swing,bob){
+ return {legA:swing*.55,legB:-swing*.55,armA:-swing*.7,armB:swing*.7,
+  rot:0,lift:0,bob,down:0}}
+
+function dugPose(id,sp,swing,bob,face){
+ const a=dugAnimOf(id);
+ if(!a)return dugRunPose(swing,bob);
+ const k=clamp((performance.now()-a.t0)/(a.t1-a.t0),0,1);
+ if(a.a==='kick'){
+  /* back-lift through to follow-through: the kicking leg goes behind
+     him, comes through hard, and the standing leg stays planted */
+  const sw=Math.sin(k*Math.PI)*(k<.35?-1:1);
+  const power=a.power||.8;
+  const kick=(k<.35? -0.55*power*(k/.35) : 1.15*power*Math.sin((k-.35)/.65*Math.PI));
+  return {legA:kick*(a.dir>=0?1:1),legB:-0.15*power,
+   armA:-kick*.45,armB:kick*.30,
+   rot:-0.10*power*Math.sin(k*Math.PI),lift:0,bob:0,down:0}}
+ if(a.a==='dive'){
+  /* out, full length, and back to his feet */
+  const out=Math.sin(Math.min(1,k*1.25)*Math.PI*.5);
+  const back=k>.72?(k-.72)/.28:0;
+  const e=out*(1-back);
+  return {legA:.25*e,legB:-.15*e,armA:-1.25*e,armB:-1.05*e,
+   rot:(a.side||1)*1.30*e, lift:e*1.9, bob:0, down:0}}
+ if(a.a==='slide'){
+  const e=Math.sin(Math.min(1,k*1.6)*Math.PI*.5)*(k>.62?(1-(k-.62)/.38):1);
+  return {legA:1.05*e,legB:.25*e,armA:-.75*e,armB:.55*e,
+   rot:0,lift:0,bob:0,down:e*2.6}}
+ if(a.a==='celebrate'){
+  const w=Math.sin(k*Math.PI*7)*.35;
+  return {legA:swing*.45,legB:-swing*.45,
+   armA:-2.35+w,armB:-2.35-w,
+   rot:0,lift:0,bob:bob,down:0}}
+ return dugRunPose(swing,bob)}
+
+/* ---------------------------------------------------------------------
+   3. THE FIGURE, DRIVEN BY THE POSE
+   ---------------------------------------------------------------------
+   Same body as before — the kit pattern, the rounded limbs, the neck,
+   the floodlight rim. The limbs now take their angles from the pose
+   instead of from the run cycle directly, and the whole body can rotate
+   and lift off the ground so a keeper can leave his feet.
+   --------------------------------------------------------------------- */
+dugFigure=function(g,d,c,P,W,now){
+ if(DUG.turfPending){
+  DUG.turfPending=false;
+  try{dugTurf(g,P,g.canvas.width,g.canvas.height)}catch(e){}}
+
+ const pl=d.pl;
+ const gk=pl.slot==='GK';
+ const p=P(d.x,d.y,0);
+ const s=p[2];
+ if(p[1]<0||p[1]>1e5)return;
+ const kit=gk?'#e9c400':c.c1;
+ const trim=gk?'#8a7400':(c.c2&&c.c2!==c.c1?c.c2:shade(c.c1,.5));
+ const HT=1.82;
+ const px=p[0],py=p[1];
+ const u=s*HT/8;
+ if(u<.6)return;
+
+ const sp=Math.hypot(d.vx||0,d.vy||0);
+ const id=pl.p.id;
+ const ph=DUG.phase;
+ /* A man who is not moving should not be jogging on the spot. The cycle
+    only turns over when he is actually going somewhere; standing still
+    he settles and sways. */
+ const moving=sp>.012;
+ ph[id]=(ph[id]==null?id%6:ph[id])+(moving?(0.09+Math.min(sp,.55)*1.9):0.020);
+ const t=ph[id];
+ const swing=moving?Math.sin(t)*Math.min(1,.25+sp*7):Math.sin(t)*.06;
+ const bob=moving?Math.abs(Math.cos(t))*u*.22*Math.min(1,.3+sp*6):0;
+ const face=(d.vx||0)>=0?1:-1;
+
+ const pose=dugPose(id,sp,swing,bob,face);
+ const y0=py-pose.bob+pose.down*u*0-pose.lift*u;
+ const rr=u*.30;
+ const hipY=y0-u*3.7,torsoT=y0-u*6.3,headR=u*.66;
+
+ g.save();
+
+ /* the shadow stays on the grass, and spreads as he leaves it */
+ const lift=pose.lift;
+ g.beginPath();
+ g.ellipse(px-DUG_LIGHT*u*.22,py+u*.05,u*(1.55+lift*.5),u*(.52+lift*.10),0,0,7);
+ g.fillStyle='rgba(0,0,0,'+(0.40-Math.min(.22,lift*.11))+')';g.fill();
+
+ if(pl.off)g.globalAlpha=.35;
+
+ /* a lean into a sprint, plus whatever the pose is doing */
+ const lean=clamp(sp*1.5,0,.16)*face+(pose.rot||0)*(gk?1:1);
+ const drop=(pose.down||0)*u*.55;
+ if(lean||drop){
+  g.translate(px,py+drop);
+  if(lean)g.rotate(lean);
+  g.translate(-px,-py)}
+
+ /* legs */
+ [[-1,pose.legA],[1,pose.legB]].forEach(([sgn,rot])=>{
+  g.save();
+  g.translate(px+sgn*u*.42,hipY);
+  g.rotate(rot);
+  g.fillStyle=trim;                dugRR(g,-u*.42,0,u*.84,u*1.55,rr);
+  g.fillStyle=shade(trim,1.5);     dugRR(g,-u*.34,u*1.55,u*.68,u*.62,rr*.8);
+  g.fillStyle='#f0f3f0';           dugRR(g,-u*.33,u*2.05,u*.66,u*1.32,rr*.7);
+  g.fillStyle='#14181c';
+  const bw=u*1.0*(sgn===1?1:-1)+u*.36;
+  dugRR(g,Math.min(-u*.36,-u*.36+bw),u*3.28,Math.abs(bw),u*.46,rr*.6);
+  g.restore()});
+
+ /* arms */
+ [[-1,pose.armA],[1,pose.armB]].forEach(([sgn,rot])=>{
+  g.save();
+  g.translate(px+sgn*u*.92,torsoT+u*.6);
+  g.rotate(rot);
+  g.fillStyle=kit;      dugRR(g,-u*.26,0,u*.52,u*1.12,rr*.8);
+  g.fillStyle='#e2b493';dugRR(g,-u*.24,u*1.05,u*.48,u*1.02,rr*.8);
+  g.restore()});
+
+ /* the shirt */
+ const shirt=()=>{
+  g.beginPath();
+  g.moveTo(px-u*.95,torsoT+u*.35);
+  g.quadraticCurveTo(px,torsoT-u*.20,px+u*.95,torsoT+u*.35);
+  g.lineTo(px+u*.82,hipY+u*.08);
+  g.lineTo(px-u*.82,hipY+u*.08);
+  g.closePath()};
+ shirt();
+ const sg=g.createLinearGradient(px-u,torsoT,px+u,hipY);
+ sg.addColorStop(0,shade(kit,1.18));sg.addColorStop(.55,kit);sg.addColorStop(1,shade(kit,.74));
+ g.fillStyle=sg;g.fill();
+
+ const pat=gk?'plain':dugKitOf(c);
+ if(pat!=='plain'&&u>1.1){
+  g.save();shirt();g.clip();
+  dugKitPaint(g,pat,px,torsoT,hipY,u,kit,trim);
+  const sh=g.createLinearGradient(px-u,torsoT,px+u,hipY);
+  sh.addColorStop(0,'rgba(255,255,255,.14)');
+  sh.addColorStop(.55,'rgba(255,255,255,0)');
+  sh.addColorStop(1,'rgba(0,0,0,.22)');
+  g.fillStyle=sh;shirt();g.fill();
+  g.restore()}
+
+ g.fillStyle=trim;
+ dugRR(g,px-u*.95,torsoT+u*.30,u*.30,u*.68,rr*.6);
+ dugRR(g,px+u*.65,torsoT+u*.30,u*.30,u*.68,rr*.6);
+ dugRR(g,px-u*.30,torsoT-u*.02,u*.60,u*.22,rr*.5);
+
+ if(u>1.6){
+  g.save();
+  g.globalCompositeOperation='lighter';
+  g.globalAlpha=pl.off?.10:.26;
+  g.fillStyle='#dfe9ff';
+  dugRR(g,px+DUG_LIGHT*u*.95,torsoT+u*.30,u*.17,(hipY-torsoT)*.86,rr*.5);
+  g.restore()}
+
+ if(u>2.0){
+  g.font='800 '+Math.round(u*1.5)+'px Inter,sans-serif';
+  g.textAlign='center';g.textBaseline='middle';
+  g.fillStyle=kitInk(kit);
+  g.globalAlpha=(pl.off?.35:.92);
+  g.fillText(String(shirtNo(pl.p,c)||''),px,torsoT+u*1.45);
+  g.globalAlpha=pl.off?.35:1;g.textBaseline='alphabetic'}
+
+ const skin=['#f0c6a4','#dda87f','#b3784f','#8a5a3a','#6b4226'][id%5];
+ g.fillStyle=shade(skin,.86);
+ dugRR(g,px-u*.20,torsoT-u*.30,u*.40,u*.42,rr*.5);
+
+ g.beginPath();g.arc(px,torsoT-headR*.55,headR,0,7);
+ g.fillStyle=skin;g.fill();
+ g.beginPath();
+ g.arc(px,torsoT-headR*.72,headR*.98,Math.PI*1.02,Math.PI*2.02);
+ g.fillStyle=['#241a12','#12100e','#4a3520','#6b4a25','#161616'][(id>>2)%5];g.fill();
+ if(u>2.4){
+  g.fillStyle='rgba(20,20,20,.55)';
+  g.fillRect(px+face*headR*.30,torsoT-headR*.62,headR*.20,headR*.16)}
+ g.restore();
+ g.globalAlpha=1};
+
+/*#wC6_anim.js#*/
 showStart();
 </script>
 </body>
