@@ -54695,6 +54695,158 @@ ACTIONS.gotoAttn=()=>{
  }catch(e){}};
 
 /*#wD5_attention.js#*/
+/*#wD6_pitchlife.js#*/
+
+/* =====================================================================
+   wD6_pitchlife — three more things that happen in a football match
+   ---------------------------------------------------------------------
+   THE BALL GOES OUT AND SOMEBODY JUST HAS IT AGAIN. Every throw-in in
+   the game was a man standing on the touchline holding nothing, and
+   then the ball was in play. The engine restarts properly — the side
+   changes, the position is right, the clock stops — but the one gesture
+   in football that is unmistakable from any distance, both arms
+   straight over the head, was not there.
+
+   A GOAL WENT IN AND ONLY ONE TEAM REACTED. The scorer peels away, two
+   team-mates chase him, the crowd goes up — and the eleven who have
+   just conceded carry on jogging about their business as if the score
+   were still level. Half of the drama of a goal is the other half of
+   the pitch.
+
+   A MAN WAS BOOKED FOR NOTHING. The referee shows the card and the
+   player protests, which is right, but there is no foul in the picture
+   — nobody is on the floor. A booking with nobody down reads as the
+   referee having a bad day rather than as a challenge.
+
+   None of this touches the engine. The throw-in still restarts where it
+   restarted, the goal still counts, the card still carries the same ban.
+   ===================================================================== */
+
+/* ---------------------------------------------------------------------
+   1. WATCHING FOR ALL THREE
+   ---------------------------------------------------------------------
+   restartFrom clamps the ball into [2,103] x [3,65], so a dead ball
+   sitting on y=3 or y=65 came off the side of the pitch and a dead ball
+   on x=2 or x=103 came off the end. That is enough to tell a throw-in
+   from a goal kick without the engine having to say so.
+   --------------------------------------------------------------------- */
+const _watchLife=dugWatch;
+dugWatch=function(){
+ const r=_watchLife.apply(this,arguments);
+ try{
+  const m=MU.m;if(!m||m.done)return r;
+  const p=(typeof playState==='function')?playState():null;
+  if(!p)return r;
+  const b=MU.ball||{x:52.5,y:34};
+
+  /* THE THROW. Taken on the frame the restart is set up, not when the
+     ball moves — by then it has already been thrown. */
+  const deadNow=(p.mode==='dead');
+  if(deadNow&&!DUG._wasDead&&p.holder&&p.holder.p){
+   const side=(b.y<=3.6||b.y>=64.4);
+   const end=(b.x<=2.6||b.x>=102.4);
+   if(side&&!end&&p.holder.slot!=='GK')
+    dugSet(p.holder.p.id,'throw',1500)}
+  DUG._wasDead=deadNow;
+
+  /* THE OTHER ELEVEN. MU.fix.sc records goals with the CLUB index, not
+     the side index — reading it as a side is how you end up with the
+     wrong team celebrating in half of all matches. */
+  const goals=(MU.fix&&MU.fix.sc)?MU.fix.sc.length:0;
+  if(goals>(DUG._lifeGoals==null?goals:DUG._lifeGoals)){
+   const last=MU.fix.sc[goals-1];
+   const scoredBy=m.sides.findIndex(s=>s.ci===last.ci);
+   if(scoredBy>=0){
+    const conceded=1-scoredBy;
+    /* the keeper has his own reasons to be on the floor; the outfield
+       ten drop their heads, and not all at the same instant */
+    livePlayers(conceded).forEach((pl,i)=>{
+     if(pl.slot==='GK')return;
+     setTimeout(()=>{try{
+      const cur=DUG.anim[pl.p.id];
+      if(!cur||cur.a!=='dive')dugSet(pl.p.id,'dejected',2100)}catch(e){}},
+      i*70)})}}
+  DUG._lifeGoals=goals;
+ }catch(e){}
+ return r};
+
+const _initLife=initDots;
+initDots=function(){
+ const r=_initLife.apply(this,arguments);
+ DUG._wasDead=false;
+ DUG._lifeGoals=(MU.fix&&MU.fix.sc)?MU.fix.sc.length:0;
+ return r};
+
+/* ---------------------------------------------------------------------
+   2. SOMEBODY IS ON THE FLOOR
+   ---------------------------------------------------------------------
+   Wrapped on top of the referee's own wrap, which is wrapped on top of
+   the engine's. All three only read.
+   --------------------------------------------------------------------- */
+function lifeFoul(dp){
+ try{
+  if(!dp||!dp.p)return;
+  const d=(typeof dotOf==='function')?dotOf(dp):null;
+  if(!d)return;
+  /* whoever he is nearest to on the other side is the man he caught */
+  const other=1-(d.si==null?0:d.si);
+  const near=livePlayers(other)
+   .map(x=>dotOf(x)).filter(Boolean)
+   .sort((a,b)=>dist2(a,d)-dist2(b,d))[0];
+  if(near&&near.pl&&near.pl.p&&dist2(near,d)<16)
+   dugSet(near.pl.p.id,'floored',2400)}
+ catch(e){}}
+
+if(typeof MatchSim==='function'&&MatchSim.prototype){
+ const _cardLife=MatchSim.prototype.card;
+ MatchSim.prototype.card=function(D,dp){
+  const r=_cardLife.apply(this,arguments);
+  try{if(liveMatch(this))lifeFoul(dp)}catch(e){}
+  return r};
+ const _offLife=MatchSim.prototype.sendOff;
+ MatchSim.prototype.sendOff=function(D,dp,straight){
+  const r=_offLife.apply(this,arguments);
+  try{if(liveMatch(this)&&straight)lifeFoul(dp)}catch(e){}
+  return r};
+}
+
+/* ---------------------------------------------------------------------
+   3. THE SHAPES
+   --------------------------------------------------------------------- */
+const _poseLife=dugPose;
+dugPose=function(id,sp,swing,bob,face){
+ const a=(typeof dugAnimOf==='function')?dugAnimOf(id):null;
+ if(a){
+  const k=clamp((performance.now()-a.t0)/Math.max(1,a.t1-a.t0),0,1);
+
+  if(a.a==='throw'){
+   /* both arms come up behind the head, hold, and snap forward. The
+      hold is most of it — that is the shape you recognise. */
+   const up=Math.sin(Math.min(1,k*4.5)*Math.PI*0.5);
+   const snap=k>0.72?Math.sin((k-0.72)/0.28*Math.PI)*1.0:0;
+   const e=up*(1-Math.max(0,(k-0.90)/0.10));
+   /* ±π is straight up. The two arms take opposite signs so they rise
+      on their own sides and meet above his head rather than both
+      swinging to one side, which is what the same sign twice does. */
+   const mag=(3.05-snap*1.25)*e;
+   return {legA:0.42*e,legB:-0.30*e,
+    armA:-mag,armB:mag,
+    rot:(-0.10+snap*0.26)*e,lift:0,bob:0,down:0}}
+
+  if(a.a==='floored'){
+   /* down, and slow to get up. He is flat for most of it and rolls back
+      onto his feet at the end. */
+   const dn=Math.sin(Math.min(1,k*5)*Math.PI*0.5);
+   const up2=k>0.68?(k-0.68)/0.32:0;
+   const e=dn*(1-up2);
+   const roll=Math.sin(performance.now()/260)*0.10*e;
+   return {legA:(0.55+roll)*e,legB:(-0.35+roll)*e,
+    armA:-1.05*e,armB:0.85*e,
+    rot:1.42*e,lift:0,bob:0,down:2.35*e}}
+ }
+ return _poseLife.apply(this,arguments)};
+
+/*#wD6_pitchlife.js#*/
 showStart();
 </script>
 </body>
