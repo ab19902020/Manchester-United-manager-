@@ -13,6 +13,10 @@
 - Made fullscreen feedback reflect actual API success or failure.
 - Prevented repeated player and club SVG gradient IDs.
 - Restored crowd audio after neural-voice interruption and bounded its decoded-audio cache by memory.
+- Warned the player when the upgraded career store did not load. The HTML now
+  pulls three scripts from `src/`; a copy of the file on its own falls back to the
+  ~5 MB `localStorage` path silently, which is the failure the store was built to
+  fix. It now says so on the save screen and once per session.
 - Fixed the instant-simulation integration test, which slept a fixed 120 ms for a
   path that takes about 300 ms in a real browser and 1.5 s under JSDOM. Tests now
   wait on the condition through a shared `waitFor` harness helper.
