@@ -55483,6 +55483,7 @@ vSave=function(){
 
 /*#wD8_storewarn.js#*/
 
+
 /*#wD9_edges.js#*/
 
 /* =====================================================================
@@ -55582,7 +55583,25 @@ render=function(){
  try{requestAnimationFrame(xsScan)}catch(e){setTimeout(xsScan,0)}
  return r};
 
-setTimeout(xsScan,300);
+/* ...but render() is not the only thing that draws a row. The club
+   picker on the front screen, every modal and the match screen are all
+   assembled by their own code, so hanging the rescan off render() alone
+   means the fade appears on those only if a render happens to follow.
+   That is the kind of dependency that works today and quietly stops
+   working the next time somebody adds a screen.
+
+   Watching the document instead covers all of them and cannot go stale.
+   Debounced, because a match feed mutates often and this only needs to
+   run once things have settled. */
+(function xsWatch(){
+ let queued=0;
+ const kick=()=>{
+  if(queued)return;
+  queued=setTimeout(()=>{queued=0;xsScan()},120)};
+ try{
+  new MutationObserver(kick).observe(document.body,{childList:true,subtree:true});
+ }catch(e){}
+ [0,300,900].forEach(t=>setTimeout(xsScan,t))})();
 
 /*#wD9_edges.js#*/
 showStart();

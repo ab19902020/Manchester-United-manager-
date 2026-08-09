@@ -29,7 +29,10 @@
 - Faded the edges of the nine horizontally scrollable tab and chip rows so it is
   visible that they continue. They were slicing words in half against the screen
   edge — 446px of the tactics row was hidden with no cue at all. The fade is sized
-  to how much is actually off-screen on each side, so it never overstates it.
+  to how much is actually off-screen on each side, so it never overstates it. The
+  rescan is driven by a debounced observer on the document rather than by the main
+  render, so rows drawn by the front screen, a modal or the match screen are covered
+  too.
 - Added transfer-market pagination and per-render fee/wage caching.
 - Added static branding and social metadata for The Results Business.
 - Added an installable PWA shell and offline caching for core game assets.
