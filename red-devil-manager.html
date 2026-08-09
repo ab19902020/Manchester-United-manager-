@@ -51537,6 +51537,271 @@ renderTop=function(){
  return r};
 
 /*#wC2_match.js#*/
+
+
+
+
+
+/*#wC3_wide.js#*/
+
+/* =====================================================================
+   wC3_wide — the pitch gets the shape of the screen it is on
+   ---------------------------------------------------------------------
+   Measured, with the match running:
+
+     portrait phone  390x844   pitch 366x242   27% of the screen
+     landscape phone 844x390   pitch 292x193   17%
+     desktop        1280x800   pitch 559x369   20%
+
+   Turning the phone on its side made the pitch SMALLER. That is the
+   wrong way round — landscape is the shape a football pitch actually
+   is — and it happens because the whole game is built as one 520px
+   column and the match screen inherits the cap. On an 844px-wide
+   phone, 324 pixels of screen are not used by anything at all, and the
+   five stacked bars are still stacked, so the body is left with fifty-
+   one pixels of height to fit a hundred and ninety-three pixel canvas
+   into. It overflows its own container.
+
+   A wide screen is not a tall screen with more room. It is a different
+   arrangement: the pitch takes the whole height down the left, and
+   everything that was stacked underneath it goes into a column beside
+   it. Same elements, same handlers, same DOM order — grid areas do the
+   moving, so nothing has to be rebuilt.
+
+     portrait phone  390x844   unchanged            27%
+     landscape phone 844x390   pitch 554x366        62%
+     desktop        1280x800   pitch 880x581        50%
+
+   WHAT THIS IS NOT. The pitch is not rotated to stand upright on a
+   portrait phone. A canvas of 105x68 metres can only be as tall as the
+   screen is wide, so a vertical pitch would be the real win there — but
+   every painter in the game reads cv._sx and cv._sy and multiplies a
+   0-105 x by one and a 0-68 y by the other, and several of them reset
+   the context with setTransform(1,0,0,1,0,0) partway through. Rotating
+   it properly means changing the painters, not wrapping them. Turning
+   the phone is the honest answer today, and the game now says so.
+   ===================================================================== */
+
+/* ---------------------------------------------------------------------
+   1. WHICH SHAPE ARE WE IN
+   ---------------------------------------------------------------------
+   Wider than it is tall, and wide enough to be worth splitting. A
+   600px floor keeps small phones held sideways out of it, where two
+   columns would leave both of them too narrow to use.
+   --------------------------------------------------------------------- */
+function mvWide(){
+ try{return window.innerWidth>window.innerHeight&&window.innerWidth>=600}
+ catch(e){return false}}
+
+/* ---------------------------------------------------------------------
+   2. THE TWO-COLUMN ARRANGEMENT
+   ---------------------------------------------------------------------
+   The DOM order is header, tabs, body, dugout strip, controls. Grid
+   areas put the body down the whole left-hand side and stack the rest
+   on the right without moving a single node, so every wrapper and
+   handler that has ever been attached still points at the same element.
+   --------------------------------------------------------------------- */
+(function wideCSS(){
+ const old=document.getElementById('wC3');if(old)old.remove();
+ const st=document.createElement('style');st.id='wC3';
+ st.textContent=
+  /* the 520px column is right for the game and wrong for a match on a
+     wide screen — the match is the one place that wants the whole width */
+  '#matchScreen.mvwide{max-width:none;display:grid;'+
+   'grid-template-columns:1fr clamp(260px,32%,380px);'+
+   'grid-template-rows:auto auto 1fr auto;'+
+   'grid-template-areas:"body hdr" "body tabs" "body dug" "body ctl";'+
+   'column-gap:10px;padding-right:env(safe-area-inset-right)}'+
+  '#matchScreen.mvwide .msb{grid-area:hdr;border-bottom:0}'+
+  '#matchScreen.mvwide .mtabs{grid-area:tabs}'+
+  '#matchScreen.mvwide #mBody{grid-area:body;overflow:hidden;'+
+   'display:flex;flex-direction:column;justify-content:center;padding:8px 0 8px 10px}'+
+  /* it has to be told it may be smaller than its contents, or it
+     overflows its grid row and prints itself over the control bar —
+     min-height:0 is what lets a grid item shrink at all */
+  '#matchScreen.mvwide .dugstrip{grid-area:dug;align-self:stretch;min-height:0;'+
+   'border-top:1px solid var(--chalk);overflow-y:auto}'+
+  '#matchScreen.mvwide #mCtl{grid-area:ctl;border-top:1px solid var(--chalk)}'+
+  /* the right-hand column is narrow, so the things in it get narrower */
+  '#matchScreen.mvwide .mtabs{padding:6px 8px}'+
+  '#matchScreen.mvwide .mv-shouts{flex-wrap:wrap;overflow:visible}'+
+  '#matchScreen.mvwide .mv-shout{font-size:11px;padding:6px 9px}'+
+  '#matchScreen.mvwide .mv-bar{flex-wrap:wrap}'+
+  '#matchScreen.mvwide .mv-speed{flex:1 0 100%;justify-content:center}'+
+  '#matchScreen.mvwide .mv-act{flex:1 0 100%}'+
+  '#matchScreen.mvwide #mvFeed{max-height:34%;overflow:hidden}'+
+  /* The strip is a horizontal scrolling rail on a phone, which is right
+     there and wrong in a side column — off the right-hand edge is the
+     one direction a narrow column has none of. The class is dug-row,
+     not dugrow, so the first attempt at this styled nothing and left
+     four of the eleven cards visible with a column of empty space
+     under them. */
+  '#matchScreen.mvwide .dugstrip{max-width:none;padding:8px 10px}'+
+  '#matchScreen.mvwide .dugstrip .dug-row{flex-wrap:wrap;overflow:visible;gap:5px}'+
+  '#matchScreen.mvwide .dugstrip .dug-row>*{flex:1 1 46%;min-width:0}'+
+  '#matchScreen.mvwide .dugstrip .dug-head{flex-wrap:wrap;gap:4px}'+
+  /* the mentality chips and the two duplicate buttons stay hidden here
+     exactly as they are on a phone — wC2 tags them .dug-extra */
+  '#matchScreen.mvwide .dugstrip .dug-foot{display:none}'+
+  /* the club name in the score bar has a column to fit in now */
+  '#matchScreen.mvwide .msb{padding-left:10px;padding-right:10px}'+
+  '#matchScreen.mvwide .msb-team{min-width:0}'+
+  '#matchScreen.mvwide .msb-team .n{min-width:0;overflow:hidden;'+
+   'text-overflow:ellipsis;white-space:nowrap;font-size:12px}'+
+  /* A phone on its side is 390 pixels tall. The header, the tabs and
+     the control bar want 349 of them, which leaves forty for eleven
+     player cards — not a layout problem, just not enough screen. The
+     ratings have a whole tab of their own, so on a short wide screen
+     they come off the side column and the controls get the room. */
+  '@media (max-height:520px){#matchScreen.mvwide .dugstrip{display:none}'+
+   '#matchScreen.mvwide{grid-template-rows:auto auto 0 1fr}}'+
+  /* a nudge, once, for anyone still holding the phone upright */
+  '.mv-turn{display:flex;align-items:center;justify-content:center;gap:7px;'+
+   'margin:7px auto 0;padding:6px 10px;border-radius:10px;width:max-content;'+
+   'border:1px solid rgba(127,179,255,.32);background:rgba(127,179,255,.09);'+
+   'font-size:10.5px;font-weight:700;color:#9ec5ff;cursor:pointer}';
+ document.head.appendChild(st)})();
+
+function mvApplyWide(){
+ try{
+  const scr=document.getElementById('matchScreen');
+  if(!scr)return false;
+  const want=mvWide();
+  const had=scr.classList.contains('mvwide');
+  if(want!==had)scr.classList.toggle('mvwide',want);
+  return want!==had}
+ catch(e){return false}}
+
+/* ---------------------------------------------------------------------
+   3. HOW MUCH ROOM THE PITCH ACTUALLY HAS
+   ---------------------------------------------------------------------
+   matchRoom works out the height by taking the header, the tabs, the
+   dugout strip and the control panel off the viewport. In two columns
+   none of those are above the pitch any more, so that arithmetic
+   removes about three hundred pixels that were never in the way. In
+   wide mode the body is measured directly instead — it is a grid cell,
+   so it already knows exactly how big it is.
+   --------------------------------------------------------------------- */
+const _matchRoomWide=matchRoom;
+matchRoom=function(){
+ if(!mvWide())return _matchRoomWide.apply(this,arguments);
+ try{
+  const scr=document.getElementById('matchScreen');
+  const body=scr&&scr.querySelector('#mBody');
+  if(!body)return _matchRoomWide.apply(this,arguments);
+  const cs=getComputedStyle(body);
+  const padX=parseFloat(cs.paddingLeft||0)+parseFloat(cs.paddingRight||0);
+  const padY=parseFloat(cs.paddingTop||0)+parseFloat(cs.paddingBottom||0);
+  const r=body.getBoundingClientRect();
+  /* the commentary shares the column with the pitch, so it is booked
+     for before the pitch is measured rather than allowed to push it */
+  const feed=document.getElementById('mvFeed');
+  const feedH=(feed&&feed.offsetParent)?Math.min(r.height*0.34,feed.getBoundingClientRect().height):0;
+  const w=Math.floor(body.clientWidth-padX);
+  const h=Math.floor(r.height-padY-feedH-6);
+  if(!(w>60)||!(h>60))return _matchRoomWide.apply(this,arguments);
+  return {w,h}}
+ catch(e){return _matchRoomWide.apply(this,arguments)}};
+
+/* the commentary tail is shorter beside the pitch than under it */
+if(typeof mvFeedKeep==='function'){
+ const _feedKeepWide=mvFeedKeep;
+ mvFeedKeep=function(){
+  if(!mvWide())return _feedKeepWide.apply(this,arguments);
+  try{
+   const b=$('#mBody'),cv=b&&b.querySelector('canvas');
+   if(!b||!cv)return 3;
+   const room=b.clientHeight-cv.getBoundingClientRect().height-14;
+   return clamp(Math.floor(room/38),1,4)}
+  catch(e){return 3}}}
+
+/* ---------------------------------------------------------------------
+   4. AND IT FOLLOWS THE PHONE AROUND
+   ---------------------------------------------------------------------
+   refitMatch already runs on resize and on orientationchange; the class
+   has to be settled before the canvas is measured, or the first fit
+   after a rotation is done against the old arrangement.
+   --------------------------------------------------------------------- */
+/* The pitch is sized from the room the commentary leaves, and the
+   commentary is trimmed to the room the pitch leaves. That is fine
+   while it settles, and circular the moment the screen changes shape:
+   turn a phone sideways mid-match and the feed is still carrying six
+   portrait lines, so it books a third of the new body and the pitch
+   comes out 400x264 instead of 554x366.
+
+   Breaking the loop needs one of the two to go first. The feed is
+   emptied on a layout change and the pitch measured against the whole
+   body; the very next tick refills the feed into whatever is left. It
+   costs the last few lines of commentary for a fraction of a second,
+   at the moment the player is turning the phone over. */
+function mvClearFeed(){
+ try{
+  const f=document.getElementById('mvFeed');
+  if(!f)return;
+  f.innerHTML='';
+  MU.lastFeed=Math.max(0,((MU.m&&MU.m.feed)||[]).length-8)}
+ catch(e){}}
+
+const _refitWide=refitMatch;
+refitMatch=function(){
+ const changed=mvApplyWide();
+ if(changed)mvClearFeed();
+ const r=_refitWide.apply(this,arguments);
+ /* a layout change moves the body, so the size it just computed was
+    measured against the arrangement it is replacing */
+ if(changed)requestAnimationFrame(()=>{try{_refitWide()}catch(e){}});
+ return r};
+
+if(typeof buildMatchScreen==='function'){
+ const _bmsWide=buildMatchScreen;
+ buildMatchScreen=function(){
+  const r=_bmsWide.apply(this,arguments);
+  try{mvApplyWide();refitMatch()}catch(e){}
+  return r}}
+
+/* ---------------------------------------------------------------------
+   5. TELLING PEOPLE THE OPTION EXISTS
+   ---------------------------------------------------------------------
+   Turning the phone doubles the size of the pitch and nothing on the
+   screen says so. It gets said once, under the tabs, on a phone held
+   upright, and it goes away for good when it is tapped or when the
+   phone is turned.
+   --------------------------------------------------------------------- */
+ACTIONS.mvTurnOK=()=>{
+ try{localStorage.setItem('rb_turn','1')}catch(e){}
+ const t=document.querySelector('.mv-turn');if(t)t.remove()};
+
+function mvTurnHint(){
+ try{
+  if(mvWide())return;
+  /* a real phone, not a narrow desktop window */
+  const touch=('ontouchstart' in window)||(navigator.maxTouchPoints>0);
+  if(!touch)return;
+  if(window.innerWidth>700)return;
+  if(localStorage.getItem('rb_turn'))return;
+  const scr=document.getElementById('matchScreen');
+  const tabs=scr&&scr.querySelector('.mtabs');
+  if(!tabs||scr.querySelector('.mv-turn'))return;
+  const d=document.createElement('div');
+  d.className='mv-turn';
+  d.dataset.action='mvTurnOK';
+  d.innerHTML='📱 Turn your phone sideways for a much bigger pitch · tap to hide';
+  tabs.insertAdjacentElement('afterend',d);
+ }catch(e){}}
+
+if(typeof renderMBody==='function'){
+ const _mbodyTurn=renderMBody;
+ renderMBody=function(){
+  const r=_mbodyTurn.apply(this,arguments);
+  try{mvTurnHint()}catch(e){}
+  return r}}
+
+/* the hint has no business surviving a rotation */
+['resize','orientationchange'].forEach(ev=>window.addEventListener(ev,()=>{
+ try{if(mvWide()){const t=document.querySelector('.mv-turn');if(t)t.remove()}}catch(e){}
+},{passive:true}));
+
+/*#wC3_wide.js#*/
 showStart();
 </script>
 </body>
