@@ -54847,6 +54847,498 @@ dugPose=function(id,sp,swing,bob,face){
  return _poseLife.apply(this,arguments)};
 
 /*#wD6_pitchlife.js#*/
+
+/*#wD7_kokoro.js#*/
+
+/* =====================================================================
+   wD7_kokoro — real British voices instead of whatever the phone has
+   ---------------------------------------------------------------------
+   THE PROBLEM WITH THE OLD ONE. speechSynthesis does not give you a
+   voice, it gives you whatever the device happens to own. On a good
+   Android that is Google UK English Male and it is fine. On an iPhone
+   without the Enhanced download, on a Windows machine with only the
+   compact voices, on any Linux browser at all, it is a robot reading a
+   telegram — and the same save sounds completely different on two
+   phones. The previous layer did what could be done about that: it
+   ranked the list, waited for it to arrive, split sentences into
+   clauses. It could not conjure a voice that was not installed.
+
+   The other thing it could never do is put the voice in the ground.
+   speechSynthesis writes straight to the output device. It does not go
+   through our mixer, so the volume slider does not really own it, the
+   stadium reverb cannot touch it, and the tannoy sounds like a phone
+   rather than like a public address system in a concrete bowl.
+
+   KOKORO-82M fixes both. It is an 82-million-parameter TTS model, it
+   runs in the browser on onnxruntime-web, it ships eight British voices
+   — four male, four female — and it hands you back a Float32Array. A
+   Float32Array can be put through the convolver. So the announcer now
+   comes out of the PA of the stadium you are actually in.
+
+   ---------------------------------------------------------------------
+   TWO THINGS THAT SHAPE THE DESIGN, BOTH UNAVOIDABLE
+
+   1. THE WEIGHTS CANNOT LIVE IN THIS FILE. The game is one HTML file of
+      about three megabytes. The quantised model is eighty-six. Base64
+      inside the document would make it a hundred and fifteen megabyte
+      HTML file that has to be parsed before the menu appears. So the
+      model is fetched once from a CDN and left in the browser cache,
+      and it is OPT-IN: nobody downloads eighty-six megabytes because
+      they tapped a football game. Until they choose to, the device
+      voices carry on exactly as before.
+
+   2. IT NEEDS THE GAME TO BE ON A WEB ADDRESS. Opened straight off the
+      disk as file://, a browser will not import a module from another
+      origin — the page has no origin to check against. Served from
+      anywhere at all, including a local server, it is fine. That is
+      detected and said plainly rather than failing into silence.
+
+   Everything degrades to the old path: no network, no WebAssembly, an
+   import that 404s, an out-of-memory on an old phone — any of them and
+   it says so once and goes back to the device voices, mid-sentence if
+   it has to.
+   ===================================================================== */
+
+const KOKO_SRC='https://cdn.jsdelivr.net/npm/kokoro-js@1.2.1/+esm';
+const KOKO_MODEL='onnx-community/Kokoro-82M-v1.0-ONNX';
+
+/* Kokoro's British voices. bf/bm is how the model names them: British
+   female, British male. The descriptions are what they actually sound
+   like, so the picker can be read rather than guessed at. */
+const KOKO_VOICES=[
+ {id:'bm_george',   g:'m',n:'George',   d:'older, measured, unhurried'},
+ {id:'bm_lewis',    g:'m',n:'Lewis',    d:'deeper, a bit gravelly'},
+ {id:'bm_daniel',   g:'m',n:'Daniel',   d:'younger, quick, bright'},
+ {id:'bm_fable',    g:'m',n:'Fable',    d:'warm, storyteller'},
+ {id:'bf_emma',     g:'f',n:'Emma',     d:'clear, level, broadcast'},
+ {id:'bf_alice',    g:'f',n:'Alice',    d:'lighter, quicker'},
+ {id:'bf_isabella', g:'f',n:'Isabella', d:'fuller, lower'},
+ {id:'bf_lily',     g:'f',n:'Lily',     d:'young, soft'}];
+
+/* the three sizes, and honestly what each costs */
+const KOKO_Q={
+ small:   {dtype:'q4f16',mb:36, lbl:'Small',    d:'quickest, and the one to use on a phone'},
+ standard:{dtype:'q8',   mb:86, lbl:'Standard', d:'the recommended one — clean, and not slow'},
+ best:    {dtype:'fp32', mb:326,lbl:'Best',     d:'full precision, only worth it on a desktop'}};
+
+const KOKO={
+ state:'off',        /* off | loading | ready | failed */
+ tts:null, err:'', pct:0, mb:0,
+ cache:new Map(),    /* voice|text -> AudioBuffer, so a repeated line is instant */
+ order:[],
+ token:null,         /* the current utterance; changing it cancels the queue */
+ node:null,          /* what is playing right now */
+ duckAt:null};
+
+/* the engine and the voice belong to the DEVICE, not to the save: the
+   model is cached per browser, and a save carried to another machine
+   should not insist on eighty-six megabytes it has not got */
+function kokoPref(k,d){try{return localStorage.getItem(k)||d}catch(e){return d}}
+function kokoSet(k,v){try{v?localStorage.setItem(k,v):localStorage.removeItem(k)}catch(e){}}
+function kokoEngine(){return kokoPref('rdmTtsEngine','device')}
+function kokoQuality(){return KOKO_Q[kokoPref('rdmKokoQ','standard')]?kokoPref('rdmKokoQ','standard'):'standard'}
+function kokoVoicePref(){return kokoPref('rdmKokoVoice','')}
+
+/* ---------------------------------------------------------------------
+   1. CAN THIS BROWSER DO IT AT ALL
+   --------------------------------------------------------------------- */
+function kokoBlocked(){
+ if(typeof WebAssembly==='undefined')return 'This browser has no WebAssembly, which the voices are built on.';
+ try{
+  const p=String(location.protocol||'');
+  if(p==='file:')
+   return 'The game is open straight from a file. Browsers will not load anything from the web into a page with no address of its own — put it on any web address, even a local one, and the voices will work.';
+ }catch(e){}
+ return null}
+
+/* ---------------------------------------------------------------------
+   2. FETCHING IT, ONCE
+   ---------------------------------------------------------------------
+   from_pretrained reports every file it pulls. That is turned into one
+   number, because "45%" is useful and "model_q8.onnx 12.4/86.1MB" is
+   noise to somebody who wants to play football.
+   --------------------------------------------------------------------- */
+let kokoLoading=null;
+function kokoLoad(){
+ if(KOKO.state==='ready')return Promise.resolve(KOKO.tts);
+ if(kokoLoading)return kokoLoading;
+ const why=kokoBlocked();
+ if(why){KOKO.state='failed';KOKO.err=why;return Promise.reject(new Error(why))}
+
+ const q=KOKO_Q[kokoQuality()]||KOKO_Q.standard;
+ KOKO.state='loading';KOKO.pct=0;KOKO.mb=q.mb;KOKO.err='';
+ kokoPaint();
+
+ kokoLoading=(async()=>{
+  /* built at run time so nothing tries to resolve it while parsing */
+  const mod=await import(/* webpackIgnore: true */ KOKO_SRC);
+  const KokoroTTS=mod.KokoroTTS||mod.default&&mod.default.KokoroTTS;
+  if(!KokoroTTS)throw new Error('The voice library loaded but was not what we expected.');
+
+  /* WebGPU is only worth asking for at full precision; the quantised
+     builds run on the WASM backend and are quicker there anyway */
+  const useGPU=(q.dtype==='fp32'&&typeof navigator!=='undefined'&&navigator.gpu);
+  const seen={};
+  const tts=await KokoroTTS.from_pretrained(KOKO_MODEL,{
+   dtype:q.dtype,
+   device:useGPU?'webgpu':'wasm',
+   progress_callback:p=>{
+    try{
+     if(!p||!p.file)return;
+     if(p.total)seen[p.file]={a:p.loaded||0,b:p.total};
+     let a=0,b=0;
+     for(const k in seen){a+=seen[k].a;b+=seen[k].b}
+     if(b>0){KOKO.pct=Math.min(99,Math.round(a/b*100));kokoPaint()}
+    }catch(e){}}});
+  KOKO.tts=tts;KOKO.state='ready';KOKO.pct=100;kokoPaint();
+  return tts})()
+ .catch(e=>{
+  KOKO.state='failed';
+  KOKO.err=kokoWhy(e);
+  kokoLoading=null;
+  kokoPaint();
+  throw e});
+ return kokoLoading}
+
+/* a message a person can act on, rather than the exception text */
+function kokoWhy(e){
+ const s=String((e&&e.message)||e||'');
+ if(/fetch|network|Failed to fetch|NetworkError|ERR_/i.test(s))
+  return 'Could not reach the voice files. You need to be online the first time — after that they are cached and it works offline.';
+ if(/memory|allocat|RangeError/i.test(s))
+  return 'This device ran out of memory loading the voices. Try the Small size.';
+ if(/import|module|MIME|Unexpected token/i.test(s))
+  return 'The voice library would not load in this browser.';
+ return s.slice(0,180)||'The voices would not load.'}
+
+/* ---------------------------------------------------------------------
+   3. WHO SOUNDS LIKE WHO
+   ---------------------------------------------------------------------
+   Same rule as the old cast: a reporter keeps his voice for a whole
+   career, because a reporter who sounds like a different man every week
+   is not a character. The announcer is always the same one — grounds do
+   not change announcer at half time.
+   --------------------------------------------------------------------- */
+function kokoVoiceFor(who,gender){
+ const key=String(who||'reporter');
+ if(/announcer|stadium|tannoy/i.test(key))return 'bm_george';
+ const pick=kokoVoicePref();
+ if(pick&&KOKO_VOICES.some(v=>v.id===pick))return pick;
+ const g=gender==='f'?'f':gender==='m'?'m':null;
+ const pool=g?KOKO_VOICES.filter(v=>v.g===g):KOKO_VOICES;
+ const use=pool.length?pool:KOKO_VOICES;
+ /* a plain hash mod eight put reporter1 and reporter2 on the same voice.
+    Running it through the generator first spreads names that differ by
+    one character, which reporter names mostly do. */
+ const r=mulberry(hashStr('kokovoice'+key));
+ return use[Math.floor(r()*use.length)%use.length].id}
+
+/* ---------------------------------------------------------------------
+   4. INTO THE MIXER
+   ---------------------------------------------------------------------
+   This is the part speechSynthesis could never do. The samples become
+   an AudioBuffer and go through the game's own master gain, so the
+   volume slider owns them — and the announcer gets a send into the
+   stadium convolver, so he is coming out of a PA in a concrete bowl
+   rather than out of the phone.
+   --------------------------------------------------------------------- */
+function kokoBuffer(raw){
+ const ctx=sfxCtx();if(!ctx)return null;
+ const data=raw.audio||raw;
+ const sr=raw.sampling_rate||raw.sampleRate||24000;
+ const buf=ctx.createBuffer(1,data.length,sr);
+ buf.getChannelData(0).set(data);
+ return buf}
+
+/* the crowd steps back while somebody is talking, and comes up again
+   after — the intrinsic value is read first so whatever the match had
+   it set to is what it goes back to */
+function kokoDuck(on){
+ try{
+  const c=A2.crowd;if(!c||!c.bus)return;
+  const ctx=SFX.ctx;if(!ctx)return;
+  if(on){
+   if(KOKO.duckAt==null)KOKO.duckAt=c.bus.gain.value;
+   c.bus.gain.setTargetAtTime(KOKO.duckAt*0.30,ctx.currentTime,0.10)}
+  else if(KOKO.duckAt!=null){
+   c.bus.gain.setTargetAtTime(KOKO.duckAt,ctx.currentTime,0.45);
+   KOKO.duckAt=null}}
+ catch(e){}}
+
+function kokoPlay(buf,opt){
+ return new Promise(res=>{
+  const ctx=sfxCtx();
+  if(!ctx||!buf){res();return}
+  /* handed to kokoStop so that stopping a clip mid-word resolves the
+     wait rather than leaving the queue parked on a promise nobody will
+     ever settle */
+  KOKO._res=res;
+  try{
+   const src=ctx.createBufferSource();src.buffer=buf;
+   const g=ctx.createGain();
+   g.gain.value=clamp((opt&&opt.vol)||1,0,1.4);
+   src.connect(g);g.connect(SFX.master);
+   /* the tannoy goes into the ground; a reporter in a press room does
+      not, because a press room is a small carpeted box */
+   if(opt&&opt.wet)a2Wet(g,opt.wet);
+   if(opt&&opt.rate)src.playbackRate.value=clamp(opt.rate,.7,1.4);
+   KOKO.node=src;
+   src.onended=()=>{if(KOKO.node===src)KOKO.node=null;if(KOKO._res===res)KOKO._res=null;res()};
+   src.start()}
+  catch(e){KOKO._res=null;res()}})}
+
+/* ---------------------------------------------------------------------
+   5. SAYING IT
+   ---------------------------------------------------------------------
+   Generation is not instant — a clause takes somewhere between a
+   quarter of a second and two seconds depending on the device. Waiting
+   for the whole sentence before the first word would be unbearable, so
+   it generates one clause ahead: while clause one is playing, clause
+   two is being made. After the first clause there is no gap.
+
+   And every clip is kept. Press questions and PA lines repeat, and the
+   second time a line comes round it is already an AudioBuffer.
+   --------------------------------------------------------------------- */
+function kokoCacheGet(k){
+ const v=KOKO.cache.get(k);
+ if(v){const i=KOKO.order.indexOf(k);if(i>=0)KOKO.order.splice(i,1);KOKO.order.push(k)}
+ return v}
+function kokoCachePut(k,v){
+ KOKO.cache.set(k,v);KOKO.order.push(k);
+ while(KOKO.order.length>70){const old=KOKO.order.shift();KOKO.cache.delete(old)}}
+
+async function kokoGen(text,voice,speed){
+ const key=voice+'|'+speed+'|'+text;
+ const hit=kokoCacheGet(key);
+ if(hit)return hit;
+ const raw=await KOKO.tts.generate(text,{voice,speed});
+ const buf=kokoBuffer(raw);
+ if(buf)kokoCachePut(key,buf);
+ return buf}
+
+function kokoStop(){
+ KOKO.token=null;
+ try{if(KOKO.node){KOKO.node.onended=null;KOKO.node.stop();KOKO.node=null}}catch(e){}
+ try{if(KOKO._res){const r=KOKO._res;KOKO._res=null;r()}}catch(e){}
+ kokoDuck(false)}
+
+async function kokoSay(text,who,opt){
+ const o=opt||{};
+ const voice=o.voice||kokoVoiceFor(who,o.gender||(typeof nameGender==='function'?nameGender(who):null));
+ const clauses=(typeof sayClauses==='function')?sayClauses(text):[text];
+ const speed=clamp(o.rate||1,.7,1.3);
+ const token={};KOKO.token=token;
+
+ /* generate the first before ducking, so the crowd does not dip into a
+    hole while a phone thinks about it */
+ let next=kokoGen(clauses[0],voice,speed);
+ let ducked=false;
+ for(let i=0;i<clauses.length;i++){
+  let buf;
+  try{buf=await next}catch(e){throw e}
+  if(KOKO.token!==token)return true;                 /* something else spoke */
+  if(i+1<clauses.length)next=kokoGen(clauses[i+1],voice,speed).catch(()=>null);
+  if(!buf)continue;
+  if(!ducked&&o.duck!==false){kokoDuck(true);ducked=true}
+  await kokoPlay(buf,{vol:(sfxCfg().vol||.7)*(o.vol||1),wet:o.wet||0});
+  if(KOKO.token!==token)return true;
+  /* a beat at a full stop, a shorter one at a comma */
+  const gap=(i===clauses.length-1)?0:(/[.!?]$/.test(clauses[i])?150:60);
+  if(gap)await new Promise(r=>setTimeout(r,gap))}
+ if(ducked)kokoDuck(false);
+ return true}
+
+/* ---------------------------------------------------------------------
+   6. TAKING OVER FROM THE DEVICE VOICES
+   ---------------------------------------------------------------------
+   ttsSay keeps its signature and its normalisation. All that changes is
+   which engine the words come out of, and if Kokoro is not ready — not
+   installed, still loading, or broken — the old path answers instead,
+   so there is never a silence where a line should be.
+   --------------------------------------------------------------------- */
+const _ttsSayDevice=ttsSay;
+const _ttsStopDevice=ttsStop;
+
+ttsStop=function(){
+ try{kokoStop()}catch(e){}
+ return _ttsStopDevice.apply(this,arguments)};
+
+ttsSay=function(text,who,opt){
+ if(!sfxOn()||!ttsCfg().tts)return false;
+ if(kokoEngine()!=='kokoro')return _ttsSayDevice.apply(this,arguments);
+
+ const raw=(typeof saySpeakable==='function')?saySpeakable(text):String(text||'');
+ if(!raw)return false;
+
+ /* not ready yet: start it if it has not been started, and let the
+    device say this one so the moment is not lost */
+ if(KOKO.state!=='ready'){
+  if(KOKO.state==='off'||KOKO.state==='failed'&&!KOKO._tried){
+   KOKO._tried=true;
+   kokoLoad().catch(()=>{})}
+  return _ttsSayDevice.apply(this,arguments)}
+
+ try{speechSynthesis.cancel()}catch(e){}
+ kokoStop();
+ const o=Object.assign({},opt||{});
+ /* the announcer is on a PA; everybody else is in a room */
+ if(/announcer|stadium|tannoy/i.test(String(who||''))){o.wet=0.55;o.vol=(o.vol||1)*1.05}
+ else o.wet=0.10;
+ kokoSay(raw,who,o).catch(e=>{
+  /* it broke mid-career. Say so once, drop back, and carry on. */
+  KOKO.state='failed';KOKO.err=kokoWhy(e);
+  kokoSet('rdmTtsEngine','device');
+  try{toast('🗣️ Neural voices stopped — back to the device voice')}catch(e2){}
+  try{_ttsSayDevice(text,who,opt)}catch(e2){}});
+ return true};
+
+/* ---------------------------------------------------------------------
+   7. THE SETTING
+   --------------------------------------------------------------------- */
+function kokoPaint(){
+ try{
+  const el=document.getElementById('kokoState');
+  if(!el)return;
+  el.innerHTML=kokoStateHTML()}
+ catch(e){}}
+
+function kokoStateHTML(){
+ const q=KOKO_Q[kokoQuality()]||KOKO_Q.standard;
+ if(KOKO.state==='loading')
+  return '<div class="koko-bar"><i style="width:'+KOKO.pct+'%"></i></div>'+
+   '<div class="xs muted" style="margin-top:5px">Downloading the voices — '+KOKO.pct+'% of about '+q.mb+' MB. '+
+   'It only happens once; after this they are on the device.</div>';
+ if(KOKO.state==='ready')
+  return '<div class="xs" style="color:var(--good,#3ddc84);font-weight:800">✓ Installed and in use ('+q.lbl.toLowerCase()+')</div>';
+ if(KOKO.state==='failed')
+  return '<div class="xs" style="color:#ff9b86">'+esc(KOKO.err||'The voices would not load.')+'</div>';
+ const why=kokoBlocked();
+ if(why)return '<div class="xs" style="color:#ff9b86">'+esc(why)+'</div>';
+ return '<div class="xs muted">Not installed. About '+q.mb+' MB, once, then it works offline.</div>'}
+
+ACTIONS.kokoInstall=()=>{
+ kokoSet('rdmTtsEngine','kokoro');
+ KOKO._tried=true;
+ kokoLoad().then(()=>{
+  toast('🗣️ British voices ready');
+  try{ttsSay('Right then. Big game tomorrow, boss — the lads look sharp.','preview')}catch(e){}
+  kokoPaint()})
+ .catch(()=>{kokoSet('rdmTtsEngine','device');kokoPaint()});
+ kokoPaint()};
+
+ACTIONS.kokoOff=()=>{
+ kokoSet('rdmTtsEngine','device');
+ kokoStop();
+ toast('🗣️ Using the device voice');
+ ACTIONS.sfxVoicePick()};
+
+ACTIONS.kokoQual=el=>{
+ const v=el.dataset.v;
+ if(!KOKO_Q[v])return;
+ if(KOKO.state==='ready'&&v!==kokoQuality()){
+  KOKO.state='off';KOKO.tts=null;kokoLoading=null;KOKO.cache.clear();KOKO.order.length=0}
+ kokoSet('rdmKokoQ',v);
+ ACTIONS.sfxVoicePick()};
+
+ACTIONS.kokoVoice=el=>{
+ const v=el.dataset.v||'';
+ kokoSet('rdmKokoVoice',v);
+ const nm=(KOKO_VOICES.find(x=>x.id===v)||{}).n;
+ if(KOKO.state==='ready')
+  ttsSay(v?'This is the voice you will hear in the press room.'
+          :'Each reporter will get a voice of his own.','preview',{voice:v||undefined});
+ toast(v?'🗣️ '+nm:'🗣️ A voice each');
+ ACTIONS.sfxVoicePick()};
+
+ACTIONS.kokoTry=el=>{
+ const v=el.dataset.v;
+ if(KOKO.state!=='ready'){toast('Install the voices first');return}
+ const q=KOKO_VOICES.find(x=>x.id===v);
+ ttsStop();
+ kokoSay('Boss, that is three defeats in four. Is the job still yours?',
+  'preview',{voice:v,wet:0.10}).catch(()=>{});
+ toast('🔈 '+(q?q.n:v))};
+
+/* the picker, rebuilt around the choice of engine */
+ACTIONS.sfxVoicePick=()=>{
+ const on=(kokoEngine()==='kokoro');
+ const qk=kokoQuality();
+ let h='<h3>🗣️ Reading voice</h3>';
+
+ h+='<div class="card tight" style="padding:11px 12px">'+
+  '<div class="row" style="gap:8px;align-items:flex-start">'+
+   '<span style="font-size:19px">🇬🇧</span>'+
+   '<div style="flex:1;min-width:0">'+
+    '<div class="small" style="font-weight:800">British neural voices</div>'+
+    '<div class="xs muted" style="margin-top:2px">Eight real British voices that run on this device and sound the same on every phone — and, unlike the built-in voice, the tannoy actually goes through the stadium.</div>'+
+    '<div id="kokoState" style="margin-top:7px">'+kokoStateHTML()+'</div>'+
+   '</div></div>';
+ if(!on||KOKO.state==='failed')
+  h+='<button class="btn btn-primary btn-block" style="margin-top:9px" data-action="kokoInstall">'+
+     (KOKO.state==='failed'?'Try again':'Install and use them')+'</button>';
+ else if(KOKO.state==='loading')
+  h+='<button class="btn btn-ghost btn-block" style="margin-top:9px" data-action="kokoOff">Cancel and use the device voice</button>';
+ else
+  h+='<button class="btn btn-ghost btn-block" style="margin-top:9px" data-action="kokoOff">Use the device voice instead</button>';
+ h+='</div>';
+
+ /* size */
+ h+='<div class="xs faint" style="margin:11px 2px 5px;font-weight:800;letter-spacing:.5px">DOWNLOAD SIZE</div>'+
+  '<div class="row" style="gap:5px">'+
+  Object.keys(KOKO_Q).map(k=>'<button class="chip'+(qk===k?' on':'')+'" data-action="kokoQual" data-v="'+k+'">'+
+   KOKO_Q[k].lbl+' · '+KOKO_Q[k].mb+'MB</button>').join('')+'</div>'+
+  '<div class="xs muted" style="margin:5px 2px 0">'+esc(KOKO_Q[qk].d)+'</div>';
+
+ /* the voices */
+ if(on){
+  h+='<div class="xs faint" style="margin:12px 2px 5px;font-weight:800;letter-spacing:.5px">WHO READS IT</div>'+
+   '<div class="card tight" style="max-height:300px;overflow:auto">'+
+   '<div class="mail'+(kokoVoicePref()?'':' on')+'" data-action="kokoVoice" data-v="">'+
+    '<div class="ic">⭐</div><div style="flex:1"><div class="tt">A voice each</div>'+
+    '<div class="bd">every reporter keeps his own for the whole career — the announcer is always George</div></div></div>'+
+   KOKO_VOICES.map(v=>'<div class="mail" data-action="kokoVoice" data-v="'+v.id+'">'+
+    '<div class="ic">'+(v.g==='m'?'🎙️':'🎤')+'</div>'+
+    '<div style="flex:1;min-width:0"><div class="tt">'+v.n+(kokoVoicePref()===v.id?' ✓':'')+'</div>'+
+    '<div class="bd">'+v.d+'</div></div>'+
+    '<button class="need-go" data-action="kokoTry" data-v="'+v.id+'">Hear</button></div>').join('')+
+   '</div>'}
+ else{
+  /* the old list, unchanged, for anyone who does not want the download */
+  let list=[];try{ttsWarm();list=ttsPool(null).slice(0,12)}catch(e){}
+  const cur=TTS.pref;
+  h+='<div class="xs faint" style="margin:12px 2px 5px;font-weight:800;letter-spacing:.5px">THIS DEVICE’S VOICES</div>';
+  if(!list.length)
+   h+='<div class="card tight"><div class="small muted" style="padding:7px 2px">This device has not reported any voices yet. On some phones the list arrives a second or two after the page opens.</div></div>';
+  else h+='<div class="card tight" style="max-height:260px;overflow:auto">'+
+   '<div class="mail'+(cur?'':' on')+'" data-action="sfxVoiceSet" data-v=""><div class="ic">⭐</div>'+
+   '<div style="flex:1"><div class="tt">Best available</div><div class="bd">let the game choose</div></div></div>'+
+   list.map(v=>'<div class="mail" data-action="sfxVoiceSet" data-v="'+esc(v.name)+'">'+
+    '<div class="ic">'+(TTS_GOOD.test(v.name)||v.localService===false?'✨':'🔈')+'</div>'+
+    '<div style="flex:1;min-width:0"><div class="tt">'+esc(v.name)+(cur===v.name?' ✓':'')+'</div>'+
+    '<div class="bd">'+esc(v.lang||'')+(v.localService===false?' · streamed':' · on device')+'</div></div></div>').join('')+
+   '</div>'}
+
+ h+='<button class="btn btn-ghost btn-block" style="margin-top:10px" data-action="closeModal">Done</button>';
+ openModal(h)};
+
+(function kokoCSS(){
+ const old=document.getElementById('wD7');if(old)old.remove();
+ const st=document.createElement('style');st.id='wD7';
+ st.textContent=
+  '.koko-bar{height:7px;border-radius:99px;background:rgba(255,255,255,.10);overflow:hidden}'+
+  '.koko-bar i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,#3ddc84,#8ef0b6);'+
+   'transition:width .25s ease}';
+ document.head.appendChild(st)})();
+
+/* if it was installed on a previous visit the files are in the browser
+   cache, so bringing it back costs nothing but a moment of CPU — do it
+   quietly in the background rather than making the first line wait */
+(function kokoResume(){
+ if(kokoEngine()!=='kokoro')return;
+ if(kokoBlocked())return;
+ setTimeout(()=>{KOKO._tried=true;kokoLoad().catch(()=>{})},2500)})();
+
+/*#wD7_kokoro.js#*/
 showStart();
 </script>
 </body>
