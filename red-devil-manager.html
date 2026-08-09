@@ -53759,6 +53759,231 @@ function skillStarHtml(p){
   '✦'+s+'</span>'}
 
 /*#wD2_flair.js#*/
+/*#wD3_ref.js#*/
+
+/* =====================================================================
+   wD3_ref — there is a referee, and when he books you he books you
+   ---------------------------------------------------------------------
+   Twenty-two players and nobody in charge. Fouls were given, cards were
+   issued, men were sent off — and all of it happened in the commentary
+   feed while the pitch carried on as if nothing had. The one figure in
+   football whose entire job is to be seen doing something was not on
+   the field at all.
+
+   He is now. He follows the play the way a referee does — behind it and
+   off to one side, never in the middle of it — and when the engine
+   books somebody he stops, turns to the man, and holds the card up. A
+   second yellow or a straight red and the card is red and he holds it
+   longer, and the player it is shown to throws his arms out.
+
+   The engine already knows all of this. MatchSim.card() and
+   MatchSim.sendOff() are where a booking happens; both are wrapped for
+   reading, neither is changed. If the referee animation never ran, the
+   same players would be booked in the same minutes.
+   ===================================================================== */
+
+const REF={x:52.5,y:40,vx:0,vy:0,phase:0,card:null,shown:0};
+
+const _initDotsRef=initDots;
+initDots=function(){
+ const r=_initDotsRef.apply(this,arguments);
+ REF.x=52.5;REF.y=40;REF.vx=0;REF.vy=0;REF.card=null;REF.shown=0;
+ return r};
+
+/* ---------------------------------------------------------------------
+   1. READING THE BOOK
+   ---------------------------------------------------------------------
+   Wrapped for information only. The card is decided, the yellow count
+   is incremented and the ban is set by the original; this notes who and
+   what colour so the picture can catch up.
+   --------------------------------------------------------------------- */
+function refBook(dp,red){
+ try{
+  if(!dp||!dp.p)return;
+  const d=(typeof dotOf==='function')?dotOf(dp):null;
+  REF.card={id:dp.p.id,red:!!red,
+   t0:performance.now(),
+   t1:performance.now()+dugMs(red?3200:2300),
+   x:d?d.x:REF.x,y:d?d.y:REF.y};
+  /* the man being booked has something to say about it */
+  if(typeof dugSet==='function')dugSet(dp.p.id,'protest',red?2600:1800);
+ }catch(e){}}
+
+if(typeof MatchSim==='function'&&MatchSim.prototype){
+ const _card=MatchSim.prototype.card;
+ MatchSim.prototype.card=function(D,dp){
+  const before=dp?dp.yc:0;
+  const r=_card.apply(this,arguments);
+  /* a second yellow turns into a sending off inside the original, and
+     sendOff is wrapped separately, so only a first yellow is drawn here */
+  try{if(dp&&before===0&&dp.yc===1&&!dp.sentOff)refBook(dp,false)}catch(e){}
+  return r};
+
+ const _sendOff=MatchSim.prototype.sendOff;
+ MatchSim.prototype.sendOff=function(D,dp,straight){
+  const r=_sendOff.apply(this,arguments);
+  try{refBook(dp,true)}catch(e){}
+  return r};
+}
+
+/* ---------------------------------------------------------------------
+   2. WHERE HE STANDS
+   ---------------------------------------------------------------------
+   A referee runs a diagonal: he keeps the ball on one side of him and
+   the far assistant on the other, and he is always a few yards behind
+   the play rather than in it. Close enough to see, never close enough
+   to be passed to.
+   --------------------------------------------------------------------- */
+function refStep(){
+ try{
+  const m=MU.m;if(!m)return;
+  const b=MU.ball||{x:52.5,y:34};
+  /* show a card standing still, facing the offender */
+  if(REF.card&&performance.now()<REF.card.t1){
+   const tx=REF.card.x-4, ty=REF.card.y+3;
+   REF.x+=(clamp(tx,2,103)-REF.x)*0.06;
+   REF.y+=(clamp(ty,2,66)-REF.y)*0.06;
+   return}
+  if(REF.card&&performance.now()>=REF.card.t1)REF.card=null;
+  /* otherwise: behind the ball, and off the diagonal */
+  const lag=(typeof playState==='function')?playState():null;
+  const dir=(lag&&lag.si===0)?-1:1;
+  const tx=clamp(b.x+dir*7,4,101);
+  const ty=clamp(b.y+9,6,62);
+  REF.x+=(tx-REF.x)*0.035;
+  REF.y+=(ty-REF.y)*0.030;
+  const sp=Math.hypot(tx-REF.x,ty-REF.y);
+  REF.phase+=0.10+Math.min(0.5,sp*0.045)*1.6;
+ }catch(e){}}
+
+/* ---------------------------------------------------------------------
+   3. WHAT HE LOOKS LIKE
+   ---------------------------------------------------------------------
+   The same body as everybody else, in black, drawn straight rather than
+   through dugFigure because he is not a squad member and has no dot, no
+   shirt number and no kit pattern.
+   --------------------------------------------------------------------- */
+function refDraw(g,P){
+ try{
+  const p=P(REF.x,REF.y,0);
+  const s=p[2];
+  const u=s*1.80/8;
+  if(u<0.5)return;
+  const px=p[0],py=p[1];
+  const rr=u*.30;
+  const showing=REF.card&&performance.now()<REF.card.t1;
+  const t=REF.phase;
+  const swing=showing?0:Math.sin(t)*0.55;
+  const bob=showing?0:Math.abs(Math.cos(t))*u*.16;
+  const y0=py-bob;
+  const hipY=y0-u*3.7,torsoT=y0-u*6.3,headR=u*.64;
+  const kit='#1a1d22', trim='#2c3138';
+
+  g.save();
+  g.beginPath();g.ellipse(px+u*.20,py+u*.05,u*1.45,u*.48,0,0,7);
+  g.fillStyle='rgba(0,0,0,.36)';g.fill();
+
+  /* legs */
+  [[-1,swing],[1,-swing]].forEach(([sgn,rot])=>{
+   g.save();g.translate(px+sgn*u*.40,hipY);g.rotate(rot*.55);
+   g.fillStyle=trim;           dugRR(g,-u*.40,0,u*.80,u*1.55,rr);
+   g.fillStyle='#0f1216';      dugRR(g,-u*.32,u*1.55,u*.64,u*1.9,rr*.8);
+   g.fillStyle='#08090b';      dugRR(g,-u*.34,u*3.28,u*.80,u*.44,rr*.6);
+   g.restore()});
+
+  /* arms — one of them goes up with the card */
+  const cardArm=showing?-2.62:swing*.7;
+  [[-1,-swing*.7],[1,cardArm]].forEach(([sgn,rot])=>{
+   g.save();g.translate(px+sgn*u*.88,torsoT+u*.6);g.rotate(rot);
+   g.fillStyle=kit;       dugRR(g,-u*.25,0,u*.50,u*1.10,rr*.8);
+   g.fillStyle='#d9a982'; dugRR(g,-u*.23,u*1.05,u*.46,u*.98,rr*.8);
+   g.restore()});
+
+  /* shirt */
+  g.beginPath();
+  g.moveTo(px-u*.92,torsoT+u*.35);
+  g.quadraticCurveTo(px,torsoT-u*.20,px+u*.92,torsoT+u*.35);
+  g.lineTo(px+u*.80,hipY+u*.08);
+  g.lineTo(px-u*.80,hipY+u*.08);
+  g.closePath();
+  const sg=g.createLinearGradient(px-u,torsoT,px+u,hipY);
+  sg.addColorStop(0,'#2a2f37');sg.addColorStop(.55,kit);sg.addColorStop(1,'#0d0f13');
+  g.fillStyle=sg;g.fill();
+
+  /* head */
+  g.fillStyle='#c9976f';
+  dugRR(g,px-u*.19,torsoT-u*.30,u*.38,u*.42,rr*.5);
+  g.beginPath();g.arc(px,torsoT-headR*.55,headR,0,7);
+  g.fillStyle='#d9a982';g.fill();
+  g.beginPath();g.arc(px,torsoT-headR*.72,headR*.98,Math.PI*1.02,Math.PI*2.02);
+  g.fillStyle='#1b1611';g.fill();
+
+  /* THE CARD, held up above him */
+  if(showing){
+   const k=clamp((performance.now()-REF.card.t0)/220,0,1);
+   const cw=u*.62,ch=u*.92;
+   const cx=px+u*1.55, cy=torsoT-u*(1.05+1.35*k);
+   g.save();
+   g.translate(cx,cy);g.rotate(0.12);
+   g.fillStyle='rgba(0,0,0,.45)';dugRR(g,-cw/2+u*.08,-ch/2+u*.08,cw,ch,u*.10);
+   g.fillStyle=REF.card.red?'#e8342a':'#f6d223';
+   dugRR(g,-cw/2,-ch/2,cw,ch,u*.10);
+   g.strokeStyle='rgba(0,0,0,.35)';g.lineWidth=Math.max(.6,u*.07);
+   g.beginPath();g.rect(-cw/2,-ch/2,cw,ch);g.stroke();
+   g.restore()}
+  g.restore()}
+ catch(e){}}
+
+/* ---------------------------------------------------------------------
+   4. DRAWN IN THE RIGHT ORDER
+   ---------------------------------------------------------------------
+   Players are drawn far side first, so the referee belongs at the point
+   in that run where the pitch reaches his own depth. Same trick the
+   turf overlay uses: a flag set before the frame, spent by the first
+   figure that is nearer to the camera than he is. If everybody is
+   further away than him he is drawn at the end instead.
+   --------------------------------------------------------------------- */
+const _drawDugoutRef=drawDugout;
+drawDugout=function(){
+ refStep();
+ DUG.refPending=true;
+ const r=_drawDugoutRef.apply(this,arguments);
+ try{
+  if(DUG.refPending){
+   DUG.refPending=false;
+   const cv=$('#dugCanvas');
+   if(cv&&MU.m)refDraw(cv.getContext('2d'),dugProject(cv.width,cv.height))}
+ }catch(e){}
+ return r};
+
+const _dugFigureRef=dugFigure;
+dugFigure=function(g,d,c,P,W,now){
+ try{
+  if(DUG.refPending&&d&&d.y<=REF.y){
+   DUG.refPending=false;
+   refDraw(g,P)}}
+ catch(e){}
+ return _dugFigureRef.apply(this,arguments)};
+
+/* ---------------------------------------------------------------------
+   5. AND THE MAN BEING BOOKED HAS A VIEW
+   --------------------------------------------------------------------- */
+const _dugPoseRef=dugPose;
+dugPose=function(id,sp,swing,bob,face){
+ const a=(typeof dugAnimOf==='function')?dugAnimOf(id):null;
+ if(a&&a.a==='protest'){
+  const k=clamp((performance.now()-a.t0)/Math.max(1,a.t1-a.t0),0,1);
+  const inn=Math.sin(Math.min(1,k*4)*Math.PI*0.5);
+  const out=k>0.82?(k-0.82)/0.18:0;
+  const e=inn*(1-out);
+  /* arms thrown out and open — "what was that for?" */
+  const w=Math.sin(k*Math.PI*5)*0.16;
+  return {legA:swing*.20,legB:-swing*.20,
+   armA:(-1.95-w)*e,armB:(1.95+w)*e,
+   rot:0,lift:0,bob:bob*.3,down:0}}
+ return _dugPoseRef.apply(this,arguments)};
+
+/*#wD3_ref.js#*/
 showStart();
 </script>
 </body>
