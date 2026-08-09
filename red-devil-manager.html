@@ -53485,7 +53485,7 @@ renderDock=function(){
    the whole point of the game and it had one animation, shared by
    everybody, every time. Real players have their own — Bruno Fernandes
    cups his ears, Cole Palmer does the cold shiver, Mbeumo puts his
-   hands out flat, Martinelli surfs. So there is a library of them, the
+   hands out flat, Cunha surfs. So there is a library of them, the
    named ones go to the players they belong to, and everybody else gets
    one drawn from his own id so it is the same every time HE scores and
    different from the man next to him.
@@ -53711,7 +53711,7 @@ dugPose=function(id,sp,swing,bob,face){
     return {legA:run*.5,legB:-run*.5,armA:-1.62*e,armB:1.62*e,
      rot:0,lift:0,bob:bob*.4,down:0}}
    if(c==='surf'){
-    /* Martinelli. Crouched, arms out, riding it. */
+    /* Cunha. Crouched, arms out, riding it. */
     const ride=Math.sin(k*Math.PI*3)*0.16;
     return {legA:(0.55+ride)*e,legB:(-0.55+ride)*e,
      armA:-1.75*e,armB:1.45*e,
@@ -53984,6 +53984,497 @@ dugPose=function(id,sp,swing,bob,face){
  return _dugPoseRef.apply(this,arguments)};
 
 /*#wD3_ref.js#*/
+
+
+
+
+
+
+/*#wD4_subs.js#*/
+
+/* =====================================================================
+   wD4_subs — the change is made in front of you
+   ---------------------------------------------------------------------
+   Three things, all on the pitch.
+
+   ONE. THERE WERE TWO REFEREES. An earlier layer draws a referee and two
+   assistants as flat black rectangles pasted over the top of the frame,
+   and last commit's proper referee was added beside him without anyone
+   noticing there was already one there. So the old set is rewritten: the
+   referee is dropped, and the two assistants become real figures with a
+   real flag, sorted into the picture at their own depth.
+
+   TWO. SUBSTITUTIONS HAPPENED IN A CAPTION. The engine models them
+   properly — the man comes off, the bench is one shorter, the new man is
+   on fresh legs — but on the pitch the outgoing player faded to a third
+   of his opacity and drifted out through the goal-line while his
+   replacement drifted in from the same place. Nobody left the field and
+   nobody came on to it.
+
+   Now the change is made where changes are made. The near touchline is
+   below the bottom of the frame — this camera looks across the pitch at
+   the main stand — so the technical area in shot is the far one, right
+   on the halfway line in front of the advertising boards. The man coming
+   off walks to it, the man coming on is stood waiting, they clap hands
+   as they cross, and the one going off walks to the bench and stays
+   there for the rest of the match, dimmed, with the rest of the subs.
+
+   The engine is not involved in any of it. It has already decided who is
+   on and who is off; this is the picture catching up.
+
+   THREE. CUNHA SURFS. He does, and it was on the wrong player.
+   ===================================================================== */
+
+/* ---------------------------------------------------------------------
+   0. THE SIGNATURES
+   ---------------------------------------------------------------------
+   CELEB_SIG is a const, but a const array is still an array — the table
+   is edited in place rather than shadowed, so celebFor keeps reading the
+   one table and nothing has to be rewired.
+   --------------------------------------------------------------------- */
+(function celebFix(){
+ try{
+  if(typeof CELEB_SIG==='undefined')return;
+  const kill=/cunha|martinelli/i;
+  for(let i=CELEB_SIG.length-1;i>=0;i--)
+   if(kill.test(String(CELEB_SIG[i][0])))CELEB_SIG.splice(i,1);
+  CELEB_SIG.unshift(
+   [/cunha/i,'surf'],                 /* the surfboard is his */
+   [/martinelli/i,'wings'],
+   [/garnacho/i,'sky'],
+   [/rashford/i,'point'],
+   [/h[oø]jlund|hojlund/i,'pump'],
+   [/mount/i,'heart'],
+   [/isak/i,'calm'],
+   [/wirtz/i,'shush'],
+   [/gy[oö]kere/i,'mask'],
+   [/yamal/i,'point'],
+   [/bellingham/i,'wings'],
+   [/kane/i,'pump'],
+   [/heung.?min|son heung/i,'camera'],
+   [/watkins|wissa/i,'slide'],
+   [/eze|olise/i,'cold'],
+   [/semenyo|mateta/i,'pump'],
+   [/lewandowski/i,'calm'],
+   [/grealish/i,'heart'],
+   [/n[uú][nñ]ez|nunez/i,'shush'],
+   [/de bruyne/i,'point'],
+   [/saliba|van dijk|konat[eé]/i,'pump'],
+   [/schade/i,'wings'],
+   [/[cs]a[il]cedo|caicedo/i,'knee'],
+   [/rice/i,'bow']);
+  if(typeof CELEBS!=='undefined'&&CELEBS.push){
+   ['point','mask','camera','knee','bow'].forEach(k=>{
+    if(CELEBS.indexOf(k)<0)CELEBS.push(k)})}
+ }catch(e){}})();
+
+/* ---------------------------------------------------------------------
+   1. THE OFFICIALS, PROPERLY
+   ---------------------------------------------------------------------
+   dugOfficials is replaced rather than wrapped: its whole job was three
+   flat rectangles, and there is nothing worth keeping now the referee
+   has a body of his own.
+   --------------------------------------------------------------------- */
+const LINE={l1:{x:30,y:1.2,ph:0},l2:{x:75,y:66.9,ph:0}};
+
+function lineFigure(g,P,o){
+ const p=P(o.x,o.y,0);
+ const u=p[2]*1.78/8;
+ if(u<0.45)return;
+ const px=p[0],py=p[1],rr=u*.30;
+ const t=o.ph;
+ const swing=Math.sin(t)*0.42;
+ const bob=Math.abs(Math.cos(t))*u*.13;
+ const y0=py-bob;
+ const hipY=y0-u*3.6,torsoT=y0-u*6.1,headR=u*.62;
+ const kit='#16181d',trim='#23262c';
+
+ g.save();
+ g.beginPath();g.ellipse(px+u*.18,py+u*.05,u*1.40,u*.46,0,0,7);
+ g.fillStyle='rgba(0,0,0,.34)';g.fill();
+
+ [[-1,swing],[1,-swing]].forEach(([sgn,rot])=>{
+  g.save();g.translate(px+sgn*u*.40,hipY);g.rotate(rot*.5);
+  g.fillStyle=trim;      dugRR(g,-u*.38,0,u*.76,u*1.5,rr);
+  g.fillStyle='#0e1013'; dugRR(g,-u*.30,u*1.5,u*.60,u*1.85,rr*.8);
+  g.fillStyle='#07080a'; dugRR(g,-u*.32,u*3.2,u*.76,u*.42,rr*.6);
+  g.restore()});
+
+ /* the flag arm hangs at his side, and the stick carries on past the
+    hand with the flag furled on the end of it */
+ [[-1,swing*.6],[1,-0.26]].forEach(([sgn,rot])=>{
+  g.save();g.translate(px+sgn*u*.86,torsoT+u*.6);g.rotate(rot);
+  g.fillStyle=kit;       dugRR(g,-u*.24,0,u*.48,u*1.08,rr*.8);
+  g.fillStyle='#d9a982'; dugRR(g,-u*.22,u*1.02,u*.44,u*.94,rr*.8);
+  if(sgn===1){
+   g.fillStyle='#1b1e22';dugRR(g,-u*.05,u*1.72,u*.11,u*1.9,u*.05);
+   g.save();g.translate(-u*.72,u*2.30);
+   const fw=u*1.5,fh=u*1.0;
+   for(let r=0;r<2;r++)for(let cq=0;cq<3;cq++){
+    g.fillStyle=((r+cq)%2)?'#f2d21a':'#e23c2a';
+    g.fillRect(cq*fw/3,r*fh/2,fw/3+.5,fh/2+.5)}
+   g.restore()}
+  g.restore()});
+
+ g.beginPath();
+ g.moveTo(px-u*.88,torsoT+u*.35);
+ g.quadraticCurveTo(px,torsoT-u*.20,px+u*.88,torsoT+u*.35);
+ g.lineTo(px+u*.76,hipY+u*.08);
+ g.lineTo(px-u*.76,hipY+u*.08);
+ g.closePath();
+ const sg=g.createLinearGradient(px-u,torsoT,px+u,hipY);
+ sg.addColorStop(0,'#282c33');sg.addColorStop(.55,kit);sg.addColorStop(1,'#0c0e11');
+ g.fillStyle=sg;g.fill();
+
+ g.fillStyle='#c9976f';
+ dugRR(g,px-u*.18,torsoT-u*.28,u*.36,u*.40,rr*.5);
+ g.beginPath();g.arc(px,torsoT-headR*.55,headR,0,7);
+ g.fillStyle='#d9a982';g.fill();
+ g.beginPath();g.arc(px,torsoT-headR*.72,headR*.98,Math.PI*1.02,Math.PI*2.02);
+ g.fillStyle='#1e1812';g.fill();
+ g.restore()}
+
+/* he runs the line level with the second-last defender, which is the
+   only reason anybody ever looks at him */
+function lineStep(){
+ try{
+  const m=MU.m;if(!m)return;
+  [['l1',1.2,0],['l2',66.9,1]].forEach(([k,ly,side])=>{
+   const o=LINE[k];
+   const back=livePlayers(side).filter(x=>x.slot!=='GK')
+    .map(x=>dotOf(x)).filter(Boolean)
+    .sort((a,b)=>atkRight(side)?a.x-b.x:b.x-a.x);
+   const want=back.length>1?back[1].x:52.5;
+   const before=o.x;
+   o.x+=(clamp(want,3,102)-o.x)*.05;
+   o.y=ly;
+   o.ph+=0.075+Math.min(0.5,Math.abs(o.x-before)*1.6)*1.7})}
+ catch(e){}}
+
+/* the far assistant belongs behind the players and the near one in
+   front — but the near touchline is off the bottom of the frame, so
+   only the far one is ever in shot. He goes in on the same pending flag
+   the referee uses. */
+dugOfficials=function(g,P,W,now){
+ try{
+  lineStep();
+  if(DUG.linePending){DUG.linePending=false;lineFigure(g,P,LINE.l2)}}
+ catch(e){}};
+
+/* ---------------------------------------------------------------------
+   2. THE SUBSTITUTION
+   ---------------------------------------------------------------------
+   Nothing here asks to be told about a change. The user's subs, the AI's
+   and the injury ones all end at the same two facts — a player has off
+   set, and a dot exists that was not there last frame — so the picture
+   watches for those instead of for a function call, and covers all three
+   without knowing which is which.
+   --------------------------------------------------------------------- */
+const SUB_WALK=[];
+const SUB_SEAT=[0,0];          /* how many are already sat down, per side */
+
+/* the technical area: halfway line, far touchline, one either side.
+   A double change needs two gates far enough apart that four men are
+   not stood on top of each other, so they are spread away from the
+   halfway line rather than nudged along it. */
+function subGate(si,n){
+ const away=(si===0?-1:1);
+ return {x:52.5+away*(6.5+(n||0)*8.5), y:65.2}}
+/* and the bench itself, just beyond the line in front of the boards */
+function subSeat(si,i){
+ return {x:52.5+(si===0?-1:1)*(11+i*3.1), y:67.6}}
+
+/* dugMs shrinks with the match speed, which is right for a kick and
+   wrong for a substitution: at 6x the whole exchange was over in a
+   third of a second while the walk itself, which is eased per frame
+   rather than per tick, took exactly as long as it always does. The
+   walk is capped at double speed so the two stay in step. */
+function subMs(ms){
+ try{return ms/clamp((typeof tScale==='function')?tScale():1,1,1.5)}
+ catch(e){return ms}}
+
+function subScan(){
+ const m=MU.m;if(!m)return;
+ const offs=[],ons=[];
+ const cold=(DUG._dotsSeen!==true);
+ MU.dots.forEach(d=>{
+  if(!d||!d.pl)return;
+  if(!d._sbSeen){
+   d._sbSeen=true;
+   /* everything that exists before the first frame is a starting XI —
+      after that, a dot that was not there last frame is a substitute.
+      This used to also require m.min>0, which quietly threw away every
+      change made inside the opening minute. */
+   if(!cold&&!d.pl.off)ons.push(d);
+   return}
+  if(d.pl.off&&!d._sbOff){d._sbOff=true;offs.push(d)}});
+ DUG._dotsSeen=true;
+ if(!offs.length&&!ons.length)return;
+
+ /* pair them inside the frame: a man going off and a man coming on for
+    the same side at the same moment are one substitution. Whatever is
+    left over walks alone — an injury going off, or a change the engine
+    made without a replacement. */
+ const n=[0,0];
+ offs.forEach(od=>{
+  const k=ons.findIndex(x=>x.si===od.si);
+  const on=k>=0?ons.splice(k,1)[0]:null;
+  const gate=subGate(od.si,n[od.si]++);
+  const inj=!!od.pl.injOff;
+  const w={d:od,kind:'off',si:od.si,inj,gate,mate:null,
+   phase:'walk',t0:performance.now()};
+  SUB_WALK.push(w);
+  if(on){
+   /* he is stood at the line waiting, not drifting in behind the goal */
+   on.x=gate.x+3.0;on.y=67.8;on.tx=on.x;on.ty=on.y;on.vx=-.02;on.vy=0;
+   const v={d:on,kind:'on',si:on.si,gate,mate:w,
+    phase:'wait',t0:performance.now()};
+   w.mate=v;SUB_WALK.push(v)}});
+ ons.forEach(on=>{
+  const gate=subGate(on.si,n[on.si]++);
+  on.x=gate.x+3.0;on.y=67.8;on.tx=on.x;on.ty=on.y;
+  SUB_WALK.push({d:on,kind:'on',si:on.si,gate,phase:'walkon',
+   t0:performance.now()})});
+}
+
+function subStep(){
+ const now=performance.now();
+ for(let i=SUB_WALK.length-1;i>=0;i--){
+  const w=SUB_WALK[i],d=w.d;
+  if(!d||!d.pl){SUB_WALK.splice(i,1);continue}
+  const id=d.pl.p.id;
+
+  if(w.kind==='off'){
+   if(w.phase==='walk'){
+    d.tx=w.gate.x-1.25;d.ty=w.gate.y;
+    if(w.inj)dugSet(id,'limp',400);
+    const near=Math.abs(d.x-d.tx)<3.4&&Math.abs(d.y-d.ty)<3.4;
+    /* if the ease has stalled, go anyway rather than stand there */
+    if((near&&now-w.t0>subMs(1900))||now-w.t0>subMs(13000)){
+     w.phase=w.mate?'shake':'exit';w.t0=now;
+     if(w.mate&&w.mate.phase==='wait'){w.mate.phase='shake';w.mate.t0=now}}}
+   else if(w.phase==='shake'){
+    d.tx=w.gate.x-1.25;d.ty=w.gate.y;
+    dugSet(id,w.inj?'limp':'shake',400,{dir:1});
+    if(now-w.t0>subMs(1700)){w.phase='exit';w.t0=now}}
+   else{
+    /* over the line, along to the bench, and that is where he stays */
+    if(w.seat==null){w.seat=SUB_SEAT[w.si]++;}
+    const st=subSeat(w.si,w.seat);
+    d.tx=st.x;d.ty=st.y;
+    d._seat=st;
+    if(w.inj)dugSet(id,'limp',400);
+    else if(now-w.t0<subMs(2400))dugSet(id,'applaud',400);
+    const there=Math.abs(d.x-st.x)<2.2&&Math.abs(d.y-st.y)<2.2;
+    /* released to the bench: from here the ordinary off-player ghosting
+       takes him down to a third and he watches the rest of it */
+    if((there&&now-w.t0>subMs(2300))||now-w.t0>subMs(13000))SUB_WALK.splice(i,1)}
+  }
+  else{
+   if(w.phase==='wait'){
+    d.tx=w.gate.x+3.0;d.ty=67.8;
+    if(now-w.t0>subMs(15000)){w.phase='run';w.t0=now}}
+   else if(w.phase==='shake'){
+    d.tx=w.gate.x+1.25;d.ty=w.gate.y;
+    dugSet(id,'shake',400,{dir:-1});
+    if(now-w.t0>subMs(1700)){w.phase='run';w.t0=now}}
+   else if(w.phase==='walkon'){
+    d.tx=w.gate.x;d.ty=w.gate.y-1.5;
+    if(now-w.t0>subMs(2300))w.phase='run'}
+   else SUB_WALK.splice(i,1)}   /* pitchTargets has him back */
+ }}
+
+function subHeld(d){
+ for(let i=0;i<SUB_WALK.length;i++)if(SUB_WALK[i].d===d)return SUB_WALK[i];
+ return null}
+
+/* ---------------------------------------------------------------------
+   AND THE ONES ALREADY OFF STAY OFF
+   ---------------------------------------------------------------------
+   pitchTargets sends every off player to x=-7 or x=112, y=34 — through
+   the middle of the goal, at walking pace, for the rest of the match.
+   Off players belong on the bench, so once the walk is done they are
+   pinned to the seat they were given.
+   --------------------------------------------------------------------- */
+const _targetsSub=pitchTargets;
+pitchTargets=function(){
+ const r=_targetsSub.apply(this,arguments);
+ try{
+  (MU.dots||[]).forEach(d=>{
+   if(!d||!d.pl||!d.pl.off)return;
+   if(subHeld(d))return;
+   if(!d._seat){
+    const si=d.si||0;
+    d._seat=subSeat(si,SUB_SEAT[si]++)}
+   d.tx=d._seat.x;d.ty=d._seat.y});
+  subStep()}
+ catch(e){}
+ return r};
+
+/* ---------------------------------------------------------------------
+   3. INTO THE FRAME
+   ---------------------------------------------------------------------
+   The scan and the walk run every frame, not every tick: a tick can be
+   three seconds apart and a man would cross the touchline in one step.
+   --------------------------------------------------------------------- */
+const _drawSub=drawDugout;
+drawDugout=function(){
+ try{subScan();subStep();DUG.linePending=true}catch(e){}
+ return _drawSub.apply(this,arguments)};
+
+const _figSubLine=dugFigure;
+dugFigure=function(g,d,c,P,W,now){
+ try{
+  if(DUG.linePending&&d&&d.y<=LINE.l2.y){
+   DUG.linePending=false;
+   lineFigure(g,P,LINE.l2)}}
+ catch(e){}
+ const w=(d&&d.pl)?subHeld(d):null;
+ if(!w)return _figSubLine.apply(this,arguments);
+ /* he is walking off, not sat down: dugFigure ghosts anybody with off
+    set to a third of his opacity, so the flag is lifted for the length
+    of the draw and put straight back */
+ const was=d.pl.off;
+ d.pl.off=false;
+ try{return _figSubLine.apply(this,arguments)}
+ finally{d.pl.off=was}};
+
+const _initDotsSub=initDots;
+initDots=function(){
+ SUB_WALK.length=0;
+ SUB_SEAT[0]=0;SUB_SEAT[1]=0;
+ DUG._dotsSeen=false;
+ const r=_initDotsSub.apply(this,arguments);
+ (MU.dots||[]).forEach(d=>{d._sbSeen=true;d._sbOff=!!(d.pl&&d.pl.off);d._seat=null});
+ DUG._dotsSeen=true;
+ LINE.l1.x=30;LINE.l2.x=75;LINE.l1.ph=0;LINE.l2.ph=0;
+ return r};
+
+/* ---------------------------------------------------------------------
+   4. THE NEW SHAPES
+   ---------------------------------------------------------------------
+   shake    — the near arm out, clasped, the other at his side
+   applaud  — both hands up, clapping the stand as he goes
+   limp     — one leg stiff, the weight thrown off it
+   header   — off the ground, neck through the ball
+   --------------------------------------------------------------------- */
+const _poseSub=dugPose;
+dugPose=function(id,sp,swing,bob,face){
+ const a=(typeof dugAnimOf==='function')?dugAnimOf(id):null;
+ if(a){
+  const k=clamp((performance.now()-a.t0)/Math.max(1,a.t1-a.t0),0,1);
+
+  if(a.a==='shake'){
+   /* Two men clasping hands as they cross. The rig has no elbow, so the
+      whole arm goes out at the shoulder.
+
+      Held out horizontally it was invisible: the sleeve is the shirt
+      colour, and the pair are stood against the advertising boards, so a
+      red arm on a red board read as nothing at all. Raised above the
+      shoulder the hand breaks the skyline instead, which is legible at
+      any size — and is what they do anyway. dir +1 clasps toward +x. */
+   const dir=a.dir||1;
+   const j=Math.sin(performance.now()/110)*0.09;
+   return dir>0
+    ? {legA:swing*.10,legB:-swing*.10,armA:0.26,armB:-2.18+j,
+       rot:0.06,lift:0,bob:bob*.3,down:0}
+    : {legA:swing*.10,legB:-swing*.10,armA:2.18-j,armB:-0.26,
+       rot:-0.06,lift:0,bob:bob*.3,down:0}}
+
+  if(a.a==='applaud'){
+   /* both hands together above his head, clapping the stand. Rotating
+      both arms the same way put both hands out to one side instead —
+      they have to turn INWARD to meet, which is opposite signs. */
+   const c=Math.sin(performance.now()/110)*0.22;
+   return {legA:swing*.38,legB:-swing*.38,
+    armA:-1.95+c,armB:1.95-c,
+    rot:0,lift:0,bob:bob*.7,down:0}}
+
+  if(a.a==='limp'){
+   /* the bad leg is held out straight and never takes his weight; the
+      good one does all the work and he drops onto it every stride */
+   const s2=Math.sin(performance.now()/230);
+   return {legA:0.62,legB:-0.15+0.50*Math.max(0,s2),
+    armA:-0.30,armB:0.62,
+    rot:0.16,lift:0,bob:0,down:0.28+Math.max(0,-s2)*0.55}}
+
+  if(a.a==='header'){
+   const up=Math.sin(Math.min(1,k*1.35)*Math.PI);
+   return {legA:-0.55*up,legB:-0.25*up,
+    armA:-1.15*up,armB:1.15*up,
+    rot:-0.16*up,lift:up*1.15,bob:0,down:0}}
+ }
+ return _poseSub.apply(this,arguments)};
+
+/* ---------------------------------------------------------------------
+   5. AND SOMEBODY WINS THE HEADER
+   ---------------------------------------------------------------------
+   A lofted ball is flagged the moment it is struck and the man it is
+   going to is p.target, so the jump is timed to the arrival rather than
+   to the strike.
+   --------------------------------------------------------------------- */
+const _watchSub=dugWatch;
+dugWatch=function(){
+ const r=_watchSub.apply(this,arguments);
+ try{
+  const m=MU.m;if(!m||m.done)return r;
+  const p=(typeof playState==='function')?playState():null;
+  if(!p)return r;
+  const now=performance.now();
+  if(p.lofted&&p.target&&p.target.p&&p.ms>260&&DUG._loftKey!==p.t0){
+   DUG._loftKey=p.t0;
+   DUG._headPend={id:p.target.p.id,at:p.t0+p.ms*0.80}}
+  if(DUG._headPend&&now>=DUG._headPend.at){
+   const h=DUG._headPend;DUG._headPend=null;
+   const cur=DUG.anim[h.id];
+   if(!cur||now>=cur.t1)dugSet(h.id,'header',620)}
+  if(DUG._headPend&&now>DUG._headPend.at+2600)DUG._headPend=null;
+ }catch(e){}
+ return r};
+
+/* ---------------------------------------------------------------------
+   6. THE NEW CELEBRATIONS
+   ---------------------------------------------------------------------
+   point  — a finger to the temple, walking away from it
+   mask   — both hands over the face, stopped dead
+   camera — a viewfinder made out of both hands
+   knee   — down on one knee, arms wide
+   bow    — a bow to the stand behind the goal
+   --------------------------------------------------------------------- */
+const _poseCeleb2=dugPose;
+dugPose=function(id,sp,swing,bob,face){
+ const a=(typeof dugAnimOf==='function')?dugAnimOf(id):null;
+ if(a&&a.a==='celeb'&&a.c){
+  const k=clamp((performance.now()-a.t0)/Math.max(1,a.t1-a.t0),0,1);
+  const inn=Math.sin(Math.min(1,k*4)*Math.PI*0.5);
+  const out=k>0.86?(k-0.86)/0.14:0;
+  const e=inn*(1-out);
+  const c=a.c;
+  const run=Math.sin(performance.now()/150);
+
+  if(c==='point')
+   return {legA:run*.42,legB:-run*.42,armA:-2.28*e,armB:0.30*e,
+    rot:0,lift:0,bob:bob*.8,down:0};
+  if(c==='mask'){
+   const sh=Math.sin(k*Math.PI*6)*0.08;
+   return {legA:swing*.12,legB:-swing*.12,
+    armA:(-2.62+sh)*e,armB:(-2.62-sh)*e,
+    rot:0,lift:0,bob:bob*.25,down:0}}
+  if(c==='camera')
+   return {legA:run*.28,legB:-run*.28,armA:-2.42*e,armB:-2.42*e,
+    rot:0,lift:0,bob:bob*.5,down:0};
+  if(c==='knee'){
+   const dn=Math.min(1,k*3);
+   return {legA:1.05*dn,legB:-0.28*dn,armA:-1.72*e,armB:1.72*e,
+    rot:0,lift:0,bob:0,down:dn*1.35}}
+  if(c==='bow'){
+   const dn=Math.sin(Math.min(1,k*2.2)*Math.PI);
+   return {legA:swing*.10,legB:-swing*.10,armA:-0.95*e,armB:0.95*e,
+    rot:dn*0.62,lift:0,bob:0,down:dn*0.35}}
+ }
+ return _poseCeleb2.apply(this,arguments)};
+
+/*#wD4_subs.js#*/
 showStart();
 </script>
 </body>
