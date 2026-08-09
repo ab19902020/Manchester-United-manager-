@@ -55482,6 +55482,109 @@ vSave=function(){
   }catch(e){}},6000)})();
 
 /*#wD8_storewarn.js#*/
+
+/*#wD9_edges.js#*/
+
+/* =====================================================================
+   wD9_edges — two things the eye was being lied to about
+   ---------------------------------------------------------------------
+   THE ROWS THAT SCROLL AND DO NOT SAY SO. Nine tab and chip rows across
+   the game are horizontal scrollers, and every one of them ends by
+   slicing a word in half against the right edge of the screen. Measured
+   at 412px wide:
+
+     tactics    .chips     446px hidden      (more than half the row)
+     tactics    .chips     240px hidden
+     club       .secnav    136px hidden
+     league     .secnav    136px hidden
+     squad      .subtabs   129px hidden
+     transfers  .chips     117px hidden
+     ...and three more between 45 and 65px
+
+   A chopped word does not read as "there is more this way", it reads as
+   a layout bug — so people do not swipe, and on the tactics screen they
+   never find over half the options. The convention that fixes it is a
+   soft edge: the content fades out where it continues, and the fade goes
+   away at the end of the travel so you can see you have arrived.
+
+   Done with a mask on the row itself rather than a wrapper element,
+   because every one of these rows is written by different code and none
+   of them would survive having their markup changed. They already share
+   the .xscroll class, so one rule reaches all nine.
+
+   THE DOCK TOUCHING BOTH EDGES. Continue and its companion button run
+   flush into the sides of the screen — left 0, right 412 on a 412px
+   phone. An earlier layer of mine set 12px of side padding to fix
+   exactly this and it never once applied: the rule is `.continue-dock`,
+   and it loses to `#app>.continue-dock{padding:14px 0 6px}`, which is a
+   shorthand, sets the sides to zero, and outranks a bare class. Same
+   selector, so it actually lands this time.
+   ===================================================================== */
+
+(function edgeCSS(){
+ const old=document.getElementById('wD9');if(old)old.remove();
+ const st=document.createElement('style');st.id='wD9';
+ const FADE=30;
+ st.textContent=[
+  /* ---- 1. the dock stops short of the glass ---------------------
+     Matching #app>.continue-dock rather than .continue-dock is the
+     whole fix; the gradient behind it still runs edge to edge, which
+     is right, because it is the buttons that need the gutter. */
+  '#app>.continue-dock{padding-left:12px;padding-right:12px;box-sizing:border-box}',
+
+  /* ---- 2. a soft edge where a row carries on --------------------
+     The fade is not a fixed width: --fl and --fr are set from how much
+     is actually hidden on each side, capped at 30px. A row resting 14px
+     off its start gets a 14px fade, not a 30px one that would dim a chip
+     which is in fact fully visible. The soft edge then never claims
+     more is hidden than really is. */
+  '.xscroll[data-fade]{',
+  ' -webkit-mask-image:linear-gradient(90deg,transparent 0,#000 var(--fl,0px),',
+  '   #000 calc(100% - var(--fr,0px)),transparent 100%);',
+  ' mask-image:linear-gradient(90deg,transparent 0,#000 var(--fl,0px),',
+  '   #000 calc(100% - var(--fr,0px)),transparent 100%);',
+  ' -webkit-mask-repeat:no-repeat;mask-repeat:no-repeat}'
+ ].join('');
+ document.head.appendChild(st)})();
+
+/* how much is hidden on each side, in pixels, capped at the fade width */
+const XS_FADE=30;
+function xsFade(el){
+ try{
+  if(!el||!el.classList||!el.classList.contains('xscroll'))return;
+  const max=el.scrollWidth-el.clientWidth;
+  const left=max<6?0:Math.max(0,Math.min(XS_FADE,el.scrollLeft));
+  const right=max<6?0:Math.max(0,Math.min(XS_FADE,max-el.scrollLeft));
+  if(left<1&&right<1){
+   el.removeAttribute('data-fade');
+   el.style.removeProperty('--fl');el.style.removeProperty('--fr');
+   return}
+  el.style.setProperty('--fl',Math.round(left)+'px');
+  el.style.setProperty('--fr',Math.round(right)+'px');
+  el.setAttribute('data-fade','');
+ }catch(e){}}
+
+function xsScan(){
+ try{document.querySelectorAll('.xscroll').forEach(xsFade)}catch(e){}}
+
+/* scroll does not bubble, so it is caught on the way down instead */
+document.addEventListener('scroll',e=>{
+ const t=e.target;
+ if(t&&t.classList&&t.classList.contains('xscroll'))xsFade(t)},true);
+window.addEventListener('resize',xsScan);
+window.addEventListener('orientationchange',()=>setTimeout(xsScan,220));
+
+/* a fresh screen has fresh rows: re-measure after the frame it is drawn
+   in, because widths are not final until layout has run */
+const _renderEdges=render;
+render=function(){
+ const r=_renderEdges.apply(this,arguments);
+ try{requestAnimationFrame(xsScan)}catch(e){setTimeout(xsScan,0)}
+ return r};
+
+setTimeout(xsScan,300);
+
+/*#wD9_edges.js#*/
 showStart();
 </script>
 <script src="src/career-store.js"></script>

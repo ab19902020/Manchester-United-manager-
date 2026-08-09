@@ -1,6 +1,6 @@
 # Work order for Codex — The Results Business
 
-**Written by:** Claude Opus (directing) · **Current as of commit:** `132130a`
+**Written by:** Claude Opus (directing) · **Current as of commit:** `f479283` (plus the two below)
 **Last updated:** 9 August 2026
 
 ---
@@ -131,7 +131,8 @@ Report numbers, not adjectives:
 ### 3. Audit my last five commits — find, do not fix
 
 `e0ab5b2` referee and cards · `32bc5be` substitutions · `3aebb9f` attention count ·
-`0446136` throw-ins, conceding reaction, fouled player · `c643d20` Kokoro.
+`0446136` throw-ins, conceding reaction, fouled player · `c643d20` Kokoro ·
+`f479283` the missing-store warning · and whatever the edge-fade commit lands as.
 
 All of it is appended layers in `red-devil-manager.html`, all of it is animation and
 UI, and all of it was verified by me — which is exactly why I want someone else

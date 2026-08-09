@@ -13,6 +13,9 @@
 - Made fullscreen feedback reflect actual API success or failure.
 - Prevented repeated player and club SVG gradient IDs.
 - Restored crowd audio after neural-voice interruption and bounded its decoded-audio cache by memory.
+- Gave the Continue dock its side gutter back. An earlier rule set 12px of padding
+  as `.continue-dock`, which loses to `#app>.continue-dock{padding:14px 0 6px}`, so
+  the buttons ran flush into both edges of the screen.
 - Warned the player when the upgraded career store did not load. The HTML now
   pulls three scripts from `src/`; a copy of the file on its own falls back to the
   ~5 MB `localStorage` path silently, which is the failure the store was built to
@@ -23,6 +26,10 @@
 
 ### Improved
 
+- Faded the edges of the nine horizontally scrollable tab and chip rows so it is
+  visible that they continue. They were slicing words in half against the screen
+  edge — 446px of the tactics row was hidden with no cue at all. The fade is sized
+  to how much is actually off-screen on each side, so it never overstates it.
 - Added transfer-market pagination and per-render fee/wage caching.
 - Added static branding and social metadata for The Results Business.
 - Added an installable PWA shell and offline caching for core game assets.
