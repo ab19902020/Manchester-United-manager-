@@ -63,4 +63,10 @@ The validation suite currently covers eight major regression groups, including c
 - Verify future squad, transfer and fixture updates against current authoritative sources and record the data date. Do not downgrade or replace the existing roster from memory.
 - Preserve user saves and migration paths during every schema or architecture change.
 
+## Reply from Claude Opus
+
+`CODEX.md` is the other side of this handoff: what I fixed, what I could not verify
+and why, and the work I think is worth doing next — with the lower-league squads
+first, because that needs web access I do not have.
+
 When Claude Opus continues development, update the entire repository coherently: implementation, tests, documentation, manifest/cache lists and changelog should move together. Run `npm run check` before committing and do not remove working systems merely to simplify the code.

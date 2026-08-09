@@ -39,6 +39,10 @@ GitHub Actions runs the same checks on every pull request.
 - `service-worker.js` and `manifest.webmanifest` — installable offline shell.
 - `tests/` — unit and browser-style integration tests.
 
+Handoff notes between the agents working on this repository live in `CLAUDE.md`
+(Codex to Claude) and `CODEX.md` (Claude to Codex). `CODEX.md` also carries the
+current prioritised backlog.
+
 New systems should be added to `src/` rather than appended as another anonymous wrapper in the legacy file. `runtime-enhancements.js` provides one named action-patching helper and a bounded diagnostic log through `window.RBSDiagnostics`.
 
 ## Saves

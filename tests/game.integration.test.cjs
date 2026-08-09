@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createGame, startCareer, wait } = require('./game-harness.cjs');
+const { createGame, startCareer, waitFor } = require('./game-harness.cjs');
 
 test('new careers save the complete world and manual slots never evict one another', { timeout: 60000 }, async () => {
   const game = await createGame();
@@ -40,11 +40,21 @@ test('new careers save the complete world and manual slots never evict one anoth
     game.eval("G.day=nextUserFixture().day;UI.view='home';render();ACTIONS.advance()");
     assert.ok(game.document.querySelector('[data-action="kickoff"]'));
     game.eval('ACTIONS.simMatch()');
-    await wait(120);
+    // simMatch ticks the whole match synchronously, rebuilds the match screen
+    // and then opens the full-time report a frame later, so the Continue button
+    // is not there the instant the call returns. Wait for it rather than for a
+    // duration.
+    await waitFor(
+      () => game.eval('!!(MU.m && MU.m.done)') && !!game.document.querySelector('[data-action="matchDone"]'),
+      { label: 'the instant-simulated match to finish and offer Continue' },
+    );
     assert.equal(game.eval('MU.m.done'), true);
     assert.ok(game.document.querySelector('[data-action="matchDone"]'));
     game.eval('ACTIONS.matchDone()');
-    await wait(220);
+    await waitFor(
+      () => game.eval("UI.view==='home'&&MU.m===null&&MU.fix===null"),
+      { label: 'the match to be cleared down and home to come back' },
+    );
     assert.equal(game.eval("UI.view==='home'&&MU.m===null&&MU.fix===null"), true);
     await game.window.RBSSaves.save('auto', true);
   } finally {

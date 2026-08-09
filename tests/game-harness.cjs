@@ -139,6 +139,27 @@ function installBrowserStubs(window) {
 
 const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
+// Poll until something is true rather than sleeping for a guessed duration.
+// A fixed sleep encodes how fast one machine happened to be: the instant-sim
+// assertion below used to allow 120ms for a path that takes ~300ms in a real
+// browser and ~1.5s under JSDOM, because buildMatchScreen() dominates it here.
+// Waiting on the condition keeps the test honest about what it is checking and
+// stops it failing on a slow CI runner.
+async function waitFor(predicate, { timeout = 15000, interval = 25, label = 'condition' } = {}) {
+  const deadline = Date.now() + timeout;
+  for (;;) {
+    let satisfied = false;
+    try {
+      satisfied = await predicate();
+    } catch {
+      satisfied = false;
+    }
+    if (satisfied) return true;
+    if (Date.now() >= deadline) throw new Error(`Timed out after ${timeout}ms waiting for ${label}.`);
+    await wait(interval);
+  }
+}
+
 async function createGame() {
   const errors = [];
   const virtualConsole = new VirtualConsole();
@@ -197,4 +218,4 @@ async function startCareer(game, name = 'Adam') {
   return game;
 }
 
-module.exports = { createGame, startCareer, wait };
+module.exports = { createGame, startCareer, wait, waitFor };
