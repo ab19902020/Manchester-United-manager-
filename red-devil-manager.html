@@ -5755,7 +5755,7 @@ vHome=function(){
  const need=blockingMails();
  let banner='';
  if(need.length)banner='<div class="card" style="margin-bottom:12px;border-color:rgba(251,225,34,.5);background:linear-gradient(160deg,rgba(251,225,34,.10),rgba(255,255,255,.01))" data-action="gotoDecision">'+
-  '<div class="row" style="gap:9px"><span style="font-size:19px">\u26a0\ufe0f</span><div style="flex:1"><div class="small" style="font-weight:800">'+need.length+' decision'+(need.length>1?'s':'')+' waiting on you</div>'+
+  '<div class="row" style="gap:9px"><span style="font-size:19px">\u26a0\ufe0f</span><div style="flex:1"><div class="small" style="font-weight:800">'+need.length+' to answer</div>'+
   '<div class="xs muted">The season can\u2019t move on until these are dealt with. Tap to jump to them.</div></div></div></div>';
  return banner+vAssistant()+_vHomeAsst()};
 
@@ -5948,7 +5948,7 @@ function vHome(){
   if(matchToday&&iss.length)h+='<div class="row" style="gap:9px;padding:2px 0" data-action="squadIssueOpen"><span style="font-size:18px">\ud83d\udea8</span>'+
    '<div style="flex:1"><div class="small" style="font-weight:800">Your team isn\u2019t ready to play</div><div class="xs muted">'+esc(iss[0].t.replace(/<[^>]+>/g,''))+(iss.length>1?' and '+(iss.length-1)+' more':'')+' \u2014 tap to fix</div></div></div>';
   if(need.length)h+='<div class="row" style="gap:9px;padding:2px 0'+(matchToday&&iss.length?';border-top:1px solid var(--chalk);margin-top:6px;padding-top:8px':'')+'" data-action="gotoDecision"><span style="font-size:18px">\u26a0\ufe0f</span>'+
-   '<div style="flex:1"><div class="small" style="font-weight:800">'+need.length+' decision'+(need.length>1?'s':'')+' waiting</div><div class="xs muted">The season won\u2019t move on until these are dealt with \u2014 tap to open</div></div></div>';
+   '<div style="flex:1"><div class="small" style="font-weight:800">'+need.length+' to answer</div><div class="xs muted">The season won\u2019t move on until these are dealt with \u2014 tap to open</div></div></div>';
   h+='</div>'}
  const nf=nextUserMatch();
  if(nf){const days=nf.day-G.day;
@@ -8692,7 +8692,7 @@ function vHome(){
   if(matchToday&&iss.length)h+='<div class="row" style="gap:9px;padding:2px 0" data-action="squadIssueOpen"><span style="font-size:18px">\ud83d\udea8</span>'+
    '<div style="flex:1"><div class="small" style="font-weight:800">Your team isn\u2019t ready to play</div><div class="xs muted">'+esc(iss[0].t.replace(/<[^>]+>/g,''))+(iss.length>1?' +'+(iss.length-1)+' more':'')+'</div></div><span class="xs faint">Fix \u203a</span></div>';
   if(need.length)h+='<div class="row" style="gap:9px;padding:2px 0'+(matchToday&&iss.length?';border-top:1px solid var(--chalk);margin-top:6px;padding-top:8px':'')+'" data-action="gotoDecision"><span style="font-size:18px">\u26a0\ufe0f</span>'+
-   '<div style="flex:1"><div class="small" style="font-weight:800">'+need.length+' decision'+(need.length>1?'s':'')+' waiting</div><div class="xs muted">The season won\u2019t move on until these are dealt with</div></div><span class="xs faint">Open \u203a</span></div>';
+   '<div style="flex:1"><div class="small" style="font-weight:800">'+need.length+' to answer</div><div class="xs muted">The season won\u2019t move on until these are dealt with</div></div><span class="xs faint">Open \u203a</span></div>';
   h+='</div>'}
  // next fixture
  const nf=nextUserMatch();
@@ -54475,6 +54475,226 @@ dugPose=function(id,sp,swing,bob,face){
  return _poseCeleb2.apply(this,arguments)};
 
 /*#wD4_subs.js#*/
+
+/*#wD5_attention.js#*/
+
+/* =====================================================================
+   wD5_attention — what the number on the front page is counting
+   ---------------------------------------------------------------------
+   THE QUESTION. Three places on the home screen tell you how much is
+   waiting, and they never agreed:
+
+     header pill   INBOX          1 to do
+     the card      5 THINGS NEED YOU
+     the dock      2 decisions to make
+
+   Three numbers, one screen, all correct about different things — and
+   the player has no way to know which one is the real one.
+
+   THE ANSWER. The headline counts things that need an ANSWER FROM YOU
+   and that go away when you give it. Nothing else.
+
+   The reason is the failure mode of the alternative. Count everything
+   asking for attention and the number can never reach zero: a good
+   player is always in the last year of something, a pledge is always
+   counting down, there is always a fixture to look at. A number that
+   never reaches zero is a number you learn to ignore within a week —
+   and once it is ignored, the one item that genuinely stops the season
+   is ignored with it. The counter is only worth having if clearing it
+   is possible and means something.
+
+   So: blocking mail, the board waiting upstairs, and the press waiting
+   downstairs are counted. They are addressed to you, they need one
+   decision each, and they are gone afterwards.
+
+   Everything else — an eleven that is not picked, a contract running
+   down, a promise coming due — is worth showing and is NOT counted. It
+   keeps its place on the card under its own quieter heading, where it
+   informs without inflating.
+
+   And the three surfaces now say the same thing in the same words.
+   "To do" and "things need you" and "decisions to make" were three
+   names for what is now one idea: needs an answer.
+   ===================================================================== */
+
+/* ---------------------------------------------------------------------
+   1. THE ONE SET
+   --------------------------------------------------------------------- */
+function attnAnswer(){
+ const out=[];
+ try{
+  if(!G||G.sacked)return out;
+  if(G.boardCall)
+   out.push({k:'board',icon:'🏛️',t:'The board want to see you',
+    s:'They are waiting upstairs.',act:'boardGo',cta:'Go up'});
+  if(G.pressCtx)
+   out.push({k:'press',icon:'🎙️',t:'The press are waiting',
+    s:'Duck it after a defeat and it is noticed.',act:'pressOpen',cta:'Take your seat'});
+  /* only the mail that actually holds up the season. Everything else in
+     the inbox with a button on it is a choice, not a requirement. */
+  const block=(typeof blockingMails==='function')?blockingMails():[];
+  block.forEach(m=>out.push({k:'mail'+m.id,icon:'✉️',
+   t:String(m.title||'A decision to make').replace(/^[^\w£]*\s*/,''),
+   s:'The season is waiting on your answer.',
+   act:'gotoDecision',cta:'Answer'}));
+ }catch(e){}
+ return out}
+
+/* the rest: real, worth seeing, and never counted */
+function attnKnow(){
+ const out=[];
+ try{
+  if(!G||G.sacked)return out;
+  const my=G.clubs[G.my];
+
+  /* actionable mail that is not blocking — a choice you can leave */
+  try{
+   const block=new Set(((typeof blockingMails==='function')?blockingMails():[]).map(m=>m.id));
+   (G.inbox||[]).filter(m=>m.actions&&m.actions.length&&!block.has(m.id))
+    .slice(0,2).forEach(m=>out.push({k:'opt'+m.id,icon:'✉️',
+     t:String(m.title||'Something to look at').replace(/^[^\w£]*\s*/,''),
+     s:'Yours to take or leave.',act:'nav',v:'home',cta:'Open',mid:m.id}))}
+  catch(e){}
+
+  try{
+   const xi=(G.tacs&&G.tacs.xi)||[];
+   const bad=xi.map(id=>playerById(id)).filter(p=>!p||p.injury||p.susp>0||p.club!==G.my);
+   if(xi.length<11)
+    out.push({k:'xi',icon:'📋',t:'Your eleven is not picked',
+     s:xi.length+' of 11 named.',act:'nav',v:'tactics',cta:'Pick it'});
+   else if(bad.length)
+    out.push({k:'xibad',icon:'📋',t:bad.length+' in your eleven cannot play',
+     s:'Injured, suspended or gone.',act:'nav',v:'tactics',cta:'Fix it'})}
+  catch(e){}
+
+  try{
+   const exp=(my.players||[]).filter(p=>!p.loan&&p.contract<=1&&p.ovr>=74)
+    .sort((a,b)=>b.ovr-a.ovr);
+   if(exp.length)
+    out.push({k:'exp',icon:'📄',t:exp[0].name+' is in his last year',
+     s:exp.length>1?(exp.length-1)+' more out of contract too.':'He can leave for nothing.',
+     act:'profile',id:exp[0].id,cta:'Look at it'})}
+  catch(e){}
+
+  try{
+   const dl=(G.pledges||[]).filter(p=>p.kind==='deadline'&&p.state==='open')[0];
+   if(dl&&dl.due-G.day<=21)
+    out.push({k:'pl',icon:'🗞️',t:'The time you asked for is nearly up',
+     s:(dl.due-G.day)+' days until the board judge it.',act:'nav',v:'club',cta:'See it'})}
+  catch(e){}
+ }catch(e){}
+ return out}
+
+/* the old function still exists and still returns everything, because
+   other layers call it — it is just no longer what the headline counts */
+needsList=function(){return attnAnswer().concat(attnKnow())};
+
+/* ---------------------------------------------------------------------
+   2. THE CARD, IN TWO PARTS
+   --------------------------------------------------------------------- */
+function attnRow(n){
+ return '<div class="need-row">'+
+  '<span class="need-ic">'+n.icon+'</span>'+
+  '<div class="need-tx"><div class="need-t">'+esc(n.t)+'</div>'+
+   '<div class="need-s">'+esc(n.s)+'</div></div>'+
+  '<button class="need-go" data-action="'+esc(n.act)+'"'+
+   (n.v?' data-v="'+esc(n.v)+'"':'')+
+   (n.id!=null?' data-id="'+esc(String(n.id))+'"':'')+
+   (n.mid?' data-mid="'+esc(n.mid)+'"':'')+
+   '>'+esc(n.cta)+'</button>'+
+ '</div>'}
+
+vNeeds=function(){
+ let must=[],may=[];
+ try{must=attnAnswer();may=attnKnow()}catch(e){}
+ if(!must.length&&!may.length)return '';
+ let h='';
+ if(must.length){
+  h+='<div class="needs">'+
+   '<div class="needs-h"><span class="needs-d"></span>'+
+    (must.length===1?'One thing needs an answer':must.length+' things need an answer')+
+   '</div>'+must.slice(0,5).map(attnRow).join('')+'</div>'}
+ if(may.length){
+  h+='<div class="needs needs-soft">'+
+   '<div class="needs-h">Worth knowing</div>'+
+   may.slice(0,4).map(attnRow).join('')+'</div>'}
+ return h};
+
+(function attnCSS(){
+ const old=document.getElementById('wD5');if(old)old.remove();
+ const st=document.createElement('style');st.id='wD5';
+ st.textContent=
+  /* the second card is the same card with the alarm taken out of it */
+  '.needs.needs-soft{border-color:var(--chalk);background:rgba(255,255,255,.028)}'+
+  '.needs.needs-soft .needs-h{color:var(--muted);letter-spacing:.6px}'+
+  '.needs.needs-soft .need-go{opacity:.9}'+
+  '.needs+.needs{margin-top:9px}';
+ document.head.appendChild(st)})();
+
+/* ---------------------------------------------------------------------
+   3. THE SAME WORDS EVERYWHERE
+   ---------------------------------------------------------------------
+   The header pill said "1 to do" and the dock said "2 decisions to
+   make" for two different sets. Both now count the same thing the card
+   counts, and say so the same way. The dock keeps its gold treatment
+   for the case that actually holds up Continue — blocking mail — and
+   says plainly when it is the board or the press instead, which do not.
+   --------------------------------------------------------------------- */
+const _hdrAttn=renderHdr;
+renderHdr=function(){
+ const r=_hdrAttn.apply(this,arguments);
+ try{
+  const n=attnAnswer().length;
+  const el=document.querySelector('#hdr .sb[data-action="mailbox"] .sbv');
+  if(!el)return r;
+  const un=(typeof unreadMails==='function')?unreadMails().length:0;
+  el.textContent=n?(n+' to answer'):(un?un+' new':'Clear');
+  const box=el.parentNode;
+  if(box)box.classList.toggle('alert',!!n);
+ }catch(e){}
+ return r};
+
+const _dockAttn=renderDock;
+renderDock=function(){
+ const r=_dockAttn.apply(this,arguments);
+ try{
+  const d=document.getElementById('continueDock');
+  if(!d||G.sacked)return r;
+  const b=d.querySelector('[data-action="gotoDecision"]');
+  if(b){
+   /* it is blocking mail: the wording matches the card */
+   const n=((typeof blockingMails==='function')?blockingMails():[]).length;
+   const sub=b.querySelector('.cd-sub');
+   const first=b.childNodes[0];
+   if(first&&first.nodeType===3)
+    first.nodeValue='⚠️ Answer '+n+' thing'+(n>1?'s':'');
+   if(sub&&!sub.textContent.trim())sub.textContent='The season is held until you deal with it';
+   return r}
+  /* the board or the press are waiting but Continue still works, so it
+     is said next to Continue rather than instead of it */
+  const waiting=attnAnswer().length;
+  if(waiting&&!d.querySelector('[data-action="gotoAttn"]')){
+   const go=d.querySelector('[data-action="advance"]');
+   if(go){
+    const a=document.createElement('button');
+    a.className='btn btn-ghost';
+    a.dataset.action='gotoAttn';
+    a.innerHTML='❗';
+    a.title=waiting+' waiting on your answer';
+    d.insertBefore(a,go)}}
+ }catch(e){}
+ return r};
+
+ACTIONS.gotoAttn=()=>{
+ try{
+  const n=attnAnswer()[0];
+  if(!n)return;
+  if(n.k==='board'&&ACTIONS.boardGo)return ACTIONS.boardGo();
+  if(n.k==='press'&&ACTIONS.pressOpen)return ACTIONS.pressOpen();
+  if(ACTIONS.gotoDecision)return ACTIONS.gotoDecision();
+ }catch(e){}};
+
+/*#wD5_attention.js#*/
 showStart();
 </script>
 </body>
