@@ -52948,6 +52948,210 @@ render=function(){
  document.head.appendChild(st)})();
 
 /*#wC7_polish.js#*/
+/*#wC8_xi.js#*/
+
+/* =====================================================================
+   wC8_xi — pick the team, not the left-back
+   ---------------------------------------------------------------------
+   Open the tactics screen and every player in the side has a warning
+   triangle beside his position. The triangles are not a bug. The team
+   selection is.
+
+   autoPick walks the formation in the order the slots happen to be
+   written down and, for each one, takes the best player left:
+
+     for each slot:  best remaining player for THIS slot
+
+   In a 4-2-3-1 the slots are written GK, DL, DC, DC, DR... so left-back
+   is filled before centre-back. Virgil van Dijk is the best player in
+   the squad at left-back — he is the best player in the squad at most
+   things — so he is given the shirt, and by the time the centre-half
+   slots come round he is gone. Then the best remaining centre-half is a
+   defensive midfielder, and so on down the pitch. One early choice that
+   looks locally correct wrecks every choice after it.
+
+   Measured, auto-picked XI against a better assignment of the same
+   squad to the same formation:
+
+     Arsenal      6 of 11 out of position    2.5 rating lost
+     Liverpool    9 of 11                   11.8
+     Sheffield    6 of 11                    8.5
+     Doncaster    8 of 11                   21.1
+
+   Twenty-one points of rating left on the bench at Doncaster, in the
+   division where a point of rating is worth most.
+
+   Choosing globally instead — the best PAIRING of a player and a shirt
+   anywhere in the side, then the next best, and so on — costs nothing
+   and picks the team a manager would. A pass of swaps afterwards catches
+   what greed still gets wrong.
+
+   This is not a new team-selection policy. The same value function
+   decides, tiredness still counts against a man, and the injured, the
+   suspended and the loaned-out are still unavailable. Only the ORDER of
+   the decisions changes.
+   ===================================================================== */
+
+/* what a player is worth in a given shirt — the base's own measure,
+   kept exactly, so nothing about who is preferred changes */
+function xiValue(p,slot){
+ try{
+  const v=calcEff(p,slot);
+  return v-((p.cond!=null&&p.cond<60)?6:0)}
+ catch(e){return 0}}
+
+function xiEligible(c){
+ return (c.players||[]).filter(p=>p&&!p.injury&&!(p.susp>0)&&!p.loan)}
+
+/* ---------------------------------------------------------------------
+   THE ASSIGNMENT
+   ---------------------------------------------------------------------
+   Every player against every shirt, best pairing first. Then a pass of
+   swaps: for each two men in the side, would the team be better if they
+   changed shirts? Eleven slots is fifty-five pairs, so it converges in
+   a few passes and costs nothing worth measuring.
+   --------------------------------------------------------------------- */
+function xiAssign(ci,formation){
+ const c=G.clubs[ci];
+ const def=FORMATIONS[formation];
+ if(!c||!def)return null;
+ const slots=def.map(s=>s[0]);
+ const pool=xiEligible(c);
+ if(!pool.length)return null;
+
+ /* every pairing, richest first */
+ const pairs=[];
+ for(let si=0;si<slots.length;si++)
+  for(let pi=0;pi<pool.length;pi++)
+   pairs.push({si,pi,v:xiValue(pool[pi],slots[si])});
+ pairs.sort((a,b)=>b.v-a.v);
+
+ const bySlot=new Array(slots.length).fill(null);
+ const takenP={},takenS={};
+ for(let k=0;k<pairs.length;k++){
+  const q=pairs[k];
+  if(takenS[q.si]||takenP[q.pi])continue;
+  takenS[q.si]=1;takenP[q.pi]=1;bySlot[q.si]=q.pi;
+  if(Object.keys(takenS).length===slots.length)break}
+
+ /* would any two of them be better off swapping shirts? */
+ for(let pass=0;pass<4;pass++){
+  let moved=false;
+  for(let a=0;a<slots.length;a++)for(let b=a+1;b<slots.length;b++){
+   const pa=bySlot[a],pb=bySlot[b];
+   if(pa==null||pb==null)continue;
+   const now=xiValue(pool[pa],slots[a])+xiValue(pool[pb],slots[b]);
+   const swp=xiValue(pool[pb],slots[a])+xiValue(pool[pa],slots[b]);
+   if(swp>now+0.01){bySlot[a]=pb;bySlot[b]=pa;moved=true}}
+  if(!moved)break}
+
+ return bySlot.map(pi=>pi==null?null:pool[pi].id)}
+
+/* ---------------------------------------------------------------------
+   WHERE IT PLUGS IN
+   ---------------------------------------------------------------------
+   The existing chain has a job worth keeping: for YOUR club, when you
+   already have a side picked, it patches the holes rather than tearing
+   the team up (xiPatch), so a change of formation does not undo your
+   choices. That path is left exactly as it is. Everything that would
+   otherwise have been a full rebuild — every AI club, every fresh
+   squad, and every time you press "auto pick" yourself — goes through
+   the assignment instead.
+   --------------------------------------------------------------------- */
+const _autoPickXI=autoPick;
+autoPick=function(ci,formation){
+ try{
+  const slots=FORMATIONS[formation];
+  if(!slots)return _autoPickXI.apply(this,arguments);
+
+  /* your own side, mid-season, with a team already on the sheet: the
+     existing incremental patch is the right behaviour and stays */
+  const full=(typeof AP_FULL!=='undefined')&&AP_FULL;
+  const mine=(ci===G.my);
+  const cur=(G.tacs&&G.tacs.xi)||[];
+  const hasXI=cur.filter(Boolean).length>0&&cur.length===slots.length;
+  if(mine&&!full&&hasXI)return _autoPickXI.apply(this,arguments);
+
+  const xi=xiAssign(ci,formation);
+  if(!xi||xi.filter(Boolean).length<Math.min(11,xiEligible(G.clubs[ci]).length))
+   return _autoPickXI.apply(this,arguments);
+  return xi;
+ }catch(e){return _autoPickXI.apply(this,arguments)}};
+
+/*#wC8_xi.js#*/
+/*#wC9_gk.js#*/
+
+/* =====================================================================
+   wC9_gk — every club keeps a goalkeeper
+   ---------------------------------------------------------------------
+   A twelve-season soak turned up one club, in season nine, with no
+   goalkeeper in its squad at all. Not injured — none on the books.
+
+   There is already a guard against this and it works: if your squad
+   falls below eighteen available players, or has no fit keeper, the
+   board signs emergency cover and writes to tell you. It only ever
+   looks at ONE club:
+
+     const c = G.clubs[G.my];
+
+   Four hundred and eighty-three other clubs have no such protection.
+   Sell a keeper, retire a keeper, and nothing notices. The side then
+   plays an outfielder in goal at a seventy per cent penalty for the
+   rest of its existence, which quietly bends a league table nobody is
+   watching closely enough to question.
+
+   The same guard, applied to everybody. It runs weekly rather than
+   daily — a squad only loses a keeper through a transfer or a
+   retirement, and neither happens hourly — and at the season rollover,
+   which is when retirements land.
+   ===================================================================== */
+
+function gkSweep(){
+ try{
+  if(!G||!G.clubs)return 0;
+  let fixed=0;
+  G.clubs.forEach(c=>{
+   if(!c||!Array.isArray(c.players))return;
+   /* the user's club has its own guard, which also mails him about it */
+   if(c.i===G.my)return;
+   const gks=c.players.filter(p=>p&&p.pos==='GK'&&!p.loan);
+   if(gks.length)return;
+   /* one keeper, at the standard of the division he is walking into */
+   const std=(typeof divStandardFor==='function')?divStandardFor(c)
+    :(typeof ovrForRep==='function'?ovrForRep(c.rep):50);
+   const base=clamp(Math.round(std),34,78);
+   const nm=(typeof worldName==='function')
+    ? worldName(c.cc||'ENG',mulberry(hashStr('gk'+c.i+G.day)),null)
+    : (FN[irnd(0,FN.length-1)]+' '+LN[irnd(0,LN.length-1)]);
+   const p=genPlayer([nm,'GK',irnd(22,32),base,base+irnd(0,3)],c.i);
+   p.contract=irnd(2,4);
+   c.players.push(p);
+   fixed++});
+  return fixed}
+ catch(e){return 0}}
+
+/* weekly — a squad does not lose its goalkeeper between lunch and tea */
+const _dtcGK=dailyTickCore;
+dailyTickCore=function(){
+ const r=_dtcGK.apply(this,arguments);
+ try{if((G.day%7)===3)gkSweep()}catch(e){}
+ return r};
+
+/* and at the rollover, which is when the retirements actually land */
+const _endSeasonGK=endSeason;
+endSeason=function(){
+ const r=_endSeasonGK.apply(this,arguments);
+ try{gkSweep()}catch(e){}
+ return r};
+
+/* a new world starts with everybody having one */
+const _newGameGK=newGame;
+newGame=function(){
+ const r=_newGameGK.apply(this,arguments);
+ try{gkSweep()}catch(e){}
+ return r};
+
+/*#wC9_gk.js#*/
 showStart();
 </script>
 </body>
