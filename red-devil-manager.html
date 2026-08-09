@@ -53323,6 +53323,442 @@ dugFigure=function(g,d,c,P,W,now){
  finally{if(vx!==null)d.vx=vx}};
 
 /*#wD0_offball.js#*/
+
+
+/*#wD1_instant.js#*/
+
+/* =====================================================================
+   wD1_instant — play the match without watching it
+   ---------------------------------------------------------------------
+   Some weeks you want to sit in the dugout for ninety minutes. Some
+   weeks you have a cup tie against a National League side, you have
+   picked the team, and you would like to know the score.
+
+   The engine can already do this and has been doing it all along.
+   Every one of the four hundred and eighty-three other matches on a
+   Saturday is resolved by quickSim, which builds the same MatchSim the
+   live view uses and calls tickOnce until it is finished. tickOnce
+   calls finish() itself, and finish() is where the ratings, the
+   morale, the fitness, the press and the league table all happen.
+
+   So an instant result is not a second, cheaper simulation with a
+   different set of odds — it is the SAME match, ticked as fast as the
+   processor will go instead of once every three seconds. There is no
+   penalty for using it because there is nothing to penalise: the only
+   thing you give up is the chance to change your mind at half time.
+
+   What it does:
+     builds the match exactly as KICK OFF does, team talk included
+     ticks it to full time in one go
+     opens the same full-time summary you get after watching
+
+   What it does not do: skip your team talk, skip your tactics, or
+   quietly use a simpler model. It is the match.
+   ===================================================================== */
+
+function simInstant(){
+ try{
+  if(!MU.fix){toast('No match to play.');return false}
+  if(MU.m&&!MU.m.done){toast('The match has already started.');return false}
+
+  /* exactly the same setup as pressing KICK OFF */
+  MU.m=new MatchSim(MU.fix);
+  MU.lastFeed=0;MU.speed=1;MU.tab='pitch';
+  MU.prevPoss=[1,1];MU.fx=[];MU.goalFlash=0;MU.lastGoals=0;MU.hlHold=0;MU.over=false;
+  initDots();
+  try{applyTalk(MU.m.sides[mySideIx()],MU.preTalk||'Encourage')}catch(e){}
+
+  /* ...then ninety minutes as fast as it will go. The guard is the same
+     four hundred quickSim uses, with room for extra time. */
+  let guard=0;
+  while(!MU.m.done&&guard++<600)MU.m.tickOnce();
+  if(!MU.m.done){try{MU.m.finish()}catch(e){}}
+
+  try{invalidateTables()}catch(e){}
+  return true}
+ catch(e){return false}}
+
+ACTIONS.simMatch=()=>{
+ try{closeModal()}catch(e){}
+ if(!simInstant()){try{render()}catch(e){}return}
+ try{sfx('whistle')}catch(e){}
+ /* land on the same screen a watched match lands on, at full time */
+ try{buildMatchScreen()}catch(e){}
+ try{stopRaf()}catch(e){}
+ try{stopLoop()}catch(e){}
+ /* and open the report straight away — the result is the point */
+ setTimeout(()=>{try{ACTIONS.ftSummary()}catch(e){}},60)};
+
+/* ---------------------------------------------------------------------
+   THE BUTTON
+   ---------------------------------------------------------------------
+   The pre-match screen is assembled by several layers and rebuilt by
+   more of them, so rather than find the one that writes KICK OFF, the
+   button is added to whatever modal turns out to have a KICK OFF in it.
+   That works wherever the markup came from and survives the next layer
+   that rewrites it.
+   --------------------------------------------------------------------- */
+function simInjectButton(){
+ try{
+  const ko=document.querySelector('[data-action="kickoff"]');
+  if(!ko||!ko.parentNode)return;
+  const host=ko.parentNode;
+  if(host.querySelector('[data-action="simMatch"]'))return;
+  const b=document.createElement('button');
+  b.className='btn btn-ghost';
+  b.dataset.action='simMatch';
+  b.style.cssText='flex:1;min-width:0';
+  b.innerHTML='⏩ Simulate';
+  b.title='Play the whole match instantly and go straight to the result';
+  host.insertBefore(b,ko);
+ }catch(e){}}
+
+/* WHERE TO HANG IT. KICK OFF is not in a modal, not in the main view,
+   and not written by renderMCtl — it lives in #matchScreen .mctl and is
+   put there by one of several layers that assemble the team sheet.
+   Three guesses at the right function to wrap (openModal, render,
+   renderMCtl) all failed to fire.
+
+   So it stops guessing. An observer watches the match screen and adds
+   the button whenever a KICK OFF appears without one beside it, which
+   works no matter which layer drew it or which layer redraws it next. */
+(function simWatchDom(){
+ const go=()=>{try{simInjectButton()}catch(e){}};
+ const start=()=>{
+  const host=document.getElementById('matchScreen')||document.body;
+  try{
+   new MutationObserver(go).observe(host,{childList:true,subtree:true});
+   go()}
+  catch(e){}};
+ if(document.readyState==='loading')
+  document.addEventListener('DOMContentLoaded',start,{once:true});
+ else start();
+})();
+
+/* ---------------------------------------------------------------------
+   AND FROM THE HOME SCREEN, WITHOUT OPENING THE TEAM SHEET AT ALL
+   ---------------------------------------------------------------------
+   The dock on a match day says "Match day — tap to begin". If you have
+   already picked the side and only want the result, going through the
+   team sheet to find the button is a step for nothing, so the dock
+   offers it too.
+   --------------------------------------------------------------------- */
+(function simDockCSS(){
+ const st=document.createElement('style');st.id='wD1';
+ st.textContent='.continue-dock>.btn.simdock{flex:0 0 58px;min-width:58px;max-width:58px;'+
+  'padding:0;justify-content:center;font-size:13px;letter-spacing:0}'+
+  '.continue-dock>.btn.simdock .cd-sub{display:none}';
+ document.head.appendChild(st)})();
+
+const _renderDockSim=renderDock;
+renderDock=function(){
+ const r=_renderDockSim.apply(this,arguments);
+ try{
+  const d=document.getElementById('continueDock');
+  if(!d)return r;
+  if(d.querySelector('[data-action="simMatch"]'))return r;
+  /* only on a match day, before kick-off */
+  if(!MU.fix||MU.m)return r;
+  const go=d.querySelector('[data-action="advance"]');
+  if(!go||!/match day/i.test(go.textContent||''))return r;
+  const b=document.createElement('button');
+  b.className='btn btn-ghost simdock';
+  b.dataset.action='simMatch';
+  b.innerHTML='⏩';
+  b.title='Simulate the match and go straight to the result';
+  d.appendChild(b);
+ }catch(e){}
+ return r};
+
+/*#wD1_instant.js#*/
+
+
+
+/*#wD2_flair.js#*/
+
+/* =====================================================================
+   wD2_flair — skill moves, and a celebration that is his own
+   ---------------------------------------------------------------------
+   Two things the pitch was missing.
+
+   EVERY GOAL LOOKED THE SAME. Eleven men put their arms up. Scoring is
+   the whole point of the game and it had one animation, shared by
+   everybody, every time. Real players have their own — Bruno Fernandes
+   cups his ears, Cole Palmer does the cold shiver, Mbeumo puts his
+   hands out flat, Martinelli surfs. So there is a library of them, the
+   named ones go to the players they belong to, and everybody else gets
+   one drawn from his own id so it is the same every time HE scores and
+   different from the man next to him.
+
+   NOBODY EVER BEAT ANYBODY. A dribble was a man moving in a straight
+   line slightly faster than another man. Some footballers can do things
+   with a ball that most cannot, and the game already knows who: it
+   holds dribbling, agility, firstTouch and composure for every player
+   in the world. Put those together and you get a skill rating, and a
+   five-star skiller does things a two-star full-back never will.
+
+   WHAT THIS DOES NOT DO: change a single result. The engine decides who
+   beats whom and it decided before any of this ran. A skill move is
+   what the drawing shows while he is carrying the ball — it does not
+   make him more likely to keep it.
+   ===================================================================== */
+
+/* ---------------------------------------------------------------------
+   1. WHO CAN ACTUALLY DO IT
+   ---------------------------------------------------------------------
+   Five stars is deliberately rare. The first thresholds tried here gave
+   three hundred and fifty-two of them, eight in Manchester United's
+   squad alone, which is not "the ones you would name" — it is most of
+   the good players. Raised until it lands on a few dozen in the world.
+   --------------------------------------------------------------------- */
+const SKILL_CACHE={};
+function skillStars(p){
+ try{
+  if(!p||!p.attrs)return 1;
+  if(SKILL_CACHE[p.id]!=null)return SKILL_CACHE[p.id];
+  const a=p.attrs;
+  const v=(a.dribbling||8)*0.46+(a.agility||8)*0.22+
+          (a.firstTouch||8)*0.20+(a.composure||8)*0.12;
+  /* a keeper is not a skiller however good his feet are */
+  const gk=p.pos==='GK';
+  let s= gk?1 : v>=18.55?5 : v>=16.8?4 : v>=14.2?3 : v>=11.2?2 : 1;
+  SKILL_CACHE[p.id]=s;
+  return s}
+ catch(e){return 1}}
+
+/* the moves each level can pull off */
+const SKILL_MOVES={
+ 2:['stepover'],
+ 3:['stepover','dragback'],
+ 4:['stepover','dragback','roulette'],
+ 5:['stepover','dragback','roulette','elastico','rainbow']};
+
+function skillPick(p){
+ const s=skillStars(p);
+ if(s<2)return null;
+ const list=SKILL_MOVES[s]||SKILL_MOVES[2];
+ /* the rarer moves belong to the rarer players, so the top of the list
+    is weighted toward whatever he has just unlocked */
+ const r=Math.random();
+ const i=(r<0.42)?list.length-1:Math.floor(Math.random()*list.length);
+ return list[Math.max(0,Math.min(list.length-1,i))]}
+
+/* ---------------------------------------------------------------------
+   2. THE CELEBRATIONS
+   ---------------------------------------------------------------------
+   The rig is a body that can rotate and lift, two legs and two arms
+   that rotate at the shoulder and hip. No elbows, no wrists. So each of
+   these is chosen to be a shape this skeleton can genuinely make —
+   "cups his ears" is both arms rotated hard up and in, which reads;
+   "hands on head" does not, which is why the dejection pose settled on
+   hips instead.
+   --------------------------------------------------------------------- */
+const CELEBS=['ears','cold','calm','surf','wings','slide','sky','shush','pump','heart'];
+
+/* the ones that belong to somebody */
+const CELEB_SIG=[
+ [/bruno fernandes/i,'ears'],
+ [/palmer/i,'cold'],
+ [/mbeumo/i,'calm'],
+ [/martinelli/i,'surf'],
+ [/vin[ií]cius|vinicius/i,'shush'],
+ [/haaland/i,'calm'],
+ [/salah/i,'heart'],
+ [/ronaldo/i,'pump'],
+ [/mbapp[eé]/i,'calm'],
+ [/saka|foden/i,'wings']
+];
+
+const CELEB_OF={};
+function celebFor(p){
+ try{
+  if(!p)return 'wings';
+  if(CELEB_OF[p.id])return CELEB_OF[p.id];
+  const n=String(p.name||'');
+  let c=null;
+  for(let i=0;i<CELEB_SIG.length;i++)if(CELEB_SIG[i][0].test(n)){c=CELEB_SIG[i][1];break}
+  /* everybody else keeps one of his own, the same one every time */
+  if(!c)c=CELEBS[Math.abs(hashStr('celeb'+p.id))%CELEBS.length];
+  CELEB_OF[p.id]=c;
+  return c}
+ catch(e){return 'wings'}}
+
+/* ---------------------------------------------------------------------
+   3. TELLING THE WATCHER WHAT TO FIRE
+   --------------------------------------------------------------------- */
+const _dugWatchWD2=dugWatch;
+dugWatch=function(){
+ /* remember who is carrying before the base runs, so a skill move can
+    be started on him */
+ let carrier=null;
+ try{
+  const p=playState&&playState();
+  /* a touch is the ball arriving at his feet at all, not only the
+     brief 'carry' mode — counting carries alone gave three skill moves
+     in a match because most possession is spent in 'hold' */
+  if(p&&(p.mode==='carry'||p.mode==='hold')&&p.holder&&p.holder.p)carrier=p.holder.p}
+ catch(e){}
+
+ const r=_dugWatchWD2.apply(this,arguments);
+
+ try{
+  const m=MU.m;if(!m||m.done||m.stage==='HT')return r;
+  const now=performance.now();
+
+  /* A SKILL MOVE, ONCE PER TOUCH. The first version rolled a small
+     probability every frame while the man was carrying, which produced
+     exactly one skill move in a forty-six minute match: 'carry' is a
+     brief mode, and for most of it he is already inside a windup or a
+     kick, so the "is he free" test was almost never true at the moment
+     the dice were thrown.
+
+     Rolling once when the ball ARRIVES at a new pair of feet ties the
+     rate to touches, which is the honest unit — a five-star tries
+     something on roughly two touches in five, a two-star almost never. */
+  if(carrier){
+   const id=carrier.p?carrier.p.id:carrier.id;
+   if(id!==DUG._lastTouchId){
+    DUG._lastTouchId=id;
+    const cur=DUG.anim[id];
+    const free=!cur||now>=cur.t1;
+    if(free){
+     const st=skillStars(carrier);
+     const chance=[0,0,0.05,0.13,0.26,0.42][st]||0;
+     if(Math.random()<chance){
+      const mv=skillPick(carrier);
+      if(mv)dugSet(id,'skill',mv==='roulette'?620:mv==='rainbow'?700:430,{mv})}}}}
+  else DUG._lastTouchId=null;
+
+  /* THE CELEBRATION. The base has already put the whole scoring side on
+     'celebrate'; the scorer gets his own instead. */
+  const goals=(MU.fix&&MU.fix.sc)?MU.fix.sc.length:0;
+  if(goals>(DUG._celebSeen||0)){
+   DUG._celebSeen=goals;
+   const last=MU.fix.sc[goals-1];
+   if(last&&last.pid!=null){
+    const sc=playerById?playerById(last.pid):null;
+    dugSet(last.pid,'celeb',3000,{c:celebFor(sc||{id:last.pid,name:last.name})});
+   }}
+  if(goals<(DUG._celebSeen||0))DUG._celebSeen=goals;
+ }catch(e){}
+ return r};
+
+const _initDotsWD2=initDots;
+initDots=function(){
+ const r=_initDotsWD2.apply(this,arguments);
+ DUG._skillGap=0;DUG._celebSeen=0;DUG._lastTouchId=null;
+ return r};
+
+/* ---------------------------------------------------------------------
+   4. THE SHAPES
+   --------------------------------------------------------------------- */
+const _dugPoseWD2=dugPose;
+dugPose=function(id,sp,swing,bob,face){
+ const a=(typeof dugAnimOf==='function')?dugAnimOf(id):null;
+ if(a){
+  const k=clamp((performance.now()-a.t0)/Math.max(1,a.t1-a.t0),0,1);
+  const wob=Math.sin(k*Math.PI);            /* 0 -> 1 -> 0 */
+
+  if(a.a==='skill'){
+   const mv=a.mv||'stepover';
+   if(mv==='stepover'){
+    /* the foot goes over the ball and back, twice, quickly */
+    const t=Math.sin(k*Math.PI*4);
+    return {legA:0.85*t,legB:-0.30*t,armA:-0.45*t,armB:0.45*t,
+     rot:0.06*t,lift:0,bob:bob*.5,down:0}}
+   if(mv==='dragback'){
+    /* sole on the ball, drag it back under him, and away */
+    const t=Math.sin(k*Math.PI);
+    return {legA:-0.95*t,legB:0.20*t,armA:0.40*t,armB:-0.30*t,
+     rot:-0.10*t,lift:0,bob:0,down:t*0.35}}
+   if(mv==='roulette'){
+    /* Zidane. A full turn on the spot with the ball under his foot. */
+    return {legA:0.35*wob,legB:-0.35*wob,
+     armA:-0.55*wob,armB:0.55*wob,
+     rot:k*Math.PI*2,lift:0,bob:0,down:0}}
+   if(mv==='elastico'){
+    /* outside of the boot then inside, one flick */
+    const t=Math.sin(k*Math.PI*2);
+    return {legA:0.95*t,legB:-0.18*t,armA:-0.70*t,armB:0.30*t,
+     rot:0.14*t,lift:0,bob:0,down:0}}
+   if(mv==='rainbow'){
+    /* up and over his own head, and he goes with it */
+    const up=Math.sin(k*Math.PI);
+    return {legA:-1.25*up,legB:0.55*up,armA:-0.95*up,armB:-0.85*up,
+     rot:0,lift:up*0.75,bob:0,down:0}}
+  }
+
+  if(a.a==='celeb'){
+   const c=a.c||'wings';
+   const inn=Math.sin(Math.min(1,k*4)*Math.PI*0.5);      /* snap into it */
+   const out=k>0.80?(k-0.80)/0.20:0;                     /* and out again */
+   const e=inn*(1-out);
+   const run=swing*0.45;
+
+   if(c==='ears'){
+    /* Bruno. Both hands cupped to the ears — arms hard up and inward. */
+    const w=Math.sin(k*Math.PI*6)*0.10;
+    return {legA:run,legB:-run,armA:(-2.75+w)*e,armB:(2.75-w)*e,
+     rot:0,lift:0,bob:bob*.5,down:0}}
+   if(c==='cold'){
+    /* Palmer. Arms folded across the chest, shivering. */
+    const sh=Math.sin(k*Math.PI*14)*0.08*e;
+    return {legA:run*.4,legB:-run*.4,
+     armA:(-1.35+sh)*e,armB:(1.35+sh)*e,
+     rot:sh*0.6,lift:0,bob:bob*.25,down:e*0.20}}
+   if(c==='calm'){
+    /* Mbeumo. Both arms straight out to the sides, palms down. */
+    return {legA:run*.5,legB:-run*.5,armA:-1.62*e,armB:1.62*e,
+     rot:0,lift:0,bob:bob*.4,down:0}}
+   if(c==='surf'){
+    /* Martinelli. Crouched, arms out, riding it. */
+    const ride=Math.sin(k*Math.PI*3)*0.16;
+    return {legA:(0.55+ride)*e,legB:(-0.55+ride)*e,
+     armA:-1.75*e,armB:1.45*e,
+     rot:ride,lift:0,bob:0,down:e*0.85}}
+   if(c==='wings'){
+    /* arms wide, running away from everybody */
+    return {legA:run*1.3,legB:-run*1.3,armA:-1.95*e,armB:1.95*e,
+     rot:0,lift:0,bob:bob,down:0}}
+   if(c==='slide'){
+    /* knees. Down, along, and back up. */
+    const dn=Math.sin(Math.min(1,k*1.5)*Math.PI*0.5)*(k>0.7?(1-(k-0.7)/0.3):1);
+    return {legA:0.95*dn,legB:0.80*dn,armA:-2.15*dn,armB:2.15*dn,
+     rot:0,lift:0,bob:0,down:dn*2.2}}
+   if(c==='sky'){
+    /* one finger up, for somebody who is not here */
+    return {legA:run*.3,legB:-run*.3,armA:-2.95*e,armB:0.25*e,
+     rot:0,lift:0,bob:bob*.3,down:0}}
+   if(c==='shush'){
+    /* finger to the lips at a ground that has gone quiet */
+    return {legA:run*.5,legB:-run*.5,armA:-2.45*e,armB:0.55*e,
+     rot:0,lift:0,bob:bob*.4,down:0}}
+   if(c==='pump'){
+    /* the jump and the turn */
+    const j=Math.sin(Math.min(1,k*2.2)*Math.PI);
+    return {legA:0.28*j,legB:-0.28*j,armA:-2.55*e,armB:-2.15*e,
+     rot:0,lift:j*1.15,bob:0,down:0}}
+   if(c==='heart'){
+    /* both hands together in front of him */
+    return {legA:run*.4,legB:-run*.4,armA:-0.95*e,armB:0.95*e,
+     rot:0,lift:0,bob:bob*.35,down:0}}
+  }
+ }
+ return _dugPoseWD2.apply(this,arguments)};
+
+/* ---------------------------------------------------------------------
+   5. AND YOU CAN SEE WHO THEY ARE
+   ---------------------------------------------------------------------
+   A skill rating is no use if it is invisible, so it goes on the player
+   card next to the rest of him.
+   --------------------------------------------------------------------- */
+function skillStarHtml(p){
+ const s=skillStars(p);
+ if(s<3)return '';
+ return '<span class="xs" title="Skill moves" style="color:var(--gold);font-weight:800">'+
+  '✦'+s+'</span>'}
+
+/*#wD2_flair.js#*/
 showStart();
 </script>
 </body>
