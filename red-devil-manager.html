@@ -52738,6 +52738,216 @@ dugFigure=function(g,d,c,P,W,now){
  g.globalAlpha=1};
 
 /*#wC6_anim.js#*/
+
+/*#wC7_polish.js#*/
+
+/* =====================================================================
+   wC7_polish — the things that make it feel built rather than assembled
+   ---------------------------------------------------------------------
+   A polish pass on the shell of the game. Nothing is removed and no
+   screen loses a control; this is about the parts you touch a hundred
+   times a session and never think about until one of them is wrong.
+
+   Four things were measured to be wrong, and one is a real bug.
+
+   THE CONTINUE DOCK DOES NOT FIT. Every button in the dock is told
+   min-width: min(440px, 100% - 28px). With one button that is right.
+   The moment a decision is waiting the dock holds TWO — the gold
+   "2 decisions to make" and a dismiss — and each of them still demands
+   the full width, so on a 390px phone they lay out at 362px each,
+   centred, and run off both edges:
+
+     gold button   -171 .. 191      dismiss   199 .. 561
+
+   Half of each is off the screen. It is tappable and it looks broken.
+
+   YOUR PLACE IS LOST EVERY TIME. The home screen is 2,216 pixels tall,
+   nearly three screens. Scroll to the bottom of it, look at your squad,
+   come back — and you are at the top again, scrolling past everything
+   you have already read. Measured: scrolled to 900, returned to 0.
+
+   NOTHING SAYS A TAP LANDED. Rows and tiles have hover states, which no
+   phone has, and no pressed state, which is the only feedback a phone
+   can give.
+
+   AND A LONG SCREEN HAS NO WAY BACK. Three screens down the home page,
+   the only route back to the top is to scroll all of it again.
+   ===================================================================== */
+
+(function polishCSS(){
+ const old=document.getElementById('wC7');if(old)old.remove();
+ const st=document.createElement('style');st.id='wC7';
+ st.textContent=[
+  /* ---- 1. THE DOCK FITS, WITH ONE BUTTON ON IT OR WITH TWO --------
+     The full-width rule becomes a rule about being the only thing
+     there. With company, both share the room and the dismiss shrinks
+     to the icon it is. */
+  '.continue-dock{gap:8px;padding-left:12px;padding-right:12px;box-sizing:border-box}',
+  '.continue-dock>.btn{min-width:0;flex:1 1 auto}',
+  '.continue-dock>.btn:only-child{min-width:min(440px,100%)}',
+  '.continue-dock>.btn.btn-ghost:not(:only-child){flex:0 0 52px;min-width:52px;'+
+   'max-width:52px;padding:0;justify-content:center;font-size:17px;letter-spacing:0}',
+  '.continue-dock>.btn.btn-ghost:not(:only-child) .cd-sub{display:none}',
+
+  /* ---- 2. A PRESS THAT ANSWERS ------------------------------------
+     Phones cannot hover. Everything you can tap now moves a little
+     under the finger and lights its edge, which is the whole of the
+     feedback loop on a touchscreen. */
+  '@media (hover:none){',
+  ' [data-action]:not(.nav button):not(.chip):active{transform:scale(.975)}',
+  '}',
+  '[data-action]{-webkit-tap-highlight-color:transparent}',
+  '.mail:active,.plist>*:active,.sb:active,.kpi:active,.clubpick:active{'+
+   'transform:scale(.985);filter:brightness(1.14)}',
+  '.mail,.plist>*,.sb,.kpi,.clubpick{transition:transform .10s ease,filter .10s ease}',
+  '.btn:active{transform:scale(.972)}',
+  '.btn{transition:transform .10s ease,filter .12s ease,border-color .14s ease}',
+  '.chip{transition:transform .10s ease,background .14s ease,border-color .14s ease}',
+  '.chip:active{transform:scale(.94)}',
+
+  /* ---- 3. BACK TO THE TOP -----------------------------------------
+     Sits above the dock, out of the way of everything, and only exists
+     when there is enough screen below you to be worth the trip. */
+  '.totop{position:fixed;right:12px;z-index:36;width:42px;height:42px;border-radius:50%;'+
+   'border:1px solid var(--chalk-strong);background:rgba(12,18,13,.90);'+
+   'backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);'+
+   'color:var(--ink);font-size:17px;line-height:1;cursor:pointer;'+
+   'display:flex;align-items:center;justify-content:center;'+
+   'box-shadow:0 8px 22px rgba(0,0,0,.45);'+
+   'opacity:0;pointer-events:none;transform:translateY(8px);'+
+   'transition:opacity .18s ease,transform .18s ease}',
+  '.totop.on{opacity:1;pointer-events:auto;transform:translateY(0)}',
+  '.totop:active{transform:scale(.90)}',
+
+  /* ---- 4. A VIEW ARRIVES RATHER THAN APPEARING ---------------------
+     Ten frames of fade. Long enough to read as a transition, short
+     enough that it never delays anybody. */
+  '@media (prefers-reduced-motion:no-preference){',
+  ' #view.vfade>*{animation:vfade .16s ease-out}',
+  ' @keyframes vfade{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}',
+  '}'
+ ].join('');
+ document.head.appendChild(st)})();
+
+/* ---------------------------------------------------------------------
+   5. WHERE YOU WERE
+   ---------------------------------------------------------------------
+   One scroll position per tab, kept while the day lasts. Pressing
+   Continue moves the game on and everything on every screen changes
+   with it, so that is the moment the positions are forgotten — coming
+   back to yesterday's scroll offset on today's news would be worse than
+   starting at the top.
+   --------------------------------------------------------------------- */
+const VIEWSCROLL={};
+
+function polishSaveScroll(){
+ try{
+  const v=document.getElementById('view');
+  if(v&&UI.view)VIEWSCROLL[UI.view]=v.scrollTop}
+ catch(e){}}
+
+function polishRestoreScroll(){
+ try{
+  const v=document.getElementById('view');if(!v)return;
+  const want=VIEWSCROLL[UI.view]||0;
+  if(want<=0)return;
+  /* after the new view has been laid out, or the box is still the old
+     height and the browser clamps the offset to nothing */
+  requestAnimationFrame(()=>{
+   try{
+    const max=v.scrollHeight-v.clientHeight;
+    v.scrollTop=Math.min(want,Math.max(0,max))}
+   catch(e){}})}
+ catch(e){}}
+
+const _navPolish=ACTIONS.nav;
+ACTIONS.nav=el=>{
+ polishSaveScroll();
+ const r=_navPolish(el);
+ polishRestoreScroll();
+ polishToTop();
+ return r};
+
+/* a new day is a new screen; the old offsets mean nothing on it */
+const _advPolish=ACTIONS.advance;
+ACTIONS.advance=function(){
+ for(const k in VIEWSCROLL)delete VIEWSCROLL[k];
+ return _advPolish.apply(this,arguments)};
+
+/* ---------------------------------------------------------------------
+   6. THE WAY BACK UP
+   --------------------------------------------------------------------- */
+ACTIONS.toTop=()=>{
+ try{
+  const v=document.getElementById('view');if(!v)return;
+  v.scrollTo({top:0,behavior:'smooth'});
+  try{sfx('tap')}catch(e){}}
+ catch(e){}};
+
+function polishToTop(){
+ try{
+  const v=document.getElementById('view');if(!v)return;
+  let b=document.getElementById('toTopBtn');
+  if(!b){
+   b=document.createElement('button');
+   b.id='toTopBtn';b.className='totop';
+   b.dataset.action='toTop';
+   b.setAttribute('aria-label','Back to the top');
+   b.innerHTML='↑';
+   document.body.appendChild(b);
+   /* it sits above whatever the dock currently is */
+   const place=()=>{
+    try{
+     /* NOT offsetParent — the dock is position:fixed and a fixed
+        element's offsetParent is always null, so testing it measured
+        the dock as zero and parked this button on top of Continue. */
+     const dock=document.getElementById('continueDock');
+     const dr=dock?dock.getBoundingClientRect():null;
+     const dh=(dr&&dr.height>2&&getComputedStyle(dock).display!=='none')?dr.height:0;
+     const nav=document.querySelector('.nav');
+     const nh=nav?nav.getBoundingClientRect().height:0;
+     b.style.bottom=(nh+dh+14)+'px'}
+    catch(e){b.style.bottom='150px'}};
+   place();
+   v.addEventListener('scroll',()=>{
+    b.classList.toggle('on',v.scrollTop>620);
+    place();
+   },{passive:true});
+   window.addEventListener('resize',place,{passive:true});
+  }
+  b.classList.toggle('on',v.scrollTop>620);
+ }catch(e){}}
+
+/* the button has to exist before anybody scrolls, and the fade wants
+   putting on whatever was just drawn */
+const _renderPolish=render;
+render=function(){
+ const r=_renderPolish.apply(this,arguments);
+ try{
+  polishToTop();
+  const v=document.getElementById('view');
+  if(v){v.classList.remove('vfade');void v.offsetWidth;v.classList.add('vfade')}
+ }catch(e){}
+ return r};
+
+/* ---------------------------------------------------------------------
+   7. AND THE DOCK LABEL STOPS SHOUTING OVER ITSELF
+   ---------------------------------------------------------------------
+   With two buttons on it the gold one has about two hundred and eighty
+   pixels for a label that was written for four hundred and forty. The
+   sub-line is the part that can go: the headline says what is waiting,
+   and the detail is on the screen the button opens anyway.
+   --------------------------------------------------------------------- */
+(function dockFit(){
+ const st=document.createElement('style');st.id='wC7b';
+ st.textContent=
+  '.continue-dock>.btn:not(:only-child) .cd-sub{max-width:46%;font-size:9px}'+
+  '@media (max-width:400px){.continue-dock>.btn:not(:only-child) .cd-sub{display:none}'+
+  '.continue-dock>.btn:not(:only-child) .cd-main{white-space:normal;line-height:1.15;'+
+  'font-size:11px;text-overflow:clip}}';
+ document.head.appendChild(st)})();
+
+/*#wC7_polish.js#*/
 showStart();
 </script>
 </body>
