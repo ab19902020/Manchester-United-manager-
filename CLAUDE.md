@@ -2,139 +2,150 @@
 
 ## Current as of
 
-- Worked from `9dc4898` (including both edge-fade commits), after first reading the
-  brief at `f479283` and rebasing each time `main` moved.
-- Published squad/data implementation: `05c2ef7a50b90633999cdff90d8c898c4c501b57`.
+- Worked from 250f86c, the cycle-2 fixture brief on top of the accepted squad
+  cycle. I did not edit CODEX.md.
+- Baseline was 484 clubs, 28 fixture divisions and 8,781 league fixtures.
 
 ## Done
 
-- Added `src/lower-league-data.js`: a generated 9 August 2026 snapshot of all 96
-  Championship, League One, League Two and National League teams. It contains
-  2,548 sourced players and a roster URL/source timestamp per team.
-- Added `scripts/fetch-lower-league-squads.cjs` and
-  `npm run data:lower-leagues`. The updater rejects a division unless it has 24
-  teams, at least 19 identities per team and goalkeeper/defence/midfield/forward
-  coverage. Missing source ages/positions remain null rather than being invented.
-- Added `src/lower-league-squads.js`. It updates the 2026/27 memberships, then
-  maps source identities, available ages and shirt numbers onto the existing game
-  slots. The 19-player depth, positions, ratings, attributes, contracts and
-  economy remain the game-balanced values. A second roster-only pass covers the
-  depth players created later by `seedSquadDepth()`.
-- Updated the picker fingerprint, test harness, PWA cache, README and changelog.
-- Added a regression that checks all 72 L1/L2/NL clubs, all 1,368 live names,
-  exact division membership, 19-player depth, position/contract shape, source
-  metadata, rating-tier order, picker parity and Leicester/Wout Faes.
-- Fixed date-only fixtures displaying one day early west of UTC.
-- Audited `e0ab5b2`, `32bc5be`, `3aebb9f`, `0446136`, `c643d20`, `f479283`,
-  `404cec0` and its follow-up `9dc4898`. Per the brief, none of the audit findings
-  below were patched.
+- Published together in the repository commit headed `Complete the authentic
+  2026/27 fixture cycle`; the work was verified locally in three tier-sized
+  checkpoints before publication.
+- Sourced all 2,588 fixtures in the Premier League, Championship, League One,
+  League Two and National League.
+- Sourced all 1,984 fixtures in La Liga, Serie A, Bundesliga, Ligue 1, Primeira
+  Liga and Eredivisie.
+- Sourced 1,720 fixtures in Serie B, 2. Bundesliga, Ligue 2, Süper Lig, Super
+  League Greece and the Czech First League.
+- The result is 6,292 exact source events in 17 divisions. The other 2,489
+  fixtures stay visibly generated; none were filled with guessed dates.
+- Added scripts/fetch-authentic-fixtures.cjs and npm run data:fixtures. It rejects
+  wrong counts, membership drift, duplicate source IDs, duplicate directed pairs,
+  missing home/away meetings and a club appearing twice on one source date.
+- Added src/authentic-fixture-data.js and src/authentic-fixtures.js. The snapshot
+  records provider, URL, read date, source season, event ID and club metadata.
+  It refreshes 2026/27 promotion/relegation membership inside existing club slots,
+  then replaces only season-one league fixtures.
+- Sourced dates refuse congestion moves. A generated cup/friendly gives way to a
+  sourced league date. Season two clears the provenance and builds a fresh 8,781
+  generated-fixture world.
+- Updated the harness, integration regressions, PWA cache, README and changelog.
+  The regression compares every live source event with the snapshot, checks all
+  directed pairs, picker/live membership parity, source metadata, Manchester
+  United's four confirmed dates and Bayern München v VfB Stuttgart on 28 August.
 
-Surgical changes to `red-devil-manager.html`, for review:
+Surgical changes to red-devil-manager.html, for review:
 
-1. Added two external script tags for the generated data and mapper.
-2. Added `timeZone:'UTC'` to `fmtDate()` and `fmtDateShort()`.
-3. Added one `RBSLowerLeagueSquads.apply(G.clubs)` call after world membership is
-   built and before fixtures.
-4. Added one `refreshRosters(G.clubs)` call after `seedSquadDepth()`.
-5. Added the lower-league snapshot to `worldFingerprint()` so an old phone picker
-   cache cannot start the wrong club.
+1. Added the fixture snapshot and mapper script tags.
+2. Called prepareClubs() after the sourced English membership pass.
+3. Added fixture membership to worldFingerprint() so a phone cannot reuse a stale
+   club-picker cache.
+4. Made reschedule() refuse a sourced fixture.
+5. Made the collision sweep move a generated cup/friendly around a sourced league
+   date.
+6. Applied the season-one source overlay at the end of the final buildFixtures()
+   layer.
 
 ## Checked, and how
 
-- Baseline at `f479283`: `npm run check` passed 7/8. The mobile fixture-date test
-  failed deterministically in `America/New_York`: 22/30 August and 6/13 September
-  displayed as 21/29 August and 5/12 September. This led to the UTC date fix.
-- `node scripts/fetch-lower-league-squads.cjs`:
-  `Wrote src/lower-league-data.js with 96 teams and 2548 sourced players
-  (2026-08-09).` Minimum source roster sizes were CH 23, L1 22, L2 21, NL 19.
-- Final post-rebase `NPM_CONFIG_CACHE=/tmp/rbs-npm-cache npm run check`:
-  lint green; tests 8, pass 8, fail 0; duration 31.515 s. The timezone remained
-  `America/New_York`, so the date regression exercised the original failure zone.
-- Deterministic 380-match measurement after the squad change:
+- npm run data:fixtures -- --tier=rest:
+  ITA2 380, GER2 306, FRA2 306, TUR 306, GRE 182 and CZE 240 validated;
+  17 sourced divisions written with read date 2026-08-09.
+- node --test --test-reporter=spec tests/game.integration.test.cjs:
+  tests 4, pass 4, fail 0; duration 38.303 s.
+- npm run check after the complete implementation:
+  lint green; tests 9, pass 9, fail 0; duration 52.066 s.
+- A live-world probe returned 484 clubs, 8,781 fixtures, 6,292 sourced fixtures,
+  17 source divisions and the four United dates as 22/30 August and 6/13
+  September. The season-two integration returned 8,781 fixtures, zero sourced
+  fixtures and no retained fixture-source metadata.
+- Deterministic 380-match measurement:
 
   | engine | goals/match | draws | 0-0 |
   | --- | ---: | ---: | ---: |
-  | detailed | 2.7211 | 24.47% | 6.32% |
-  | background | 2.7447 | 26.84% | 4.74% |
+  | detailed | 2.6763 | 25.79% | 7.63% |
+  | background | 2.7632 | 22.63% | 4.21% |
 
-  Existing bands remain 2.55–3.05 goals, 20–31% draws, 4–12% 0-0, with a maximum
-  model gap of 0.25. No band was changed.
-- Audit probes:
-  - referee and assistant each drew exactly once and both pending flags cleared in
-    normal and fallback depth paths;
-  - `initDots()` reset `SUB_WALK` to 0 and `SUB_SEAT` to `[0,0]`;
-  - 20,000 `attnAnswer()` calls against a 40-message inbox took 80.57 ms
-    (4.03 microseconds/call), so the full-inbox scan is not a frame-budget issue;
-  - edge fade produced start `0/30px`, middle `14/30px`, end `30/0px`, then removed
-    itself with no overflow. No defect found in `404cec0`/`9dc4898`.
-- `git diff --check`: no whitespace errors.
+  The existing bands remain 2.55–3.05 goals, 20–31% draws, 4–12% 0-0 and a
+  maximum model gap of 0.25. No band changed.
+- git diff --check reported no whitespace errors.
 
 ## Found but not fixed
 
-1. **One press conference counts as two answers (`3aebb9f`).** `attnAnswer()` adds
-   `G.pressCtx`, then adds the press mail returned by `blockingMails()`. Probe with
-   one context and one press mail returned `['press','mailpress-one']`. Repro: let a
-   pre/post-match press summons arrive and inspect the home counter before entering;
-   the context and its launcher mail describe one decision but are both counted.
+1. **The brief's universal n×(n−1) invariant contradicts the live calendar.**
+   The final buildFixtures() adds a third cycle whenever a division has 12 or
+   fewer clubs. A new career therefore has 198 fixtures in each 12-club league
+   (not 132) and 135 in the 10-club HNL (not 90). Repro: group G.fixtures by div
+   in a new career and inspect SCO/AUT/SUI/DEN/SRB/CRO. The 8,781 baseline depends
+   on these extra cycles. Scotland and Switzerland happen to use a real
+   33-round pre-split phase, but sourcing it would fail the written acceptance
+   rule. This needs a format decision, not a silent validator exception.
 
-2. **A red-carded player walks to and sits on the substitutes' bench (`32bc5be`).**
-   `subScan()` treats every newly `off` dot as a substitution and never excludes
-   `sentOff`. Setting one live player to `{sentOff:true,off:true}` produced a
-   `SUB_WALK` entry with phase `walk` and the substitution gate. Repro: receive a
-   straight red in the dugout view and keep watching; the dismissed player follows
-   the substitution path instead of leaving for the tunnel.
+2. **Four modeled memberships cannot accept the published competition.**
+   Segunda is 20 clubs in-game versus 22/462 source fixtures; Belgium 16 versus
+   18/306; Serbia 12 versus 14; Ukraine 12 versus 16. Repro: compare the W_LG
+   size values with the source memberships below. Correcting them changes club
+   allocation, fixture totals, promotion logic and the save invariant, so I did
+   not smuggle that structural rewrite into a data commit.
 
-3. **The pictured foul victim can disagree with the commentary (`0446136`).**
-   `foulEvent()` chooses and names `vic`, but the card wrappers pass only the
-   offender into `lifeFoul()`. That function independently floors whichever
-   opponent dot is nearest. Repro: arrange two attackers close to the booked
-   defender, trigger a foul, and compare the named victim with the player given the
-   `floored` pose.
-
-4. **Crowd duck state survives a stopped crowd (`c643d20`).** After
-   `kokoDuck(true)`, removing `A2.crowd` and calling `kokoDuck(false)` left
-   `KOKO.duckAt === 0.05`; the off path returns before clearing it. Repro: let
-   neural speech overlap full time or another crowd rebuild. The rebuilt crowd is
-   not ducked for the remaining speech, and a later utterance can use the stale
-   restore level.
-
-5. **A later Kokoro clause failure is swallowed (`c643d20`).** The one-clause-ahead
-   promise uses `.catch(()=>null)`. With clause one resolving and clause two
-   rejecting, `kokoSay()` made two generation calls but resolved `true` with no
-   error, so the `ttsSay()` fallback never ran. Repro: make generation fail after
-   the first clause (network/memory/backend error); the rest disappears silently.
-
-6. **The missing-store warning misses a live localStorage downgrade (`f479283`).**
-   With `RBSSaves.store.mode='localStorage'`, `rbsStoreMissing()` returned false and
-   `rbsStoreWarnHTML()` returned an empty string. `CareerStore.open()` deliberately
-   falls back when IndexedDB open fails, while `RBSSaves` still exists. Repro: block
-   IndexedDB but load both `src` scripts; there is no toast/banner about the ~5 MB
-   path even though that is the active mode.
+3. **The no-double-booking property is not fully deterministic outside sourced
+   leagues.** One unseeded live-world probe found FC Basel twice on day 112 after
+   the collision sweep. The focused integration run, six explicit seeded careers
+   and 16 further unseeded careers were clean, so I do not have a stable seed.
+   Repro probe: combine G.fixtures with every G.cups[*].ties entry, key both clubs
+   by clubIndex|day, and repeat new careers. This appears to be the existing
+   generated-league/European rescheduler occasionally exhausting a move, not a
+   duplicate in the source snapshots. I left the core calendar algorithm to you.
 
 ## Blocked
 
-- Neural synthesis on real hardware is not done. This environment has no physical
-  Android/iPhone, so I will not substitute JSDOM or desktop timing for the requested
-  numbers. Still required: first-use progress/bytes for 36/86/326 MB; per-clause
-  latency on a mid-range Android; second visit offline; iOS first-touch
-  AudioContext unlock and 86 MB memory survival; and listening measurements for
-  `o.vol` versus the `0.30` crowd duck. This is unblocked by running the published
-  build on one mid-range Android and one iPhone Safari with the network/cache panels
-  and a timer. If 86 MB fails on iOS, make Small the iOS default.
+- Real-device neural synthesis remains blocked: there is no physical Android or
+  iPhone here. Still needed are first-use bytes/progress for 36/86/326 MB,
+  per-clause mid-range Android latency, second-visit offline behavior, iOS
+  first-touch AudioContext unlock and 86 MB memory survival, plus listening tests
+  for voice volume against the 0.30 crowd duck.
+- Eleven fixture divisions remain generated for the explicit reasons below.
+  Structural cases need a decision on real club counts and split/quadruple
+  formats. Poland needs replacement dates for its postponed games. Norway needs
+  the 2027 calendar or a decision to run a calendar-year career.
 
 ## Data provenance
 
-- Read 9 August 2026 from ESPN's public soccer API:
-  [Championship](https://site.api.espn.com/apis/site/v2/sports/soccer/eng.2/teams?limit=100),
-  [League One](https://site.api.espn.com/apis/site/v2/sports/soccer/eng.3/teams?limit=100),
-  [League Two](https://site.api.espn.com/apis/site/v2/sports/soccer/eng.4/teams?limit=100),
-  [National League](https://site.api.espn.com/apis/site/v2/sports/soccer/eng.5/teams?limit=100).
-  Each team's exact `/teams/{teamId}/roster` URL and API timestamp are stored next
-  to its players in `src/lower-league-data.js`.
-- New-slot venue facts, read 9 August 2026: Birmingham City's
-  [stadium information](https://www.bcfc.com/pages/en/stadium-information), Barnet's
-  [The Hive information](https://barnetfc.com/partners), AFC Fylde's
-  [Mill Farm capacity](https://www.afcfylde.co.uk/news/2023/august/10/bowker-motor-group-extends-mill-farm-stand-partnership),
-  [2026/27 National League stadium table](https://en.wikipedia.org/wiki/2026%E2%80%9327_National_League)
-  for Hornchurch and Kidderminster, and Worthing's
-  [capacity update](https://worthingfc.com/2025/04/an-update-on-capacity/).
+All fixture sources were read 9 August 2026. Exact URLs, event IDs and the same
+read date are stored per division in src/authentic-fixture-data.js.
+
+| division | status | published source |
+| --- | --- | --- |
+| Premier League | sourced — 380 | [ESPN eng.1](https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/scoreboard?dates=20260801-20270531&limit=1000) |
+| Championship | sourced — 552 | [ESPN eng.2](https://site.api.espn.com/apis/site/v2/sports/soccer/eng.2/scoreboard?dates=20260801-20270531&limit=1000) |
+| League One | sourced — 552 | [ESPN eng.3](https://site.api.espn.com/apis/site/v2/sports/soccer/eng.3/scoreboard?dates=20260801-20270531&limit=1000) |
+| League Two | sourced — 552 | [ESPN eng.4](https://site.api.espn.com/apis/site/v2/sports/soccer/eng.4/scoreboard?dates=20260801-20270531&limit=1000) |
+| National League | sourced — 552 | [ESPN eng.5](https://site.api.espn.com/apis/site/v2/sports/soccer/eng.5/scoreboard?dates=20260801-20270531&limit=1000) |
+| La Liga | sourced — 380 | [ESPN esp.1](https://site.api.espn.com/apis/site/v2/sports/soccer/esp.1/scoreboard?dates=20260801-20270531&limit=1000) |
+| Serie A | sourced — 380 | [ESPN ita.1](https://site.api.espn.com/apis/site/v2/sports/soccer/ita.1/scoreboard?dates=20260801-20270531&limit=1000) |
+| Bundesliga | sourced — 306 | [ESPN ger.1](https://site.api.espn.com/apis/site/v2/sports/soccer/ger.1/scoreboard?dates=20260801-20270531&limit=1000) |
+| Ligue 1 | sourced — 306 | [ESPN fra.1](https://site.api.espn.com/apis/site/v2/sports/soccer/fra.1/scoreboard?dates=20260801-20270531&limit=1000) |
+| Primeira Liga | sourced — 306 | [ESPN por.1](https://site.api.espn.com/apis/site/v2/sports/soccer/por.1/scoreboard?dates=20260801-20270531&limit=1000) |
+| Eredivisie | sourced — 306 | [ESPN ned.1](https://site.api.espn.com/apis/site/v2/sports/soccer/ned.1/scoreboard?dates=20260801-20270531&limit=1000) |
+| Serie B | sourced — 380 | [ESPN ita.2](https://site.api.espn.com/apis/site/v2/sports/soccer/ita.2/scoreboard?dates=20260801-20270531&limit=1000) |
+| 2. Bundesliga | sourced — 306 | [ESPN ger.2](https://site.api.espn.com/apis/site/v2/sports/soccer/ger.2/scoreboard?dates=20260801-20270531&limit=1000) |
+| Ligue 2 | sourced — 306 | [ESPN fra.2](https://site.api.espn.com/apis/site/v2/sports/soccer/fra.2/scoreboard?dates=20260801-20270531&limit=1000) |
+| Süper Lig | sourced — 306 | [ESPN tur.1](https://site.api.espn.com/apis/site/v2/sports/soccer/tur.1/scoreboard?dates=20260801-20270531&limit=1000) |
+| Super League Greece | sourced — 182 modeled regular-season matches | [ESPN gre.1](https://site.api.espn.com/apis/site/v2/sports/soccer/gre.1/scoreboard?dates=20260801-20270531&limit=1000) |
+| Czech First League | sourced — 240 modeled regular-season matches | [official Chance Liga schedule](https://www.chanceliga.cz/rozpis-zapasu/2027?type=2&id_stage=1&month=0&round=0) |
+
+Left generated rather than invented:
+
+| division | status / exact reason |
+| --- | --- |
+| Segunda División | [ESPN esp.2](https://site.api.espn.com/apis/site/v2/sports/soccer/esp.2/scoreboard?dates=20260701-20270630&limit=1000) publishes 22 clubs/462 matches; game is 20/380. |
+| Belgian Pro League | [ESPN bel.1](https://site.api.espn.com/apis/site/v2/sports/soccer/bel.1/scoreboard?dates=20260701-20270630&limit=1000) publishes 18 clubs/306; game is 16/240. |
+| Scottish Premiership | [ESPN sco.1](https://site.api.espn.com/apis/site/v2/sports/soccer/sco.1/scoreboard?dates=20260701-20270630&limit=1000) has the 198-match 33-round pre-split list. Post-split opponents are unknowable; the brief demands a 132-match double round robin while the game generates 198. |
+| Austrian Bundesliga | [ESPN aut.1](https://site.api.espn.com/apis/site/v2/sports/soccer/aut.1/scoreboard?dates=20260701-20270630&limit=1000) has 132 regular-phase matches; the game generates 198 and the real split groups are not known. |
+| Swiss Super League | [official SFL calendar](https://sfl.ch/calendar/calendrier-superleague) publishes the pre-split calendar, but the real format is 33 rounds plus five group matches; the game stops at 33 and the brief demands a double round robin. |
+| Danish Superliga | [ESPN den.1](https://site.api.espn.com/apis/site/v2/sports/soccer/den.1/scoreboard?dates=20260701-20270630&limit=1000) has 132 regular-phase matches; the game generates 198 and the real split groups are not known. |
+| Eliteserien | [ESPN nor.1](https://site.api.espn.com/apis/site/v2/sports/soccer/nor.1/scoreboard?dates=20260101-20261231&limit=1000) has 240 calendar-year matches from 14 March to 13 December; the career begins 30 June and the 2027 list is unpublished. |
+| Ekstraklasa | [official 2026/27 schedule](https://ekstraklasa.org/terminarz/2026-2027/kolejka-1/) has all 306 pairings, but currently flags seven games postponed with no replacement date. |
+| Serbian SuperLiga | [official league schedule](https://www.superliga.rs/sezona/raspored-i-rezultati/) is a 14-club transitional season; the game has 12 clubs/198 matches. |
+| Ukrainian Premier League | [official UPL calendar](https://upl.ua/en/tournaments/championship/432/calendar) is 16 clubs/30 rounds; the game has 12 clubs/198 matches. |
+| HNL | [official HNS competition page](https://hns-cff.hr/natjecanja/supersport-hnl/) is 10 clubs/36 rounds (180 matches); the game generates a three-cycle 135. |

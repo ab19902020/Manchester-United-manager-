@@ -15,6 +15,8 @@
 <script src="src/simulation-model.js"></script>
 <script src="src/lower-league-data.js"></script>
 <script src="src/lower-league-squads.js"></script>
+<script src="src/authentic-fixture-data.js"></script>
+<script src="src/authentic-fixtures.js"></script>
 <style>
 /* ============ FLOODLIT PITCH DESIGN SYSTEM ============ */
 :root{
@@ -17849,6 +17851,7 @@ function buildWorld(){
   // anything left in this league from the old data gets its country stamped
   G.clubs.filter(c=>c.league===L.k).forEach(c=>{c.cc=L.cc;c.tier=L.tier})});
  if(typeof RBSLowerLeagueSquads!=='undefined')RBSLowerLeagueSquads.apply(G.clubs);
+ if(typeof RBSAuthenticFixtures!=='undefined')RBSAuthenticFixtures.prepareClubs(G.clubs);
  G.clubs.forEach(c=>{if(!c.cc){c.cc='ENG';c.tier=1}});
  // the placeholder "Continental League" no longer exists — anything still
  // in it (there should be nothing) joins the league it really plays in
@@ -33277,6 +33280,7 @@ function worldFingerprint(){
  try{tab('E2',EU2_DB)}catch(e){}
  try{if(typeof W_LG!=='undefined'&&W_LG)parts.push('WLG:'+W_LG.map(L=>L.k+'#'+(L.add||'').length).join(','))}catch(e){}
  try{if(typeof RBSLowerLeagueData!=='undefined')parts.push('LOW:'+RBSLowerLeagueData.readDate+':'+Object.values(RBSLowerLeagueData.divisions).map(d=>Object.keys(d.teams).join(',')).join('|'))}catch(e){}
+ try{if(typeof RBSAuthenticFixtureData!=='undefined')parts.push('FIX:'+RBSAuthenticFixtureData.readDate+':'+Object.entries(RBSAuthenticFixtureData.divisions).map(([k,d])=>k+'='+d.teams.join(',')).join('|'))}catch(e){}
  return (hashStr(parts.join('|'))>>>0).toString(36)}
 
 const ROSTER_KEY2='rdmRoster';
@@ -46399,6 +46403,7 @@ function reschedCandidates(f){
  return out}
 
 function reschedule(f,idx,why){
+ if(f.authentic)return false;          /* a sourced 2026/27 league date is evidence, not a suggestion */
  const cands=reschedCandidates(f);
  let pick=null,pickScore=-1e9;
  for(let i=0;i<cands.length;i++){
@@ -46454,7 +46459,13 @@ function reschedSweep(){
     /* the league fixture gives way; if both are cup ties there is
        nothing to be done and the squad plays twice in three days, which
        is a real thing that happens */
-    const move=(!b.cup&&!b.friendly)?b:((!a.cup&&!a.friendly)?a:null);
+    let move;
+    if(a.authentic||b.authentic){
+     /* Published league dates win this collision. The generated cup or
+        friendly moves around them; two authentic dates are left alone. */
+     if(a.authentic&&b.authentic)continue;
+     move=a.authentic?b:a;
+    }else move=(!b.cup&&!b.friendly)?b:((!a.cup&&!a.friendly)?a:null);
     if(!move)continue;
     const other=move===b?a:b;
     const C=fixCtx(other);
@@ -48596,7 +48607,11 @@ buildFixtures=function(){
     every division is laid from the same point in the season and the
     Premier League's real published dates override it as they always
     did. */
- return _buildFixturesJune.call(this,(G.seasonStart||0)+SEASON_OPENS)};
+ const rows=_buildFixturesJune.call(this,(G.seasonStart||0)+SEASON_OPENS);
+ try{
+  if(typeof RBSAuthenticFixtures!=='undefined')RBSAuthenticFixtures.apply(G)
+ }catch(e){}
+ return rows};
 
 /* ---------------------------------------------------------------------
    4. AND EVERY SUMMER AFTER THIS ONE

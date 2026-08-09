@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createGame, startCareer, waitFor } = require('./game-harness.cjs');
 const lowerLeagueData = require('../src/lower-league-data.js');
+const authenticFixtureData = require('../src/authentic-fixture-data.js');
 
 function checkLowerLeagueSquads(game) {
   const pickerNames = JSON.parse(game.eval(`JSON.stringify(buildRoster()
@@ -50,6 +51,72 @@ function checkLowerLeagueSquads(game) {
   assert.ok(live.find((club) => club.name === 'Leicester City').names.includes('Wout Faes'));
 }
 
+function checkAuthenticFixtures(game, divisions) {
+  const live = JSON.parse(game.eval(`JSON.stringify((()=>{
+    const divisions=${JSON.stringify(divisions)};
+    const fixtures=G.fixtures.filter(f=>divisions.includes(f.div));
+    return {
+      epoch:G.epoch,
+      sources:G.fixtureSources,
+      collisions:(()=>{
+        const seen=new Map(),out=[];
+        const all=[...G.fixtures,...Object.values(G.cups||{}).flatMap(c=>c.ties||[])];
+        all.filter(f=>!f.played).forEach(f=>[f.h,f.a].forEach(ci=>{
+          const key=ci+'|'+f.day;
+          if(seen.has(key))out.push({club:G.clubs[ci].name,day:f.day});
+          else seen.set(key,f);
+        }));
+        return out;
+      })(),
+      fixtures:fixtures.map(f=>({
+        division:f.div,date:new Date(G.epoch+f.day*86400000).toISOString().slice(0,10),
+        home:G.clubs[f.h].name,away:G.clubs[f.a].name,round:f.r,
+        authentic:f.authentic,sourceId:f.sourceId
+      }))
+    };
+  })())`));
+
+  assert.deepEqual(live.collisions, [], 'a club has two league/cup fixtures on the same day');
+
+  for (const division of divisions) {
+    const source = authenticFixtureData.divisions[division];
+    const actual = live.fixtures.filter((fixture) => fixture.division === division);
+    assert.equal(source.status, 'published');
+    assert.equal(source.readDate, authenticFixtureData.readDate);
+    assert.match(source.source, /^https:\/\//);
+    if (source.provider === 'ESPN') assert.match(source.source, /^https:\/\/site\.api\.espn\.com\//);
+    if (division === 'CZE') {
+      assert.equal(source.provider, 'Chance Liga');
+      assert.match(source.source, /^https:\/\/www\.chanceliga\.cz\/rozpis-zapasu/);
+    }
+    assert.equal(actual.length, source.fixtureCount);
+    assert.equal(live.sources[division].source, source.source);
+    assert.equal(live.sources[division].readDate, source.readDate);
+    assert.ok(actual.every((fixture) => fixture.authentic === 1));
+    const expected = source.fixtures
+      .map(([date, home, away, round, sourceId]) => ({ date, home, away, round, sourceId }))
+      .sort((left, right) => left.sourceId.localeCompare(right.sourceId));
+    const observed = actual
+      .map(({ date, home, away, round, sourceId }) => ({ date, home, away, round, sourceId }))
+      .sort((left, right) => left.sourceId.localeCompare(right.sourceId));
+    assert.deepEqual(observed, expected, `${division} diverged from its source snapshot`);
+
+    const directedPairs = new Set(actual.map((fixture) => `${fixture.home}\u0000${fixture.away}`));
+    for (const home of source.teams) {
+      for (const away of source.teams) {
+        if (home !== away) assert.ok(directedPairs.has(`${home}\u0000${away}`), `${division}: missing ${home} v ${away}`);
+      }
+    }
+  }
+
+  if (divisions.includes('GER')) {
+    assert.ok(live.fixtures.some((fixture) => fixture.division === 'GER'
+      && fixture.date === '2026-08-28'
+      && fixture.home === 'Bayern München'
+      && fixture.away === 'VfB Stuttgart'));
+  }
+}
+
 test('new careers save the complete world and manual slots never evict one another', { timeout: 60000 }, async () => {
   const game = await createGame();
   try {
@@ -60,6 +127,19 @@ test('new careers save the complete world and manual slots never evict one anoth
     assert.equal(live.fixtures, 8781);
     assert.equal(live.day, 0);
     checkLowerLeagueSquads(game);
+    checkAuthenticFixtures(game, [
+      'PL', 'CH', 'L1', 'L2', 'NL', 'ESP', 'ITA', 'GER', 'FRA', 'POR', 'NED',
+      'ITA2', 'GER2', 'FRA2', 'TUR', 'GRE', 'CZE',
+    ]);
+    const sourcedPicker = JSON.parse(game.eval(`JSON.stringify(buildRoster()
+      .filter(club=>['ESP','ITA','GER','FRA','POR','NED','ITA2','GER2','FRA2','TUR','GRE','CZE'].includes(club.league))
+      .map(club=>club.name).sort())`));
+    const sourcedLive = JSON.parse(game.eval(`JSON.stringify(G.clubs
+      .filter(club=>['ESP','ITA','GER','FRA','POR','NED','ITA2','GER2','FRA2','TUR','GRE','CZE'].includes(club.league))
+      .map(club=>club.name).sort())`));
+    assert.deepEqual(sourcedPicker, sourcedLive);
+    assert.ok(sourcedLive.includes('Zbrojovka Brno'));
+    assert.ok(sourcedLive.includes('Artis Brno'));
 
     const auto = await game.window.RBSSaves.store.get('auto');
     assert.ok(auto);
@@ -106,6 +186,48 @@ test('new careers save the complete world and manual slots never evict one anoth
     );
     assert.equal(game.eval("UI.view==='home'&&MU.m===null&&MU.fix===null"), true);
     await game.window.RBSSaves.save('auto', true);
+  } finally {
+    game.close();
+  }
+});
+
+test('published 2026/27 dates survive congestion and season two generates afresh', { timeout: 60000 }, async () => {
+  const game = await createGame();
+  try {
+    await startCareer(game);
+    const protectedDate = game.eval(`(()=>{
+      const cups=Object.values(G.cups||{}).flatMap(c=>c.ties||[]);
+      for(const cup of cups){
+        const sourced=G.fixtures.find(f=>f.authentic&&f.day>G.day+7&&f.day<G.day+110&&
+          (f.h===cup.h||f.a===cup.h||f.h===cup.a||f.a===cup.a));
+        if(!sourced)continue;
+        const before=sourced.day;
+        cup.day=before;
+        reschedSweep();
+        return {before,after:sourced.day,cupAfter:cup.day,sourceMoved:!!sourced.moved,cupMoved:!!cup.moved};
+      }
+      return null;
+    })()`);
+    assert.ok(protectedDate, 'no cup/source collision could be constructed');
+    assert.equal(protectedDate.after, protectedDate.before);
+    assert.equal(protectedDate.sourceMoved, false);
+    assert.notEqual(protectedDate.cupAfter, protectedDate.before);
+    assert.equal(protectedDate.cupMoved, true);
+
+    const seasonTwo = game.eval(`(()=>{
+      G.fixtures.forEach(f=>{f.played=true;f.hs=0;f.as=0});
+      endSeason();
+      return {season:G.season,total:G.fixtures.length,sourced:G.fixtures.filter(f=>f.authentic).length,
+        sourceCount:Object.keys(G.fixtureSources||{}).length,
+        divisions:Object.fromEntries(leagueKeys().filter(k=>divMembers(k).length>1)
+          .map(k=>[k,G.fixtures.filter(f=>f.div===k).length]))};
+    })()`);
+    assert.equal(seasonTwo.season, 2);
+    assert.equal(seasonTwo.total, 8781);
+    assert.equal(seasonTwo.sourced, 0);
+    assert.equal(seasonTwo.sourceCount, 0);
+    assert.equal(seasonTwo.divisions.PL, 380);
+    assert.equal(seasonTwo.divisions.CH, 552);
   } finally {
     game.close();
   }

@@ -26,6 +26,16 @@
 - Kept date-only fixtures on their intended calendar day in timezones west of UTC.
   They previously rendered one day early because UTC midnight was formatted in the
   device timezone.
+- Replaced the generated English league calendar with all 2,588 published 2026/27
+  Premier League, Championship, League One, League Two and National League fixtures.
+  Sourced dates are protected from congestion moves; generated cup ties give way.
+- Added all 1,984 published 2026/27 fixtures from La Liga, Serie A, Bundesliga,
+  Ligue 1, Primeira Liga and Eredivisie, including the promotion/relegation changes
+  needed for those schedules to map to the live world without changing its size.
+- Added 1,720 more published fixtures from Serie B, 2. Bundesliga, Ligue 2,
+  Süper Lig, Super League Greece and the Czech First League. The official Czech
+  schedule importer also refreshes its two promoted Brno clubs without changing
+  the 484-club or 8,781-fixture world shape.
 
 ### Improved
 
@@ -46,3 +56,5 @@
   is refreshed with it so promotion and relegation remain consistent, while the
   existing squad shape, ratings, contracts and economy remain game-balanced.
 - Added a validated ESPN roster updater and cached its generated data in the PWA.
+- Added a validated fixture updater, exact source-event regression and a season-two
+  handoff test so published dates cannot silently fall back or leak into later years.

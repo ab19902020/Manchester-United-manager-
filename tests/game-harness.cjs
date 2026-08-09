@@ -16,6 +16,8 @@ function gameHtml() {
     'src/simulation-model.js',
     'src/lower-league-data.js',
     'src/lower-league-squads.js',
+    'src/authentic-fixture-data.js',
+    'src/authentic-fixtures.js',
     'src/career-store.js',
     'src/runtime-enhancements.js',
   ]) {

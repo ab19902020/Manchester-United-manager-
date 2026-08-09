@@ -1,4 +1,4 @@
-const CACHE_NAME = 'results-business-v2';
+const CACHE_NAME = 'results-business-v3';
 const CORE_ASSETS = [
   './',
   './index.html',
@@ -7,6 +7,8 @@ const CORE_ASSETS = [
   './src/simulation-model.js',
   './src/lower-league-data.js',
   './src/lower-league-squads.js',
+  './src/authentic-fixture-data.js',
+  './src/authentic-fixtures.js',
   './src/career-store.js',
   './src/runtime-enhancements.js',
   './vendor/three.min.js',
