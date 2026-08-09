@@ -51194,6 +51194,349 @@ paintStart=function(){
 })();
 
 /*#wC1_brand.js#*/
+
+
+
+
+/*#wC2_match.js#*/
+
+/* =====================================================================
+   wC2_match — the match screen, given back to the match
+   ---------------------------------------------------------------------
+   Measured on a 390x844 phone, sixteen minutes into a game:
+
+     header            109px
+     tabs               47px
+     pitch             242px   <- the match
+     empty black       162px   <- nothing at all
+     dugout strip      126px
+     control panel     158px
+
+   Twenty-nine per cent of the screen is the football. Nineteen per cent
+   is a black void above and below the pitch. The other fifty-two is
+   chrome, and the chrome says several things twice.
+
+   THE SHOUTS WERE HIDDEN BY A TYPO. The panel folds anything not on a
+   keep-list behind "More controls", and the keep-list names 'shout' and
+   'shoutMore' while the buttons are actually 'touchCall' and
+   'touchMore'. So the five touchline calls — the only controls in the
+   game that change what the players are doing WHILE they are doing it —
+   were folded away every match, and their heading, which has no button
+   in it and therefore matched nothing, was left behind on its own.
+   That is the "📣 Shout from the touchline" caption with a blank space
+   underneath it: not a styling accident, a live control that has been
+   one word away from working.
+
+   SAID TWICE. Substitutions are a chip in the dugout strip and a button
+   in the panel. Tactics are "Full tactics" in the strip and "4-2-3-1 ·
+   Balanced" in the panel. Mentality is three chips in the strip and
+   three more inside the tactics sheet. Four rows of controls, stacked,
+   for eleven distinct things.
+
+   What this does: one control bar, everything on it visible and each
+   thing on it once; the dugout strip goes back to being what it is good
+   at, which is eleven live player ratings; and the empty half of the
+   body gets the commentary feed, so what just happened is on the same
+   screen as the thing it happened on.
+   ===================================================================== */
+
+/* ---------------------------------------------------------------------
+   1. THE ONE-WORD FIX
+   ---------------------------------------------------------------------
+   MCTL_KEEP is a const binding, but the array it points at is not
+   frozen, so the names can simply be corrected in place. The two wrong
+   entries are left where they are — they match nothing either way, and
+   removing them would only invite someone to re-add them.
+   --------------------------------------------------------------------- */
+try{MCTL_KEEP.push('touchCall','touchMore','mvShout')}catch(e){}
+
+/* ---------------------------------------------------------------------
+   2. THE LOOK
+   --------------------------------------------------------------------- */
+(function mvCSS(){
+ const old=document.getElementById('wC2');if(old)old.remove();
+ const st=document.createElement('style');st.id='wC2';
+ st.textContent=
+  /* the header loses a line: the competition sits with the clock */
+  '#matchScreen .msb{padding-top:calc(env(safe-area-inset-top) + 6px);padding-bottom:6px}'+
+  '#matchScreen .msb .mvcomp{display:none}'+
+  /* the control bar */
+  '#mCtl{padding:7px 12px calc(env(safe-area-inset-bottom) + 8px)}'+
+  '.mv-shouts{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;'+
+   'padding:0 0 7px;-webkit-overflow-scrolling:touch}'+
+  '.mv-shouts::-webkit-scrollbar{display:none}'+
+  '.mv-shout{flex:none;display:flex;align-items:center;gap:5px;white-space:nowrap;'+
+   'border:1px solid rgba(251,225,34,.30);border-radius:11px;padding:8px 11px;'+
+   'background:linear-gradient(160deg,rgba(251,225,34,.11),rgba(12,18,14,.9));'+
+   'color:var(--ink);font-size:12px;font-weight:800;cursor:pointer;'+
+   'transition:transform .1s,border-color .12s,background .12s}'+
+  '.mv-shout:active{transform:scale(.94)}'+
+  '.mv-shout.cold{opacity:.40;border-color:var(--chalk)}'+
+  '.mv-shout.hot{border-color:rgba(255,59,45,.75);'+
+   'background:linear-gradient(160deg,rgba(255,59,45,.24),rgba(12,18,14,.9))}'+
+  /* the action row: speed on the left, the three things you do on the right */
+  '.mv-bar{display:flex;gap:6px;align-items:stretch}'+
+  '.mv-speed{display:flex;gap:3px;flex:none;border:1px solid var(--chalk-strong);'+
+   'border-radius:11px;padding:3px;background:rgba(8,12,9,.8)}'+
+  '.mv-speed button{border:0;background:transparent;color:var(--ink-dim);'+
+   'font-size:11.5px;font-weight:800;padding:6px 7px;border-radius:8px;cursor:pointer;'+
+   'min-width:29px;font-variant-numeric:tabular-nums}'+
+  '.mv-speed button.on{background:rgba(218,41,28,.85);color:#fff}'+
+  '.mv-act{flex:1;display:flex;gap:6px}'+
+  '.mv-btn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;'+
+   'gap:1px;border:1px solid var(--chalk-strong);border-radius:11px;padding:5px 4px;'+
+   'background:rgba(12,18,14,.86);color:var(--ink);cursor:pointer;'+
+   'transition:transform .1s,border-color .12s}'+
+  '.mv-btn:active{transform:scale(.96)}'+
+  '.mv-btn .i{font-size:15px;line-height:1}'+
+  '.mv-btn .l{font-size:9.5px;font-weight:800;letter-spacing:.02em;color:var(--ink-dim)}'+
+  '.mv-btn.wide{flex:1.35}'+
+  '.mv-btn.cog{flex:none;width:42px}'+
+  /* the feed, in the room the pitch does not use */
+  '#mvFeed{margin-top:9px;display:flex;flex-direction:column;gap:2px;'+
+   'max-width:920px;margin-left:auto;margin-right:auto;width:100%}'+
+  '#mvFeed .cline{opacity:.92}'+
+  /* the dugout strip stops carrying buttons it does not need */
+  '#matchScreen .dugstrip .dug-extra{display:none}';
+ document.head.appendChild(st)})();
+
+/* ---------------------------------------------------------------------
+   3. ONE CONTROL BAR
+   ---------------------------------------------------------------------
+   This runs last, on the panel every other layer has already filled, and
+   re-composes what is there rather than reimplementing it — so every
+   button keeps the handler it arrived with. The rule is that a thing
+   appears once: whichever copy is easiest to reach wins, and the other
+   is removed.
+   --------------------------------------------------------------------- */
+/* The speed values are NOT invented here. The engine keeps its own
+   table and the first draft of this bar guessed at it — 0/1/2/4/9/99
+   against a real 0/1/2/4/6/9 — which built a row of buttons that looked
+   right and left the clock stopped, because "⏭" was sending a speed the
+   engine has never heard of. Read the engine's table. */
+const MV_SPEEDS=(typeof SPEED_ROW!=='undefined'&&SPEED_ROW.length)
+ ? SPEED_ROW.map(s=>[String(s[0]),s[1]])
+ : [['0','⏸'],['1','1×'],['2','2×'],['4','4×'],['6','⭐'],['9','⏭']];
+
+function mvSpeedNow(){
+ try{
+  const v=(MU&&MU.speed!=null)?String(MU.speed):'1';
+  return v}
+ catch(e){return '1'}}
+
+function mvRebuild(){
+ const c=$('#mCtl');
+ if(!c||!MU.m)return;
+ const m=MU.m;
+
+ /* full time and half time bring their own buttons and their own
+    urgency; the live bar has no business being on screen then */
+ const live=!m.done&&m.stage!=='HT';
+ if(!live){c.dataset.mv='';return}
+ if(c.dataset.mv==='1'&&c.querySelector('.mv-bar')){mvSyncBar(c);return}
+
+ /* collect what the other layers built, by action, before rebuilding */
+ const grab=a=>[...c.querySelectorAll('[data-action="'+a+'"]')];
+ const shouts=grab('touchCall');
+ const more=grab('touchMore')[0];
+ const subs=grab('subOpen')[0];
+ const tac=grab('instrOpen')[0];
+ /* the odds and ends: camera, names, lines, shape, sound */
+ const extras=['pitchCam','pitchNames','pitchShape','mShapeOpen','sfxToggle','sfxCrowd','sfxPA']
+  .flatMap(a=>grab(a));
+
+ if(!shouts.length&&!subs&&!tac)return;      /* nothing to work with yet */
+
+ MV_STASH.shouts=shouts.map(b=>({v:b.dataset.v,html:b.innerHTML}));
+ MV_STASH.extras=extras.map(b=>({a:b.dataset.action,v:b.dataset.v||'',html:b.innerHTML}));
+ MV_STASH.hasMore=!!more;
+
+ c.innerHTML=
+  '<div class="mv-shouts" id="mvShouts"></div>'+
+  '<div class="mv-bar">'+
+   '<div class="mv-speed" id="mvSpeed">'+
+    MV_SPEEDS.map(s=>'<button data-action="mspeed" data-v="'+s[0]+'">'+s[1]+'</button>').join('')+
+   '</div>'+
+   '<div class="mv-act">'+
+    '<button class="mv-btn wide" data-action="subOpen"><span class="i">🔁</span>'+
+     '<span class="l" id="mvSubL">SUBS</span></button>'+
+    '<button class="mv-btn wide" data-action="instrOpen"><span class="i">📝</span>'+
+     '<span class="l" id="mvTacL">TACTICS</span></button>'+
+    '<button class="mv-btn cog" data-action="mvCog"><span class="i">⚙</span>'+
+     '<span class="l">·</span></button>'+
+   '</div>'+
+  '</div>';
+ c.dataset.mv='1';
+ mvPaintShouts();
+ mvSyncBar(c);
+ try{refitMatch()}catch(e){}}
+
+const MV_STASH={shouts:[],extras:[],hasMore:false,last:null};
+
+/* the shouts, with the cooling-off period shown on the buttons
+   themselves rather than as a caption above an empty space */
+function mvPaintShouts(){
+ const box=$('#mvShouts');if(!box)return;
+ let wait=0;
+ try{wait=(typeof touchCool==='function')?touchCool():0}catch(e){}
+ /* MU.lastTouch is the MINUTE of the last shout, not which one it was —
+    it drives the four-minute cooling-off period. Which call is still
+    ringing in their ears is tracked here. */
+ const last=MV_STASH.last;
+ box.innerHTML=MV_STASH.shouts.map(s=>
+  '<button class="mv-shout'+(wait>0?' cold':'')+(last===s.v?' hot':'')+
+  '" data-action="touchCall" data-v="'+s.v+'">'+s.html+'</button>').join('')+
+  (MV_STASH.hasMore
+   ?'<button class="mv-shout" data-action="touchMore" style="opacity:.8">⋯</button>':'')+
+  (wait>0?'<span class="mv-shout cold" style="border-style:dashed;cursor:default">'+
+   wait+' min</span>':'')}
+
+function mvSyncBar(c){
+ try{
+  const now=mvSpeedNow();
+  [...(c||$('#mCtl')).querySelectorAll('#mvSpeed button')].forEach(b=>
+   b.classList.toggle('on',b.dataset.v===now));
+  const sl=$('#mvSubL');
+  if(sl){const sd=(typeof mySide==='function')?mySide():null;
+   const n=(sd&&sd.subs!=null)?sd.subs:null;
+   sl.textContent=n==null?'SUBS':'SUBS · '+n}
+  const tl=$('#mvTacL');
+  if(tl){const s=(typeof mySide==='function')?mySide():null;
+   tl.textContent=(s&&s.tac&&s.tac.formation)?s.tac.formation:'TACTICS'}
+ }catch(e){}}
+
+/* the odds and ends, in a sheet instead of a fifth row */
+ACTIONS.mvCog=()=>{
+ try{sfx('tap')}catch(e){}
+ openModal('<h3>⚙ Match settings</h3>'+
+  '<div class="xs faint" style="margin:2px 0 10px">The view and the sound. '+
+  'Nothing here changes the game.</div>'+
+  '<div class="chips" id="mvCogBox">'+
+   MV_STASH.extras.map(e=>'<button class="chip" data-action="'+e.a+'"'+
+    (e.v?' data-v="'+e.v+'"':'')+'>'+e.html+'</button>').join('')+
+  '</div>'+
+  '<button class="btn btn-primary btn-block" style="margin-top:12px" '+
+  'data-action="closeModal">Back to the game</button>')};
+
+/* rebuild after whatever the other layers did */
+const _renderMCtlMV=renderMCtl;
+renderMCtl=function(){
+ const r=_renderMCtlMV.apply(this,arguments);
+ try{mvRebuild()}catch(e){}
+ return r};
+
+/* keep the speed lamp, the sub count and the shout cooldown honest
+   without rebuilding the bar every frame */
+const _mspeedMV=ACTIONS.mspeed;
+ACTIONS.mspeed=el=>{const r=_mspeedMV(el);try{mvSyncBar()}catch(e){}return r};
+const _touchCallMV=ACTIONS.touchCall;
+ACTIONS.touchCall=el=>{
+ const before=(MU&&MU.lastTouch);
+ const r=_touchCallMV(el);
+ /* only remember it if the call actually went out — inside the
+    cooling-off period touchCall bails and nothing changed */
+ try{if(MU&&MU.lastTouch!==before)MV_STASH.last=el.dataset.v;mvPaintShouts()}catch(e){}
+ return r};
+
+/* ---------------------------------------------------------------------
+   4. THE DUGOUT STRIP GOES BACK TO BEING PLAYER RATINGS
+   ---------------------------------------------------------------------
+   Eleven live ratings is a genuinely good thing to have on screen and
+   it is the one thing on that strip that appears nowhere else. The
+   mentality chips, the tactics button and the bench button are all
+   below it in the bar, so they come off.
+   --------------------------------------------------------------------- */
+const _dugStripMV=paintDugStrip;
+paintDugStrip=function(){
+ const r=_dugStripMV.apply(this,arguments);
+ try{
+  const s=document.querySelector('#matchScreen .dugstrip');
+  if(!s)return r;
+  [...s.children].forEach(el=>{
+   const acts=[...el.querySelectorAll('[data-action]')].map(x=>x.dataset.action);
+   if(!acts.length)return;
+   /* the row of player cards is the one made of dugPick */
+   if(acts.indexOf('dugPick')>=0)return;
+   if(acts.every(a=>['dugMent','instrOpen','subOpen'].indexOf(a)>=0))
+    el.classList.add('dug-extra')});
+ }catch(e){}
+ return r};
+
+/* ---------------------------------------------------------------------
+   5. AND THE BLACK HALF OF THE BODY GETS THE COMMENTARY
+   ---------------------------------------------------------------------
+   A football pitch is wider than it is tall, so on a portrait phone the
+   canvas can only ever be as tall as the screen is wide — about two
+   hundred and forty pixels of a four-hundred pixel body. The rest was
+   left empty. The game already builds a running commentary and already
+   has a renderer for a short tail of it; somewhere in the layers the
+   element it writes into stopped being created. It is created again,
+   underneath the pitch, where the space already was.
+   --------------------------------------------------------------------- */
+function mvFeedBox(){
+ try{
+  const b=$('#mBody');if(!b)return null;
+  if(MU.tab!=='pitch'&&MU.tab!=='dugout')return null;
+  let f=document.getElementById('mvFeed');
+  if(f)return f;
+  const cv=b.querySelector('canvas');
+  if(!cv)return null;
+  f=document.createElement('div');
+  f.id='mvFeed';f.className='commentary';
+  cv.insertAdjacentElement('afterend',f);
+  MU.lastFeed=0;
+  return f}
+ catch(e){return null}}
+
+/* how many lines fit in whatever the pitch left over */
+function mvFeedKeep(){
+ try{
+  const b=$('#mBody'),cv=b&&b.querySelector('canvas');
+  if(!b||!cv)return 4;
+  /* a commentary line wraps to two rows more often than not, so it is
+     budgeted at forty pixels rather than one line of text */
+  const room=b.clientHeight-cv.getBoundingClientRect().height-16;
+  return clamp(Math.floor(room/40),2,6)}
+ catch(e){return 4}}
+
+function mvFeedTick(){
+ try{
+  const f=mvFeedBox();
+  if(f&&MU.m)fillFeed(f,mvFeedKeep());
+ }catch(e){}}
+
+const _renderMBodyMV=renderMBody;
+renderMBody=function(){
+ const r=_renderMBodyMV.apply(this,arguments);
+ try{mvFeedTick()}catch(e){}
+ return r};
+
+/* The feed has to keep up with the game. The first attempt at this was
+   a self-driving animation frame started from buildMatchScreen, which
+   never ran once: it stops itself when the match screen is not open,
+   and buildMatchScreen fires BEFORE the screen is given that class, so
+   the loop checked, found a closed screen and quit for good.
+
+   renderTop already runs on every tick of the match — it is what moves
+   the clock and the scoreline — so the feed rides on that instead. No
+   second timer, and nothing to start or stop. */
+let MV_LASTFEED=0;
+const _initDotsMV=initDots;
+initDots=function(){const r=_initDotsMV.apply(this,arguments);MV_STASH.last=null;return r};
+
+const _renderTopMV=renderTop;
+renderTop=function(){
+ const r=_renderTopMV.apply(this,arguments);
+ try{
+  const now=Date.now();
+  if(now-MV_LASTFEED>240){
+   MV_LASTFEED=now;
+   mvFeedTick();
+   if(MU.m&&!MU.m.done&&MU.m.stage!=='HT')mvPaintShouts()}
+ }catch(e){}
+ return r};
+
+/*#wC2_match.js#*/
 showStart();
 </script>
 </body>
