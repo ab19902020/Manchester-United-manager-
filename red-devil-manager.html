@@ -1185,7 +1185,7 @@ function completeSigning(p,fee,t){
  if(typeof windowId==='function')p.movedWindow=windowId();
  p.morale=clamp(p.morale+12,1,100);p.sharp=Math.max(p.sharp,55);
  my.players.push(p);
- mail('transfer','DONE DEAL: '+p.name+' is a Red Devil','<b>'+esc(p.name)+'</b> ('+p.pos+', '+p.age+') joins from '+esc(seller.name)+' for <b>'+fmtM(fee)+'</b> on a '+t.len+'-year deal worth '+fmtW(t.wage)+'.');
+ mail('transfer','DONE DEAL: '+p.name+' signs for '+my.short,'<b>'+esc(p.name)+'</b> ('+p.pos+', '+p.age+') joins '+esc(my.name)+' from '+esc(seller.name)+' for <b>'+fmtM(fee)+'</b> on a '+t.len+'-year deal worth '+fmtW(t.wage)+'.');
  closeModal();toast('🔴 Welcome, '+p.name+'!');render()}
 
 /* ---- incoming offers for user players ---- */
@@ -50358,6 +50358,842 @@ interestCheck=function(p){
  }catch(e){return base}};
 
 /*#wB9_market.js#*/
+
+
+
+
+
+
+/*#wC0_save.js#*/
+
+/* =====================================================================
+   wC0_save — the save file was going to run out of room
+   ---------------------------------------------------------------------
+   A National League career weighs 4.9 MB two hundred days into its
+   first season. The browser gives a page about 5 MB of localStorage.
+   Nobody had lost a save yet, but the margin was gone: a few more
+   seasons and the write fails, and the game already handles that by
+   deleting your other save slots to make room. That is not a fix, it is
+   a slower way to lose everything.
+
+   The packer was already doing the clever part. Players are stored as
+   positional arrays against a shared column list, attributes as one
+   base-36 string, logs and fixtures through a string dictionary. What
+   it was not doing was noticing how much of that data is nothing at
+   all. Measured across 9,926 players:
+
+     listed     0 of 9,926 are true          68 kB of the word "false"
+     scouted   19 of 9,926 are true          68 kB of the word "false"
+     form       0 of 9,926 are non-empty     30 kB of "[]"
+     injury    55 of 9,926 are injured       59 kB of "null"
+     value      recomputed on load anyway    94 kB
+     tacs      484 identical default objects 117 kB
+
+   The column order is decided by how many players HAVE a field, and a
+   field set to false counts as having it. So the emptiest columns in
+   the game were sorted to the front, where every single player pays for
+   them, when they should have been sorted to the back where the
+   existing trailing-null trim would have deleted them for free.
+
+   That one inversion is most of the waste. Four changes, no new format
+   to speak of, and the reader is unchanged for everything except the
+   two things that are genuinely reconstructed rather than stored.
+   ===================================================================== */
+
+/* ---------------------------------------------------------------------
+   1. WHAT COUNTS AS NOTHING
+   ---------------------------------------------------------------------
+   A player who is not transfer-listed, not injured, not scouted and has
+   played no games should cost nothing to store for any of those facts.
+   The reader already treats an absent column as absent — `if(p.listed)`
+   is false either way, and unpackG puts `form` and `injury` back itself
+   — so every one of these can simply not be written.
+   --------------------------------------------------------------------- */
+function svEmpty(v){
+ return v===null||v===undefined||v===false||
+  (Array.isArray(v)&&v.length===0)}
+
+/* The only player field worth dropping outright. valueFor() is a pure
+   function of rating, age, potential and contract length, and the game
+   already recomputed it on every load before this module existed.
+
+   NOTHING ELSE COMES OUT, and the underscore-prefixed fields are the
+   reason to be careful rather than the reason to be bold. They look
+   like scratch and several of them are load-bearing:
+
+     _cap        marks a player whose potential ceiling has been
+                 applied. Drop it and the ceiling is applied a second
+                 time on load, moving the potential of thousands of
+                 players.
+     _injScaled  the same guard for injury proneness — dropped, every
+                 player in the game is re-scaled on every load.
+     _gS / _gB   the season stamp and baseline rating that cap how much
+                 a player can grow in one season. Dropping those does
+                 not just lose data, it hands out a fresh season's
+                 growth allowance every time the game is reloaded.
+
+   A one-shot guard is state. Only genuinely derived values leave. */
+const SV_DROP=new Set(['value','_nm']);
+
+/* ---------------------------------------------------------------------
+   2. RE-RANK THE COLUMNS, THEN RE-CUT EVERY ROW
+   ---------------------------------------------------------------------
+   This runs on the finished output of the packer rather than replacing
+   it, because four separate layers add to that output and none of them
+   should have to know about this. Rows arrive as [attrs, stats, ...pk];
+   the first two stay exactly where they are and everything after them
+   is reordered by how often it actually says something.
+   --------------------------------------------------------------------- */
+const _packSv=packG;
+packG=function(g){
+ const out=_packSv.apply(this,arguments);
+ try{
+  if(!out||!out.g||!Array.isArray(out.pk)||!out.pk.length)return out;
+  const pk=out.pk;
+
+  /* every packed player row in the world, gathered once */
+  const rows=[];
+  (out.g.clubs||[]).forEach(c=>{
+   if(!c)return;
+   ['players','youth'].forEach(f=>{
+    const L=c[f];
+    if(Array.isArray(L))L.forEach(r=>{if(Array.isArray(r))rows.push(r)})})});
+  if(!rows.length)return out;
+
+  /* how often does each column carry information? */
+  const cnt={},keep=[];
+  for(let i=0;i<pk.length;i++){
+   if(SV_DROP.has(pk[i]))continue;
+   let n=0;
+   for(let r=0;r<rows.length;r++)if(!svEmpty(rows[r][i+2]))n++;
+   cnt[i]=n;keep.push(i)}
+  /* busiest first, so the quiet ones fall off the end of every row */
+  keep.sort((a,b)=>cnt[b]-cnt[a]||(pk[a]<pk[b]?-1:1));
+
+  const newPk=keep.map(i=>pk[i]);
+  const cut=r=>{
+   let n=r.length;
+   while(n>0&&svEmpty(r[n-1]))n--;
+   return n===r.length?r:r.slice(0,n)};
+
+  (out.g.clubs||[]).forEach(c=>{
+   if(!c)return;
+   ['players','youth'].forEach(f=>{
+    const L=c[f];
+    if(!Array.isArray(L))return;
+    c[f]=L.map(r=>{
+     if(!Array.isArray(r))return r;
+     const o=[r[0]===undefined?null:r[0],r[1]===undefined?null:r[1]];
+     for(let k=0;k<keep.length;k++){
+      const v=r[keep[k]+2];
+      /* false, null and [] all become one character of nothing, and
+         true becomes one character of something */
+      o.push(svEmpty(v)?null:(v===true?1:v))}
+     return cut(o)})})});
+  out.pk=newPk;
+  out.g._sv=1;                       /* this save reconstructs value */
+ }catch(e){}
+ return out};
+
+/* ---------------------------------------------------------------------
+   2b. A SEASON THAT HAS NOT HAPPENED YET
+   ---------------------------------------------------------------------
+   Every player carries a full statistics row — appearances, goals,
+   assists, cards, minutes, ratings — and on the thirtieth of June every
+   one of those numbers is zero. They are written out in full anyway,
+   because the packer's trailing trim only recognises null and a zero is
+   not a null.
+
+   The reader already fills a missing statistic with zero, so a player
+   who has not kicked a ball can be stored as an empty row. The column
+   order gets the same frequency treatment as the player fields.
+   --------------------------------------------------------------------- */
+const _packStats=packG;
+packG=function(g){
+ const out=_packStats.apply(this,arguments);
+ try{
+  if(!out||!out.g||!Array.isArray(out.sk)||!out.sk.length)return out;
+  const sk=out.sk;
+  const rows=[];
+  (out.g.clubs||[]).forEach(c=>{
+   if(!c)return;
+   ['players','youth'].forEach(f=>{
+    const L=c[f];
+    if(Array.isArray(L))L.forEach(r=>{if(Array.isArray(r)&&Array.isArray(r[1]))rows.push(r[1])})})});
+  if(!rows.length)return out;
+
+  const dead=v=>v===null||v===undefined||v===0;
+  const cnt={},keep=[];
+  for(let i=0;i<sk.length;i++){
+   let n=0;
+   for(let r=0;r<rows.length;r++)if(!dead(rows[r][i]))n++;
+   cnt[i]=n;keep.push(i)}
+  keep.sort((a,b)=>cnt[b]-cnt[a]||(sk[a]<sk[b]?-1:1));
+
+  (out.g.clubs||[]).forEach(c=>{
+   if(!c)return;
+   ['players','youth'].forEach(f=>{
+    const L=c[f];
+    if(!Array.isArray(L))return;
+    L.forEach(r=>{
+     if(!Array.isArray(r)||!Array.isArray(r[1]))return;
+     const s=r[1],o=[];
+     for(let k=0;k<keep.length;k++){const v=s[keep[k]];o.push(dead(v)?null:v)}
+     let n=o.length;while(n>0&&(o[n-1]===null))n--;
+     /* an empty array, not a null: the reader only builds p.stats when
+        the cell is truthy, and code elsewhere reads p.stats.goals
+        without checking that p.stats exists */
+     r[1]=o.slice(0,n)})})});
+  out.sk=keep.map(i=>sk[i]);
+ }catch(e){}
+ return out};
+
+/* ---------------------------------------------------------------------
+   2c. THIRTEEN THOUSAND NAMES, A FEW THOUSAND WORDS
+   ---------------------------------------------------------------------
+   Names are the second largest thing in the file after the attribute
+   strings, and they repeat far more than they look like they do: the
+   world is generated from name pools, so a few thousand first names and
+   surnames produce fourteen thousand footballers. Stored as a pair of
+   dictionary indices, a name costs about half what it did.
+   --------------------------------------------------------------------- */
+const _packNames=packG;
+packG=function(g){
+ const out=_packNames.apply(this,arguments);
+ try{
+  if(!out||!out.g||!Array.isArray(out.pk))return out;
+  const col=out.pk.indexOf('name');
+  if(col<0)return out;
+  const at=col+2;
+  const dict=[],dix=new Map();
+  const tok=s=>{
+   let i=dix.get(s);
+   if(i===undefined){i=dict.length;dict.push(s);dix.set(s,i)}
+   return i};
+  let touched=0;
+  (out.g.clubs||[]).forEach(c=>{
+   if(!c)return;
+   ['players','youth'].forEach(f=>{
+    const L=c[f];
+    if(!Array.isArray(L))return;
+    L.forEach(r=>{
+     if(!Array.isArray(r))return;
+     const v=r[at];
+     if(typeof v!=='string')return;
+     r[at]=v.split(' ').map(tok);
+     touched++})})});
+  if(touched)out.g._nmd=dict;
+ }catch(e){}
+ return out};
+
+/* ---------------------------------------------------------------------
+   3. FOUR HUNDRED AND EIGHTY-FOUR IDENTICAL TACTICS OBJECTS
+   ---------------------------------------------------------------------
+   Every club in the world carries thirteen tactical settings written
+   out in full, and every club that is not yours carries exactly the
+   same thirteen. Only the difference from the default is worth keeping.
+   --------------------------------------------------------------------- */
+const SV_TACS={formation:'4-4-2',mentality:'Balanced',passStyle:'Mixed',passFocus:'Central',
+ tempo:'Normal',width:'Standard',press:'Medium',counter:'Drop off',line:'Standard',
+ trap:'Off',tackling:'Normal',marking:'Zonal',timeWaste:'Off'};
+
+const _packTacs=packG;
+packG=function(g){
+ const out=_packTacs.apply(this,arguments);
+ try{
+  if(!out||!out.g||!Array.isArray(out.g.clubs))return out;
+  out.g.clubs.forEach(c=>{
+   if(!c||!c.tacs||Array.isArray(c.tacs))return;
+   const d={};
+   let any=false;
+   for(const k in c.tacs){
+    const v=c.tacs[k];
+    if(SV_TACS[k]===v)continue;      /* the default, so say nothing */
+    d[k]=v;any=true}
+   c.tacs=any?d:0});
+  out.g._svt=1;
+ }catch(e){}
+ return out};
+
+/* ---------------------------------------------------------------------
+   4. PUTTING BACK THE TWO THINGS THAT WERE NOT STORED
+   ---------------------------------------------------------------------
+   The tactics are rebuilt from the default plus whatever differed, and
+   every player's transfer value is recomputed from the curve — which is
+   what the game did on the next load anyway, one layer further up. Both
+   are guarded on the marker, so a save written before today still opens
+   and still reads its own stored copies.
+   --------------------------------------------------------------------- */
+const _unpackSv=unpackG;
+unpackG=function(g,pk,ak,sk){
+ const r=_unpackSv.apply(this,arguments);
+ try{
+  const out=r||g;
+  if(!out)return r;
+  if(out._svt&&Array.isArray(out.clubs)){
+   out.clubs.forEach(c=>{
+    if(!c)return;
+    const d=(c.tacs&&typeof c.tacs==='object'&&!Array.isArray(c.tacs))?c.tacs:{};
+    c.tacs=Object.assign({},SV_TACS,d)});
+   delete out._svt}
+  const D=Array.isArray(out._nmd)?out._nmd:null;
+  if((out._sv||D)&&Array.isArray(out.clubs)){
+   out.clubs.forEach(c=>{
+    if(!c)return;
+    ['players','youth'].forEach(f=>{
+     const L=c[f];
+     if(!Array.isArray(L))return;
+     L.forEach(p=>{
+      if(!p||typeof p!=='object'||Array.isArray(p))return;
+      if(D&&Array.isArray(p.name))p.name=p.name.map(i=>D[i]===undefined?'':D[i]).join(' ');
+      if(out._sv){try{p.value=valueFor(p)}catch(e){}}})})});
+   delete out._sv;delete out._nmd}
+ }catch(e){}
+ return r};
+
+/* ---------------------------------------------------------------------
+   5. AND IF IT STILL WILL NOT FIT, SAY SO BEFORE IT MATTERS
+   ---------------------------------------------------------------------
+   The existing handler reacts to a write that has already failed by
+   deleting the other slots and trying again. That is the right thing to
+   do at the moment of failure and the wrong thing to find out about.
+   This watches the size on the way past and warns once, with room still
+   left to do something about it.
+   --------------------------------------------------------------------- */
+const SV_WARN=4.2*1024*1024;
+const _wsSvSize=writeSlot;
+writeSlot=function(n,quiet){
+ const ok=_wsSvSize.apply(this,arguments);
+ try{
+  if(ok&&!G._svWarned){
+   /* read the length back off the slot that was just written rather
+      than packing the whole world a second time to measure it */
+   const raw=localStorage.getItem(SAVE_KEY+':'+n);
+   const bytes=raw?raw.length:0;
+   if(bytes>SV_WARN){
+    G._svWarned=1;
+    mail('board','⚠️ This save is getting large',
+     'Your career file is <b>'+(bytes/1048576).toFixed(1)+' MB</b>. A browser gives the game '+
+     'about 5 MB, and the save is written every time you continue.'+
+     '<br><br>Nothing is lost yet. If you keep other careers in the other save slots, '+
+     'clearing one you have finished with will give this one room to grow.'+
+     '<br><br><span class="xs faint">You will only be told this once.</span>')}}
+ }catch(e){}
+ return ok};
+
+/*#wC0_save.js#*/
+
+
+
+
+/*#wC1_brand.js#*/
+
+/* =====================================================================
+   wC1_brand — THE RESULTS BUSINESS
+   ---------------------------------------------------------------------
+   The game was called Red Devil Manager and it opened on a Manchester
+   United crest, because for a long time that is what it was. It is not
+   that any more: there are four hundred and eighty-four clubs in twenty
+   countries, you can build your own from nothing in the National
+   League, and United is one job on the list rather than the premise.
+
+   So it gets its real name. The front door is rebuilt to the cover:
+   THE RESULTS / BUSINESS in stone-grey capitals over a red slash, and
+   underneath it a manager walking out of the tunnel into a floodlit
+   ground — photographers to one side, the dugout to the other, the
+   pitch waiting at the end of it.
+
+   It is drawn, not photographed. Everything in this game is generated
+   at runtime by design; a cover image would be the only asset in the
+   file and the only thing that could not adapt to the screen it is on.
+
+   UNITED KEEPS ITS PLACE. It is still the featured save, still the
+   first thing offered, still the best-supported squad in the game. It
+   is now offered as a choice among many rather than as the identity of
+   the whole thing.
+   ===================================================================== */
+
+const BRAND={
+ name:'The Results Business',
+ line1:'THE RESULTS',
+ line2:'BUSINESS',
+ sub:'A Football Management Career',
+ season:'2026/27'};
+
+try{document.title=BRAND.name+' — '+BRAND.sub}catch(e){}
+
+/* ---------------------------------------------------------------------
+   1. THE TYPE
+   ---------------------------------------------------------------------
+   The lockup is three things: a light condensed line, a red brush
+   slash under it, and the big cast-concrete word. Everything scales
+   with the viewport so it reads the same on a phone as on a tablet.
+   --------------------------------------------------------------------- */
+(function brandCSS(){
+ const old=document.getElementById('wC1');if(old)old.remove();
+ const st=document.createElement('style');st.id='wC1';
+ st.textContent=
+  /* the lockup */
+  '.rb-lock{text-align:center;user-select:none;-webkit-user-select:none}'+
+  '.rb-l1{font-family:var(--disp),Impact,sans-serif;font-size:clamp(21px,7.1vw,34px);'+
+   'line-height:1;letter-spacing:.10em;color:#e9ebee;'+
+   'text-shadow:0 2px 18px rgba(0,0,0,.9);display:block}'+
+  /* the brush slash: a thin red wedge, heavier in the middle */
+  '.rb-slash{height:clamp(4px,1.3vw,7px);margin:clamp(5px,1.6vw,9px) auto clamp(2px,.8vw,5px);'+
+   'width:min(86%,430px);border-radius:99px;'+
+   'background:linear-gradient(90deg,rgba(218,41,28,0) 0%,#b81f14 12%,#ff3b2d 50%,#b81f14 86%,rgba(218,41,28,0) 100%);'+
+   'box-shadow:0 0 22px rgba(255,59,45,.45);'+
+   'clip-path:polygon(0 42%,7% 8%,52% 0,96% 14%,100% 52%,95% 96%,46% 100%,5% 88%)}'+
+  /* The big word is an SVG, not styled HTML text, for one reason: it
+     has to fill the width exactly and CSS cannot promise that. A
+     font-size in vw depends on the metrics of whatever font actually
+     loaded, so "BUSINESS" at 20.5vw fits on one device and runs off the
+     edge of the next — which is what it did. textLength with
+     lengthAdjust="spacingAndGlyphs" forces the eight letters into the
+     box whatever the font is doing, and the squeeze that makes it look
+     like the cover comes free with it. */
+  '.rb-l2{display:block;width:100%;height:auto;overflow:visible;'+
+   'filter:drop-shadow(0 5px 22px rgba(0,0,0,.85))}'+
+  '.rb-sub{display:block;margin-top:clamp(8px,2.4vw,13px);'+
+   'font-size:clamp(8.5px,2.5vw,11px);letter-spacing:.34em;font-weight:800;'+
+   'text-transform:uppercase;color:rgba(214,220,228,.62);text-indent:.34em}'+
+  '.rb-season{display:block;margin-top:7px;font-size:10px;letter-spacing:.22em;'+
+   'font-weight:800;color:rgba(255,59,45,.85);text-indent:.22em}'+
+  /* the picker header uses the same type, smaller */
+  '.rb-mini .rb-l2{width:62%;margin:0 auto}'+
+  '.rb-mini .rb-l1{font-size:clamp(13px,4vw,17px)}'+
+  /* ---- and the opening titles, which are their own screen ----
+     The staged reveal is kept exactly as it was — the lights come up
+     bank by bank, then the words arrive out of a blur. Only what the
+     words say and what they are cut from changes. */
+  '#introScreen .in-crest{display:none}'+
+  '#introScreen .in-t1{font-size:clamp(20px,6.6vw,34px);letter-spacing:.11em;margin-top:0;'+
+   'background:linear-gradient(180deg,#fbfcfd 20%,#dfe2e6 70%,#aeb3ba 100%);'+
+   '-webkit-background-clip:text;background-clip:text;color:transparent}'+
+  '#introScreen .in-t2{width:min(92vw,560px);margin-top:clamp(6px,2vw,10px);'+
+   'animation:inWord .82s cubic-bezier(.2,.8,.28,1) 2.7s forwards}'+
+  '#introScreen .in-t2 svg{display:block;width:100%;height:auto;overflow:visible}'+
+  '#introScreen .in-rule{height:clamp(4px,1.3vw,7px);margin-top:clamp(7px,2vw,11px);'+
+   'background:linear-gradient(90deg,rgba(218,41,28,0),#b81f14 12%,#ff3b2d 50%,#b81f14 86%,rgba(218,41,28,0));'+
+   'box-shadow:0 0 22px rgba(255,59,45,.45);'+
+   'clip-path:polygon(0 42%,7% 8%,52% 0,96% 14%,100% 52%,95% 96%,46% 100%,5% 88%);'+
+   'animation:inRule .9s cubic-bezier(.2,.8,.3,1) 2.5s forwards}'+
+  '#introScreen .in-sub{letter-spacing:.34em;text-indent:.34em}';
+ document.head.appendChild(st)})();
+
+/* ---------------------------------------------------------------------
+   1b. THE WORDMARK
+   ---------------------------------------------------------------------
+   Cut from concrete: a vertical gradient for the light falling across
+   it, and fractal noise composited into the glyph alpha for the wear.
+   feTurbulence is the one honest way to get grain without shipping an
+   image, and stretching it hard on one axis turns the speckle into the
+   grazes and pitting you get on a cast surface.
+
+   Each instance needs its own gradient and filter ids or the second one
+   on the page inherits the first one's paint.
+   --------------------------------------------------------------------- */
+let RB_UID=0;
+function brandWord(word){
+ const u='rb'+(++RB_UID);
+ const W=1000,H=205;
+ return '<svg class="rb-l2" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="xMidYMid meet" '+
+  'role="img" aria-label="'+esc(word)+'">'+
+  '<defs>'+
+   '<linearGradient id="'+u+'g" x1="0" y1="0" x2="0.06" y2="1">'+
+    '<stop offset="0" stop-color="#f7f8f9"/>'+
+    '<stop offset=".26" stop-color="#dcdee2"/>'+
+    '<stop offset=".54" stop-color="#a8adb4"/>'+
+    '<stop offset=".76" stop-color="#cbcfd4"/>'+
+    '<stop offset="1" stop-color="#878d95"/>'+
+   '</linearGradient>'+
+   /* the wear: noise, flattened to grey, then kept only where the
+      letters already are */
+   '<filter id="'+u+'f" x="-5%" y="-5%" width="110%" height="110%">'+
+    '<feTurbulence type="fractalNoise" baseFrequency="0.022 0.42" numOctaves="4" seed="9" result="n"/>'+
+    '<feColorMatrix in="n" type="matrix" result="m" values="'+
+     '0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -1.55 0.82"/>'+
+    '<feComposite in="m" in2="SourceAlpha" operator="in"/>'+
+   '</filter>'+
+  '</defs>'+
+  '<g font-family="Archivo Black, Impact, sans-serif" font-size="190" '+
+   'text-anchor="middle" letter-spacing="0">'+
+   '<text x="'+(W/2)+'" y="163" textLength="'+(W-14)+'" lengthAdjust="spacingAndGlyphs" '+
+    'fill="url(#'+u+'g)">'+esc(word)+'</text>'+
+   '<text x="'+(W/2)+'" y="163" textLength="'+(W-14)+'" lengthAdjust="spacingAndGlyphs" '+
+    'fill="#2b2f34" filter="url(#'+u+'f)" opacity=".85">'+esc(word)+'</text>'+
+  '</g></svg>'}
+
+/* the opening titles already exist in the page by the time this runs, so
+   they are re-lettered in place rather than rebuilt */
+(function brandIntro(){
+ try{
+  const el=document.getElementById('introScreen');if(!el)return;
+  const t1=el.querySelector('.in-t1'),t2=el.querySelector('.in-t2'),sub=el.querySelector('.in-sub');
+  if(t1)t1.textContent=BRAND.line1;
+  if(t2)t2.innerHTML=brandWord(BRAND.line2);
+  if(sub)sub.textContent=BRAND.sub;
+  /* the slash belongs under the first line, not under everything */
+  const rule=el.querySelector('.in-rule');
+  if(rule&&t2&&rule.parentNode)rule.parentNode.insertBefore(rule,t2);
+ }catch(e){}})();
+
+function brandLock(mini){
+ return '<div class="rb-lock'+(mini?' rb-mini':'')+'">'+
+  '<span class="rb-l1">'+BRAND.line1+'</span>'+
+  '<div class="rb-slash"></div>'+
+  brandWord(BRAND.line2)+
+  '<span class="rb-sub">'+BRAND.sub+'</span>'+
+  '</div>'}
+
+/* ---------------------------------------------------------------------
+   2. THE TUNNEL
+   ---------------------------------------------------------------------
+   One-point perspective. Everything converges on a bright rectangle of
+   pitch about a third of the way down; the walls, the ceiling and the
+   wet floor all run to it. The manager is a silhouette because that is
+   what he is on the cover and because a silhouette is the one figure
+   drawing that never looks slightly wrong.
+
+   What moves: the floodlight bloom breathes, the photographers' flashes
+   pop at random, and the reflections on the wet floor move with them.
+   Nothing else — it is a poster, not a screensaver.
+   --------------------------------------------------------------------- */
+const TUN={flashes:[]};
+
+function tunFlash(t,rng){
+ /* keep a handful of camera flashes alive at any moment */
+ while(TUN.flashes.length<7)TUN.flashes.push({t:t+rng()*2.2,d:0.05+rng()*0.10,
+  x:0.775+rng()*0.20,y:0.50+rng()*0.20,r:rng()});
+ for(let i=TUN.flashes.length-1;i>=0;i--){
+  const f=TUN.flashes[i];
+  if(t>f.t+f.d+0.9)TUN.flashes.splice(i,1)}}
+
+frontPaint=function(){
+ const cv=FRONT.cv;if(!cv)return;
+ const p=cv.parentElement;if(!p)return;
+ const dpr=Math.min(window.devicePixelRatio||1,2);
+ const W=Math.round(p.clientWidth*dpr),H=Math.round(p.clientHeight*dpr);
+ if(W<8||H<8){FRONT.raf=requestAnimationFrame(frontPaint);return}
+ if(cv.width!==W||cv.height!==H){cv.width=W;cv.height=H;FRONT.bg=null}
+ const g=cv.getContext('2d');
+ const t=(performance.now()-FRONT.t0)/1000;
+
+ /* the geometry of the tunnel mouth, in fractions of the canvas */
+ const OX0=0.300,OX1=0.700,OY0=0.360,OY1=0.735;
+ const ox0=OX0*W,ox1=OX1*W,oy0=OY0*H,oy1=OY1*H;
+
+ if(!FRONT.bg||FRONT.bg.width!==W){
+  const b=document.createElement('canvas');b.width=W;b.height=H;
+  const x=b.getContext('2d');
+  const rng=mulberry(20260630);
+
+  x.fillStyle='#05070a';x.fillRect(0,0,W,H);
+
+  /* ---- what you can see through the opening: a floodlit ground ---- */
+  x.save();
+  x.beginPath();x.rect(ox0,oy0,ox1-ox0,oy1-oy0);x.clip();
+  let sg=x.createLinearGradient(0,oy0,0,oy1);
+  sg.addColorStop(0,'#5d7b98');sg.addColorStop(.34,'#6d8dab');sg.addColorStop(.42,'#41596f');
+  x.fillStyle=sg;x.fillRect(ox0,oy0,ox1-ox0,oy1-oy0);
+  /* the far stand, packed */
+  const sy=oy0,sh=(oy1-oy0)*0.40;
+  const tg=x.createLinearGradient(0,sy,0,sy+sh);
+  tg.addColorStop(0,'#27384a');tg.addColorStop(1,'#4d6379');
+  x.fillStyle=tg;x.fillRect(ox0,sy,ox1-ox0,sh);
+  for(let i=0;i<1500;i++){
+   const r=rng();
+   x.fillStyle=r<.10?'rgba(218,41,28,.9)':r<.16?'rgba(251,225,34,.8)':
+    ['rgba(214,222,232,.75)','rgba(150,160,172,.7)','rgba(92,102,114,.7)','rgba(238,244,250,.85)'][Math.floor(rng()*4)];
+   x.fillRect(ox0+rng()*(ox1-ox0),sy+rng()*sh,Math.max(1,W*.0022),Math.max(1,W*.0026))}
+  /* hoardings, then the grass running away from you */
+  x.fillStyle='#0d1219';x.fillRect(ox0,sy+sh,ox1-ox0,(oy1-oy0)*.05);
+  const gy=sy+sh+(oy1-oy0)*.05;
+  const gg2=x.createLinearGradient(0,gy,0,oy1);
+  gg2.addColorStop(0,'#78c880');gg2.addColorStop(1,'#3f8f4b');
+  x.fillStyle=gg2;x.fillRect(ox0,gy,ox1-ox0,oy1-gy);
+  for(let i=0;i<8;i+=2){
+   x.fillStyle='rgba(255,255,255,.045)';
+   x.fillRect(ox0+i*(ox1-ox0)/8,gy,(ox1-ox0)/8,oy1-gy)}
+  x.strokeStyle='rgba(240,248,240,.30)';x.lineWidth=Math.max(1,W*.003);
+  x.beginPath();x.moveTo(ox0,gy+(oy1-gy)*.55);x.lineTo(ox1,gy+(oy1-gy)*.55);x.stroke();
+  x.restore();
+
+  /* ---- the tunnel itself, drawn as four converging quads ---- */
+  const quad=(pts,fill)=>{x.beginPath();x.moveTo(pts[0]*W,pts[1]*H);
+   for(let i=2;i<pts.length;i+=2)x.lineTo(pts[i]*W,pts[i+1]*H);
+   x.closePath();x.fillStyle=fill;x.fill()};
+
+  /* left wall */
+  let lw=x.createLinearGradient(0,0,ox0,0);
+  lw.addColorStop(0,'#070b11');lw.addColorStop(.55,'#131b25');lw.addColorStop(1,'#27333f');
+  quad([0,0.06, OX0,OY0, OX0,OY1, 0,1.0],lw);
+  /* right wall */
+  let rw=x.createLinearGradient(W,0,ox1,0);
+  rw.addColorStop(0,'#070b11');rw.addColorStop(.55,'#131b25');rw.addColorStop(1,'#27333f');
+  quad([1,0.06, OX1,OY0, OX1,OY1, 1,1.0],rw);
+  /* ceiling */
+  let cg=x.createLinearGradient(0,0,0,oy0);
+  cg.addColorStop(0,'#04070a');cg.addColorStop(1,'#1a232e');
+  quad([0,0.06, OX0,OY0, OX1,OY0, 1,0.06],cg);
+
+  /* the glass panel on the left, with people behind it */
+  x.save();
+  x.beginPath();
+  x.moveTo(0.045*W,0.30*H);x.lineTo(0.255*W,0.395*H);
+  x.lineTo(0.255*W,0.63*H);x.lineTo(0.045*W,0.72*H);x.closePath();
+  x.clip();
+  const pg=x.createLinearGradient(0.045*W,0,0.255*W,0);
+  pg.addColorStop(0,'#0a1219');pg.addColorStop(1,'#16222e');
+  x.fillStyle=pg;x.fillRect(0.04*W,0.28*H,0.23*W,0.46*H);
+  /* three or four figures, shoulders and heads */
+  [[0.075,0.60,0.030],[0.125,0.585,0.028],[0.175,0.575,0.030],[0.222,0.565,0.026]].forEach(([fx,fy,fr])=>{
+   x.fillStyle='rgba(6,10,14,.92)';
+   x.beginPath();x.arc(fx*W,(fy-fr*1.5)*H*1,fr*W*.42,0,7);x.fill();
+   x.beginPath();
+   x.ellipse(fx*W,fy*H,fr*W*.72,fr*H*1.5,0,0,7);x.fill()});
+  x.restore();
+  x.strokeStyle='rgba(150,180,210,.20)';x.lineWidth=Math.max(1,W*.002);
+  x.beginPath();
+  x.moveTo(0.045*W,0.30*H);x.lineTo(0.255*W,0.395*H);
+  x.lineTo(0.255*W,0.63*H);x.lineTo(0.045*W,0.72*H);x.closePath();x.stroke();
+
+  /* the red skirting either side, the one bit of colour in the tunnel */
+  quad([0,0.775, OX0,0.665, OX0,0.700, 0,0.845],'#7d1610');
+  quad([1,0.775, OX1,0.665, OX1,0.700, 1,0.845],'#7d1610');
+
+  /* ---- the wet floor ---- */
+  const fy0=oy1;
+  const fg=x.createLinearGradient(0,fy0,0,H);
+  fg.addColorStop(0,'#161c22');fg.addColorStop(.35,'#0d1116');fg.addColorStop(1,'#05070a');
+  x.fillStyle=fg;x.fillRect(0,fy0,W,H-fy0);
+  /* the pitch reflected back down the wet concrete */
+  const rg2=x.createLinearGradient(0,fy0,0,H*.97);
+  rg2.addColorStop(0,'rgba(160,205,165,.34)');
+  rg2.addColorStop(.45,'rgba(130,175,140,.12)');
+  rg2.addColorStop(1,'rgba(0,0,0,0)');
+  x.fillStyle=rg2;
+  x.beginPath();x.moveTo(ox0,fy0);x.lineTo(ox1,fy0);x.lineTo(W*.86,H);x.lineTo(W*.14,H);
+  x.closePath();x.fill();
+  /* streaks of standing water */
+  for(let i=0;i<26;i++){
+   const yy=fy0+rng()*(H-fy0);
+   const k=(yy-fy0)/(H-fy0);
+   x.fillStyle='rgba(190,215,235,'+(0.020+rng()*0.045)*(1-k*.5)+')';
+   x.fillRect(W*(.5-(.5*(0.2+k*.8))*rng()),yy,W*(.04+rng()*.16),Math.max(1,H*.0016))}
+  FRONT.bg=b}
+
+ g.setTransform(1,0,0,1,0,0);
+ g.drawImage(FRONT.bg,0,0);
+
+ /* ---- the light coming out of the opening, breathing ---- */
+ const pulse=0.86+Math.sin(t*0.55)*0.10;
+ const bloom=g.createRadialGradient((ox0+ox1)/2,(oy0+oy1)/2,0,(ox0+ox1)/2,(oy0+oy1)/2,W*0.46);
+ bloom.addColorStop(0,'rgba(232,244,255,'+(0.66*pulse)+')');
+ bloom.addColorStop(.28,'rgba(200,225,250,'+(0.20*pulse)+')');
+ bloom.addColorStop(1,'rgba(180,210,240,0)');
+ g.fillStyle=bloom;g.fillRect(0,0,W,H);
+
+ /* two shafts of light thrown down the tunnel walls */
+ g.save();g.globalCompositeOperation='lighter';
+ [[0.30,0.16],[0.70,0.16]].forEach(([sx,sw],i)=>{
+  const lg=g.createLinearGradient(sx*W,oy0,(sx<0.5?sx-sw:sx+sw)*W,H);
+  lg.addColorStop(0,'rgba(214,232,255,'+(0.085*pulse)+')');
+  lg.addColorStop(1,'rgba(214,232,255,0)');
+  g.fillStyle=lg;
+  g.beginPath();
+  g.moveTo(sx*W,oy0);g.lineTo(sx*W,oy1);
+  g.lineTo((sx<0.5?sx-sw:sx+sw)*W,H);g.lineTo((sx<0.5?sx-sw*.4:sx+sw*.4)*W,H);
+  g.closePath();g.fill()});
+ g.restore();
+
+ /* ---- photographers, and their flashes ---- */
+ const rng2=mulberry(77);
+ tunFlash(t,rng2);
+ g.fillStyle='rgba(4,7,10,.95)';
+ [[0.795,0.66,0.036],[0.855,0.645,0.034],[0.912,0.655,0.036],[0.962,0.67,0.033]].forEach(([fx,fy,fr])=>{
+  g.beginPath();g.arc(fx*W,(fy-fr*2.0)*H,fr*W*.40,0,7);g.fill();
+  g.beginPath();g.ellipse(fx*W,fy*H,fr*W*.80,fr*H*2.1,0,0,7);g.fill();
+  /* the camera held up to the face */
+  g.fillRect((fx-fr*.55)*W,(fy-fr*2.5)*H,fr*W*1.0,fr*H*.9)});
+ TUN.flashes.forEach(f=>{
+  const age=t-f.t;
+  if(age<0||age>f.d+0.9)return;
+  const a=age<f.d?1:Math.max(0,1-(age-f.d)/0.9);
+  const fx=f.x*W,fy=f.y*H,r=W*(0.10+f.r*0.10);
+  const fg2=g.createRadialGradient(fx,fy,0,fx,fy,r);
+  fg2.addColorStop(0,'rgba(255,255,255,'+(0.85*a)+')');
+  fg2.addColorStop(.25,'rgba(226,240,255,'+(0.30*a)+')');
+  fg2.addColorStop(1,'rgba(200,225,255,0)');
+  g.fillStyle=fg2;g.fillRect(0,0,W,H)});
+
+ /* ---- the manager, walking out ---- */
+ (function manager(){
+  const cx=W*0.5;
+  const foot=H*0.955, head=H*0.545;
+  const hh=foot-head;
+  const sway=Math.sin(t*0.9)*W*0.0035;
+  g.save();
+  g.translate(sway,0);
+  g.fillStyle='#04060a';
+  /* legs */
+  const step=Math.sin(t*1.6);
+  g.beginPath();
+  g.moveTo(cx-hh*0.085,foot-hh*0.40);
+  g.lineTo(cx-hh*0.085+step*hh*0.045,foot);
+  g.lineTo(cx-hh*0.015+step*hh*0.045,foot);
+  g.lineTo(cx-hh*0.015,foot-hh*0.40);
+  g.closePath();g.fill();
+  g.beginPath();
+  g.moveTo(cx+hh*0.015,foot-hh*0.40);
+  g.lineTo(cx+hh*0.015-step*hh*0.045,foot);
+  g.lineTo(cx+hh*0.085-step*hh*0.045,foot);
+  g.lineTo(cx+hh*0.085,foot-hh*0.40);
+  g.closePath();g.fill();
+  /* the long coat */
+  g.beginPath();
+  g.moveTo(cx-hh*0.150,head+hh*0.135);
+  g.quadraticCurveTo(cx-hh*0.205,head+hh*0.42,cx-hh*0.175,foot-hh*0.30);
+  g.lineTo(cx+hh*0.175,foot-hh*0.30);
+  g.quadraticCurveTo(cx+hh*0.205,head+hh*0.42,cx+hh*0.150,head+hh*0.135);
+  g.quadraticCurveTo(cx,head+hh*0.055,cx-hh*0.150,head+hh*0.135);
+  g.closePath();g.fill();
+  /* collar, neck and head */
+  g.beginPath();
+  g.moveTo(cx-hh*0.078,head+hh*0.130);
+  g.lineTo(cx-hh*0.040,head+hh*0.055);
+  g.lineTo(cx+hh*0.040,head+hh*0.055);
+  g.lineTo(cx+hh*0.078,head+hh*0.130);
+  g.closePath();g.fill();
+  g.beginPath();
+  g.ellipse(cx,head+hh*0.052,hh*0.062,hh*0.070,0,0,7);g.fill();
+  /* the light behind him catches one edge */
+  g.strokeStyle='rgba(198,222,250,.30)';g.lineWidth=Math.max(1,W*.0022);
+  g.beginPath();
+  g.moveTo(cx-hh*0.060,head+hh*0.005);
+  g.quadraticCurveTo(cx-hh*0.098,head+hh*0.075,cx-hh*0.150,head+hh*0.140);
+  g.quadraticCurveTo(cx-hh*0.200,head+hh*0.44,cx-hh*0.172,foot-hh*0.31);
+  g.stroke();
+  g.restore();
+  /* his shadow on the wet floor */
+  const sg2=g.createLinearGradient(0,foot,0,H);
+  sg2.addColorStop(0,'rgba(0,0,0,.55)');sg2.addColorStop(1,'rgba(0,0,0,0)');
+  g.fillStyle=sg2;
+  g.beginPath();g.moveTo(cx-hh*0.16,foot);g.lineTo(cx+hh*0.16,foot);
+  g.lineTo(cx+hh*0.30,H);g.lineTo(cx-hh*0.30,H);g.closePath();g.fill();
+ })();
+
+ /* ---- and the dark at the edges ---- */
+ const vg=g.createRadialGradient(W/2,H*0.52,W*0.16,W/2,H*0.52,W*0.95);
+ vg.addColorStop(0,'rgba(0,0,0,0)');vg.addColorStop(1,'rgba(0,0,0,.62)');
+ g.fillStyle=vg;g.fillRect(0,0,W,H);
+ /* the top third goes to black so the type sits on nothing */
+ const tg2=g.createLinearGradient(0,0,0,H*0.34);
+ tg2.addColorStop(0,'rgba(3,5,8,.94)');tg2.addColorStop(.58,'rgba(3,5,8,.55)');
+ tg2.addColorStop(1,'rgba(3,5,8,0)');
+ g.fillStyle=tg2;g.fillRect(0,0,W,H*0.34);
+
+ FRONT.raf=requestAnimationFrame(frontPaint)};
+
+/* ---------------------------------------------------------------------
+   3. THE DOOR
+   ---------------------------------------------------------------------
+   Same menu, same actions, new head on it. The United crest that used
+   to sit above the title is gone: the featured save says United on it,
+   which is the honest place for that to be said.
+   --------------------------------------------------------------------- */
+showStart=function(){
+ G=null;
+ const ss=$('#startScreen');
+ ss.style.display='flex';ss.classList.add('front');
+ const m=(typeof slotMeta==='function')?(slotMeta('auto')||slotMeta('1')):null;
+ const slot=(m&&slotMeta('auto'))?'auto':'1';
+ ss.innerHTML='<canvas id="frontCv"></canvas><div class="fwrap">'+
+  '<div class="fspacer"></div>'+
+  '<div class="fhero">'+brandLock()+'</div>'+
+  '<div class="fmenu">'+
+   (m?'<button class="fbtn prime" data-action="resumeCareer" data-v="'+slot+'">'+
+     '<span class="fl">CONTINUE CAREER</span>'+
+     '<span class="fd">'+esc(m.club)+' · Season '+m.season+' · '+esc(m.date)+'</span>'+
+     '<span class="fi">▶</span></button>':'')+
+   '<button class="fbtn red" data-action="frontNew">'+
+    '<span class="fl">NEW CAREER</span>'+
+    '<span class="fd">484 clubs, 20 countries — or build your own from nothing</span>'+
+    '<span class="fi">⚽</span></button>'+
+   '<button class="fbtn" data-action="frontLoad">'+
+    '<span class="fl">LOAD A SAVE</span>'+
+    '<span class="fd">Your slots, or a file from this device</span>'+
+    '<span class="fi">💾</span></button>'+
+   '<button class="fbtn" data-action="frontSound">'+
+    '<span class="fl">SOUND</span>'+
+    '<span class="fd" id="fSoundSub">Crowd, commentary and the reading voice</span>'+
+    '<span class="fi">🔊</span></button>'+
+   '<button class="fbtn" data-action="frontAbout">'+
+    '<span class="fl">HOW IT WORKS</span>'+
+    '<span class="fd">What is in the game, and how to play it</span>'+
+    '<span class="fi">📖</span></button>'+
+  '</div>'+
+  '<div class="ffoot">'+BRAND.season+' · single-file edition · everything runs offline</div>'+
+  '<div class="fspacer"></div></div>';
+ FRONT.cv=$('#frontCv');FRONT.t0=performance.now();FRONT.bg=null;
+ frontStop();FRONT.cv=$('#frontCv');
+ TUN.flashes.length=0;
+ FRONT.raf=requestAnimationFrame(frontPaint)};
+
+/* the club picker gets the same masthead, in miniature */
+const _frontNewBrand=ACTIONS.frontNew;
+ACTIONS.frontNew=()=>{
+ _frontNewBrand();
+ try{
+  const ss=$('#startScreen');
+  const logo=ss.querySelector('.logo');
+  if(logo){
+   const d=document.createElement('div');
+   d.innerHTML=brandLock(true)+
+    '<div class="xs faint" style="text-align:center;margin-top:9px;line-height:1.6">'+
+    'Take any job in the world, or build a club of your own in the National League.</div>';
+   logo.replaceWith(d)}
+  const tag=ss.querySelector('.tag');
+  if(tag)tag.remove();
+ }catch(e){}};
+
+/* ---------------------------------------------------------------------
+   4. WHAT THE FEATURED SAVE SAYS NOW
+   ---------------------------------------------------------------------
+   It used to be the only thing on the screen with a personality. It
+   keeps the personality and loses the implication that it is the point
+   of the game.
+   --------------------------------------------------------------------- */
+const _paintStartBrand=paintStart;
+paintStart=function(){
+ const r=_paintStartBrand.apply(this,arguments);
+ try{
+  const body=$('#startBody');if(!body)return r;
+  body.querySelectorAll('.card.tight').forEach(el=>{
+   const h=el.querySelector('div');
+   if(h&&/FEATURED/.test(h.textContent))
+    h.parentNode.innerHTML='<div class="small" style="font-weight:800;color:var(--gold)">'+
+     '🔴 FEATURED SAVE — THE UNITED REBUILD</div>'+
+     '<div class="xs muted" style="margin-top:3px">The best-supported squad in the game and a title to go and win. '+
+     'One job of four hundred and eighty-four.</div>'});
+ }catch(e){}
+ return r};
+
+/* ---------------------------------------------------------------------
+   5. THE NAME, WHEREVER IT WAS WRITTEN DOWN
+   --------------------------------------------------------------------- */
+(function renameEverywhere(){
+ const fix=()=>{
+  try{
+   document.querySelectorAll('.xs.faint').forEach(el=>{
+    if(/Red Devil Manager/.test(el.textContent))
+     el.textContent=el.textContent.replace(/Red Devil Manager 26\/27/g,BRAND.name+' '+BRAND.season)})}
+  catch(e){}};
+ const _r=render;render=function(){const v=_r.apply(this,arguments);fix();return v};
+ const _om=openModal;openModal=function(){const v=_om.apply(this,arguments);fix();return v};
+})();
+
+/*#wC1_brand.js#*/
 showStart();
 </script>
 </body>
