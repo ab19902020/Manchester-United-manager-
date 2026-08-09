@@ -51802,6 +51802,264 @@ if(typeof renderMBody==='function'){
 },{passive:true}));
 
 /*#wC3_wide.js#*/
+
+
+/*#wC4_dugout.js#*/
+
+/* =====================================================================
+   wC4_dugout — the dugout camera goes where the football is
+   ---------------------------------------------------------------------
+   The figures in this view were never the problem. Each one is already
+   a head with a skin tone and a haircut, a shirt with a gradient and
+   sleeves and a collar and a squad number, shorts, thighs, socks,
+   boots, and arms and legs on a run cycle that turns over faster the
+   quicker he moves. All of that has been in there the whole time.
+
+   You cannot see any of it, because he is eighteen pixels tall.
+
+   The camera sits forty-two metres back and twenty-two up and holds a
+   wide shot of most of the pitch, so a man ends up about a fortieth of
+   the frame and every bit of that detail lands inside two or three
+   pixels. It reads as a coloured blob — hence stick men. A real
+   broadcast camera is much tighter than this and moves a lot more: it
+   follows the ball, it pushes in when play settles, and it pulls out
+   when the ball is switched across the pitch.
+
+   So this does not add detail. It gets close enough to see the detail
+   that is already drawn, and then finishes the things that only start
+   to matter once you can see them:
+
+     the camera pushes in about forty per cent, harder still when the
+     ball is in a box, and pulls back out for a switch of play
+
+     limbs get rounded ends instead of square ones, which at fifteen
+     pixels a leg is the difference between a person and a domino
+
+     the floodlights put a rim on the side of every player facing the
+     near pylon, and the grass gets the pool of light under them
+
+     the ball keeps a short trail and a shadow that separates from it
+     when it is off the ground
+
+   None of it touches the simulation. Where the players are and what
+   they do is decided exactly as before; this is only the lens.
+   ===================================================================== */
+
+/* ---------------------------------------------------------------------
+   1. A CAMERA THAT COVERS THE GAME
+   ---------------------------------------------------------------------
+   Three changes. It sits closer, so everything is bigger. It tracks the
+   ball's depth as well as its width, which is what lets it stay close
+   without losing the play. And it breathes: tight when the ball is in
+   a settled position, wider the moment it is moving quickly across the
+   pitch, so a long switch does not fly out of frame.
+   --------------------------------------------------------------------- */
+/* The camera object is REPLACED wholesale at kick-off — DUG.cam={x,f,tilt}
+   — so anything stamped on it once at load is gone by the time the
+   first match starts, and `c.f += (want - undefined) * k` would be NaN.
+   NaN travels straight through the projection into every coordinate on
+   screen and the first thing to complain is createLinearGradient, a
+   long way from the cause. Defaults are applied every frame, not once. */
+dugCam=function(W,H){
+ const c=DUG.cam;
+ if(!(c.f>0))c.f=1;
+ const m=MU.m;
+ const b=MU.ball||{x:52.5,y:34};
+ const bx=b.x==null?52.5:b.x, by=b.y==null?34:b.y;
+
+ /* across: still clamped off the corners, but it follows harder now
+    that the shot is tight enough to lose the ball if it does not */
+ const want=clamp(bx,22,83);
+ c.x+=(want-c.x)*.075;
+
+ /* how fast the ball is travelling across the frame decides how wide
+    it needs to be: a switch of play pulls out, a settled ball pushes in.
+    Zooming IN pushes the near touchline further down the screen, so
+    unlike a pan it can never uncover the bottom of the frame. */
+ const vx=Math.abs((MU.ballT?MU.ballT.x:bx)-bx);
+ const near=Math.min(bx,105-bx);
+ let wantF=1.38;                          /* the new normal, ~40% tighter */
+ if(near<18)wantF=1.60;                   /* in and around the box */
+ else if(near<30)wantF=1.48;
+ if(vx>14)wantF=Math.min(wantF,1.16);     /* the ball is being switched */
+ if(!m||m.stage==='HT'||m.done)wantF=1.0; /* the wide shot for the breaks */
+ c.f+=(wantF-c.f)*.035;
+ return c};
+
+/* THE PROJECTION IS LEFT ALONE. The first attempt also panned down the
+   pitch by standing the camera further back when play was on the far
+   side. It tracked well and it tore a hole in the picture: moving the
+   camera back lifts the NEAR touchline up the screen, and everything
+   below the near touchline is drawn by nothing, so the bottom corner of
+   the frame went black.
+
+   Filling below the near line means changing the ground painter, and
+   the zoom below already does most of what the pan was for. The lens
+   changes; where the camera stands does not. */
+
+/* ---------------------------------------------------------------------
+   2. A LIMB WITH ENDS ON IT
+   ---------------------------------------------------------------------
+   Everything below the waist was drawn with fillRect. At the size the
+   old camera used that did not matter because none of it resolved; at
+   this size a square-ended thigh is very obviously a square. Rounded
+   caps cost one call each and do most of the work of making a shape
+   read as a person.
+   --------------------------------------------------------------------- */
+function dugRR(g,x,y,w,h,r){
+ const rr=Math.min(r,Math.abs(w)/2,Math.abs(h)/2);
+ if(g.roundRect){g.beginPath();g.roundRect(x,y,w,h,rr);g.fill();return}
+ g.beginPath();
+ g.moveTo(x+rr,y);g.lineTo(x+w-rr,y);g.quadraticCurveTo(x+w,y,x+w,y+rr);
+ g.lineTo(x+w,y+h-rr);g.quadraticCurveTo(x+w,y+h,x+w-rr,y+h);
+ g.lineTo(x+rr,y+h);g.quadraticCurveTo(x,y+h,x,y+h-rr);
+ g.lineTo(x,y+rr);g.quadraticCurveTo(x,y,x+rr,y);
+ g.closePath();g.fill()}
+
+/* which side the near floodlight is on, for the rim */
+const DUG_LIGHT=-1;
+
+dugFigure=function(g,d,c,P,W,now){
+ const pl=d.pl;
+ const gk=pl.slot==='GK';
+ const p=P(d.x,d.y,0);
+ const s=p[2];
+ if(p[1]<0||p[1]>1e5)return;
+ const kit=gk?'#e9c400':c.c1;
+ const trim=gk?'#8a7400':(c.c2&&c.c2!==c.c1?c.c2:shade(c.c1,.5));
+ const HT=1.82;
+ const px=p[0],py=p[1];
+ const u=s*HT/8;
+ if(u<.6)return;
+ const sp=Math.hypot(d.vx||0,d.vy||0);
+ const ph=DUG.phase;
+ ph[pl.p.id]=(ph[pl.p.id]==null?pl.p.id%6:ph[pl.p.id])+(0.09+Math.min(sp,.55)*1.9);
+ const t=ph[pl.p.id];
+ const swing=Math.sin(t)*Math.min(1,.25+sp*7);
+ const bob=Math.abs(Math.cos(t))*u*.22*Math.min(1,.3+sp*6);
+ const face=(d.vx||0)>=0?1:-1;
+ const y0=py-bob;
+ const rr=u*.30;                                   /* the corner radius */
+
+ /* the shadow softens and spreads with height off the ground, and is
+    thrown away from the near pylon rather than sitting under him */
+ g.save();
+ g.beginPath();
+ g.ellipse(px-DUG_LIGHT*u*.22,py+u*.05,u*1.55,u*.52,0,0,7);
+ g.fillStyle='rgba(0,0,0,.40)';g.fill();
+
+ if(pl.off)g.globalAlpha=.35;
+ const hipY=y0-u*3.7,torsoT=y0-u*6.3,headR=u*.66;
+
+ /* legs */
+ [[-1,swing],[1,-swing]].forEach(([sgn,sw])=>{
+  g.save();
+  g.translate(px+sgn*u*.42,hipY);
+  g.rotate(sw*.55);
+  g.fillStyle=trim;                dugRR(g,-u*.42,0,u*.84,u*1.55,rr);
+  g.fillStyle=shade(trim,1.5);     dugRR(g,-u*.34,u*1.55,u*.68,u*.62,rr*.8);
+  g.fillStyle='#f0f3f0';           dugRR(g,-u*.33,u*2.05,u*.66,u*1.32,rr*.7);
+  g.fillStyle='#14181c';
+  const bw=u*1.0*(sgn===1?1:-1)+u*.36;
+  dugRR(g,Math.min(-u*.36,-u*.36+bw),u*3.28,Math.abs(bw),u*.46,rr*.6);
+  g.restore()});
+
+ /* arms */
+ [[-1,-swing],[1,swing]].forEach(([sgn,sw])=>{
+  g.save();
+  g.translate(px+sgn*u*.92,torsoT+u*.6);
+  g.rotate(sw*.7);
+  g.fillStyle=kit;      dugRR(g,-u*.26,0,u*.52,u*1.12,rr*.8);
+  g.fillStyle='#e2b493';dugRR(g,-u*.24,u*1.05,u*.48,u*1.02,rr*.8);
+  g.restore()});
+
+ /* the shirt */
+ g.beginPath();
+ g.moveTo(px-u*.95,torsoT+u*.35);
+ g.quadraticCurveTo(px,torsoT-u*.20,px+u*.95,torsoT+u*.35);
+ g.lineTo(px+u*.82,hipY+u*.08);
+ g.lineTo(px-u*.82,hipY+u*.08);
+ g.closePath();
+ const sg=g.createLinearGradient(px-u,torsoT,px+u,hipY);
+ sg.addColorStop(0,shade(kit,1.18));sg.addColorStop(.55,kit);sg.addColorStop(1,shade(kit,.74));
+ g.fillStyle=sg;g.fill();
+
+ /* sleeves and collar */
+ g.fillStyle=trim;
+ dugRR(g,px-u*.95,torsoT+u*.30,u*.30,u*.68,rr*.6);
+ dugRR(g,px+u*.65,torsoT+u*.30,u*.30,u*.68,rr*.6);
+ dugRR(g,px-u*.30,torsoT-u*.02,u*.60,u*.22,rr*.5);
+
+ /* the floodlight catches one edge of him — the single cheapest thing
+    that stops a flat fill looking like a sticker */
+ if(u>1.6){
+  g.save();
+  g.globalCompositeOperation='lighter';
+  g.globalAlpha=pl.off?.10:.26;
+  g.fillStyle='#dfe9ff';
+  dugRR(g,px+DUG_LIGHT*u*.95,torsoT+u*.30,u*.17,(hipY-torsoT)*.86,rr*.5);
+  g.restore()}
+
+ if(u>2.0){
+  g.font='800 '+Math.round(u*1.5)+'px Inter,sans-serif';
+  g.textAlign='center';g.textBaseline='middle';
+  g.fillStyle=kitInk(kit);g.globalAlpha=(pl.off?.35:.92);
+  g.fillText(String(shirtNo(pl.p,c)||''),px,torsoT+u*1.45);
+  g.globalAlpha=pl.off?.35:1;g.textBaseline='alphabetic'}
+
+ /* head, hair, and a glance the way he is going */
+ g.beginPath();g.arc(px,torsoT-headR*.55,headR,0,7);
+ g.fillStyle=['#f0c6a4','#dda87f','#b3784f','#8a5a3a','#6b4226'][pl.p.id%5];g.fill();
+ g.beginPath();
+ g.arc(px,torsoT-headR*.72,headR*.98,Math.PI*1.02,Math.PI*2.02);
+ g.fillStyle=['#241a12','#12100e','#4a3520','#6b4a25','#161616'][(pl.p.id>>2)%5];g.fill();
+ if(u>2.4){
+  g.fillStyle='rgba(20,20,20,.55)';
+  g.fillRect(px+face*headR*.30,torsoT-headR*.62,headR*.20,headR*.16)}
+ g.restore();
+ g.globalAlpha=1};
+
+/* ---------------------------------------------------------------------
+   3. THE BALL LEAVES A MARK
+   ---------------------------------------------------------------------
+   At this range the ball is big enough to read, so it is worth the few
+   lines: a short trail so a driven pass has direction, and a shadow
+   that stays on the grass and shrinks away underneath it when it is
+   lofted, which is the only cue that tells you the thing is airborne.
+   --------------------------------------------------------------------- */
+const DUG_TRAIL=[];
+const _dugDrawWC4=drawDugout;
+drawDugout=function(){
+ const r=_dugDrawWC4.apply(this,arguments);
+ try{
+  const cv=$('#dugCanvas'),m=MU.m;
+  if(!cv||!m||!MU.ball)return r;
+  const g=cv.getContext('2d');
+  const P=dugProject(cv.width,cv.height);
+  const b=MU.ball,h=MU.ballH||0;
+  DUG_TRAIL.push({x:b.x,y:b.y,h});
+  if(DUG_TRAIL.length>9)DUG_TRAIL.shift();
+  const air=P(b.x,b.y,h), ground=P(b.x,b.y,0);
+  const s=air[2];
+  const rad=Math.max(1.1,s*0.115);
+  /* the trail, oldest first and fading */
+  g.save();
+  for(let i=0;i<DUG_TRAIL.length-1;i++){
+   const q=DUG_TRAIL[i],pt=P(q.x,q.y,q.h);
+   g.globalAlpha=(i/DUG_TRAIL.length)*0.20;
+   g.beginPath();g.arc(pt[0],pt[1],rad*(0.35+i/DUG_TRAIL.length*0.5),0,7);
+   g.fillStyle='#ffffff';g.fill()}
+  g.globalAlpha=1;
+  /* the shadow stays on the ground and tightens as it climbs */
+  const lift=clamp(h/6,0,1);
+  g.beginPath();
+  g.ellipse(ground[0],ground[1],rad*(1.25-lift*0.55),rad*(0.5-lift*0.22),0,0,7);
+  g.fillStyle='rgba(0,0,0,'+(0.42-lift*0.20)+')';g.fill();
+  g.restore()}
+ catch(e){}
+ return r};
+
+/*#wC4_dugout.js#*/
 showStart();
 </script>
 </body>
