@@ -105,6 +105,29 @@
 
 ### Fixed
 
+- Fixed the budget rebalance slider, reported from a real save where two screens
+  contradicted each other: the squad screen said `£106K/w of £72K/w` in red while the
+  transfers screen said `£183/w wage room left` in green. Both are the same two numbers —
+  one divided by the ceiling, the other by the ceiling plus a hidden 18% overdraft. The
+  ceiling is the ceiling now, room is what is left of it, and the overdraft the board
+  tolerates is stated rather than buried in a multiplier.
+
+  The slider itself went one way. Its right-hand limit is `(ceiling − wage bill) × 52`
+  floored at zero, so the moment the bill passed the ceiling nothing could move towards
+  transfers — and the neutral handle then rendered hard against the right-hand end,
+  directly under the words *more transfers →*, so it looked maxed out when it was stuck.
+  Every further drag took another lump out of the transfer budget; the reported save had
+  shifted £808,000 that way without meaning to. The commit had no limit checks of its own
+  either, and `budLimits` can return an inverted band (low bound £108,119 *above* high
+  bound £95,077) once the bill is further above the ceiling than the whole transfer budget
+  could close. Both directions now work and reverse exactly, the panel says plainly when
+  the bill is over the ceiling and what to do about it, and pouring transfer money into
+  the ceiling — the way out of that hole — actually commits.
+
+- Closed the hole the wage bill came through. Contract talks, free agents and deadline day
+  all test the bill against the ceiling; neither loan path did, so a loan could put it
+  anywhere. In the reported save it was 147% of the ceiling.
+
 - Broke the squad-unrest loop. Any player you had not explicitly given a role to was
   treated as a promised *squad player* — 42% of the matches — so a club that had just
   assembled itself out of free agents was in breach of twenty promises it never made.

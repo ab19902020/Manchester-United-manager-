@@ -411,3 +411,82 @@ test('a transfer is paid for the way transfers are actually paid for', async (t)
   assert.ok(deal.afterSummer.owed < deal.beforeSummer.owed, 'an instalment goes out every summer');
   assert.ok(deal.afterSummer.due < deal.beforeSummer.due, 'and one comes in');
 });
+
+test('the budget slider moves money both ways and never lies about the wage bill', async (t) => {
+  const game = await createGame();
+  t.after(() => game.close());
+  await startCareer(game);
+
+  const drag = (id, value) => `(function(){
+    const i = document.createElement('input');
+    i.type = 'range'; i.id = '${id}';
+    i.min = '-99999999'; i.max = '99999999';   // a range input clamps to its own bounds
+    i.value = String(${value});
+    document.body.appendChild(i);
+    i.dispatchEvent(new window.Event('change', {bubbles: true}));
+    i.remove();
+  })()`;
+
+  // 1. a healthy club: money moves out and comes straight back.
+  const both = game.eval(`(function(){
+    const c = G.clubs[G.my];
+    delete c._bud0;
+    const b0 = c.budget, w0 = c.wageCap;
+    ${drag('budSplit', 250000)};
+    const out = {budget: c.budget - b0, cap: c.wageCap - w0};
+    ${drag('budSplit', -250000)};
+    return {out, back: {budget: c.budget - b0, cap: c.wageCap - w0}};
+  })()`);
+
+  assert.equal(both.out.budget, 250000, 'dragging towards transfers adds to the transfer budget');
+  assert.ok(both.out.cap < 0, 'and takes it off the wage ceiling');
+  assert.equal(both.back.budget, 0, 'dragging back returns the transfer budget exactly');
+  assert.equal(both.back.cap, 0, 'and returns the wage ceiling exactly');
+
+  /* 2. The reported save: a wage bill of £106K/w against a £72K/w ceiling.
+        The transfers screen used to call that "£183/w wage room left" in
+        green while the squad screen called it over budget in red, and the
+        slider rendered its neutral handle hard against "more transfers →"
+        because nothing could move that way. */
+  const broken = game.eval(`(function(){
+    const c = G.clubs.filter(x => x.league === 'NL').sort((a,b) => a.rep - b.rep)[0];
+    G.my = c.i; G.deals = null;
+    c.custom = true; c.rep = 1850; c.cap = 2400;
+    c.budget = 12e5; c.wageCap = 72000; c.bank = 6e5;
+    c._bud0 = {budget: 12e5, wageCap: 72000};
+    const k = 106000 / Math.max(1, squadWage(c));
+    c.players.forEach(p => { p.wage = Math.round(p.wage * k); });
+
+    const html = vTransferBudget();
+    const b0 = c.budget, w0 = c.wageCap;
+    ${drag('budSplit', -5e6)};        // shove everything towards wages
+    return {
+      bill: squadWage(c), ceiling: w0,
+      saysOver: html.indexOf('Over the ceiling') >= 0,
+      claimsRoomLeft: html.indexOf('Wage room left') >= 0,
+      explains: html.indexOf('no money can move back to transfers') >= 0,
+      maxToTransfers: (html.match(/max="(-?\\d+)" value="0"/) || [])[1],
+      escaped: {budget: c.budget - b0, cap: c.wageCap - w0},
+    };
+  })()`);
+
+  assert.ok(broken.bill > broken.ceiling, 'the reproduction really is over the ceiling');
+  assert.equal(broken.saysOver, true, 'the panel says you are over the ceiling');
+  assert.equal(broken.claimsRoomLeft, false, 'it does not simultaneously claim you have room left');
+  assert.equal(broken.explains, true, 'and it explains why nothing can move back to transfers');
+  assert.equal(broken.maxToTransfers, '0', 'nothing can be moved into transfers while the bill is over');
+  assert.ok(broken.escaped.cap > 0 && broken.escaped.budget < 0,
+    'but transfer money can still be poured into the ceiling, which is the way out of the hole');
+
+  // 3. and a loan cannot push the bill over the ceiling in the first place
+  const loan = game.eval(`(function(){
+    const c = G.clubs[G.my];
+    const before = c.players.length;
+    const mkt = (typeof loanMarket === 'function' ? loanMarket() : []);
+    if (!mkt.length) return 'no market';
+    G._loanList = mkt;
+    ACTIONS.loanInDo({dataset: {v: '0'}});
+    return c.players.length === before ? 'blocked' : 'went through';
+  })()`);
+  assert.equal(loan, 'blocked', 'a loan may not push the wage bill past the ceiling — that is how it got there');
+});

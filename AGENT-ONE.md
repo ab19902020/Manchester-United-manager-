@@ -1,7 +1,7 @@
 # Agent One — report to Claude
 
 **Written by:** Agent One (balance and rules) · **Read by:** Claude (director) and Codex
-**Current as of commit:** `b314c8e` · **Last updated:** 10 August 2026 (cycle 5)
+**Current as of commit:** `9acb075` · **Last updated:** 10 August 2026 (cycle 6)
 
 ---
 
@@ -96,6 +96,41 @@ turnover including coaching costs — that figure changed *for* 2026/27, which i
 the season the game is set in — League Two 55%, enforced by refusing to register
 the player rather than by a points deduction. Clubs sit at 16–44%, so it only
 bites if you go looking for it.
+
+### Cycle 6 — the budget slider, from a real save
+
+The user played it and sent two screenshots taken seconds apart. The squad
+screen said `WAGE BILL £106K/w of £72K/w` in red. The transfers screen said
+`£183/w WAGE ROOM LEFT` in green. Same two numbers: one divided by the ceiling,
+the other by the ceiling plus the 18% overdraft the signing checks quietly allow.
+The hidden one is gone — the ceiling is the ceiling, and the overdraft is stated.
+
+**The slider went one way and did not look like it.** Its right-hand limit is
+`(ceiling − bill) × 52` floored at zero, so once the bill passes the ceiling
+nothing can move towards transfers, `max` becomes 0, and the neutral value of 0
+renders the handle hard against the right-hand end — directly under the words
+*more transfers →*. It reads as maxed out. It is stuck, and every further drag
+moves another lump the other way; the reported save had shifted £808,000 without
+meaning to.
+
+**And `budLimits` can return an inverted band.** Once the wage bill is further
+above the ceiling than the entire transfer budget could close, `wageLo` (bill ×
+1.02) ends up above `wageHi` (ceiling + budget/52) — measured at £108,119 against
+£95,077. Any range built on that is nonsense, and the commit had no checks of its
+own to catch it. The two constraints that are always true are derived directly
+now: you cannot spend a budget you do not have, and you cannot cut the ceiling
+below the people already on it. **Raising** the ceiling is never blocked, because
+when you are over it that is the way out.
+
+**How the bill got over the ceiling.** Contract talks check it, free agents check
+it, deadline day checks it. Neither loan path does — both test the fee against
+the transfer budget and stop. That is the hole, and it is plugged.
+
+Verified against a reproduction of the reported save: the panel now says you are
+over the ceiling instead of claiming room left, explains why nothing moves back
+to transfers, and pouring £1.2M of transfer money into the ceiling — the escape —
+commits where before nothing did. On a healthy club, £250K out and £250K back
+returns both numbers to exactly where they started.
 
 ### Cycle 5 — a built club that can climb
 
@@ -324,10 +359,10 @@ new. `red-devil-manager.html` +1 line, `tests/game-harness.cjs` +1 line,
 
 ```text
 npm run check
-lint clean; tests 18; pass 18; fail 0; duration 74.8 s
+lint clean; tests 20; pass 20; fail 0; duration 106.9 s
 ```
 
-Ten of those eighteen were already here and still pass. Eight are mine.
+Ten of those twenty were already here and still pass. Ten are mine.
 
 Three full seasons simulated a day at a time, on the merged tree:
 

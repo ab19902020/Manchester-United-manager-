@@ -1,10 +1,11 @@
-/* global G, esc, clamp, fmtM, mail, squadWage, staffWage, divMembers, leaguePos,
+/* global G, esc, clamp, fmtM, fmtW, WEEKS_IN_YEAR, mail, squadWage, staffWage, divMembers, leaguePos,
           LEAGUES, commercialIncome, ensureCommercial, MU, ordinal, tableRows,
           fixCtx, DIV_ORDER, ACTIONS, playerById, toast, $, loanTerms, offerById,
-          CC_CHAIRS */
+          CC_CHAIRS, budLimits, budOrigin, sfx, render */
 /* global seasonRevenue:writable, seasonCosts:writable, monthlyIncome:writable,
           applyPostMatch:writable, endSeason:writable, vFinances:writable,
-          dailyTickCore:writable, normaliseReps:writable, completeSigning:writable */
+          dailyTickCore:writable, normaliseReps:writable, completeSigning:writable,
+          vTransferBudget:writable */
 
 /* =====================================================================
    ECONOMY — what football clubs actually earn, and what it costs them
@@ -1594,4 +1595,251 @@
       target: 3,
     });
   } catch (error) { /* the built-club module is not present */ }
+}());
+
+/* =====================================================================
+   THE BUDGET SLIDER, AND THE WAGE BILL IT IS SUPPOSED TO DESCRIBE
+   ---------------------------------------------------------------------
+   Reported from a real save, with two screens that contradicted each
+   other. The squad screen said
+
+       WAGE BILL   £106K/w of £72K/w        (red, over)
+
+   and the transfers screen, at the same moment, said
+
+       £183/w  WAGE ROOM LEFT               (green, fine)
+
+   Both are computed from the same two numbers. The squad screen divides
+   by the ceiling; the transfers screen divides by the ceiling plus
+   eighteen per cent, which is the overdraft the signing checks quietly
+   allow. One of them had to go, and it is the hidden one: the ceiling is
+   the ceiling, room is what is left of it, and if the board will tolerate
+   an overdraft it should say so rather than hide it in a multiplier.
+
+   THE SLIDER ITSELF. Its range is `-maxToWage` to `+maxToFee`, and
+
+       maxToFee = (wageCap - max(wageLo, bill)) x 52   floored at zero
+
+   so the moment the wage bill passes the ceiling, maxToFee is zero, the
+   range becomes one-way, and the neutral value of 0 renders the handle
+   hard against the right-hand end — directly underneath the words "more
+   transfers →". It looks like you have pushed everything into transfers.
+   You have not: you cannot move anything into transfers at all, and
+   every further drag takes another lump out of the transfer budget and
+   puts it into wages. The reported save had shifted £808,000 that way.
+
+   The commit had no guards of its own either — it trusted the range
+   attributes, which are only recomputed on render.
+
+   AND HOW THE BILL GOT ABOVE THE CEILING. Contract talks check it, free
+   agents check it, deadline day checks it. Loans do not: both loan paths
+   test the fee against the transfer budget and never look at wages, so a
+   loan signing can push the bill anywhere. That is the actual hole, and
+   it is plugged here.
+   ===================================================================== */
+
+(function economyBudgetSlider() {
+  'use strict';
+
+  const has = (fn) => typeof fn === 'function';
+  const WEEKS = (typeof WEEKS_IN_YEAR === 'number') ? WEEKS_IN_YEAR : 52;
+  const OVERDRAFT = 1.18;          /* what the signing checks already allow */
+
+  function guard(context, fn, fallback) {
+    try { return fn(); } catch (error) {
+      try { console.error(`[economy: ${context}]`, error); } catch (ignored) { /* no console */ }
+      return fallback;
+    }
+  }
+
+  /* The board's band cannot be trusted as given. `budLimits` computes
+     `wageLo` as the wage bill plus 2% and `wageHi` as the ceiling plus
+     everything the transfer budget could buy, and when the bill is
+     further above the ceiling than the whole budget could close, the
+     low bound ends up ABOVE the high one. The reported save was exactly
+     that: wageLo £108,119 against wageHi £95,077. Any range built on an
+     inverted band is nonsense, so the two constraints that are always
+     true are derived here and the board's band is applied only where it
+     is coherent.
+
+     The two that are always true: you cannot spend a transfer budget you
+     do not have, and you cannot cut the ceiling below the people already
+     on it. Raising the ceiling is never blocked — when you are over it,
+     raising it is the way out. */
+  function limits() {
+    const c = G.clubs[G.my];
+    const bill = has(squadWage) ? squadWage(c) : 0;
+    const billFloor = Math.round(bill * 1.02);
+    let L = { feeLo: 0, feeHi: Infinity, wageLo: 0, wageHi: Infinity };
+    try {
+      if (has(budLimits)) {
+        const b = budLimits(c);
+        const coherent = b && b.wageLo <= b.wageHi && b.feeLo <= b.feeHi;
+        if (coherent) L = b;
+        else L = { feeLo: 0, feeHi: Math.max(b.feeHi, c.budget), wageLo: 0, wageHi: Infinity };
+      }
+    } catch (error) { /* use the always-true bounds */ }
+
+    const capMax = Math.max(c.wageCap, L.wageHi === Infinity ? Infinity : L.wageHi);
+    const capMin = Math.max(billFloor, Math.min(L.wageLo, c.wageCap));
+    const budLo = Math.max(0, L.feeLo);
+    const budHi = L.feeHi === Infinity ? Infinity : L.feeHi;
+
+    const toWage = Math.max(0, Math.min(
+      c.budget - budLo,
+      capMax === Infinity ? c.budget : (capMax - c.wageCap) * WEEKS,
+    ));
+    const toFee = Math.max(0, Math.min(
+      budHi === Infinity ? Infinity : budHi - c.budget,
+      (c.wageCap - capMin) * WEEKS,
+    ));
+    return { c, bill, billFloor, budLo, budHi, capMax, capMin, toWage, toFee, over: bill - c.wageCap };
+  }
+
+  /* --------------------------------------------------------------
+     THE PANEL
+     -------------------------------------------------------------- */
+  if (has(vTransferBudget)) {
+    vTransferBudget = function vTransferBudgetHonest() {
+      return guard('slider', () => {
+        const { c, bill, toWage, toFee, over } = limits();
+        const room = c.wageCap - bill;
+        const moved = c.budget - (has(budOrigin) ? budOrigin(c).budget : c.budget);
+        const step = Math.max(1000, Math.round(Math.max(toWage, toFee) / 40 / 1000) * 1000);
+
+        let h = '<div class="budgetbar">' +
+          '<div class="bb"><div class="bv" id="bbFee" style="color:var(--gold)">' + fmtM(c.budget) + '</div>' +
+          '<div class="bl">Transfer budget</div></div>' +
+          '<div class="bb"><div class="bv" id="bbWage" style="color:' + (room >= 0 ? 'var(--green)' : 'var(--danger)') + '">' +
+          (room >= 0 ? fmtW(room) : '-' + fmtW(-room)) + '</div>' +
+          '<div class="bl">' + (room >= 0 ? 'Wage room left' : 'Over the ceiling') + '</div></div></div>';
+
+        h += '<div class="card tight" style="padding:12px 13px">' +
+          '<div class="spread" style="margin-bottom:9px">' +
+          '<span class="chip-lbl" style="margin:0">Rebalance the budget</span>' +
+          (moved ? '<button class="chip" data-action="budReset">↺ Reset</button>' : '') + '</div>';
+
+        if (toWage <= 0 && toFee <= 0) {
+          h += '<div class="xs" style="color:var(--amber);line-height:1.6">The board will not move the split any ' +
+            'further in either direction. This is the plan you have already agreed with them.</div>';
+        } else {
+          h += '<input type="range" id="budSplit" min="' + Math.round(-toWage) + '" max="' + Math.round(toFee) +
+            '" value="0" step="' + step + '" style="width:100%;accent-color:var(--gold)">' +
+            '<div class="spread xs faint" style="margin-top:5px">' +
+            '<span>' + (toWage > 0 ? '← ' + fmtM(toWage) + ' to wages' : '← nothing to move') + '</span>' +
+            '<span id="budNote">drag to move money</span>' +
+            '<span>' + (toFee > 0 ? fmtM(toFee) + ' to transfers →' : 'nothing to move →') + '</span></div>';
+        }
+
+        h += '<div class="xs faint" style="line-height:1.6;margin-top:9px">' +
+          'A wage ceiling is weekly and a fee is a lump, so a year is the bridge: ' +
+          fmtM(WEEKS * 1e5) + ' of transfer money is worth ' + fmtW(1e5) + ' a week. ' +
+          'Paying <b>' + fmtW(bill) + '</b> against a ceiling of <b>' + fmtW(c.wageCap) + '</b>.</div>';
+
+        if (over > 0) {
+          h += '<div class="xs" style="margin-top:8px;color:var(--danger);line-height:1.6">' +
+            '⚠️ You are <b>' + fmtW(over) + ' a week</b> over the ceiling, so no money can move back to transfers ' +
+            'until the wage bill comes down — sell somebody, or let a contract run out. The board tolerate up to ' +
+            '<b>' + fmtW(Math.round(c.wageCap * OVERDRAFT)) + '</b> before they stop you signing anyone at all.</div>';
+        } else if (toFee <= 0 && toWage > 0) {
+          h += '<div class="xs" style="margin-top:8px;color:var(--amber);line-height:1.6">' +
+            'Moving money the other way would put the ceiling below the wages you already pay, so this slider only ' +
+            'goes one way for now.</div>';
+        }
+
+        if (moved) {
+          h += '<div class="xs" style="margin-top:8px;color:' + (moved > 0 ? 'var(--green)' : 'var(--gold)') + '">' +
+            'Shifted ' + (moved > 0 ? '+' : '−') + fmtM(Math.abs(moved)) + ' against the board’s original split. ' +
+            (moved > 0 ? 'More to spend on fees, less on wages.' : 'More to spend on wages, less on fees.') + '</div>';
+        }
+        return h + '</div>';
+      }, '');
+    };
+  }
+
+  /* --------------------------------------------------------------
+     AND IT COMMITS WHAT IT SHOWS
+     -------------------------------------------------------------- */
+  (function wire() {
+    const preview = (v) => guard('slider.preview', () => {
+      const { c, bill } = limits();
+      const fee = c.budget + v;
+      const cap = c.wageCap - Math.round(v / WEEKS);
+      const room = cap - bill;
+      const f = document.getElementById('bbFee');
+      const w = document.getElementById('bbWage');
+      const n = document.getElementById('budNote');
+      if (f) f.textContent = fmtM(fee);
+      if (w) { w.textContent = room >= 0 ? fmtW(room) : '-' + fmtW(-room); w.style.color = room >= 0 ? 'var(--green)' : 'var(--danger)'; }
+      if (n) {
+        n.textContent = v === 0 ? 'drag to move money'
+          : v > 0 ? '+' + fmtM(v) + ' to transfers, −' + fmtW(Math.round(v / WEEKS)) + '/w ceiling'
+            : '+' + fmtW(Math.round(-v / WEEKS)) + '/w ceiling, −' + fmtM(-v) + ' to spend';
+      }
+    });
+
+    document.addEventListener('input', (e) => {
+      if (e.target && e.target.id === 'budSplit') preview(+e.target.value);
+    });
+
+    document.addEventListener('change', (e) => {
+      if (!e.target || e.target.id !== 'budSplit') return;
+      guard('slider.commit', () => {
+        const v = +e.target.value;
+        if (!v) return;
+        const { c, billFloor, budLo, budHi, capMax, toWage, toFee } = limits();
+        /* the range attributes are only as fresh as the last render, so
+           every limit is checked again here rather than trusted */
+        const amount = Math.max(-toWage, Math.min(toFee, v));
+        if (!amount) { render(); return; }
+        const perWeek = Math.round(amount / WEEKS);
+        const newBudget = c.budget + amount;
+        const newCap = c.wageCap - perWeek;
+        if (newBudget < budLo || newBudget > budHi) { toast('The board will not move the split that far.'); render(); return; }
+        /* the ceiling may always go up — when you are over it, that is the
+           way out. It may only come down as far as the wages you pay. */
+        if (amount > 0 && newCap < billFloor) { toast('That would put the ceiling below the wages you already pay.'); render(); return; }
+        if (amount < 0 && capMax !== Infinity && newCap > capMax) { toast('The board will not raise the ceiling any further.'); render(); return; }
+        c.budget = newBudget;
+        c.wageCap = newCap;
+        try { sfx('tap'); } catch (error) { /* no audio */ }
+        toast(amount > 0 ? `💷 ${fmtM(amount)} moved to the transfer budget`
+          : `💷 ${fmtW(-perWeek)} a week added to the wage ceiling`);
+        render();
+      });
+    });
+  }());
+
+  /* --------------------------------------------------------------
+     THE HOLE THE BILL CAME THROUGH
+     --------------------------------------------------------------
+     Contract talks, free agents and deadline day all test the wage bill
+     against the ceiling. Neither loan path does — they check the fee
+     against the transfer budget and stop there — so a loan could put the
+     bill anywhere, and in the reported save it was 147% of the ceiling.
+     -------------------------------------------------------------- */
+  ['loanAskDo', 'loanInDo'].forEach((name) => {
+    if (typeof ACTIONS === 'undefined' || typeof ACTIONS[name] !== 'function') return;
+    const previous = ACTIONS[name];
+    ACTIONS[name] = function loanWageChecked(el) {
+      const stop = guard('loan.wages', () => {
+        const c = G.clubs[G.my];
+        let weekly = 0;
+        if (name === 'loanInDo') {
+          const r = (G._loanList || [])[+el.dataset.v];
+          if (r) weekly = Math.round(r.p.wage * (100 - r.share) / 100);
+        } else {
+          const p = playerById(el.dataset.id);
+          if (p && has(loanTerms)) weekly = (loanTerms(p) || {}).weekly || 0;
+        }
+        if (weekly <= 0) return false;
+        const bill = has(squadWage) ? squadWage(c) : 0;
+        if (bill + weekly <= c.wageCap * OVERDRAFT) return false;
+        toast(`The wage bill will not take it — ${fmtW(bill + weekly)} against a ${fmtW(c.wageCap)} ceiling`);
+        return true;
+      }, false);
+      if (stop) return undefined;
+      return previous.apply(this, arguments);
+    };
+  });
 }());
