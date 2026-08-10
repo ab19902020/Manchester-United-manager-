@@ -1,7 +1,7 @@
 # Agent One — report to Claude
 
 **Written by:** Agent One (balance and rules) · **Read by:** Claude (director) and Codex
-**Current as of commit:** `7950fcb` · **Last updated:** 10 August 2026 (cycle 2)
+**Current as of commit:** `b401e7c` · **Last updated:** 10 August 2026 (cycle 3)
 
 ---
 
@@ -97,6 +97,49 @@ the season the game is set in — League Two 55%, enforced by refusing to regist
 the player rather than by a points deduction. Clubs sit at 16–44%, so it only
 bites if you go looking for it.
 
+### Cycle 3 — the chairman, and how a transfer is paid for
+
+`a7ff39e`, `08ba7bf`.
+
+**The built-club chairman is fixed.** This was item 1 of my last "found but not
+fixed" list and it was the worst thing in the file, because choosing a chairman
+is the shape of the whole created-club career and the choice lasted until May.
+`normaliseReps` ends every summer with `wageCap = max(wageCap, rep × 90)`;
+measured, one season end, no promotion, the Tight chairman's numbers went
+
+| | before | after one summer | now |
+| --- | ---: | ---: | ---: |
+| wage ceiling | £22,000/wk | £169,020/wk | **£22,000/wk** |
+| transfer budget | £150,000 | £613,000 | **£150,000** |
+
+The `rep × 90` floor is kept for every other club in the world — it stops a
+generated club being left unable to field a team — and skipped for the one club
+whose ceiling was set deliberately. A chairman is stored as a *multiple* of the
+going rate for a club that size, reapplied each season, so Tight stays tight in
+the Championship: £22K/£38K/£72K become £40K/£69K/£131K on promotion to League
+Two rather than being flattened to one number.
+
+And a ceiling above what the club turns over is an owner writing cheques, so it
+is modelled as that — owner funding, its own line in the accounts, paid monthly,
+counting towards the wage cap because the real SCMP counts secured owner
+investment. Generous puts in £2.15M a year; Tight puts in nothing, which is
+precisely what he tells you when you pick him.
+
+One thing worth flagging for its own sake: three separate layers write to the
+budget *after* `normaliseReps`, and one of them was **my own** merit-payment
+correction from cycle two, quietly taking £38,000 back off the chairman's
+allocation. I found it by tracing every write to `c.budget` through a property
+setter rather than by reading the chain. Worth doing that whenever a number ends
+up somewhere you cannot account for.
+
+**Phase four of the economy — transfers.** Every transfer was cash on the day.
+Now: fees structured over the contract (one year below £300K, four above £20M),
+sell-on clauses honoured on the profit rather than the fee, agent fees at ten per
+cent out of cash, and a signing fee on frees. Guarded so leverage cannot become
+free money — outstanding debt is capped at 1.5× the annual budget, which is
+roughly the covenant a real board imposes. Instalments settle each summer in both
+directions and appear on the Finances screen.
+
 ### Cycle 1 — six defects away from the pitch
 
 `eef35a8` and `42234ea`.
@@ -162,10 +205,10 @@ new. `red-devil-manager.html` +1 line, `tests/game-harness.cjs` +1 line,
 
 ```text
 npm run check
-lint clean; tests 16; pass 16; fail 0; duration 70.9 s
+lint clean; tests 18; pass 18; fail 0; duration 73.9 s
 ```
 
-Ten of those sixteen were already here and still pass. Six are mine.
+Ten of those eighteen were already here and still pass. Eight are mine.
 
 ### The economy, measured before and after
 
@@ -227,7 +270,7 @@ and one conversation in twenty matches. That run is in the regression test.
 The valuable section, per your own protocol. All of these are outside what I was
 asked to change.
 
-### 1. A built club's chairman is overwritten at the first season end — measured
+### 1. ~~A built club's chairman is overwritten at the first season end~~ — FIXED in `a7ff39e`
 
 This one matters, because choosing a chairman is the whole shape of a created-club
 career and the choice does not survive May.
@@ -253,7 +296,7 @@ Repro: start a career, take the weakest National League club, set
 `custom=true, budget=150000, wageCap=22000, rep=1850`, call `endSeason()`, read
 the two numbers back.
 
-### 2. Promotion pays a flat £8,000,000, at every level — read, not run
+### 2. ~~Promotion pays a flat £8,000,000, at every level~~ — FIXED in `b5de3b8`
 
 `red-devil-manager.html:3395`, in the promotion `swap`:
 `c.budget = Math.round(c.budget*2.4 + 8e6)`. `wB6_finance`'s `endSeason` wrapper
@@ -315,11 +358,11 @@ Nothing. Everything I was asked for is in and measured.
 
 ## What I would like from you
 
-- **Claude:** item 1 is still open and now matters more, not less — a built club's
-  chairman sets a wage ceiling that a `rep × 90` floor overwrites at the first
-  season end. Phase three softens the consequence, because turnover now caps wages
-  below the Championship whatever the ceiling says, but the chairman you chose
-  still stops meaning anything in May. Items 2 and 3 are economy design calls.
+- **Claude:** items 1 and 2 are now fixed. What is left on that list is item 3
+  (commercial income too flat across the Premier League), item 4 (a goal bonus
+  cannot help close a deal below the Championship — that one needs the acceptance
+  score rewriting, which is yours), item 5 (the morale drip still starts at a
+  fixed five matches) and item 7 (dead code).
 - **Claude, on feel:** the economy is calibrated soft on the user's explicit
   instruction — everybody profitable, nobody doomed. If you want it to bite
   harder, the four numbers to move are `runs`, `seat`, `grant` and the division

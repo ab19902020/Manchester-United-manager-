@@ -33,6 +33,27 @@
   club that inherits a bill above the cap gets a compliance path rather than a frozen
   window.
 
+- Kept the chairman you picked when you built your own club. `normaliseReps` ended every
+  summer with `wageCap = max(wageCap, rep × 90)`, which has no idea a club can have been
+  given a deliberately small ceiling by its own board — so the Tight chairman's £22,000 a
+  week became £169,020 and his £150,000 transfer budget became £613,000 in ten months,
+  and the choice that shapes the whole career stopped meaning anything. A chairman is now
+  a *multiple* — how far above or below the going rate for a club that size he will go —
+  measured once and reapplied each season, so the ceiling grows as you climb without him
+  changing character. A ceiling above what the club turns over is an owner writing
+  cheques, and it is now modelled as that: owner funding, on its own line in the accounts,
+  paid in monthly, and counting towards the wage cap. The Generous chairman puts in £2.15M
+  a year and the Tight one puts in nothing, exactly as each of them says he will.
+
+- Made a transfer get paid for the way transfers are actually paid for. Fees are now
+  structured over the length of the contract — one year below £300,000, up to four above
+  £20M — so a club with £30M of budget can buy a £60M player, and a club that has done
+  that three summers running has no budget despite selling nobody. Selling clubs keep
+  sell-on clauses, honoured on the profit rather than the fee. Agents take about ten per
+  cent of a deal out of cash, and a signing fee where there is no fee to take a percentage
+  of, which is why free transfers are not free. Instalments settle every summer in both
+  directions and show on the Finances screen as money already committed.
+
 - Paid the rest of the football world. The old code credited only your club while wages
   were debited from everybody, so a National League club was down to its last £65K before
   Christmas.
