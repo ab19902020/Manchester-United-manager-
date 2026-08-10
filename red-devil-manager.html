@@ -55904,6 +55904,120 @@ dugPose=function(id,sp,swing,bob,face){
  return _poseE0.apply(this,arguments)};
 
 /*#wE0_audit.js#*/
+/*#wE1_sweeplast.js#*/
+
+/* =====================================================================
+   wE1_sweeplast — sweep the calendar the player is actually given
+   ---------------------------------------------------------------------
+   Codex found a club with two matches on one day in one unseeded career
+   out of about twenty, and could not get a stable seed for it. The seed
+   was never the variable.
+
+   Logging the build order through newGame:
+
+     buildFixtures -> 0        initCups -> sweep moved 0
+     buildFixtures -> 380      initCups -> sweep moved 0
+     buildFixtures -> 380      initCups -> sweep moved 0
+     buildFixtures -> 8781     initCups -> sweep moved 115   <- the real one
+     buildFixtures -> 8781                                   <- rebuilt, and
+                                                                no sweep after
+     AFTER newGame: fixtures carrying .moved = 0
+
+   The rescheduler is hung off initCups, which is right, because a cup
+   draw is the only thing that creates new dates. But the calendar is
+   built one more time after the last draw. That final rebuild throws
+   away all 115 repairs and nothing sweeps it, so the world handed to the
+   player is the raw generated calendar — the one the sweep exists to
+   fix. Every fixture came out with no `moved` flag on it, which is the
+   tell: the repairs were real and then they were discarded.
+
+   Why it looked random: the first career in a browser session and every
+   career after it generate different worlds from the same seed, because
+   something initialises lazily on the first run and shifts the random
+   stream. So whether the unswept calendar happens to contain a clash
+   varies career to career. Same seed, first career clean, second career
+   broken, every time.
+
+   The fix is not to move the rescheduler. It is to make sure a sweep
+   happens after the LAST build rather than only after cup draws.
+   ===================================================================== */
+
+/* A complete calendar, as opposed to one of the part-built ones the
+   earlier layers produce on their way there. The last two builds both
+   carry the full 8,781; the first three do not. */
+function calFull(){
+ try{return !!(G&&G.fixtures&&G.fixtures.length>1000&&G.cups)}
+ catch(e){return false}}
+
+const _bfSweepLast=buildFixtures;
+buildFixtures=function(){
+ const r=_bfSweepLast.apply(this,arguments);
+ try{
+  if(calFull()){
+   /* reserveCupDays() first, because playableOn consults RESERVED and
+      the cup calendar may have moved since the last time it was built */
+   reserveCupDays();
+   reschedSweep();
+   calRepair();
+  }
+ }catch(e){}
+ return r};
+
+/* ---------------------------------------------------------------------
+   AND A BACKSTOP, BECAUSE THE SWEEP DECLINES SOME CASES ON PURPOSE
+   ---------------------------------------------------------------------
+   reschedSweep only looks at pairs closer together than three days and
+   deliberately leaves two cup ties alone — a squad playing twice in a
+   week is real football. But two matches on the SAME DAY is not a
+   judgement call, it is impossible, and it is worth a second pass that
+   only ever looks for that.
+
+   This runs after the sweep, finds any club with two unplayed matches on
+   one date, and moves whichever of the two is allowed to move. It does
+   not invent new rules about what may move: a sourced 2026/27 date and a
+   cup tie both stay put, exactly as before, so the only thing it can
+   shift is a generated league fixture.
+   --------------------------------------------------------------------- */
+function calSameDayClashes(){
+ const out=[];
+ try{
+  const all=[...(G.fixtures||[])];
+  if(G.cups)for(const k in G.cups)(G.cups[k].ties||[]).forEach(t=>all.push(t));
+  const seen=new Map();
+  all.forEach(f=>{
+   if(!f||f.played||f.day==null)return;
+   [f.h,f.a].forEach(ci=>{
+    if(ci==null)return;
+    const key=ci+'|'+f.day;
+    const prev=seen.get(key);
+    if(prev){if(prev!==f)out.push({ci,day:f.day,a:prev,b:f})}
+    else seen.set(key,f)})});
+ }catch(e){}
+ return out}
+
+function calRepair(){
+ try{
+  let fixed=0;
+  for(let pass=0;pass<3;pass++){
+   const clashes=calSameDayClashes();
+   if(!clashes.length)break;
+   const idx=fixtureIndex();
+   let any=false;
+   clashes.forEach(c=>{
+    /* the same rules the sweep uses: published dates and cup ties are
+       fixed points, so only a generated league fixture can give way */
+    const movable=[c.a,c.b].filter(f=>!f.authentic&&!f.cup);
+    if(!movable.length)return;
+    /* prefer moving a friendly, then the later of the two */
+    movable.sort((x,y)=>(y.friendly?1:0)-(x.friendly?1:0)||y.day-x.day);
+    for(const f of movable){
+     if(reschedule(f,idx,'two matches on one day')){fixed++;any=true;break}}
+   });
+   if(!any)break}
+  return fixed}
+ catch(e){return 0}}
+
+/*#wE1_sweeplast.js#*/
 showStart();
 </script>
 <script src="src/career-store.js"></script>

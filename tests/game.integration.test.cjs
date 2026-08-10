@@ -233,6 +233,48 @@ test('published 2026/27 dates survive congestion and season two generates afresh
   }
 });
 
+test('a second career in the same session never double-books a club', { timeout: 60000 }, async () => {
+  // The existing collision assertion only ever sees the FIRST career built in a
+  // window, and that one is reliably clean. The calendar was rebuilt once more
+  // after the last cup draw, throwing away every repair the rescheduler had
+  // made, so the world actually handed to the player had never been swept —
+  // and whether it happened to contain a clash varied career to career.
+  // Same seed: first career clean, second broken, every time.
+  const game = await createGame();
+  try {
+    await startCareer(game);
+    const report = JSON.parse(game.eval(`JSON.stringify((()=>{
+      const out=[];
+      for(let career=1;career<=3;career+=1){
+        let x=(23*2654435761)>>>0;
+        Math.random=()=>{x=(Math.imul(x,1664525)+1013904223)>>>0;return x/4294967296};
+        newGame('MUN');
+        const all=[...G.fixtures];
+        if(G.cups)for(const k in G.cups)(G.cups[k].ties||[]).forEach(t=>all.push(t));
+        const seen=new Map(),clashes=[];
+        all.forEach(f=>{
+          if(!f||f.played||f.day==null)return;
+          [f.h,f.a].forEach(ci=>{
+            if(ci==null)return;
+            const key=ci+'|'+f.day;
+            if(seen.has(key)){
+              if(seen.get(key)!==f)clashes.push((G.clubs[ci]||{}).name+' on day '+f.day);
+            } else seen.set(key,f);
+          });
+        });
+        out.push({career,fixtures:G.fixtures.length,clashes:clashes.slice(0,5)});
+      }
+      return out;
+    })())`));
+    for (const career of report) {
+      assert.equal(career.fixtures, 8781);
+      assert.deepEqual(career.clashes, [], `career ${career.career} double-booked a club`);
+    }
+  } finally {
+    game.close();
+  }
+});
+
 test('mobile UI fixes cover press copy, fixture dates, unique SVG ids and paginated transfers', { timeout: 60000 }, async () => {
   const game = await createGame();
   try {

@@ -4,6 +4,11 @@
 
 ### Fixed
 
+- Swept the calendar the player is actually given. The rescheduler ran after cup
+  draws, but the fixture list was rebuilt once more after the last draw, discarding
+  every repair — so the delivered world had never been swept and could contain a
+  club with two matches on one day. Measured 1 in 40 careers before, 0 in 105 after.
+
 - Counted a press conference once instead of twice on the home screen; the context
   and the mail that launches it are one decision.
 - Sent a red-carded player down the tunnel rather than to a seat on the substitutes'
