@@ -50,12 +50,13 @@
   given a deliberately small ceiling by its own board — so the Tight chairman's £22,000 a
   week became £169,020 and his £150,000 transfer budget became £613,000 in ten months,
   and the choice that shapes the whole career stopped meaning anything. A chairman is now
-  a *multiple* — how far above or below the going rate for a club that size he will go —
-  measured once and reapplied each season, so the ceiling grows as you climb without him
-  changing character. A ceiling above what the club turns over is an owner writing
-  cheques, and it is now modelled as that: owner funding, on its own line in the accounts,
-  paid in monthly, and counting towards the wage cap. The Generous chairman puts in £2.15M
-  a year and the Tight one puts in nothing, exactly as each of them says he will.
+  stored as the *amount* he is putting in over and above the going rate for a club that
+  size, measured once and reapplied every season, so the ceiling grows as you climb
+  without him changing character. That money is an owner writing cheques, and it is
+  modelled as that: owner funding, on its own line in the accounts, paid in monthly, and
+  counting towards the wage cap — because the real Salary Cost Management Protocol counts
+  secured owner investment too, and a ceiling you are not allowed to spend is not a
+  ceiling.
 
 - Made a transfer get paid for the way transfers are actually paid for. Fees are now
   structured over the length of the contract — one year below £300,000, up to four above
