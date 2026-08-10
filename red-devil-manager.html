@@ -55624,6 +55624,286 @@ render=function(){
  [0,300,900].forEach(t=>setTimeout(xsScan,t))})();
 
 /*#wD9_edges.js#*/
+
+
+/*#wE0_audit.js#*/
+
+/* =====================================================================
+   wE0_audit — the six things Codex found in my last six commits
+   ---------------------------------------------------------------------
+   All six are mine, all six were reproducible, and none of them showed
+   up in my own testing because in every case I checked that the code was
+   present rather than checking what it did.
+   ===================================================================== */
+
+/* ---------------------------------------------------------------------
+   1. ONE PRESS CONFERENCE WAS COUNTED AS TWO   (3aebb9f)
+   ---------------------------------------------------------------------
+   attnAnswer() adds G.pressCtx, and then adds every blocking mail —
+   including the mail whose only purpose is to launch that same press
+   conference. Codex's probe returned ['press','mailpress-one']: one
+   decision, two entries, so the home screen said "2 things need an
+   answer" for one thing.
+
+   The mail and the context are the same event. The context wins, because
+   it is the thing you actually answer; its launcher mail is a doorway.
+   --------------------------------------------------------------------- */
+function attnIsPressMail(m){
+ try{
+  return !!(m&&(m.press||(m.actions&&m.actions.some(a=>
+   a.act==='pressOpen'||a.act==='pressSkip'))))}
+ catch(e){return false}}
+
+const _attnAnswerE0=attnAnswer;
+attnAnswer=function(){
+ const out=_attnAnswerE0.apply(this,arguments);
+ try{
+  if(!G||!G.pressCtx)return out;
+  /* the context is already in the list; drop its launcher mail so the
+     same conference is not counted a second time */
+  const block=(typeof blockingMails==='function')?blockingMails():[];
+  const dupes=new Set(block.filter(attnIsPressMail).map(m=>'mail'+m.id));
+  if(!dupes.size)return out;
+  return out.filter(n=>!dupes.has(n.k));
+ }catch(e){return out}};
+
+/* ---------------------------------------------------------------------
+   2. A SENT-OFF PLAYER TOOK A SEAT ON THE BENCH   (32bc5be)
+   ---------------------------------------------------------------------
+   subScan() treats every dot that has newly gone off as a substitution.
+   A red card also sets off, so the dismissed man walked to the fourth
+   official, waited to shake hands with a replacement who was never
+   coming, and then sat down with the substitutes.
+
+   He does not go to the bench. He goes down the tunnel — which in this
+   camera means the near corner, past the byline, and out of shot.
+   --------------------------------------------------------------------- */
+const SENT_OFF=[];
+
+function sentOffStep(){
+ const now=performance.now();
+ for(let i=SENT_OFF.length-1;i>=0;i--){
+  const w=SENT_OFF[i],d=w.d;
+  if(!d||!d.pl){SENT_OFF.splice(i,1);continue}
+  const age=now-w.t0;
+  /* He does not jog off. First he stands there while it sinks in — the
+     ease on these dots is 5% a frame, which without this pause carried
+     him from the centre circle to the touchline in about six hundred
+     milliseconds, a sprint rather than the walk of a man who has just
+     been dismissed. */
+  if(age<dugMs(1500)){
+   d.tx=d.x;d.ty=d.y;
+   dugSet(d.pl.p.id,'protest',600);
+   continue}
+  /* then the long walk: the nearest touchline, and out past it */
+  d.tx=w.x;d.ty=w.y;
+  if(typeof dugSet==='function')dugSet(d.pl.p.id,'trudge',420);
+  /* gone only once he is both there and has taken his time over it */
+  const there=d.y>=w.y-2.5;
+  if((there&&age>dugMs(4200))||age>dugMs(26000)){
+   d._gone=true;SENT_OFF.splice(i,1)}}}
+
+function sentOffScan(){
+ try{
+  const m=MU.m;if(!m)return;
+  (MU.dots||[]).forEach(d=>{
+   if(!d||!d.pl||!d.pl.sentOff||d._sentSeen)return;
+   d._sentSeen=true;
+   /* pull him out of the substitution machinery if it already grabbed
+      him, and give back the bench seat it handed out */
+   if(typeof SUB_WALK!=='undefined'){
+    for(let i=SUB_WALK.length-1;i>=0;i--)
+     if(SUB_WALK[i].d===d){
+      if(SUB_WALK[i].seat!=null&&typeof SUB_SEAT!=='undefined')
+       SUB_SEAT[SUB_WALK[i].si]=Math.max(0,SUB_SEAT[SUB_WALK[i].si]-1);
+      SUB_WALK.splice(i,1)}}
+   d._seat=null;
+   /* and tell the substitution layer to leave him alone. subScan() adds
+      any dot with off set and _sbOff clear, and it runs inside the same
+      frame as this does — claiming the flag is what stops it putting him
+      straight back in the queue behind my back. */
+   d._sbOff=true;
+   /* the tunnel: the far touchline, at whichever end he is nearer */
+   SENT_OFF.push({d,t0:performance.now(),
+    x:clamp(d.x<52.5?18:87,6,99), y:71.5});
+  })}
+ catch(e){}}
+
+/* off players are pinned to a bench seat by the substitution layer, so
+   a dismissed man has to be taken back out of that every frame */
+const _targetsE0=pitchTargets;
+pitchTargets=function(){
+ const r=_targetsE0.apply(this,arguments);
+ try{sentOffScan();sentOffStep()}catch(e){}
+ return r};
+
+const _drawE0=drawDugout;
+drawDugout=function(){
+ try{sentOffScan();sentOffStep()}catch(e){}
+ return _drawE0.apply(this,arguments)};
+
+const _initDotsE0=initDots;
+initDots=function(){
+ SENT_OFF.length=0;
+ const r=_initDotsE0.apply(this,arguments);
+ (MU.dots||[]).forEach(d=>{d._sentSeen=!!(d.pl&&d.pl.sentOff);d._gone=false});
+ return r};
+
+/* ---------------------------------------------------------------------
+   3. THE MAN ON THE FLOOR WAS NOT THE MAN NAMED   (0446136)
+   ---------------------------------------------------------------------
+   foulEvent picks a victim and says his name. lifeFoul then floored
+   whichever opponent happened to be nearest, so the commentary could
+   name one player while a different one went down.
+
+   The victim is a local inside foulEvent and cannot be read from
+   outside — but the name has just been spoken, and the commentary feed
+   is the record of that. So the last line is searched for a live
+   opponent, and he is the one who goes down. Nearest-man stays as the
+   fallback for the paths that name nobody, which is most yellow cards.
+   --------------------------------------------------------------------- */
+function lifeNamedVictim(m,si){
+ try{
+  const feed=m&&m.feed;if(!feed||!feed.length)return null;
+  const text=String(feed[feed.length-1].text||'');
+  if(!text)return null;
+  const opp=(typeof livePlayers==='function')?livePlayers(1-si):[];
+  /* longest name first, so "de Ligt" is not beaten by "Ligt" */
+  const hit=opp.filter(pl=>pl&&pl.p&&pl.p.name&&text.indexOf(pl.p.name)>=0)
+   .sort((a,b)=>b.p.name.length-a.p.name.length)[0];
+  return hit||null}
+ catch(e){return null}}
+
+if(typeof lifeFoul==='function'){
+ lifeFoul=function(dp){
+  try{
+   if(!dp||!dp.p)return;
+   const d=(typeof dotOf==='function')?dotOf(dp):null;
+   if(!d)return;
+   const si=(d.si==null?0:d.si);
+   /* the man the commentary just named, if it named one */
+   const named=lifeNamedVictim(MU.m,si);
+   if(named&&named.p){dugSet(named.p.id,'floored',2400);return}
+   const near=livePlayers(1-si)
+    .map(x=>dotOf(x)).filter(Boolean)
+    .sort((a,b)=>dist2(a,d)-dist2(b,d))[0];
+   if(near&&near.pl&&near.pl.p&&dist2(near,d)<16)
+    dugSet(near.pl.p.id,'floored',2400)}
+  catch(e){}};
+}
+
+/* ---------------------------------------------------------------------
+   4. THE CROWD DUCK OUTLIVED THE CROWD   (c643d20)
+   ---------------------------------------------------------------------
+   kokoDuck(false) returns early when A2.crowd has gone, so duckAt was
+   left holding the old level. Rebuild the crowd during speech — full
+   time will do it — and the new crowd is never ducked, while the stale
+   number waits to be restored onto something else later.
+
+   Releasing the duck must clear the state whether or not there is still
+   a crowd to release it on.
+   --------------------------------------------------------------------- */
+if(typeof kokoDuck==='function'){
+ kokoDuck=function(on){
+  try{
+   const c=A2.crowd;
+   const ctx=SFX.ctx;
+   if(on){
+    if(!c||!c.bus||!ctx)return;
+    if(KOKO.duckAt==null)KOKO.duckAt=c.bus.gain.value;
+    c.bus.gain.setTargetAtTime(KOKO.duckAt*0.30,ctx.currentTime,0.10);
+    return}
+   /* off: put the level back if the same crowd is still there, and
+      forget it either way */
+   const want=KOKO.duckAt;
+   KOKO.duckAt=null;
+   if(want!=null&&c&&c.bus&&ctx)
+    c.bus.gain.setTargetAtTime(want,ctx.currentTime,0.45);
+  }catch(e){KOKO.duckAt=null}};
+}
+
+/* ---------------------------------------------------------------------
+   5. A CLAUSE THAT FAILED AFTER THE FIRST ONE VANISHED   (c643d20)
+   ---------------------------------------------------------------------
+   The one-clause-ahead generation was written .catch(()=>null), so a
+   failure part-way through a sentence produced a null buffer, the loop
+   skipped it, and kokoSay resolved true. ttsSay only falls back to the
+   device voice when kokoSay rejects — so the rest of the sentence was
+   silently dropped and nothing took over.
+
+   A failure mid-sentence is exactly when the fallback is needed most.
+   --------------------------------------------------------------------- */
+if(typeof kokoSay==='function'){
+ const _kokoSayE0=kokoSay;
+ kokoSay=async function(text,who,opt){
+  const o=opt||{};
+  const voice=o.voice||kokoVoiceFor(who,o.gender||
+   (typeof nameGender==='function'?nameGender(who):null));
+  const clauses=(typeof sayClauses==='function')?sayClauses(text):[text];
+  const speed=clamp(o.rate||1,.7,1.3);
+  const token={};KOKO.token=token;
+  let ducked=false;
+  /* the look-ahead keeps its own failure instead of throwing away the
+     reason, so it can be raised on the turn that needs it */
+  let next=kokoGen(clauses[0],voice,speed).then(b=>({b}),e=>({e}));
+  try{
+   for(let i=0;i<clauses.length;i++){
+    const got=await next;
+    if(KOKO.token!==token)return true;
+    if(got.e)throw got.e;                        /* was swallowed */
+    if(i+1<clauses.length)
+     next=kokoGen(clauses[i+1],voice,speed).then(b=>({b}),e=>({e}));
+    if(!got.b)continue;
+    if(!ducked&&o.duck!==false){kokoDuck(true);ducked=true}
+    await kokoPlay(got.b,{vol:(sfxCfg().vol||.7)*(o.vol||1),wet:o.wet||0});
+    if(KOKO.token!==token)return true;
+    const gap=(i===clauses.length-1)?0:(/[.!?]$/.test(clauses[i])?150:60);
+    if(gap)await new Promise(r=>setTimeout(r,gap))}
+   return true}
+  finally{if(ducked)kokoDuck(false)}};
+}
+
+/* ---------------------------------------------------------------------
+   6. THE WARNING MISSED A LIVE DOWNGRADE   (f479283)
+   ---------------------------------------------------------------------
+   rbsStoreMissing() asked whether RBSSaves existed. CareerStore.open()
+   deliberately falls back to localStorage when IndexedDB will not open,
+   and in that case RBSSaves exists perfectly well — with store.mode set
+   to 'localStorage'. So the one case the warning was written for, a
+   player actually running on the ~5 MB path, was the case it stayed
+   silent about.
+
+   Ask what mode it is in, not whether the object is there.
+   --------------------------------------------------------------------- */
+if(typeof rbsStoreMissing==='function'){
+ rbsStoreMissing=function(){
+  try{
+   const s=window.RBSSaves;
+   if(typeof s==='undefined'||!s)return true;
+   const mode=s.store&&s.store.mode;
+   /* 'pending' is still opening and may yet succeed; only a settled
+      localStorage mode is a downgrade worth shouting about */
+   return mode==='localStorage';
+  }catch(e){return false}}}
+
+/* ---------------------------------------------------------------------
+   AND ONE NEW SHAPE
+   ---------------------------------------------------------------------
+   trudge — head down, hands low, the walk of a man who has been sent
+   off. Slower than a jog and it does not bob.
+   --------------------------------------------------------------------- */
+const _poseE0=dugPose;
+dugPose=function(id,sp,swing,bob,face){
+ const a=(typeof dugAnimOf==='function')?dugAnimOf(id):null;
+ if(a&&a.a==='trudge'){
+  const t=performance.now()/300;
+  const s2=Math.sin(t);
+  return {legA:s2*0.30,legB:-s2*0.30,
+   armA:-0.16,armB:0.16,
+   rot:0.07,lift:0,bob:0,down:0.30}}
+ return _poseE0.apply(this,arguments)};
+
+/*#wE0_audit.js#*/
 showStart();
 </script>
 <script src="src/career-store.js"></script>

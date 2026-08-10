@@ -4,6 +4,19 @@
 
 ### Fixed
 
+- Counted a press conference once instead of twice on the home screen; the context
+  and the mail that launches it are one decision.
+- Sent a red-carded player down the tunnel rather than to a seat on the substitutes'
+  bench, and gave him a beat before he starts walking.
+- Floored the player the commentary actually named in a foul, instead of whoever
+  happened to be nearest the offender.
+- Cleared the crowd-duck state when the crowd is rebuilt mid-speech, so a later
+  utterance cannot restore a stale level.
+- Surfaced a neural-voice failure that happens after the first clause, so the device
+  voice takes over instead of the rest of the sentence disappearing.
+- Warned about a live localStorage downgrade, not only a missing save store: the
+  career store can exist and still have fallen back to the ~5 MB path.
+
 - Prevented the first autosave from capturing the incomplete 84-club world.
 - Replaced silent save-slot eviction with validated IndexedDB careers and rotating autosave recovery points.
 - Fixed incoming transfer acceptance crashing because an arrow function referenced `arguments`.
