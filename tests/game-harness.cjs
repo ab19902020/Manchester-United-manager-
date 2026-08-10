@@ -22,6 +22,7 @@ function gameHtml() {
     'src/runtime-enhancements.js',
     'src/gameplay-balance.js',
     'src/economy.js',
+    'src/press-room.js',
   ]) {
     html = inlineScript(html, fs.readFileSync(path.join(root, filename), 'utf8'), filename);
   }

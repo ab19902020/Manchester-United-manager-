@@ -105,6 +105,20 @@
 
 ### Fixed
 
+- Made the press conference understand which match it is at. Reported from a real save:
+  six wins on the spin and the room asked whether it was a blip. Measured, with eight
+  matches played and a six-game winning run, the pool was **46 rules, 272 lines, picked
+  uniformly at random, of which 51.5% was context-free filler** — your winning run and
+  your league position were about 1% each. A topic with ten interchangeable phrasings was
+  ten times likelier than the thing actually happening to you. The room now knows the
+  competition (`fixCtx` already worked it out for the match engine and nothing passed it
+  through), the division, the matchday out of the season's total, what part of the season
+  that makes it, whether it is a cup tie, a European night, a semi-final, a final, a derby
+  or the last day, and which eleven you picked — including a big name you left out, a
+  debutant, and how young the side is. Twelve new questions use it, with answers. And
+  selection is weighted: filler drops to a quarter of the room and a six-game run becomes
+  the single most likely thing to be asked about.
+
 - Fixed the budget rebalance slider, reported from a real save where two screens
   contradicted each other: the squad screen said `£106K/w of £72K/w` in red while the
   transfers screen said `£183/w wage room left` in green. Both are the same two numbers —
