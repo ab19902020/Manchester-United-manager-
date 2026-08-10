@@ -20,6 +20,7 @@ function gameHtml() {
     'src/authentic-fixtures.js',
     'src/career-store.js',
     'src/runtime-enhancements.js',
+    'src/gameplay-balance.js',
   ]) {
     html = inlineScript(html, fs.readFileSync(path.join(root, filename), 'utf8'), filename);
   }

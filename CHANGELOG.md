@@ -4,6 +4,52 @@
 
 ### Fixed
 
+- Broke the squad-unrest loop. Any player you had not explicitly given a role to was
+  treated as a promised *squad player* — 42% of the matches — so a club that had just
+  assembled itself out of free agents was in breach of twenty promises it never made.
+  The complaint was typed as board business, which halts the season, and the weekly
+  pass could raise a fresh one every Monday for ever. A player now comes to you at most
+  once a month and once every twelve weeks each, after eight weeks at the club and
+  eight matches played; the message sits in the inbox instead of in front of the
+  Continue button; a role you have not set is read from where he actually stands in the
+  squad; and you can tell him honestly what he is here rather than only promising him
+  minutes. A promise is now recorded and checked twelve weeks later.
+
+- Made a red card cost the next match. Suspensions were applied correctly during a
+  match — two matches for a straight red, one for two yellows, one for every fifth
+  booking — and then served by the match they were shown in, because `afterRound`
+  decrements every ban at every club that played that day and the fixture list it walks
+  includes the game that has just finished. Two yellows cost nothing at all. Bans are
+  now served once per club per matchday, league or cup, and never by the match that
+  produced them. Your squad is also warned when a player is one booking from a ban.
+
+- Priced a season loan for the division doing the borrowing. `loanTerms` quoted
+  `max(£200,000, 7% of value)` rounded to £100,000, so a National League club with a
+  £150,000 transfer budget was quoted £200,000 for every player in the game and the
+  loan market was shut. (`loanFeeFor`, the other loan path, had already been corrected;
+  this one was missed.) The multiplier that was supposed to charge a big club more was
+  also inverted and billed a small club 18% more than Manchester United. Below the
+  Football League most loans now carry no fee at all, which is what actually happens.
+
+- Scaled the goal bonus on a contract to the wage on it — about 5% of a week, so £50 in
+  the National League rather than the £5,000 the sheet opened with whoever you were.
+
+- Made the transfer news about the league you manage in. The rumour mill only looked at
+  players rated 76 or better, skipped League Two and the National League entirely, and
+  only ever named a Premier League or European suitor. It now works from your own
+  division and the ones directly above and below it in your country — so Serie B reads
+  about Serie B — with one story in five still from the top of the world game.
+
+- Funded a wage rise out of the transfer budget. Giving a player another £10,000 a week
+  changed nothing anywhere. It now costs a year of the rise at the game's own exchange
+  rate — the same 52 weeks the budget slider trades at — the contract sheet says what
+  it will cost before you offer it, and a rise the budget cannot cover is refused.
+
+### Changed
+
+- Gave the inbox filters (decisions, transfers, squad, board, media) with unread counts
+  on each, and a line of the message itself on every row.
+
 - Made the budget rebalance slider work at every size of club. The board's band was
   plus or minus 40% of its own split, so a created club with a small wage ceiling
   could only move a few thousand a week, and the slider's fixed £100k step was
