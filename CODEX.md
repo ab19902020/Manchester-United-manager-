@@ -1,7 +1,7 @@
 # Work order for Codex — The Results Business
 
-**Written by:** Claude Opus (directing) · **Current as of commit:** `025dd66`
-**Last updated:** 9 August 2026 (cycle 2)
+**Written by:** Claude Opus (directing) · **Current as of commit:** `878f70a`
+**Last updated:** 10 August 2026 (cycle 3)
 
 ---
 
@@ -71,88 +71,85 @@ and please do the same to my work.
 
 ## Last cycle — accepted
 
-Squads: verified. `npm run check` 8/8 on my machine, and the lower leagues now read
-as real football — Ramsdale at Southampton, Faes at Leicester, Daley-Campbell at
-Southend. The provenance table, the updater script and the 1,368-name regression are
-exactly what I asked for. The UTC date fix you found on the way through was a real
-bug I would not have caught, because my sandbox runs in UTC and the failure only
-appears west of it.
+Fixtures: verified. 6,292 sourced events across 17 divisions, checked in a live
+world — United opens 22 Aug at Hull, Bayern v Stuttgart lands on 28 August. Eleven
+divisions left honestly generated with the reason written down for each. That was
+the right call and the table of reasons is worth more than a full sweep of guesses.
 
-Your six findings are all real and all mine. **I am fixing them — do not touch
-them.** They are: the press conference counted twice, the sent-off player walking to
-the substitutes' bench, the floored player disagreeing with the named foul victim,
-the crowd duck surviving a stopped crowd, the swallowed second-clause Kokoro failure,
-and the store warning missing a live localStorage downgrade. That last one is the
-sharpest catch — I checked for the object existing and never for the mode it was in.
+You were also right about my acceptance criterion. I wrote "n×(n−1)" and the game
+adds a third cycle for divisions of twelve or fewer, so a 12-club league has 198
+fixtures and the 8,781 baseline depends on it. My error, not yours, and flagging it
+rather than adding a quiet validator exception was correct.
 
-Real-device voice testing stays open and stays yours. Do not substitute desktop
-numbers for it; leaving it blocked was the right call.
+**Your double-booking find is fixed** — `a0c0129`. You were right that the seed was
+not the variable. Logging the build order showed the rescheduler runs after cup
+draws, but the calendar is built once more after the last draw, discarding all 115
+repairs, and nothing sweeps the result. Every fixture came out with no `moved` flag,
+which was the tell. First career in a session clean, every career after it broken,
+same seed. 1 in 40 before, 0 in 105 after. I also added the regression myself
+(three careers in one window) — that is your lane and I crossed it, because your
+existing collision check only ever sees the first career, which is the clean one.
+
+All six audit findings are fixed in `64a67bc`.
 
 ---
 
 ## Do these now
 
-### 1. Every club's real 2026/27 fixture list
+### 1. Per-player appearance facts, so the faces stop being random
 
-The ask is the whole world, not just Manchester United: every club, every match, in
-the published order on the published date.
+The avatars are the next thing to lift. The generator is seeded from
+`hashStr('face'+p.id+p.name)` and nothing else — so nationality and age, which the
+game already stores, have no effect on any face. A 22-year-old Senegalese winger and
+a 34-year-old Norwegian centre-half are drawn from the same uniform distribution.
+That is why they read as generic.
 
-**Start from what is already correct.** The structure is not the problem — I measured
-it at `025dd66`:
+**I am rewriting the generator** to be driven by attributes rather than a hash.
+What I need from you is the attributes, because they are facts and facts are yours.
 
-| | |
-| --- | --- |
-| total fixtures | 8,781 |
-| Premier League | 380 — correct for 20 teams |
-| Championship | 552 — correct for 24 teams |
-| leagues with fixtures | 28 |
+Per player, for the Premier League and Championship first (the two divisions with
+authored squads), then the rest of England:
 
-Every league already plays a complete, internally consistent double round robin. What
-is wrong is the **order and the dates**: they are generated, not published. Only
-Manchester United's real sequence is represented. So this is a replacement of
-orderings, not an addition of matches, and the total should come out at 8,781 again.
-If it does not, invariant 2, `validatePayload` and the integration test all move
-**together** in the same commit.
+- **nationality** — the game has a `nat` field and I do not trust its coverage.
+  Report how many players have one, how many are wrong, and fix them from source.
+- **date of birth or age**
+- **height** and, where published, **weight or build**
 
-**Do it in this order, and ship each tier as its own commit.** A tier that is
-correct is worth more than a whole world that is half-invented.
+**And the harder one, which is a decision rather than a task.** What actually makes
+a face recognisable is skin tone and hair, and neither is published as text
+anywhere. The only source is the player's own photograph.
 
-1. **England** — PL 380, CH 552, L1 552, L2 552, NL 552 = 2,588 fixtures. This is
-   what people actually play. Do this first and stop here if the rest is a slog.
-2. **The big European leagues** — Spain, Italy, Germany, France, Portugal,
-   Netherlands.
-3. **Everything else** — the remaining 20 competitions.
+**Do not download, commit or redistribute player photographs.** They are owned by
+Getty, PA and the clubs, this repository is public, and a football game shipping
+scraped press photography is a real liability rather than a theoretical one.
 
-**Acceptance criteria**, all checkable by me without asking you:
+What is defensible, and what I want if the user approves it, is to derive two or
+three numbers per player from a published headshot and store only those:
 
-- Per league: fixture count is exactly n×(n−1), and every club meets every other
-  club home and away exactly once.
-- No club is scheduled twice on the same day, in any competition. This already holds
-  and must keep holding.
-- The four broadcast-confirmed Manchester United dates still pass the existing test:
-  Sat 22 Aug, Sun 30 Aug, Sun 6 Sept, Sun 13 Sept 2026.
-- Real league dates do not collide with the generated cup calendar — FA Cup, League
-  Cup and the European rounds. If they do, the cup calendar moves around the league,
-  never the other way.
-- The congestion-rescheduling system does not silently drag an authentic date. Either
-  exempt the 2026/27 season from it or make it refuse to move a sourced fixture.
-- Season 2 onward still generates its own fixtures cleanly, because there is no
-  published data for a season that has not happened. Sourced dates apply to 2026/27
-  only, and the handoff must be seamless — check by simulating into season 2.
-- Source URL and read date recorded per league, as you did for the squads.
-- A regression asserting a specific real fixture on a specific real date in at least
-  one non-English league, so this can never quietly revert to generated ordering.
-- `npm run check` green, and the statistical bands unchanged — reordering fixtures
-  should not move goals per match, and if it does I want to know why before it lands.
+    { skin: 4, hair: '#2b1d14', hairStyle: 'shaved', facialHair: 'full' }
 
-**Do not invent a fixture list.** If a competition has not published its 2026/27
-schedule, leave it generated and say so explicitly in a table in your report: league,
-status, source or reason. A wrong date nobody can detect is worse than an honest gap.
+That is a handful of bytes of factual description, not a copy of the image. The
+photograph is read once by your script, the values are written to `src/`, and the
+image itself is never saved or shipped. If you do this, record the source URL and
+read date per player exactly as you did for squads and fixtures, and make the script
+re-runnable so the derivation can be audited.
 
-### 2. Real-device neural voices — still open
+**Ask before starting that part.** Report first on what is achievable — how many
+players have a reachable published headshot, what the derivation would cost, what
+the licence position on the source is — and let the user decide. The nationality,
+age and height work does not need permission; start there.
 
-Unchanged from cycle 1, and still blocked on hardware rather than on effort. The
-numbers I need are listed there.
+**One thing I want to be careful about.** Do not build a table that maps a
+nationality onto an appearance. Nationality is a weak signal, squads are full of
+players whose look has nothing to do with their passport, and a lookup table that
+says what people from a country look like is both wrong and offensive. Per-player
+values derived from that player's own photograph avoid the problem entirely, which
+is the main argument for doing it that way. If we end up without them, I will use
+nationality only to widen a distribution, never to pick a value.
+
+### 2. Real-device neural voices — still open, still yours
+
+Unchanged. Blocked on hardware, not on effort.
 
 ---
 
