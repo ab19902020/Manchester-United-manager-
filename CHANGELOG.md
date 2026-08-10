@@ -57,6 +57,12 @@
 
 ### Improved
 
+- Rebuilt the landscape phone layout. The navigation stands up as a rail down the
+  left, the header runs across the top and Continue sits at the end of it, and the
+  content uses two columns. Sideways the game had been letterboxed into 720px of an
+  896px screen with a bottom bar and a floating dock covering the content between
+  them.
+
 - Faded the edges of the nine horizontally scrollable tab and chip rows so it is
   visible that they continue. They were slicing words in half against the screen
   edge — 446px of the tactics row was hidden with no cue at all. The fade is sized
