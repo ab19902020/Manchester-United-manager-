@@ -4,6 +4,13 @@
 
 ### Fixed
 
+- Made the budget rebalance slider work at every size of club. The board's band was
+  plus or minus 40% of its own split, so a created club with a small wage ceiling
+  could only move a few thousand a week, and the slider's fixed £100k step was
+  coarser than the whole usable range. The limits are now the two real ones — a
+  ceiling cannot go below the squad's existing bill, and you cannot spend money you
+  do not have — and the step is a fraction of the range.
+
 - Swept the calendar the player is actually given. The rescheduler ran after cup
   draws, but the fixture list was rebuilt once more after the last draw, discarding
   every repair — so the delivered world had never been swept and could contain a

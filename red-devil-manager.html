@@ -56263,6 +56263,99 @@ function lsUnpin(){
  window.addEventListener('resize',on)})();
 
 /*#wE2_landscape.js#*/
+
+/*#wE3_budget.js#*/
+
+/* =====================================================================
+   wE3_budget — the rebalance slider, at every size of club
+   ---------------------------------------------------------------------
+   Reported from a created club with about a million pounds: the slider
+   would only add about five thousand a week to the wage ceiling, offered
+   around seven hundred thousand to spend, and moved in jumps. Wanting
+   half the money in wages and half in fees was simply not reachable.
+
+   Two faults, and they compound.
+
+   THE BAND IS A PERCENTAGE OF THE BOARD'S SPLIT. budLimits() allowed
+   plus or minus forty per cent of whatever the board started you with:
+
+       feeLo  = 0.6 x budget      wageLo = 0.6 x wageCap
+       feeHi  = 1.4 x budget      wageHi = 1.4 x wageCap
+
+   At a big club forty per cent of a large wage ceiling is a lot of room.
+   At a small one it is nothing: a ceiling of ten thousand a week gives
+   four thousand of headroom, which is the five grand in the report. The
+   limit scales with the number it is limiting, so the clubs with the
+   least freedom are the ones that most need it.
+
+   THE STEP IS FIXED AT A HUNDRED THOUSAND. On a club whose entire usable
+   range is smaller than one step, the slider has two or three positions
+   and snaps between them. That is the glitchiness.
+
+   ---------------------------------------------------------------------
+   WHAT REPLACES IT. The board should stop you doing something impossible,
+   not something merely ambitious. There are two real limits and they are
+   both physical:
+
+     you cannot cut the wage ceiling below what the squad is already paid
+     you cannot spend transfer money you do not have
+
+   So the range now runs between those, and the step is a fraction of the
+   range rather than a constant. A million-pound club can put nine
+   hundred thousand into wages or take its spare wage room out as fees,
+   in steps small enough to land on a round number.
+   ===================================================================== */
+
+/* the squad's current weekly bill is the floor under any wage ceiling */
+function budBill(c){
+ try{return (typeof squadWage==='function')?squadWage(c):0}catch(e){return 0}}
+
+budLimits=function(c){
+ const o=budOrigin(c);
+ const bill=budBill(c);
+ /* a ceiling has to cover the people already on it, with a little air so
+    the squad is not instantly over its limit by a pound */
+ const floor=Math.max(0,Math.round(bill*1.02));
+ /* everything the club could put into wages for a year, and everything
+    it could take back out of them */
+ const feeToWage=Math.max(0,o.budget);
+ const wageToFee=Math.max(0,(o.wageCap-floor))*WEEKS_IN_YEAR;
+ return {
+  feeLo:0,
+  feeHi:Math.round(o.budget+wageToFee),
+  wageLo:floor,
+  wageHi:Math.round(o.wageCap+feeToWage/WEEKS_IN_YEAR)}};
+
+/* ---------------------------------------------------------------------
+   AND A STEP THAT SUITS THE RANGE
+   ---------------------------------------------------------------------
+   Four hundred positions along the bar, snapped to a round number, so the
+   thumb always lands somewhere you would say out loud. £1k at a created
+   club, £1M at Manchester United.
+   --------------------------------------------------------------------- */
+function budStep(range){
+ const raw=Math.max(1,range/400);
+ const steps=[1e3,2500,5e3,1e4,25e3,5e4,1e5,25e4,5e5,1e6];
+ for(let i=0;i<steps.length;i++)if(raw<=steps[i])return steps[i];
+ return 1e6}
+
+const _vTBudget=vTransferBudget;
+vTransferBudget=function(){
+ let h='';
+ try{h=_vTBudget.apply(this,arguments)}catch(e){return ''}
+ try{
+  const m=h.match(/id="budRange"\s+min="(-?\d+)"\s+max="(-?\d+)"/);
+  if(!m)return h;
+  const lo=+m[1],hi=+m[2];
+  const st=budStep(Math.max(1,hi-lo));
+  h=h.replace(/(id="budRange"[^>]*?)step="\d+"/,'$1step="'+st+'"');
+  /* a range of zero leaves a dead bar with no explanation on it */
+  if(hi-lo<st)
+   h=h.replace('drag to move money','the board will not move this one');
+ }catch(e){}
+ return h};
+
+/*#wE3_budget.js#*/
 showStart();
 </script>
 <script src="src/career-store.js"></script>
