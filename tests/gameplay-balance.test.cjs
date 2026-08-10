@@ -106,19 +106,43 @@ test('a wage rise is funded, and a player asking for minutes cannot hold up the 
   t.after(() => game.close());
   await startCareer(game);
 
-  game.eval(`(function(){
+  /* --------------------------------------------------------------
+     Nobody complains about minutes two games into a season.
+     -------------------------------------------------------------- */
+  const gate = game.eval(`(function(){
+    const opens = RBSBalance.unrestOpensAt();
+    const out = {season: RBSBalance.seasonMatches(), opens, tooEarly: []};
     let guard = 0;
-    while (gamesPlayed(G.my) < 12 && guard++ < 400) {
+    // run to just short of the gate, demanding a conversation every week
+    while (gamesPlayed(G.my) < opens - 1 && guard++ < 500) {
       const um = fixturesOn(G.day).find(f => !f.played && (f.h === G.my || f.a === G.my));
       if (um) { quickSim(um); finishDayAfterMatch(); }
       else { simRestOfDay(); dailyTickCore(); G.day++; checkSeasonEnd(); }
+      G.clubs[G.my].players.forEach(p => { p.morale = 20; p.joined = 0; p.unrestDay = -9999; });
+      G.unrestDay = -9999;
+      weeklyTraining();
+      if (G.inbox.some(m => m.unrest)) out.tooEarly.push(gamesPlayed(G.my));
     }
+    out.playedAtStop = gamesPlayed(G.my);
+    return out;
   })()`);
+
+  assert.ok(gate.season >= 33, `a league season should be a full campaign, got ${gate.season} matches`);
+  assert.ok(gate.opens >= Math.floor(gate.season / 3),
+    `unrest should not open before a third of ${gate.season} matches, opens at ${gate.opens}`);
+  assert.equal(gate.tooEarly.length, 0,
+    `a miserable squad still cannot complain before match ${gate.opens} (complained after ${gate.tooEarly.join(', ')})`);
 
   /* --------------------------------------------------------------
      Squad unrest is a conversation in the inbox, not a toll gate.
      -------------------------------------------------------------- */
   const unrest = game.eval(`(function(){
+    let guard = 0;
+    while (gamesPlayed(G.my) < RBSBalance.unrestOpensAt() + 1 && guard++ < 500) {
+      const um = fixturesOn(G.day).find(f => !f.played && (f.h === G.my || f.a === G.my));
+      if (um) { quickSim(um); finishDayAfterMatch(); }
+      else { simRestOfDay(); dailyTickCore(); G.day++; checkSeasonEnd(); }
+    }
     const c = G.clubs[G.my];
     const victim = c.players.filter(p => !p.injury && !p.youth && !p.loan)
       .sort((a, b) => (a.stats.apps || 0) - (b.stats.apps || 0))[0];
@@ -128,17 +152,19 @@ test('a wage rise is funded, and a player asking for minutes cannot hold up the 
     weeklyTraining();
     const m = G.inbox.find(x => x.unrest);
     if (!m) return {raised: false};
+    const promise = m.actions.find(a => String(a.arg).indexOf('promise:') === 0);
+    // whoever actually knocked, which need not be the man we nudged
+    const caller = playerById(String(promise.arg).split(':')[1]);
     const out = {
       raised: true,
       blocking: blockingMails().some(b => b.id === m.id),
       options: m.actions.length,
       hasHonestOption: m.actions.some(a => String(a.arg).indexOf('honest:') === 0),
-      roleBefore: roleOf(victim),
+      roleBefore: roleOf(caller),
     };
-    const promise = m.actions.find(a => String(a.arg).indexOf('promise:') === 0);
     ACTIONS.unrestTalk({dataset: {arg: promise.arg, mid: m.id}});
-    out.roleAfter = roleOf(victim);
-    out.promiseRecorded = !!victim.promise;
+    out.roleAfter = roleOf(caller);
+    out.promiseRecorded = !!caller.promise;
     out.mailClosed = !(G.inbox.find(x => x.id === m.id) || {}).actions;
     // four more weeks must not produce four more demands
     for (let i = 0; i < 4; i++) weeklyTraining();
@@ -166,7 +192,9 @@ test('a wage rise is funded, and a player asking for minutes cannot hold up the 
     const wage0 = p.wage, budget0 = c.budget;
     openContractSheet(p, {fee: 0, renew: true});
     const shown = !!document.getElementById('renewFund');
-    document.getElementById('tWage').value = String(wage0 + 10000);
+    // the agent's own asking wage, so the deal is certain to be agreed
+    const asking = Number((document.getElementById('termsMeet') || {dataset: {}}).dataset.v || 0);
+    document.getElementById('tWage').value = String(Math.max(wage0 + 10000, asking));
     document.getElementById('tLen').value = '3';
     ACTIONS.submitTerms();
     const funded = {shown, rise: p.wage - wage0, charged: budget0 - c.budget};
@@ -183,8 +211,9 @@ test('a wage rise is funded, and a player asking for minutes cannot hold up the 
   })()`);
 
   assert.equal(money.shown, true, 'the sheet says what the rise will cost before you offer it');
-  assert.equal(money.rise, 10000, 'the renewal went through');
-  assert.equal(money.charged, 10000 * 52, 'a year of the rise leaves the transfer budget');
+  assert.ok(money.rise >= 10000, `the renewal went through with a real rise, got £${money.rise}`);
+  assert.equal(money.charged, money.rise * 52,
+    'a year of the rise leaves the transfer budget, at the same 52 weeks the budget slider trades at');
   assert.equal(money.refusedWage, true, 'a rise the budget cannot fund is refused');
   assert.equal(money.refusedBudget, true, 'and refusing it costs nothing');
 

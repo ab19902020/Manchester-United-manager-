@@ -25,7 +25,10 @@
         BLOCKING type, and weeklyTraining can raise a fresh one every
         Monday. Answering it moved one player's morale and changed
         nothing else, so the next Monday raised another. That is the
-        loop you cannot get out of.
+        loop you cannot get out of. And none of it waited for a season
+        to happen first: five matches in, a squad of twenty had eleven
+        men with a grievance and no manager alive could have answered
+        it.
 
      2. LOAN FEES. loanTerms priced a season loan at max(£200,000, 7% of
         value) rounded to £100,000. A National League club with a
@@ -152,12 +155,31 @@
   const UNREST_PLAYER_GAP = 84; /* days before the same man knocks again */
   const UNREST_SETTLE = 56;     /* days at the club before he has a case */
   const PROMISE_DAYS = 84;      /* how long you have to make good on one */
+  const UNREST_SEASON_OPENS = 1 / 3; /* how far in before anyone has a case at all */
+
+  /* How long a league season is where you manage, so that "a third of
+     the way in" means the same thing in a thirty-eight match Premier
+     League and a forty-six match National League. Divisions of twelve
+     or fewer play each other three times rather than twice, which is
+     the difference between a thirty-three match season and a
+     twenty-two match one. */
+  function seasonMatches() {
+    try {
+      const n = (divMembers(G.clubs[G.my].league) || []).length;
+      if (n >= 2) return (n - 1) * (n <= 12 ? 3 : 2);
+    } catch (error) { /* fall back below */ }
+    return 38;
+  }
 
   function unrestCandidates() {
     const c = myClub();
     if (!c) return [];
     const played = gamesPlayed(G.my);
-    if (played < 8) return [];
+    /* Nobody has a grievance about minutes two games into a season.
+       You have to have had a real chance to spread them around first,
+       and that is a third of the campaign — not a fixed number of
+       matches, which means something different in every division. */
+    if (played < Math.ceil(seasonMatches() * UNREST_SEASON_OPENS)) return [];
     const out = [];
     (c.players || []).forEach((p) => {
       if (p.loan || p.loanIn || p.youth || p.injury || p.susp > 0) return;
@@ -839,5 +861,10 @@
     };
   }
 
-  try { window.RBSBalance = Object.freeze({ loanFeeQuote, goalBonusFor, standingRole, localDivisions, roleShare }); } catch (error) { /* no window */ }
+  try {
+    window.RBSBalance = Object.freeze({
+      loanFeeQuote, goalBonusFor, standingRole, localDivisions, roleShare,
+      seasonMatches, unrestOpensAt: () => Math.ceil(seasonMatches() * UNREST_SEASON_OPENS),
+    });
+  } catch (error) { /* no window */ }
 }());

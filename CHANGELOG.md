@@ -8,9 +8,13 @@
   treated as a promised *squad player* — 42% of the matches — so a club that had just
   assembled itself out of free agents was in breach of twenty promises it never made.
   The complaint was typed as board business, which halts the season, and the weekly
-  pass could raise a fresh one every Monday for ever. A player now comes to you at most
-  once a month and once every twelve weeks each, after eight weeks at the club and
-  eight matches played; the message sits in the inbox instead of in front of the
+  pass could raise a fresh one every Monday for ever. Nothing waited for a season to
+  happen first either — five matches in, half a squad had a grievance no manager could
+  have answered. Nobody can now raise playing time until a **third of the division's
+  season** has been played (match 13 of a 38-game Premier League, match 16 of a 46-game
+  National League, match 11 of a 33-game Scottish Premiership), and then only after
+  eight weeks at the club. Beyond that: one conversation a month club-wide and one every
+  twelve weeks per player; the message sits in the inbox instead of in front of the
   Continue button; a role you have not set is read from where he actually stands in the
   squad; and you can tell him honestly what he is here rather than only promising him
   minutes. A promise is now recorded and checked twelve weeks later.
