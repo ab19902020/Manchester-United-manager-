@@ -1,7 +1,7 @@
 # Agent One — report to Claude
 
 **Written by:** Agent One (balance and rules) · **Read by:** Claude (director) and Codex
-**Current as of commit:** `b401e7c` · **Last updated:** 10 August 2026 (cycle 3)
+**Current as of commit:** `a0c448f` · **Last updated:** 10 August 2026 (cycle 4)
 
 ---
 
@@ -96,6 +96,59 @@ turnover including coaching costs — that figure changed *for* 2026/27, which i
 the season the game is set in — League Two 55%, enforced by refusing to register
 the player rather than by a points deduction. Clubs sit at 16–44%, so it only
 bites if you go looking for it.
+
+### Cycle 4 — the verification pass, and what it caught
+
+No new features. The user asked for proof it works before merging, so I ran
+three full seasons a day at a time, rendered every screen, round-tripped a save
+with every new field in it, and played a built club for four seasons. It found
+five things, four of which the test suite had not.
+
+**A correction to what I told you last cycle.** I wrote that the backroom staff
+wage bill was "a projection line only — nothing debits it". That was wrong, and
+it was the most expensive thing in the file. `dailyWages` is wrapped a second
+time at `red-devil-manager.html:3946` and takes `staffWage()/7` out of the bank
+every single day. `defaultStaff` pays `(4 + rep/900) × £1,000` a week per role,
+so the floor is £4,000 a head whoever you are: a built National League club was
+paying its six-man backroom **more than twice its entire playing squad** and
+bleeding to £12.8M overdrawn inside two seasons while its accounts said it was
+profitable. The bill is now scaled down when it is out of proportion to the
+playing budget, never up, so a Premier League backroom is untouched. Same club,
+same two seasons, after: **+£1.09M**.
+
+I found it by defining a property setter on `c.bank` and grouping every write by
+stack frame. Reading the chain would not have found it — the drain was 708
+movements of £20,000, none of them individually remarkable.
+
+**The transfer budget was compounding.** The base game re-levels every club's
+budget each summer except yours, then adds `rep × 9000` to everybody including
+you, and nothing ever takes it back: £135M → £266M → £411M → £563M across three
+seasons without a player being sold. A board allocates from the accounts each
+summer; it does not hand you the running total of every budget it has ever set.
+You keep what you did not spend, up to as much again.
+
+**Eight Spanish clubs went bankrupt.** The foreign second-tier fallback was a
+flat £4M of central money for every league in the world, and a Segunda squad is
+paid like a Championship one. They ended the third season between £13M and £48M
+overdrawn.
+
+**And the fix for that was wrong first time, in a way worth recording.** I
+floored each club's central distribution at its own costs. A regression test
+caught it: a top-up that scales with your own wage bill is an unlimited bailout,
+so overspending pays for itself and the entire point of wages being the binding
+constraint disappears — and it flattened the promotion cliff, because a relegated
+club kept a Premier League income. It is now measured on the **median club in the
+division** and handed to everyone in it equally. A league that cannot pay its way
+gets lifted; a club that has overspent inside a solvent league loses money exactly
+as it should. It binds nowhere in England.
+
+**Also:** AI clubs could carry a negative transfer budget for a month, because
+the AI transfer code subtracts a fee without checking it has one. Cleared daily.
+
+Verified after: 484 clubs, three seasons, **no negative bank anywhere, no
+non-finite money anywhere, zero JavaScript errors**, every screen renders, and a
+save round-trips with parachutes, wage-cap baselines, instalment ledgers and
+sell-on clauses intact.
 
 ### Cycle 3 — the chairman, and how a transfer is paid for
 
@@ -205,10 +258,21 @@ new. `red-devil-manager.html` +1 line, `tests/game-harness.cjs` +1 line,
 
 ```text
 npm run check
-lint clean; tests 18; pass 18; fail 0; duration 73.9 s
+lint clean; tests 18; pass 18; fail 0; duration 74.8 s
 ```
 
 Ten of those eighteen were already here and still pass. Eight are mine.
+
+Three full seasons simulated a day at a time, on the merged tree:
+
+```text
+non-finite or negative money, 484 clubs   NONE
+clubs with a negative bank                NONE
+JavaScript errors                         0
+every screen renders                      yes
+save round-trip, all new fields           intact
+built club, tight chairman, 4 seasons     ceiling £22K -> £60K, bank £97K -> £3.1M
+```
 
 ### The economy, measured before and after
 
@@ -363,6 +427,13 @@ Nothing. Everything I was asked for is in and measured.
   cannot help close a deal below the Championship — that one needs the acceptance
   score rewriting, which is yours), item 5 (the morale drip still starts at a
   fixed five matches) and item 7 (dead code).
+- **Claude:** one wart left that I chose not to touch before merging. The user's
+  bank compounds — £922M after four seasons — because everything is profitable by
+  design. It buys nothing the transfer budget does not already cap, so it harms
+  nothing, but a club hoarding a billion pounds is not a club. If you want it
+  handled, the honest mechanism is the board taking profit above a threshold for
+  the stadium and the training ground, and that is a feel decision rather than a
+  fix.
 - **Claude, on feel:** the economy is calibrated soft on the user's explicit
   instruction — everybody profitable, nobody doomed. If you want it to bite
   harder, the four numbers to move are `runs`, `seat`, `grant` and the division

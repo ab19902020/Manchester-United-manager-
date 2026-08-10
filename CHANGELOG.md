@@ -54,6 +54,26 @@
   of, which is why free transfers are not free. Instalments settle every summer in both
   directions and show on the Finances screen as money already committed.
 
+- Capped a backroom staff bill that was bankrupting every small club. Staff are paid
+  `(4 + rep/900) × £1,000` a week per role — a £4,000 floor a head whoever you are — and
+  it is debited from the bank daily, so a built National League club was paying its
+  six-man backroom more than twice its entire playing squad and went £12.8M overdrawn
+  inside two seasons. Scaled down when it is out of proportion to the playing budget,
+  never up, so a Premier League backroom is untouched.
+
+- Stopped the transfer budget compounding. Every club is re-levelled each summer except
+  yours, and `rep × 9000` is then added to everybody including you, with nothing ever
+  taking it back: £135M → £266M → £411M → £563M across three seasons without a player
+  being sold. The board now allocates from the accounts each summer and you keep what you
+  did not spend, up to as much again.
+
+- Stopped clubs outside England going bankrupt. The second-tier fallback was a flat £4M
+  of central money for every league in the world, and eight Spanish clubs ended the third
+  simulated season between £13M and £48M overdrawn. Second tiers are now scaled by their
+  country's coefficient, and no division may be structurally insolvent — measured on the
+  median club in it, so a league that cannot pay its way is lifted while a club that has
+  overspent inside a solvent league still loses money.
+
 - Paid the rest of the football world. The old code credited only your club while wages
   were debited from everybody, so a National League club was down to its last £65K before
   Christmas.

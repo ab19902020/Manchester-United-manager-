@@ -102,11 +102,20 @@
     if (DIV_FIN[div]) return DIV_FIN[div];
     const L = (typeof LEAGUES !== 'undefined') && LEAGUES[div];
     if (!L) return EU_FALLBACK;
-    if (L.tier !== 1) return { central: 4e6, merit: 4e5, ticket: 18, fill: 0.62, corp: 0.20, seat: 260, runs: 0.17 };
     const co = L.coef || 2;
+    /* Second tiers abroad are not all the same size either — the Segunda
+       División and 2. Bundesliga distribute real money and carry real
+       wage bills, and a flat £4M for all of them was what sent a dozen
+       Spanish clubs into an overdraft they could never climb out of. */
+    if (L.tier !== 1) {
+      const central = co >= 5 ? 14e6 : co >= 4 ? 7e6 : co >= 3 ? 4e6 : 25e5;
+      return { central, merit: Math.round(central * 0.05), ticket: co >= 5 ? 20 : 17,
+        fill: 0.62, corp: 0.22, seat: 300, runs: 0.17, grant: Math.round(central * 0.25) };
+    }
     const central = co >= 5 ? 55e6 : co >= 4 ? 22e6 : co >= 3 ? 12e6 : co >= 2 ? 6e6 : 3e6;
     return { central, merit: Math.round(central * 0.03), ticket: co >= 5 ? 30 : co >= 4 ? 25 : co >= 3 ? 21 : 18,
-      fill: 0.82, corp: co >= 4 ? 0.55 : 0.30, seat: co >= 4 ? 620 : 380, runs: 0.19 };
+      fill: 0.82, corp: co >= 4 ? 0.55 : 0.30, seat: co >= 4 ? 620 : 380, runs: 0.19,
+      grant: Math.round(central * 0.2) };
   }
 
   /* Where a club sits inside its own division on reputation: 1 is the
@@ -201,9 +210,58 @@
      clears a small profit rather than an honest small loss. It is keyed
      to standing rather than to anything you control, so it cannot be
      farmed by running the wage bill up. */
+  /* THE SOLVENCY FLOOR, APPLIED TO A DIVISION AND NOT TO A CLUB.
+
+     A game should not contain clubs that cannot exist. Wage bills are
+     set from reputation, and reputation and revenue do not track each
+     other everywhere — a Spanish second-tier squad is paid like a
+     Championship one on a fraction of the income, and eight of them
+     ended the third simulated season between £13M and £48M overdrawn.
+
+     The first version of this measured each club's own costs, which was
+     wrong in a way a regression test caught before it shipped: a top-up
+     that scales with your own wage bill is an unlimited bailout, so
+     overspending pays for itself and the whole point of wages being the
+     binding constraint disappears. It also flattened the cliff between
+     divisions, because a relegated club kept a Premier League income.
+
+     So it is measured on the MEDIAN club in the division and handed to
+     everybody in it equally. A league that cannot pay its way gets
+     lifted; a club that has overspent inside a solvent league does not,
+     and loses money exactly as it should. Cached per season — it walks
+     every squad in the division. It binds nowhere in England. */
+  let floorCache = { season: -1, by: {} };
+
+  function solvencyNeed(c, f) {
+    const wages = (has(squadWage) ? squadWage(c) : 0) * 52;
+    const staff = wages * 0.18;
+    const stadium = (c.cap || 5000) * f.seat;
+    const denom = Math.max(0.3, 1 - 1.05 * f.runs);
+    return 1.02 * (wages + staff + stadium) / denom;
+  }
+
+  function divisionTopUp(div) {
+    return guard('topup', () => {
+      if (floorCache.season !== G.season) floorCache = { season: G.season, by: {} };
+      if (floorCache.by[div] != null) return floorCache.by[div];
+      floorCache.by[div] = 0;                     /* guards against re-entry */
+      const f = divFinance(div);
+      const mem = divMembers(div) || [];
+      if (!mem.length) return 0;
+      const gaps = mem.map((i) => {
+        const c = G.clubs[i];
+        return solvencyNeed(c, f) - matchdayRevenue(c) - commercialFor(c) - f.central;
+      }).sort((a, b) => a - b);
+      const median = gaps[Math.floor(gaps.length / 2)];
+      const top = Math.max(0, Math.round(median));
+      floorCache.by[div] = top;
+      return top;
+    }, 0);
+  }
+
   function centralFor(c) {
     const f = divFinance(c.league);
-    return Math.round(f.central + (f.grant || 0) * (1 - standing(c)));
+    return Math.round(f.central + (f.grant || 0) * (1 - standing(c)) + divisionTopUp(c.league));
   }
 
   /* Merit money for a finishing position, paid at the end of the season.
@@ -227,14 +285,15 @@
   }
 
   /* Backroom staff are paid `(4 + rep/900) x £1,000` a week per role,
-     which has a £4,000 floor on it and no idea what division it is in:
-     a National League club's six-man backroom costs £1.96M a year
-     against an £816K playing budget. Nothing debits it — it is a
-     projection line only — but it made the bottom of the pyramid look
-     insolvent. Bounded here to a real share of the playing budget in
-     both directions, and the underlying formula is flagged for Claude
-     rather than rewritten, because staff pay belongs to the staff
-     system. */
+     which has a £4,000 floor on it and no idea what division it is in.
+     I previously recorded that nothing debited this and it was a
+     projection line only. That was wrong: `dailyWages` is wrapped a
+     second time and takes `staffWage()/7` out of the bank every single
+     day. It is the largest outgoing a small club has — a built National
+     League club was paying its six-man backroom more than twice its
+     entire playing squad and bleeding to £12.8M overdrawn inside two
+     seasons. The bill itself is capped in `rescaleStaff` below; this
+     bound keeps the projection honest either way. */
   function costsFor(c, rev) {
     const f = divFinance(c.league);
     const r = rev || revenueFor(c);
@@ -287,6 +346,10 @@
           if (!c || c.i === G.my) return;
           const gate = Math.round(matchdayRevenue(c) / 12);
           c.bank = Math.round((c.bank || 0) + (centralFor(c) + commercialFor(c)) / 12 + gate);
+          /* the AI transfer code subtracts a fee without checking it has
+             one, so a club that gets carried away in a window carries a
+             negative transfer budget for the rest of the season */
+          if (!(c.budget > 0)) c.budget = 0;
         });
       });
     };
@@ -991,6 +1054,34 @@
     };
   }
 
+  /* THE BUDGET STOPS COMPOUNDING. The base game re-levels every club's
+     transfer budget each summer except yours — `if(c.i!==G.my)` — and
+     then adds `rep x 9000` to everybody including you. Nothing ever
+     takes it back, so across three simulated seasons a Premier League
+     budget went £135M, £266M, £411M, £563M without a single player
+     being sold. A board allocates a budget from the accounts each
+     summer; it does not hand you a cumulative total of every budget it
+     has ever set. You keep what you did not spend, up to as much again,
+     which is generous and still bounded. */
+  const BUD_SHARE = { PL: 0.22, CH: 0.18, L1: 0.12, L2: 0.12, NL: 0.12 };
+  if (has(endSeason)) {
+    const prevBudEnd = endSeason;
+    endSeason = function endSeasonBudget() {
+      const unspent = guard('budget.pre', () => Math.max(0, (G.clubs[G.my] || {}).budget || 0), 0);
+      const r = prevBudEnd.apply(this, arguments);
+      guard('budget.relevel', () => {
+        const c = G.clubs[G.my];
+        if (!c || c.custom) return;               /* a built club answers to its chairman */
+        const api = E();
+        if (!api) return;
+        const rev = api.centralFor(c) + api.matchdayRevenue(c) + api.commercialFor(c);
+        const allocation = Math.round(rev * (BUD_SHARE[c.league] || 0.15));
+        c.budget = Math.max(1e4, Math.round((allocation + Math.min(unspent, allocation)) / 1e4) * 1e4);
+      });
+      return r;
+    };
+  }
+
   /* The summer is a chain of a dozen layers and three of them touch the
      budget after `normaliseReps` has run — including this file's own
      merit-payment correction, which was quietly taking £38,000 back off
@@ -1014,6 +1105,37 @@
     };
   }
 
+  /* -------------------------------------------------------------------
+     A BACKROOM THE CLUB CAN AFFORD
+     -------------------------------------------------------------------
+     `defaultStaff` pays every role `(4 + rep/900) x £1,000` a week, so
+     the floor is £4,000 a head whoever you are. At a National League
+     club that is a backroom costing more than twice the playing squad,
+     debited daily, and it is why a built club went £12.8M overdrawn in
+     two seasons while its accounts said it was profitable.
+
+     Only ever scaled down, and only when it is out of proportion — a
+     Premier League backroom is a small fraction of a Premier League
+     wage bill already and is left exactly as it is. The staff screen,
+     the daily debit and the accounts all read from the same numbers, so
+     correcting the numbers keeps all three honest at once.
+     ------------------------------------------------------------------- */
+  function rescaleStaff() {
+    const c = G.clubs[G.my];
+    if (!c || !G.staff || !has(staffWage)) return;
+    const bill = (has(squadWage) ? squadWage(c) : 0);
+    if (bill <= 0) return;
+    const current = staffWage();
+    const ceiling = bill * 0.35;
+    if (current <= ceiling) return;                 /* already proportionate */
+    const target = bill * 0.25;
+    const k = target / current;
+    Object.keys(G.staff).forEach((role) => {
+      const st = G.staff[role];
+      if (st && typeof st.wage === 'number') st.wage = Math.max(150, Math.round(st.wage * k / 50) * 50);
+    });
+  }
+
   /* anchored on the first tick of a career, before any summer can move it */
   if (has(dailyTickCore)) {
     const prevTick = dailyTickCore;
@@ -1022,6 +1144,10 @@
       guard('chair.tick', () => {
         const c = G.clubs[G.my];
         if (c && c.custom) anchorChairman(c);
+        /* a club that overspent in the window carries a negative budget
+           until the next month's income; cleared the day it happens */
+        (G.clubs || []).forEach((x) => { if (x && !(x.budget > 0)) x.budget = 0; });
+        if (G.day % 7 === 1) rescaleStaff();
       });
       return r;
     };
