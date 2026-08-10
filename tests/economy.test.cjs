@@ -310,3 +310,58 @@ test('the chairman you picked when you built the club is the chairman you keep',
   assert.equal(generous.ownerShown, generous.owner, 'and it appears in the accounts as owner funding');
   assert.ok(generous.revenue > tight.revenue, 'so his club turns over more');
 });
+
+test('a transfer is paid for the way transfers are actually paid for', async (t) => {
+  const game = await createGame();
+  t.after(() => game.close());
+  await startCareer(game);
+
+  // small fees are settled on the day; big ones are structured
+  const terms = game.eval(`([5e4, 2e5, 4e5, 6e6, 3e7].map(f => RBSEconomy.instalmentYears(f)))`);
+  assert.equal(Array.from(terms).join(','), '1,1,2,3,4',
+    'a non-league fee is cash, a club record is spread across the contract');
+
+  // an agent takes a cut of the deal, or a fee if there is no deal to cut
+  const agents = game.eval(`({big: RBSEconomy.agentFee(2e7, 150000), small: RBSEconomy.agentFee(5e5, 8000), free: RBSEconomy.agentFee(0, 1500)})`);
+  assert.equal(agents.big, 2e6, 'about ten per cent of the fee');
+  assert.ok(agents.free > 0, 'a free transfer is not free — the agent still gets paid');
+
+  const deal = game.eval(`(function(){
+    const my = G.clubs[G.my];
+    const target = G.clubs.find(c => c.i !== G.my && c.league === 'PL').players.filter(p => p.ovr >= 75)[0];
+    const fee = 3e7;
+    const b0 = {budget: my.budget, bank: my.bank};
+    completeSigning(target, fee, {wage: 120000, len: 4, signOn: 0, bonus: 0, clause: 0});
+    const bought = {paidNow: b0.budget - my.budget, cashOut: b0.bank - my.bank, owed: RBSEconomy.outstanding()};
+
+    // sell him on at a profit, with a sell-on clause in the original deal
+    target.sellOn = {club: 1, pct: 20, paid: fee};
+    const buyer = G.clubs.find(c => c.i !== G.my && c.league === 'PL' && c.i !== 1);
+    const oid = 'regress' + Math.random().toString(36).slice(2);
+    G.pendingOffers.push({id: oid, pid: target.id, buyer: buyer.i, fee: 5e7, expires: G.day + 5, stage: 0});
+    const s0 = {budget: my.budget};
+    const owner0 = G.clubs[1].bank;
+    ACTIONS.offerAccept({dataset: {arg: oid}});
+    const sold = {gainedNow: my.budget - s0.budget, due: RBSEconomy.receivable(),
+                  sellOnPaid: G.clubs[1].bank - owner0};
+
+    const beforeSummer = {owed: RBSEconomy.outstanding(), due: RBSEconomy.receivable()};
+    endSeason();
+    return {bought, sold, beforeSummer,
+            afterSummer: {owed: RBSEconomy.outstanding(), due: RBSEconomy.receivable()}};
+  })()`);
+
+  // £30M over four years: a quarter leaves the budget now, the rest is owed
+  assert.equal(deal.bought.paidNow, 75e5, 'a quarter of a four-year deal leaves the transfer budget on the day');
+  assert.equal(deal.bought.owed, 225e5, 'and three quarters of it is owed');
+  assert.ok(deal.bought.cashOut > deal.bought.paidNow,
+    'more cash than budget leaves the club, because the agent is paid out of cash');
+
+  // 20% of the £20M profit goes back to the club he was bought from
+  assert.equal(deal.sold.sellOnPaid, 4e6, 'the sell-on clause is honoured on the profit, not the fee');
+  assert.ok(deal.sold.due > 0, 'and the buyer pays you in instalments too');
+
+  // and the summer settles one year of each
+  assert.ok(deal.afterSummer.owed < deal.beforeSummer.owed, 'an instalment goes out every summer');
+  assert.ok(deal.afterSummer.due < deal.beforeSummer.due, 'and one comes in');
+});

@@ -1,9 +1,9 @@
 /* global G, esc, clamp, fmtM, mail, squadWage, staffWage, divMembers, leaguePos,
           LEAGUES, commercialIncome, ensureCommercial, MU, ordinal, tableRows,
-          fixCtx, DIV_ORDER, ACTIONS, playerById, toast, $, loanTerms */
+          fixCtx, DIV_ORDER, ACTIONS, playerById, toast, $, loanTerms, offerById */
 /* global seasonRevenue:writable, seasonCosts:writable, monthlyIncome:writable,
           applyPostMatch:writable, endSeason:writable, vFinances:writable,
-          dailyTickCore:writable, normaliseReps:writable */
+          dailyTickCore:writable, normaliseReps:writable, completeSigning:writable */
 
 /* =====================================================================
    ECONOMY — what football clubs actually earn, and what it costs them
@@ -1038,6 +1038,289 @@
       api.typicalCap = typicalCap;
       api.baseRevenue = baseRevenue;
       api.structuralRevenue = structuralRevenue;
+      window.RBSEconomy = Object.freeze(api);
+    }
+  } catch (error) { /* no window */ }
+}());
+
+/* =====================================================================
+   ECONOMY PHASE FOUR — how a transfer is actually paid for
+   ---------------------------------------------------------------------
+   Every transfer in the game was cash on the day: the full fee left the
+   buyer's bank and budget in one movement and arrived in the seller's in
+   the same movement. Almost no real transfer works like that.
+
+   INSTALMENTS. A fee of any size is paid over the length of the
+   contract, usually in two to five annual payments. It is why a club
+   with £30M of budget can buy a £60M player, and why a club that has
+   done that for three summers running has no budget at all despite
+   having sold nobody. Both halves of that are the mechanic.
+
+   Guarded so it cannot become free money: what you still owe may not
+   exceed one and a half times your annual transfer budget, which is
+   roughly the covenant a real board would impose, and the first payment
+   still has to be affordable today.
+
+   SELL-ON CLAUSES. A selling club that suspects it is letting a good one
+   go keeps a share of the next sale. When you buy from a bigger club it
+   will often want one, and when you sell that player at a profit years
+   later the cheque goes out — which is the single most-forgotten line in
+   football accounts.
+
+   AGENT FEES. Around ten per cent of a deal, paid on completion, out of
+   cash rather than the transfer budget. On a free transfer there is no
+   fee to take a percentage of, so the agent takes a signing fee instead,
+   which is why free transfers are not free.
+
+   ADD-ONS. Appearance-triggered money, paid in stages as the player
+   actually plays. Small, but it is the reason a fee reported at £15M is
+   "£12M rising to £15M".
+   ===================================================================== */
+
+(function economyTransfers() {
+  'use strict';
+
+  const has = (fn) => typeof fn === 'function';
+
+  function guard(context, fn, fallback) {
+    try { return fn(); } catch (error) {
+      try { console.error(`[economy: ${context}]`, error); } catch (ignored) { /* no console */ }
+      return fallback;
+    }
+  }
+
+  function ledger() {
+    if (!G.fin) G.fin = {};
+    if (!Array.isArray(G.fin.owed)) G.fin.owed = [];
+    if (!Array.isArray(G.fin.due)) G.fin.due = [];
+    return G.fin;
+  }
+
+  function outstanding() {
+    return ledger().owed.reduce((s, x) => s + (x.per || 0) * (x.left || 0), 0);
+  }
+
+  function receivable() {
+    return ledger().due.reduce((s, x) => s + (x.per || 0) * (x.left || 0), 0);
+  }
+
+  /* Over how many years. Small fees are paid up front because the
+     paperwork is not worth it; a club record is spread as far as the
+     contract runs. */
+  function instalmentYears(fee) {
+    if (fee >= 2e7) return 4;
+    if (fee >= 5e6) return 3;
+    if (fee >= 3e5) return 2;
+    return 1;
+  }
+
+  function agentFee(fee, weeklyWage) {
+    const v = fee > 0 ? fee * 0.10 : (weeklyWage || 0) * 8;
+    const step = v >= 1e6 ? 5e4 : v >= 1e5 ? 1e4 : v >= 1e4 ? 500 : 50;
+    return Math.max(0, Math.round(v / step) * step);
+  }
+
+  /* ---------------------------------------------------------------
+     BUYING
+     --------------------------------------------------------------- */
+  if (has(completeSigning)) {
+    const previousSign = completeSigning;
+    completeSigning = function completeSigningStaged(p, fee, t) {
+      const seller = G.clubs[p.club];
+      const sellerIx = seller ? seller.i : -1;
+      const r = previousSign.apply(this, arguments);
+      guard('transfer.buy', () => {
+        const my = G.clubs[G.my];
+        const f = Math.round(fee || 0);
+        const agent = agentFee(f, (t && t.wage) || p.wage);
+        if (agent > 0) my.bank -= agent;
+
+        /* the seller may want a share of the next sale */
+        if (f >= 25e4 && seller && Math.random() < 0.45) {
+          p.sellOn = { club: sellerIx, pct: [10, 15, 20, 25][Math.floor(Math.random() * 4)], paid: f };
+        } else if (f > 0) {
+          p.sellOn = null;
+          p.boughtFor = f;
+        }
+        if (f > 0) p.boughtFor = f;
+
+        if (f > 0) {
+          const years = instalmentYears(f);
+          if (years > 1) {
+            const per = Math.round(f / years);
+            /* the base took the lot; give back everything not due today */
+            const deferred = f - per;
+            my.budget += deferred;
+            my.bank += deferred;
+            if (seller) { seller.bank -= deferred; seller.budget -= Math.round(deferred * 0.75); }
+            ledger().owed.push({ to: sellerIx, per, left: years - 1, who: p.name, total: f });
+          }
+        }
+
+        const L = ledger();
+        const lines = [];
+        if (f > 0 && instalmentYears(f) > 1) {
+          const years = instalmentYears(f);
+          lines.push(`Structured over <b>${years} years</b> at <b>${fmtM(Math.round(f / years))}</b> a year — ` +
+            `<b>${fmtM(Math.round(f / years))}</b> paid now.`);
+        }
+        if (agent > 0) lines.push(`Agent's fee of <b>${fmtM(agent)}</b> settled in cash.`);
+        if (p.sellOn) lines.push(`${esc(G.clubs[p.sellOn.club].short)} keep a <b>${p.sellOn.pct}%</b> sell-on clause.`);
+        if (L.owed.length) lines.push(`<span class="xs faint">Total still owed on past transfers: <b>${fmtM(outstanding())}</b>.</span>`);
+        if (lines.length) {
+          mail('transfer', `📄 ${p.name}: how the deal is paid`, lines.join('<br><br>'));
+        }
+      });
+      return r;
+    };
+  }
+
+  /* You cannot mortgage the club to nothing. The first payment has to be
+     affordable now, and the running total owed is capped against the
+     budget the board actually allocates. */
+  if (typeof ACTIONS !== 'undefined' && typeof ACTIONS.submitBid === 'function') {
+    const previousBid = ACTIONS.submitBid;
+    ACTIONS.submitBid = function submitBidLeveraged() {
+      const stop = guard('transfer.leverage', () => {
+        const fee = Math.round(+(($('#bidFee') || {}).value) || 0);
+        if (fee <= 0) return false;
+        const my = G.clubs[G.my];
+        const owedAfter = outstanding() + fee - Math.round(fee / instalmentYears(fee));
+        const ceiling = Math.round((my.budget + outstanding()) * 1.5);
+        if (owedAfter <= ceiling) return false;
+        toast(`The board will not carry more transfer debt — ${fmtM(outstanding())} is already owed`);
+        return true;
+      }, false);
+      if (stop) return undefined;
+      return previousBid.apply(this, arguments);
+    };
+  }
+
+  /* ---------------------------------------------------------------
+     SELLING
+     --------------------------------------------------------------- */
+  if (typeof ACTIONS !== 'undefined' && typeof ACTIONS.offerAccept === 'function') {
+    const previousAccept = ACTIONS.offerAccept;
+    ACTIONS.offerAccept = function offerAcceptStaged(el) {
+      const before = guard('transfer.sell.pre', () => {
+        const o = has(offerById) ? offerById(el.dataset.arg) : null;
+        if (!o) return null;
+        const p = playerById(o.pid);
+        return p ? { fee: o.fee, buyer: o.buyer, sellOn: p.sellOn, name: p.name, boughtFor: p.boughtFor || 0 } : null;
+      }, null);
+      const r = previousAccept.apply(this, arguments);
+      guard('transfer.sell', () => {
+        if (!before) return;
+        const my = G.clubs[G.my];
+        const f = Math.round(before.fee || 0);
+        const lines = [];
+
+        /* the club you bought him from takes its share of the profit */
+        if (before.sellOn && before.sellOn.pct) {
+          const profit = Math.max(0, f - (before.sellOn.paid || before.boughtFor || 0));
+          const cut = Math.round(profit * before.sellOn.pct / 100);
+          if (cut > 0) {
+            my.bank -= cut;
+            my.budget = Math.max(0, my.budget - cut);
+            const owner = G.clubs[before.sellOn.club];
+            if (owner) { owner.bank += cut; owner.budget += Math.round(cut * 0.75); }
+            lines.push(`<b>${esc(owner ? owner.short : 'The selling club')}</b> take <b>${fmtM(cut)}</b> ` +
+              `under their ${before.sellOn.pct}% sell-on clause.`);
+          }
+        }
+
+        /* and the buyer pays you the way you pay everybody else */
+        const years = instalmentYears(f);
+        if (years > 1) {
+          const per = Math.round(f / years);
+          const deferred = f - per;
+          my.budget = Math.max(0, my.budget - deferred);
+          my.bank -= deferred;
+          const buyer = G.clubs[before.buyer];
+          if (buyer) buyer.bank += deferred;
+          ledger().due.push({ from: before.buyer, per, left: years - 1, who: before.name, total: f });
+          lines.push(`The fee is structured over <b>${years} years</b> — <b>${fmtM(per)}</b> received now, ` +
+            `<b>${fmtM(deferred)}</b> to follow.`);
+        }
+        if (lines.length) mail('transfer', `📄 ${before.name}: how the fee arrives`, lines.join('<br><br>'));
+      });
+      return r;
+    };
+  }
+
+  /* ---------------------------------------------------------------
+     AND EVERY SUMMER, THE CHEQUES GO OUT AND COME IN
+     --------------------------------------------------------------- */
+  if (has(endSeason)) {
+    const previousEnd = endSeason;
+    endSeason = function endSeasonInstalments() {
+      const r = previousEnd.apply(this, arguments);
+      guard('transfer.settle', () => {
+        const L = ledger();
+        const my = G.clubs[G.my];
+        let paid = 0;
+        let got = 0;
+        L.owed.forEach((x) => {
+          if (!(x.left > 0)) return;
+          my.bank -= x.per; my.budget = Math.max(0, my.budget - x.per);
+          const to = G.clubs[x.to];
+          if (to) { to.bank += x.per; to.budget += Math.round(x.per * 0.75); }
+          x.left -= 1; paid += x.per;
+        });
+        L.due.forEach((x) => {
+          if (!(x.left > 0)) return;
+          my.bank += x.per; my.budget += x.per;
+          const from = G.clubs[x.from];
+          if (from) from.bank -= x.per;
+          x.left -= 1; got += x.per;
+        });
+        L.owed = L.owed.filter((x) => x.left > 0);
+        L.due = L.due.filter((x) => x.left > 0);
+        if (paid || got) {
+          mail('transfer', '📄 Transfer instalments settled',
+            (paid ? `<b>${fmtM(paid)}</b> has gone out in instalments on players already signed.` : '') +
+            (paid && got ? '<br><br>' : '') +
+            (got ? `<b>${fmtM(got)}</b> has come in on players already sold.` : '') +
+            `<br><br><span class="xs faint">Still owed: <b>${fmtM(outstanding())}</b> · still due to you: <b>${fmtM(receivable())}</b>.</span>`);
+        }
+      });
+      return r;
+    };
+  }
+
+  /* it belongs on the finances screen, because it is money you have
+     already committed and cannot spend twice */
+  if (has(vFinances)) {
+    const prevFin = vFinances;
+    vFinances = function vFinancesInstalments() {
+      let h = prevFin.apply(this, arguments);
+      guard('screen.instalments', () => {
+        const owe = outstanding();
+        const due = receivable();
+        if (!owe && !due) return;
+        const card = '<div class="card tight" style="margin-bottom:12px">' +
+          '<div class="chip-lbl" style="margin-top:0">📄 Transfer instalments</div>' +
+          (owe ? '<div class="spread" style="padding:4px 2px"><span class="small">Still owed on players signed</span>' +
+            '<b class="num small" style="color:var(--danger)">' + fmtM(owe) + '</b></div>' : '') +
+          (due ? '<div class="spread" style="padding:4px 2px"><span class="small">Still due on players sold</span>' +
+            '<b class="num small" style="color:var(--green)">' + fmtM(due) + '</b></div>' : '') +
+          '<div class="xs faint" style="padding:4px 2px 0;line-height:1.5">Paid and received each summer. ' +
+          'Money already committed cannot be spent twice.</div></div>';
+        const anchor = '<div class="sec"><div class="t">Annual income</div>';
+        h = h.indexOf(anchor) >= 0 ? h.replace(anchor, card + anchor) : card + h;
+      });
+      return h;
+    };
+  }
+
+  try {
+    if (typeof window !== 'undefined' && window.RBSEconomy) {
+      const api = {};
+      Object.keys(window.RBSEconomy).forEach((k) => { api[k] = window.RBSEconomy[k]; });
+      api.instalmentYears = instalmentYears;
+      api.agentFee = agentFee;
+      api.outstanding = outstanding;
+      api.receivable = receivable;
       window.RBSEconomy = Object.freeze(api);
     }
   } catch (error) { /* no window */ }
