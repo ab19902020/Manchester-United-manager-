@@ -253,8 +253,8 @@ test('the chairman you picked when you built the club is the chairman you keep',
   await startCareer(game);
 
   const chairmen = game.eval(`(function(){
-    // the three chairmen a built club can have, as they are configured
-    const setups = [['Tight', 22000, 150000], ['Sensible', 38000, 450000], ['Generous', 72000, 1200000]];
+    // read from the chairmen the game actually offers, not from a copy
+    const setups = CC_CHAIRS.map(ch => [ch.name, ch.wage, ch.budget]);
     const out = [];
     setups.forEach(([name, wage, budget]) => {
       const nl = G.clubs.filter(c => c.league === 'NL').sort((a,b) => a.rep - b.rep)[0];
@@ -262,7 +262,7 @@ test('the chairman you picked when you built the club is the chairman you keep',
       G.my = nl.i; G.deals = {};
       nl.custom = true; nl.rep = 1850; nl.cap = 2400;
       nl.wageCap = wage; nl.budget = budget; nl.bank = Math.round(budget * 0.8);
-      ['chairMult','chairCap0','chairBudMult','chairBud0','scmpBase','scmpSeason'].forEach(k => { delete nl[k]; });
+      ['chairMult','chairCap0','chairBudMult','chairBud0','chairCapAdd','chairBudAdd','scmpBase','scmpSeason'].forEach(k => { delete nl[k]; });
       dailyTickCore();                       // day one: the chairman is anchored
       const owner = RBSEconomy.ownerFunding(nl);
       const scmp = RBSEconomy.scmpPosition(0);
@@ -304,11 +304,57 @@ test('the chairman you picked when you built the club is the chairman you keep',
   //    the entire point of picking him.
   const tight = chairmen.find((c) => c.name === 'Tight');
   const generous = chairmen.find((c) => c.name === 'Generous');
-  assert.equal(tight.owner, 0, 'the tight chairman funds nothing, as advertised');
-  assert.ok(generous.owner > 1e6,
-    `the generous chairman should be visibly bankrolling the club, got £${generous.owner}`);
-  assert.equal(generous.ownerShown, generous.owner, 'and it appears in the accounts as owner funding');
+  assert.ok(tight.owner > 1e6, 'every chairman is underwriting the wage ceiling he set');
+  assert.ok(generous.owner > tight.owner * 2,
+    'and the generous one is visibly bankrolling the club harder than the tight one');
+  assert.equal(generous.ownerShown, generous.owner, 'it appears in the accounts as owner funding');
   assert.ok(generous.revenue > tight.revenue, 'so his club turns over more');
+});
+
+test('a club you build can actually climb out of the division it starts in', async (t) => {
+  const game = await createGame();
+  t.after(() => game.close());
+  await startCareer(game);
+
+  const climb = game.eval(`(function(){
+    // what each division is, measured from the squads in it
+    const standard = (div) => {
+      let n = 0, s = 0;
+      (divMembers(div) || []).forEach(i => (G.clubs[i].players || []).forEach(p => { if (!p.loan) { s += p.ovr; n += 1; } }));
+      return n ? s / n : 0;
+    };
+    const fa = (typeof faList === 'function' ? faList() : (G.freeAgents || [])).filter(Boolean);
+    // the best twenty players a given weekly ceiling can actually pay for
+    const squadFor = (ceiling) => {
+      const per = ceiling / 20;
+      const top = fa.filter(p => (p.askWage || 1000) <= per).sort((a, b) => b.ovr - a.ovr).slice(0, 20);
+      return top.length ? top.reduce((s, p) => s + p.ovr, 0) / top.length : 0;
+    };
+    return {
+      NL: standard('NL'), L2: standard('L2'), L1: standard('L1'), CH: standard('CH'),
+      chairmen: CC_CHAIRS.map(ch => ({name: ch.name, wage: ch.wage, budget: ch.budget, squad: squadFor(ch.wage)})),
+      l1Budget: Math.round((divMembers('L1') || []).reduce((a, i) => a + (G.clubs[i].budget || 0), 0) / Math.max(1, (divMembers('L1') || []).length)),
+    };
+  })()`);
+
+  const tightest = climb.chairmen.reduce((a, b) => (a.wage <= b.wage ? a : b));
+
+  // the point of the whole thing: even the smallest chairman fields a side
+  // that is better than the division it has been dropped into, by enough
+  // that going up is a plan rather than a coin toss.
+  assert.ok(tightest.squad > climb.NL + 6,
+    `the tightest chairman builds a ${tightest.squad.toFixed(1)} squad for a ${climb.NL.toFixed(1)} division — that is not a promotion push`);
+  assert.ok(tightest.squad > climb.L2 + 2,
+    `and it should still be ahead of League Two (${climb.L2.toFixed(1)}) so the second promotion follows`);
+
+  // "a budget of a League One club" — the brief, checked against League One
+  assert.ok(tightest.budget >= climb.l1Budget * 0.9,
+    `the smallest built-club budget (£${tightest.budget}) should be League One money (£${climb.l1Budget})`);
+
+  // and the most generous should be able to look at the Championship
+  const richest = climb.chairmen.reduce((a, b) => (a.wage >= b.wage ? a : b));
+  assert.ok(richest.squad > climb.L1,
+    `the most generous chairman should out-build League One (${climb.L1.toFixed(1)}), got ${richest.squad.toFixed(1)}`);
 });
 
 test('a transfer is paid for the way transfers are actually paid for', async (t) => {

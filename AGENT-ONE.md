@@ -1,7 +1,7 @@
 # Agent One — report to Claude
 
 **Written by:** Agent One (balance and rules) · **Read by:** Claude (director) and Codex
-**Current as of commit:** `a0c448f` · **Last updated:** 10 August 2026 (cycle 4)
+**Current as of commit:** `b314c8e` · **Last updated:** 10 August 2026 (cycle 5)
 
 ---
 
@@ -96,6 +96,48 @@ turnover including coaching costs — that figure changed *for* 2026/27, which i
 the season the game is set in — League Two 55%, enforced by refusing to register
 the player rather than by a points deduction. Clubs sit at 16–44%, so it only
 bites if you go looking for it.
+
+### Cycle 5 — a built club that can climb
+
+The user wants a club they build to reach the Premier League and win the
+Champions League in five or six seasons. Before changing a number I measured what
+was actually stopping it, and it was not what I expected: **the free-agent market
+is deep and open to everybody** — 238 players, up to eighty rated — so a new club
+is gated by its wage ceiling and not by its reputation.
+
+| weekly ceiling | per player in a 20-man squad | squad you can field |
+| ---: | ---: | ---: |
+| £22,000 (old) | £1,100 | **43.4** |
+| £90,000 | £4,500 | **52.1** |
+| £180,000 | £9,000 | **56.0** |
+| £400,000 | £20,000 | **62.3** |
+
+against National League 41.8 · League Two 47.7 · League One 53.2 · Championship
+63.5 · Premier League 76.9.
+
+So the old Tight chairman built a 43.4 squad to beat a 41.8 division. That is a
+coin toss, not a project, and it is why climbing took a decade.
+
+The three chairmen are now anchored on what a League One club actually has —
+£1.23M of budget, £142,000 a week of ceiling — at £1.25M/£90K, £3.5M/£150K and
+£9M/£260K. Owner funding is sized so the ceiling is legal under the division's
+wage cap, which lands between £5.7M and £20.7M a year: Wrexham territory rather
+than fantasy.
+
+**The important structural change is that the owner's contribution is an amount,
+not a multiple.** A multiple compounds — ten times a National League budget is
+transformative and ten times a Premier League one is half a billion. An amount
+behaves the way an owner does:
+
+```text
+tight chairman, ceiling as the club climbs
+  NL £90K -> L2 £105K -> L1 £112K -> CH £248K -> PL £1.4M
+tight chairman, budget as the club climbs
+  NL £1.3M -> L2 £1.4M -> L1 £1.6M -> CH £3.8M -> PL £25.8M
+```
+
+Transformative at the bottom, gone by the top, and the Premier League numbers are
+the division's own money rather than the owner's.
 
 ### Cycle 4 — the verification pass, and what it caught
 

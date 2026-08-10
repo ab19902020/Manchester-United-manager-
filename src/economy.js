@@ -1,6 +1,7 @@
 /* global G, esc, clamp, fmtM, mail, squadWage, staffWage, divMembers, leaguePos,
           LEAGUES, commercialIncome, ensureCommercial, MU, ordinal, tableRows,
-          fixCtx, DIV_ORDER, ACTIONS, playerById, toast, $, loanTerms, offerById */
+          fixCtx, DIV_ORDER, ACTIONS, playerById, toast, $, loanTerms, offerById,
+          CC_CHAIRS */
 /* global seasonRevenue:writable, seasonCosts:writable, monthlyIncome:writable,
           applyPostMatch:writable, endSeason:writable, vFinances:writable,
           dailyTickCore:writable, normaliseReps:writable, completeSigning:writable */
@@ -936,16 +937,25 @@
     if (c.chairMult != null) return;
     const t = typicalCap(c);
     c.chairCap0 = c.wageCap || t;
-    c.chairMult = t > 0 ? clamp(c.chairCap0 / t, 0.4, 10) : 1;
     const b = typicalBudget(c);
     c.chairBud0 = c.budget || b;
-    c.chairBudMult = b > 0 ? clamp(c.chairBud0 / b, 0.2, 12) : 1;
+    /* What the owner is putting in, as an amount rather than a multiple.
+       A multiple compounds: ten times a National League budget is a
+       fortune, and ten times a Premier League one is half a billion. An
+       amount behaves the way an owner actually does — it transforms a
+       non-league club, it is useful in League One, and by the time the
+       club is in the Premier League its own income has made the owner's
+       money irrelevant, which is exactly the arc. */
+    c.chairCapAdd = Math.max(0, c.chairCap0 - t);
+    c.chairBudAdd = Math.max(0, c.chairBud0 - b);
+    c.chairMult = 1;
+    c.chairBudMult = 1;
   }
 
   function chairCeiling(c) {
     anchorChairman(c);
-    if (!c || c.chairMult == null) return c ? c.wageCap : 0;
-    return Math.max(c.chairCap0 || 0, Math.round(typicalCap(c) * c.chairMult));
+    if (!c || c.chairCapAdd == null) return c ? c.wageCap : 0;
+    return Math.max(c.chairCap0 || 0, Math.round(typicalCap(c) + c.chairCapAdd));
   }
 
   /* The transfer budget drifted the same way and for the same reason:
@@ -963,12 +973,12 @@
 
   function chairBudget(c) {
     anchorChairman(c);
-    if (!c || c.chairBudMult == null) return c ? c.budget : 0;
+    if (!c || c.chairBudAdd == null) return c ? c.budget : 0;
     /* Floored at what he first gave you, the same way the ceiling is.
        Commercial income moves with where you finished, and a chairman
        who cut the transfer budget a quarter because the sponsorship
        revalued is not a chairman, it is a rounding error. */
-    return Math.max(1e4, c.chairBud0 || 0, Math.round(typicalBudget(c) * c.chairBudMult / 1e4) * 1e4);
+    return Math.max(1e4, c.chairBud0 || 0, Math.round((typicalBudget(c) + (c.chairBudAdd || 0)) / 1e4) * 1e4);
   }
 
   /* The gap between what the chairman will underwrite and what the club
@@ -978,7 +988,13 @@
     return guard('owner', () => {
       if (!c || !c.custom) return 0;
       anchorChairman(c);
-      const need = chairCeiling(c) * 52 * 1.15;
+      /* A ceiling you are not allowed to spend is not a ceiling. Below
+         the Championship the wage cap is a share of turnover, so the
+         owner has to underwrite enough turnover for his own ceiling to
+         be legal — which is exactly what a bankrolled non-league club
+         does, and why one can field a squad its division cannot. */
+      const share = NORM_SHARE[c.league] || 0.60;
+      const need = chairCeiling(c) * 52 / share * 1.10;
       return Math.max(0, Math.round(need - baseRevenue(c)));
     }, 0);
   }
@@ -1450,4 +1466,81 @@
       window.RBSEconomy = Object.freeze(api);
     }
   } catch (error) { /* no window */ }
+}());
+
+/* =====================================================================
+   WHAT THE CHAIRMAN ACTUALLY PUTS IN
+   ---------------------------------------------------------------------
+   A club you build starts in the National League with no players, and
+   the chairman's money is the only thing that decides how fast you can
+   get out of it. Measured against what you have to beat and what the
+   free-agent market will sell you — the market is deep, 238 players up
+   to eighty rated, and open to anybody, so the binding constraint on a
+   new club is the wage ceiling and not its reputation:
+
+     ceiling      per player in a 20-man squad   squad you can field
+       £22,000              £1,100                  average 43.4
+       £90,000              £4,500                  average 52.1
+       £180,000             £9,000                  average 56.0
+       £400,000             £20,000                 average 62.3
+
+   and what each division is:
+
+     National League 41.8 · League Two 47.7 · League One 53.2
+     Championship 63.5 · Premier League 76.9
+
+   At £22,000 a week you assemble a 43.4 squad to beat a 41.8 division.
+   That is a coin toss, not a project, and it is why climbing took a
+   decade. The three chairmen are now anchored on what a League One club
+   actually has — £993,000 of budget and £142,000 a week of ceiling —
+   so the tightest of them fields a side that walks the National League
+   and the most generous fields one that could hold its own in the
+   Championship on day one.
+
+   It stays honest at the top because the owner's contribution is an
+   amount, not a multiple: it is transformative in the National League,
+   useful in League One, and by the Premier League the club's own income
+   has swallowed it.
+   ===================================================================== */
+
+(function economyChairmanScale() {
+  'use strict';
+  try {
+    if (typeof CC_CHAIRS === 'undefined') return;
+    const set = (id, o) => {
+      const c = CC_CHAIRS.filter((x) => x.id === id)[0];
+      if (c) Object.keys(o).forEach((k) => { c[k] = o[k]; });
+    };
+
+    /* Sized on what actually wins a division rather than on a round
+       number. The wage cap below the Championship is a share of
+       turnover, so a ceiling has to be underwritten by an owner putting
+       in enough turnover to make it legal — £600,000 a week in the
+       fifth tier would need £48M of it, which is beyond even a
+       heavily-bankrolled non-league club. These land between £6M and
+       £19M a year of owner money, which is Wrexham territory, and they
+       buy squads of roughly 52, 55 and 58 against a National League of
+       41.8, a League Two of 47.7 and a League One of 53.2. */
+    set('gen', {
+      budget: 9e6, bank: 45e5, wage: 26e4, patience: 74,
+      who: 'a hedge fund founder who watched this club from the terraces as a boy and has just had a very good decade',
+      blurb: 'A squad that would finish mid-table in League One, in the fifth tier. Three divisions in three years is the plan.',
+      warn: 'He is not funding a project. He wants promotions, and he wants the first one this season.',
+      target: 1,
+    });
+    set('sen', {
+      budget: 35e5, bank: 18e5, wage: 15e4, patience: 68,
+      who: 'a supporters’ trust that sold its stake in the ground to a member who never wanted it back',
+      blurb: 'A League One wage bill and better, in the National League. Enough to go up at the first attempt and keep going.',
+      warn: 'They want promotion and they want the books to balance while it happens.',
+      target: 2,
+    });
+    set('tig', {
+      budget: 125e4, bank: 7e5, wage: 9e4, patience: 60,
+      who: 'a local haulage family who have quietly underwritten this club for thirty years',
+      blurb: 'A League One transfer budget in the fifth tier — the smallest of the three, and still more than anyone you will play this season.',
+      warn: 'They will not give you more. What you have is what the climb has to be built on.',
+      target: 3,
+    });
+  } catch (error) { /* the built-club module is not present */ }
 }());

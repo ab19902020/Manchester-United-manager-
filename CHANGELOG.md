@@ -33,6 +33,18 @@
   club that inherits a bill above the cap gets a compliance path rather than a frozen
   window.
 
+- Gave a club you build the money to actually climb. Measured what the binding
+  constraint was: the free-agent market is deep and open to anyone, so a new club is
+  gated by its **wage ceiling**, not by its reputation. At the old £22,000 a week you
+  could assemble a squad averaging 43.4 to beat a National League averaging 41.8 — a coin
+  toss, not a project. The three chairmen are now anchored on what a League One club
+  actually has (£1.23M of budget, £142,000 a week of ceiling), so the smallest of them
+  starts you with a League One transfer budget and a squad that walks the fifth tier, and
+  the most generous starts you with one that could hold its own in League One on day one.
+  The owner's contribution is an **amount rather than a multiple**, so it transforms a
+  non-league club, stays useful in League One, and has been swallowed by the club's own
+  income by the time you reach the Premier League.
+
 - Kept the chairman you picked when you built your own club. `normaliseReps` ended every
   summer with `wageCap = max(wageCap, rep × 90)`, which has no idea a club can have been
   given a deliberately small ceiling by its own board — so the Tight chairman's £22,000 a
