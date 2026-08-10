@@ -30187,7 +30187,9 @@ function applyWindow26(){
  if(typeof window[k]!=='function')return;
  const prev=window[k];
  window[k]=function(){const r=prev.apply(this,arguments);
-  try{if(k!=='loadSlot'||r)applyWindow26()}catch(e){}
+  try{if(k!=='loadSlot'||r){
+   applyWindow26();
+   if(typeof RBSLowerLeagueSquads!=='undefined')RBSLowerLeagueSquads.refreshPremierLeague(G.clubs)}}catch(e){}
   return r}});
 
 /*#w60_squads26.js#*/

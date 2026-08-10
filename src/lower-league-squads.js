@@ -6,6 +6,7 @@
   'use strict';
 
   const DIVISION_ORDER = ['CH', 'L1', 'L2', 'NL'];
+  const FACT_DIVISION_ORDER = ['PL', ...DIVISION_ORDER];
   const TIERS = { CH: 2, L1: 3, L2: 4, NL: 5 };
   const RANGES = {
     CH: { rep: [4300, 5600], budget: [5e6, 18e6] },
@@ -14,6 +15,7 @@
     NL: { rep: [2050, 2600], budget: [0.2e6, 0.9e6] },
   };
   const NAME_ALIASES = { 'Milton Keynes Dons': 'MK Dons' };
+  const PLAYER_NAME_ALIASES = { 'Modou Kéba Cissé': 'Modou Cissé' };
   const NEW_CLUB_VENUES = {
     'Birmingham City': {
       name: 'St Andrew\'s @ Knighthead Park', capacity: 29409,
@@ -52,16 +54,52 @@
     return 'F';
   }
 
+  function nameKey(value) {
+    return String(value || '')
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[ı]/gi, 'i')
+      .replace(/[ø]/gi, 'o')
+      .replace(/[đð]/gi, 'd')
+      .replace(/[ł]/gi, 'l')
+      .replace(/[æ]/gi, 'ae')
+      .replace(/[œ]/gi, 'oe')
+      .replace(/[ß]/gi, 'ss')
+      .replace(/[þ]/gi, 'th')
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '');
+  }
+
+  function ageOnSeasonStart(dateOfBirth) {
+    const match = String(dateOfBirth || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!match) return null;
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    const day = Number(match[3]);
+    const age = 2026 - year - (month > 8 || (month === 8 && day > 1) ? 1 : 0);
+    return age >= 15 && age <= 50 ? age : null;
+  }
+
   function validate() {
-    if (!data || data.schema !== 1 || !data.divisions) throw new Error('Lower-league source data is unavailable.');
-    for (const division of DIVISION_ORDER) {
+    if (!data || data.schema !== 2 || !data.divisions) throw new Error('English player source data is unavailable.');
+    for (const division of FACT_DIVISION_ORDER) {
       const entry = data.divisions[division];
-      if (!entry || Object.keys(entry.teams || {}).length !== 24) {
-        throw new Error(`${division} does not contain 24 sourced teams.`);
+      const expected = division === 'PL' ? 20 : 24;
+      if (!entry || Object.keys(entry.teams || {}).length !== expected) {
+        throw new Error(`${division} does not contain ${expected} sourced teams.`);
       }
       for (const team of Object.values(entry.teams)) {
         if (!Array.isArray(team.players) || team.players.length < 19) {
           throw new Error(`${team.name} does not contain a complete sourced roster.`);
+        }
+        for (const player of team.players) {
+          if (!player.id || !player.name) throw new Error(`${team.name} contains an invalid player record.`);
+          if (player.heightCm && (player.heightCm < 140 || player.heightCm > 220)) {
+            throw new Error(`${player.name} has an invalid sourced height.`);
+          }
+          if (player.weightKg && (player.weightKg < 40 || player.weightKg > 150)) {
+            throw new Error(`${player.name} has an invalid sourced weight.`);
+          }
         }
       }
     }
@@ -90,6 +128,57 @@
     return pool[0] || null;
   }
 
+  function applyFacts(player, source, provenance) {
+    player.espnId = source.id;
+    if (source.nat) player.nat = source.nat;
+    if (source.nationality) player.nationality = source.nationality;
+    if (source.dateOfBirth) {
+      player.dob = source.dateOfBirth;
+      const sourcedAge = ageOnSeasonStart(source.dateOfBirth);
+      if (sourcedAge) player.age = sourcedAge;
+    } else if (source.age) player.age = source.age;
+    if (source.heightCm) player.heightCm = source.heightCm;
+    if (source.weightKg) player.weightKg = source.weightKg;
+    if (source.displayHeight) player.displayHeight = source.displayHeight;
+    if (source.displayWeight) player.displayWeight = source.displayWeight;
+    if (source.profile) player.playerProfile = source.profile;
+    player.playerFactsSource = provenance;
+    player.playerFactsReadDate = data.readDate;
+  }
+
+  function buildFactsIndex() {
+    const index = new Map();
+    const add = (source, team, division, provenance, gameClub) => {
+      const entry = { source, team, division, provenance, gameClub };
+      for (const alias of source.aliases || [source.name]) {
+        const key = nameKey(alias);
+        if (!index.has(key)) index.set(key, []);
+        const candidates = index.get(key);
+        if (!candidates.some((candidate) => candidate.source.id === source.id)) candidates.push(entry);
+      }
+    };
+    for (const division of FACT_DIVISION_ORDER) {
+      for (const team of Object.values(data.divisions[division].teams)) {
+        for (const source of team.players) add(source, team, division, team.source, team.name);
+      }
+    }
+    for (const source of data.extraPlayers || []) {
+      add(source, null, 'PL', source.source, source.gameClub);
+    }
+    return index;
+  }
+
+  function matchFacts(index, player, club, division, used) {
+    const sourceName = PLAYER_NAME_ALIASES[player.name] || player.name;
+    const available = (index.get(nameKey(sourceName)) || [])
+      .filter((candidate) => !used.has(candidate.source.id));
+    const sameClub = available.filter((candidate) => nameKey(candidate.gameClub) === nameKey(club.name));
+    const sameDivision = available.filter((candidate) => candidate.division === division);
+    if (sameClub.length === 1) return sameClub[0];
+    if (sameDivision.length === 1) return sameDivision[0];
+    return available.length === 1 ? available[0] : null;
+  }
+
   function applyRoster(club, team) {
     const used = new Set();
     let assigned = 0;
@@ -98,9 +187,9 @@
       if (!source) continue;
       used.add(source.id);
       player.name = source.name;
-      if (source.age) player.age = source.age;
       if (source.shirt) player.shirt = source.shirt;
       else delete player.shirt;
+      applyFacts(player, source, team.source);
       assigned += 1;
     }
     delete club._shirts;
@@ -109,10 +198,52 @@
     return assigned;
   }
 
+  function refreshPremierLeague(clubs) {
+    const index = buildFactsIndex();
+    const report = { clubs: 0, players: 0, replacedGenerated: 0, unresolvedAuthored: [] };
+    for (const team of Object.values(data.divisions.PL.teams)) {
+      const club = clubs.find((candidate) => candidate.league === 'PL' && candidate.name === team.name);
+      if (!club) throw new Error(`The live world is missing ${team.name} from PL.`);
+      const authored = new Set((team.authoredPlayers || []).map(nameKey));
+      const used = new Set();
+      const unmatched = [];
+      for (const player of club.players || []) {
+        const match = matchFacts(index, player, club, 'PL', used);
+        if (!match) {
+          unmatched.push(player);
+          continue;
+        }
+        used.add(match.source.id);
+        applyFacts(player, match.source, match.provenance);
+        report.players += 1;
+      }
+      for (const player of unmatched) {
+        if (authored.has(nameKey(player.name))) {
+          report.unresolvedAuthored.push(`${club.name}: ${player.name}`);
+          continue;
+        }
+        const source = choosePlayer(team.players, used, positionGroup(player.pos), player.age);
+        if (!source) continue;
+        used.add(source.id);
+        player.name = source.name;
+        if (source.shirt) player.shirt = source.shirt;
+        else delete player.shirt;
+        applyFacts(player, source, team.source);
+        report.players += 1;
+        report.replacedGenerated += 1;
+      }
+      delete club._shirts;
+      club.playerFactsSource = team.source;
+      club.playerFactsReadDate = data.readDate;
+      report.clubs += 1;
+    }
+    return report;
+  }
+
   function refreshRosters(clubs) {
     validate();
     if (!Array.isArray(clubs)) throw new TypeError('Expected the game club array.');
-    const report = { clubs: 0, players: 0 };
+    const report = { clubs: 0, players: 0, premierLeague: null };
     for (const division of DIVISION_ORDER) {
       for (const team of Object.values(data.divisions[division].teams)) {
         const club = clubs.find((candidate) => candidate.league === division && candidate.name === team.name);
@@ -121,6 +252,7 @@
         report.clubs += 1;
       }
     }
+    report.premierLeague = refreshPremierLeague(clubs);
     return report;
   }
 
@@ -188,8 +320,9 @@
       report.divisions[division].players += assigned;
       if (target.replaced) report.replaced.push({ removed: target.replaced, added: team.name, division });
     }
+    report.premierLeague = refreshPremierLeague(clubs);
     return report;
   }
 
-  return Object.freeze({ apply, refreshRosters, validate, positionGroup, data });
+  return Object.freeze({ apply, refreshRosters, refreshPremierLeague, validate, positionGroup, data });
 });

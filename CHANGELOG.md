@@ -64,6 +64,14 @@
 
 ### Improved
 
+- Added sourced player biographies for all five modeled English divisions. The
+  repeatable ESPN updater now records 3,251 roster players across 116 clubs and
+  applies published nationality, date of birth, height and weight to live careers.
+  Provider-specific country abbreviations are canonicalised, implausible source
+  measurements are rejected, and missing fields remain missing instead of guessed.
+  Generated Premier League depth names are replaced with unused sourced players
+  while ratings, positions, potential, contracts and finances stay unchanged.
+
 - Rebuilt the landscape phone layout. The navigation stands up as a rail down the
   left, the header runs across the top and Continue sits at the end of it, and the
   content uses two columns. Sideways the game had been letterboxed into 720px of an

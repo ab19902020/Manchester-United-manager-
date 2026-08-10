@@ -25,7 +25,7 @@ The automated suite covers:
 - IndexedDB manual slots and rotating recovery autosaves;
 - save/load round trips and transfer-offer acceptance;
 - sourced 2026/27 English fixture dates, pairings and season-two handoff;
-- sourced League One, League Two and National League squad identities and shape;
+- sourced English squad identities, nationality, birth date and physical facts;
 - press-conference, fullscreen, SVG-ID and transfer-pagination regressions;
 - full-season statistical bands for both match simulators.
 
@@ -36,8 +36,8 @@ GitHub Actions runs the same checks on every pull request.
 - `red-devil-manager.html` — the legacy game core and UI.
 - `src/career-store.js` — validated, checksummed IndexedDB career storage.
 - `src/simulation-model.js` — shared scoring probabilities and balance targets.
-- `src/lower-league-data.js` — generated English-pyramid team and roster snapshot.
-- `src/lower-league-squads.js` — maps factual identities onto the game-balanced squad slots.
+- `src/lower-league-data.js` — generated five-division English roster and player-facts snapshot.
+- `src/lower-league-squads.js` — maps factual identities and biographies onto game-balanced slots.
 - `src/authentic-fixture-data.js` — generated snapshot of published 2026/27 fixture lists.
 - `src/authentic-fixtures.js` — applies sourced dates to season one without moving them for cups.
 - `src/runtime-enhancements.js` — save integration, diagnostics, accessibility and PWA wiring.
@@ -75,8 +75,17 @@ Sourced dates apply only to 2026/27. From season two, the game returns to its
 generated calendar because no future list has been published. Generated cup ties
 move around a sourced league date, never the other way round.
 
-Championship, League One, League Two and National League membership and first-team identities are an ESPN roster snapshot read on 9 August 2026: [Championship](https://site.api.espn.com/apis/site/v2/sports/soccer/eng.2/teams?limit=100), [League One](https://site.api.espn.com/apis/site/v2/sports/soccer/eng.3/teams?limit=100), [League Two](https://site.api.espn.com/apis/site/v2/sports/soccer/eng.4/teams?limit=100) and [National League](https://site.api.espn.com/apis/site/v2/sports/soccer/eng.5/teams?limit=100). Every team’s exact roster URL and source timestamp are recorded in `src/lower-league-data.js`. Run `npm run data:lower-leagues` to validate all four 24-team divisions and refresh that generated snapshot.
+All 116 modeled English clubs use an ESPN roster and player-biography snapshot
+read on 10 August 2026: [Premier League](https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/teams?limit=100), [Championship](https://site.api.espn.com/apis/site/v2/sports/soccer/eng.2/teams?limit=100), [League One](https://site.api.espn.com/apis/site/v2/sports/soccer/eng.3/teams?limit=100), [League Two](https://site.api.espn.com/apis/site/v2/sports/soccer/eng.4/teams?limit=100) and [National League](https://site.api.espn.com/apis/site/v2/sports/soccer/eng.5/teams?limit=100).
+The snapshot records 3,251 roster players with the nationality, date of birth,
+height and weight ESPN publishes, plus each team roster URL, source timestamp and
+direct player profile where available. Run `npm run data:player-facts` to validate
+and refresh it.
 
-The integration deliberately keeps the game’s 19-player slot shape, positions, ratings and contract lengths. It replaces identities, sourced ages and available shirt numbers; where ESPN omits an age or shirt number, the balanced slot value is retained rather than guessed. Updating the Championship alongside the requested 72 lower-league clubs is necessary because promotion and relegation move clubs across that boundary.
+The integration keeps positions, ratings, potential, contracts and the economy
+game-balanced. Lower-division slots retain their shape while sourced identities and
+facts replace generated ones; generated Premier League depth names are replaced by
+unused players from the published club roster. A missing source field is retained as
+missing rather than guessed.
 
 British neural voices are optional. Their first use requires a 36–326 MB download; coarse-pointer and lower-memory devices default to the 36 MB model. Device voices remain the zero-download fallback.
