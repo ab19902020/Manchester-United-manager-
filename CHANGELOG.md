@@ -41,9 +41,16 @@
   actually has (£1.23M of budget, £142,000 a week of ceiling), so the smallest of them
   starts you with a League One transfer budget and a squad that walks the fifth tier, and
   the most generous starts you with one that could hold its own in League One on day one.
-  The owner's contribution is an **amount rather than a multiple**, so it transforms a
-  non-league club, stays useful in League One, and has been swallowed by the club's own
-  income by the time you reach the Premier League.
+  The owner keeps pace with the division rather than with the turnstiles. A club you
+  build has a 2,400-seat ground, so its own income stays small however high it climbs —
+  the ceiling went £90K in the National League to £108K in League Two to £112K in League
+  One while what it takes to win those divisions roughly doubles at each step. Measured:
+  a squad 6.5 rating points above League Two finished **11th on 67 points**. The chairman
+  is now stored as a multiple of what his division pays, decaying as you climb, so the
+  ladder reads £90K → £195K → £352K → £916K → £4.1M — and the same squad now finishes
+  **3rd on 83 points and goes up**, in a top four separated by a single point. His
+  advantage is everything in the fifth tier and a rounding error in the Premier League,
+  which is both true of real owners and the only way the top of the game stays sane.
 
 - Kept the chairman you picked when you built your own club. `normaliseReps` ended every
   summer with `wageCap = max(wageCap, rep × 90)`, which has no idea a club can have been

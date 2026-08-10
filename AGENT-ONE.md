@@ -124,20 +124,44 @@ The three chairmen are now anchored on what a League One club actually has —
 wage cap, which lands between £5.7M and £20.7M a year: Wrexham territory rather
 than fantasy.
 
-**The important structural change is that the owner's contribution is an amount,
-not a multiple.** A multiple compounds — ten times a National League budget is
+**And then the first version of that was wrong too, which only playing it found.**
+Anchoring the owner as a flat amount over the going rate looked right and failed
+in League Two: a club you build has a 2,400-seat ground, so its own income stays
+small however high it climbs, and the ceiling went £90K → £108K → £112K across
+three divisions while what it takes to win them roughly doubles each step.
+Measured, a correctly-shaped squad at that League Two ceiling finished **11th on
+67 points**; the top four were on 74–78. The chairman is now a multiple of what
+his *division* pays, decaying as you climb — £90K → £195K → £352K → £916K →
+£4.1M — and the same test finishes **3rd on 83 points and goes up**, in a top
+four separated by one point.
+
+Two things worth recording from that. The engine converts squad quality into
+results faithfully: an XI 28 points above League Two won it with 121 points and a
++105 goal difference, so when a club is not going up it is the squad, not the
+simulation. And my first three attempts to measure the climb all failed for
+harness reasons rather than game reasons — free agents are stored compacted as
+arrays until rehydrated, so filtering the pool by `p.id` silently left every
+player I had signed still on the market for the AI to take back. Signing by
+rating alone also builds a positionally lopsided side whose XI is far worse than
+its squad average. Both produced convincing-looking evidence of a game bug that
+was not there.
+
+**The structural change is that the owner's contribution is a multiple of the
+division, not of the club, and not a flat amount.** A multiple compounds — ten times a National League budget is
 transformative and ten times a Premier League one is half a billion. An amount
 behaves the way an owner does:
 
 ```text
 tight chairman, ceiling as the club climbs
-  NL £90K -> L2 £105K -> L1 £112K -> CH £248K -> PL £1.4M
+  NL £90K  -> L2 £195K -> L1 £352K -> CH £916K -> PL £4.1M
 tight chairman, budget as the club climbs
-  NL £1.3M -> L2 £1.4M -> L1 £1.6M -> CH £3.8M -> PL £25.8M
+  NL £1.3M -> L2 £1.4M -> L1 £2.8M -> CH £11.3M -> PL £82.3M
 ```
 
-Transformative at the bottom, gone by the top, and the Premier League numbers are
-the division's own money rather than the owner's.
+The budget fades faster than the ceiling on purpose: a ceiling is what lets you
+field a side, and a budget stacked on top of what a Premier League club already
+gets is just a cheat code. Both land on the division's own numbers by the top —
+£4.1M against a Premier League median of £3.4M, £82.3M against £78.6M.
 
 ### Cycle 4 — the verification pass, and what it caught
 

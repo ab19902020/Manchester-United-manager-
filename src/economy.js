@@ -931,6 +931,43 @@
     return Math.max(1000, Math.round(structuralRevenue(c) * share / 52));
   }
 
+  /* What the division itself pays, rather than what this particular club
+     can earn. A club you built has a 2,400-seat ground, so its own
+     revenue stays small however high it climbs — measured, a tight
+     chairman's ceiling went £90K in the National League to £108K in
+     League Two to £112K in League One, while what it takes to win those
+     divisions roughly doubles at every step. Fielding a squad 6.5
+     rating points above League Two finished eleventh on 67 points;
+     the top four were on 74 to 78. So the owner has to keep pace with
+     the division, not with the turnstiles. */
+  let capCache = { season: -1, cap: {}, bud: {} };
+  function divisionMedian(div, field) {
+    return guard('divmedian', () => {
+      if (capCache.season !== G.season) capCache = { season: G.season, cap: {}, bud: {} };
+      const store = field === 'budget' ? capCache.bud : capCache.cap;
+      if (store[div] != null) return store[div];
+      const vals = (divMembers(div) || [])
+        .map((i) => G.clubs[i][field] || 0)
+        .filter((v) => v > 0)
+        .sort((a, b) => a - b);
+      const v = vals.length ? vals[Math.floor(vals.length / 2)] : 0;
+      store[div] = v;
+      return v;
+    }, 0);
+  }
+  const divisionMedianCap = (div) => divisionMedian(div, 'wageCap');
+  const divisionMedianBudget = (div) => divisionMedian(div, 'budget');
+
+  /* How much of the owner's advantage survives each promotion. He is
+     everything in the fifth tier and a rounding error in the Premier
+     League, which is both true of real owners and the only way the
+     numbers stay sane at the top. */
+  const OWNER_REACH = { NL: 1.0, L2: 0.85, L1: 0.70, CH: 0.45, PL: 0.15 };
+  /* The transfer budget fades faster than the wage ceiling. A ceiling is
+     what lets you field a side; a budget on top of what a Premier League
+     club already gets is just a cheat code. */
+  const OWNER_REACH_BUD = { NL: 1.0, L2: 0.70, L1: 0.50, CH: 0.30, PL: 0.08 };
+
   /* Measured once, on the ceiling the chairman actually set. */
   function anchorChairman(c) {
     if (!c || !c.custom) return;
@@ -939,6 +976,12 @@
     c.chairCap0 = c.wageCap || t;
     const b = typicalBudget(c);
     c.chairBud0 = c.budget || b;
+    /* the chairman as a multiple of what his division pays, measured on
+       the day he took over */
+    const dm = divisionMedianCap(c.league);
+    c.chairDivMult = dm > 0 ? clamp(c.chairCap0 / dm, 1, 8) : 1;
+    const db = divisionMedianBudget(c.league);
+    c.chairBudDivMult = db > 0 ? clamp(c.chairBud0 / db, 1, 4) : 1;
     /* What the owner is putting in, as an amount rather than a multiple.
        A multiple compounds: ten times a National League budget is a
        fortune, and ten times a Premier League one is half a billion. An
@@ -955,7 +998,11 @@
   function chairCeiling(c) {
     anchorChairman(c);
     if (!c || c.chairCapAdd == null) return c ? c.wageCap : 0;
-    return Math.max(c.chairCap0 || 0, Math.round(typicalCap(c) + c.chairCapAdd));
+    const own = typicalCap(c) + c.chairCapAdd;
+    const dm = divisionMedianCap(c.league);
+    const reach = OWNER_REACH[c.league] == null ? 0.4 : OWNER_REACH[c.league];
+    const keptUp = dm > 0 ? dm * (1 + ((c.chairDivMult || 1) - 1) * reach) : 0;
+    return Math.max(c.chairCap0 || 0, Math.round(own), Math.round(keptUp));
   }
 
   /* The transfer budget drifted the same way and for the same reason:
@@ -978,7 +1025,11 @@
        Commercial income moves with where you finished, and a chairman
        who cut the transfer budget a quarter because the sponsorship
        revalued is not a chairman, it is a rounding error. */
-    return Math.max(1e4, c.chairBud0 || 0, Math.round((typicalBudget(c) + (c.chairBudAdd || 0)) / 1e4) * 1e4);
+    const own = typicalBudget(c) + (c.chairBudAdd || 0);
+    const dm = divisionMedianBudget(c.league);
+    const reach = OWNER_REACH_BUD[c.league] == null ? 0.3 : OWNER_REACH_BUD[c.league];
+    const keptUp = dm > 0 ? dm * (1 + ((c.chairBudDivMult || 1) - 1) * reach) : 0;
+    return Math.max(1e4, c.chairBud0 || 0, Math.round(Math.max(own, keptUp) / 1e4) * 1e4);
   }
 
   /* The gap between what the chairman will underwrite and what the club
