@@ -136,3 +136,63 @@ test('the Finances screen and your bank account agree, and nobody goes bust', as
       `the weakest ${r.div} club (${r.short}) went bust in 150 days: £${Math.round(r.bank0/1e3)}K -> £${Math.round(r.bank1/1e3)}K`);
   });
 });
+
+test('promotion and relegation are the financial events they really are', async (t) => {
+  const game = await createGame();
+  t.after(() => game.close());
+  await startCareer(game);
+
+  // 1. the cliff. The same club, in each division in turn.
+  const cliff = game.eval(`(function(){
+    const c = G.clubs.filter(x => x.league === 'CH').sort((a,b) => b.rep - a.rep)[0];
+    const was = c.league, saved = G.my;
+    const out = {};
+    ['PL','CH','L1','L2','NL'].forEach(div => {
+      c.league = div; G.my = c.i; G.deals = {};
+      out[div] = {central: RBSEconomy.centralFor(c), revenue: seasonRevenue().total};
+      G.my = saved; G.deals = {};
+    });
+    c.league = was;
+    return out;
+  })()`);
+
+  assert.ok(cliff.PL.central > cliff.CH.central * 5,
+    `promotion to the Premier League should transform a club: £${Math.round(cliff.CH.central/1e6)}M -> £${Math.round(cliff.PL.central/1e6)}M`);
+  assert.ok(cliff.CH.central > cliff.L1.central * 2.5, 'and the Championship should be worth leaving League One for');
+  assert.ok(cliff.L2.central > cliff.NL.central * 2, 'and getting out of the National League should matter');
+
+  // 2. the parachute taper, and the rule that decides its length.
+  const chute = game.eval(`(function(){
+    const c = G.clubs.filter(x => x.league === 'CH')[0];
+    const read = (total) => {
+      const out = [];
+      for (let left = total; left > 0; left--) { c.chute = {left, total, years: total}; out.push(RBSEconomy.parachuteFor(c)); }
+      c.chute = null;
+      return out;
+    };
+    return {oneSeasonUp: read(2), longerUp: read(3)};
+  })()`);
+
+  assert.equal(Array.from(chute.oneSeasonUp).join(','), '49000000,40000000',
+    'a club up for one season gets two years of parachute, starting at the top of the taper');
+  assert.equal(Array.from(chute.longerUp).join(','), '49000000,40000000,22000000',
+    'a club up for longer gets the third year too');
+
+  // 3. and it is what keeps a relegated club with a top-flight wage bill
+  //    alive, which is the whole point of it.
+  const relegated = game.eval(`(function(){
+    const c = G.clubs.filter(x => x.league === 'CH').sort((a,b) => b.rep - a.rep)[0];
+    const saved = G.my; G.my = c.i; G.deals = {};
+    c.chute = null;
+    const bare = seasonRevenue().total - seasonCosts().total;
+    c.chute = {left: 3, total: 3, years: 3};
+    const withChute = seasonRevenue().total - seasonCosts().total;
+    c.chute = null; G.my = saved; G.deals = {};
+    return {bare, withChute, wages: 0};
+  })()`);
+
+  assert.ok(relegated.bare < 0,
+    'a relegated club carrying a Premier League wage bill on Championship income should be losing money');
+  assert.ok(relegated.withChute > 0,
+    'and the parachute should be what stops it going under');
+});

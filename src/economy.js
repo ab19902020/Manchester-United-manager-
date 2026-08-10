@@ -1,6 +1,6 @@
 /* global G, esc, clamp, fmtM, mail, squadWage, staffWage, divMembers, leaguePos,
-          LEAGUES, commercialIncome, ensureCommercial, MU, ordinal, DIV_NAMES, tableRows,
-          fixCtx */
+          LEAGUES, commercialIncome, ensureCommercial, MU, ordinal, tableRows,
+          fixCtx, DIV_ORDER */
 /* global seasonRevenue:writable, seasonCosts:writable, monthlyIncome:writable,
           applyPostMatch:writable, endSeason:writable, vFinances:writable */
 
@@ -389,4 +389,208 @@
       commercialFor, centralFor, meritFor, revenueFor, costsFor, homeLeagueMatches,
     });
   } catch (error) { /* no window */ }
+}());
+
+/* =====================================================================
+   ECONOMY PHASE TWO — the cliff
+   ---------------------------------------------------------------------
+   Promotion and relegation were modelled as a multiplier on whatever the
+   club happened to have: `budget x 2.4 + £8,000,000` going up and
+   `budget x 0.55, wageCap x 0.7` coming down. The £8M is flat, so a
+   National League club promoted to League Two banked the same eight
+   million as a Championship club promoted to the Premier League.
+
+   In real football the promotion from the Championship is the single
+   largest financial event in the sport — roughly £110M of central money
+   the following season against £11M — and relegation from the Premier
+   League is a £100M hole in the accounts that parachute payments only
+   partly fill. Both now fall out of the division tables in phase one by
+   themselves, so the flat £8M is removed rather than retuned.
+
+   PARACHUTE PAYMENTS are the real 2024/25 taper: about £49M in the first
+   year after relegation, £40M in the second, and £22M in a third that is
+   only paid to clubs who were up for more than one season. Luton, up
+   through the play-offs and straight back down, got two years and
+   nothing after. That rule is modelled, because it is the reason a club
+   gambles on staying up.
+
+   They follow the club, not the manager, so they are stored on the club
+   and appear as central income for whoever holds them — which means a
+   Championship rival with a parachute is genuinely harder to compete
+   with, as it is in life.
+   ===================================================================== */
+
+(function economyCliff() {
+  'use strict';
+
+  const has = (fn) => typeof fn === 'function';
+  const PARACHUTE = [49e6, 40e6, 22e6];
+
+  function guard(context, fn, fallback) {
+    try { return fn(); } catch (error) {
+      try { console.error(`[economy: ${context}]`, error); } catch (ignored) { /* no console */ }
+      return fallback;
+    }
+  }
+
+  function order() {
+    return (typeof DIV_ORDER !== 'undefined') ? DIV_ORDER : ['PL', 'CH', 'L1', 'L2', 'NL'];
+  }
+
+  /* What a club is owed this season for having been in the Premier
+     League. `left` counts down each summer; `years` is how long they
+     were up, which decides whether there is a third payment at all. */
+  /* Which rung of the taper a club is on. Counted from how many years it
+     was awarded rather than from the length of the table, so a two-year
+     parachute starts at £49M and steps to £40M — it does not start
+     half way down. */
+  function parachuteFor(c) {
+    if (!c || !c.chute || !(c.chute.left > 0)) return 0;
+    const total = c.chute.total || c.chute.left;
+    const stage = total - c.chute.left;
+    if (stage < 0 || stage >= PARACHUTE.length) return 0;
+    return PARACHUTE[stage];
+  }
+
+  function grantParachute(c, seasonsUp) {
+    const years = seasonsUp > 1 ? 3 : 2;
+    c.chute = { left: years, total: years, years: seasonsUp, from: G.season };
+  }
+
+  /* Parachute money is central money: it goes in the same bucket, so
+     every screen, the PSR position and the monthly payment all pick it
+     up without being told about it. */
+  if (typeof window !== 'undefined' && window.RBSEconomy && has(window.RBSEconomy.centralFor)) {
+    const baseCentral = window.RBSEconomy.centralFor;
+    const withChute = function centralWithParachute(c) {
+      return baseCentral(c) + parachuteFor(c);
+    };
+    /* rebuild the frozen export around the new one */
+    const api = {};
+    Object.keys(window.RBSEconomy).forEach((k) => { api[k] = window.RBSEconomy[k]; });
+    api.centralFor = withChute;
+    api.parachuteFor = parachuteFor;
+    api.baseCentralFor = baseCentral;
+    window.RBSEconomy = Object.freeze(api);
+
+    /* and the two globals that read it */
+    if (has(seasonRevenue)) {
+      const prevRev = seasonRevenue;
+      seasonRevenue = function seasonRevenueChute() {
+        const r = prevRev.apply(this, arguments);
+        return guard('revenue.chute', () => {
+          const p = parachuteFor(G.clubs[G.my]);
+          if (!p) return r;
+          return { tv: r.tv + p, gate: r.gate, com: r.com, spon: r.spon, total: r.total + p };
+        }, r);
+      };
+    }
+    if (has(monthlyIncome)) {
+      const prevInc = monthlyIncome;
+      monthlyIncome = function monthlyIncomeChute() {
+        const r = prevInc.apply(this, arguments);
+        guard('income.chute', () => {
+          (G.clubs || []).forEach((c) => {
+            const p = parachuteFor(c);
+            if (p) c.bank = Math.round((c.bank || 0) + p / 12);
+          });
+        });
+        return r;
+      };
+    }
+  }
+
+  /* -------------------------------------------------------------------
+     WHO GOES UP, WHO COMES DOWN, AND WHAT IT DOES TO THEM
+     -------------------------------------------------------------------
+     endSeason moves the clubs and applies its own money. This runs after
+     it, takes that money back out, and applies the real thing: the
+     division tables do the work, and all that is left to record is how
+     long a relegated club was up for and how many seasons of parachute
+     that earns it.
+     ------------------------------------------------------------------- */
+  if (has(endSeason)) {
+    const previousEnd = endSeason;
+    endSeason = function endSeasonCliff() {
+      const before = {};
+      guard('cliff.before', () => {
+        (G.clubs || []).forEach((c) => { if (c) before[c.i] = c.league; });
+      });
+      const r = previousEnd.apply(this, arguments);
+      guard('cliff.after', () => {
+        const ord = order();
+        const justRelegated = new Set();
+        (G.clubs || []).forEach((c) => {
+          if (!c) return;
+          const was = before[c.i];
+          const now = c.league;
+
+          /* another season in this division */
+          if (was === now) {
+            if (now === 'PL') c.plSeasons = (c.plSeasons || 0) + 1;
+            return;
+          }
+
+          const wasIx = ord.indexOf(was);
+          const nowIx = ord.indexOf(now);
+
+          /* undo the flat promotion and relegation money — the division
+             tables in phase one already say what each league is worth */
+          if (wasIx >= 0 && nowIx >= 0) {
+            if (nowIx < wasIx) c.budget = Math.max(0, Math.round((c.budget - 8e6) / 2.4));
+            else c.budget = Math.round(c.budget / 0.55);
+            /* and re-level the budget on the division actually joined */
+            const rev = (window.RBSEconomy && window.RBSEconomy.revenueFor)
+              ? window.RBSEconomy.revenueFor(c).total : c.budget;
+            c.budget = Math.max(1e4, Math.round(rev * (now === 'PL' ? 0.22 : now === 'CH' ? 0.18 : 0.12) / 1e4) * 1e4);
+          }
+
+          if (was === 'PL' && now === 'CH') {
+            grantParachute(c, Math.max(1, c.plSeasons || 1));
+            justRelegated.add(c.i);
+            c.plSeasons = 0;
+            if (c.i === G.my) {
+              mail('board', '🪂 Parachute payments confirmed',
+                `Relegation costs the club its Premier League central distribution. The parachute is confirmed at ` +
+                `<b>${fmtM(PARACHUTE[0])}</b> this coming season and <b>${fmtM(PARACHUTE[1])}</b> the season after` +
+                (c.chute.left > 2 ? `, with a third year of <b>${fmtM(PARACHUTE[2])}</b> because we were up for more than one season.` : '.') +
+                (c.chute.left <= 2 ? '<br><br>There is no third year. One season in the Premier League does not earn one.' : '') +
+                '<br><br>It does not replace what has gone. The wage bill has to come down to meet it.');
+            }
+          }
+          if (now === 'PL') {
+            c.plSeasons = 1;
+            c.chute = null;
+            if (c.i === G.my) {
+              mail('board', '💰 What promotion is worth',
+                'The club joins the Premier League central distribution. Equal share, international rights and ' +
+                'central commercial money come to roughly <b>£106M</b> a season before a ball is kicked, against ' +
+                'the <b>£11M</b> we have been living on, and merit money on top of that in May.' +
+                '<br><br>Every one of it is at risk the moment we go back down, so spend it like a club that ' +
+                'intends to stay.');
+            }
+          }
+        });
+
+        /* A parachute year is used up each summer — but not the summer
+           it was awarded in, or a club would drop a rung on the way
+           down and never see the first payment. */
+        (G.clubs || []).forEach((c) => {
+          if (!c || !c.chute || justRelegated.has(c.i)) return;
+          if (c.league === 'PL') { c.chute = null; return; }
+          c.chute.left -= 1;
+          if (c.chute.left <= 0) {
+            c.chute = null;
+            if (c.i === G.my) {
+              mail('board', '🪂 The parachute has run out',
+                'The last parachute payment has been made. From this season the club lives on its Championship ' +
+                'central distribution and what it earns for itself. If the wage bill has not come down to meet ' +
+                'it by now, it has to come down quickly.');
+            }
+          }
+        });
+      });
+      return r;
+    };
+  }
 }());
