@@ -1,6 +1,6 @@
 /* global G, esc, clamp, fmtM, mail, squadWage, staffWage, divMembers, leaguePos,
           LEAGUES, commercialIncome, ensureCommercial, MU, ordinal, tableRows,
-          fixCtx, DIV_ORDER */
+          fixCtx, DIV_ORDER, ACTIONS, playerById, toast, $, loanTerms */
 /* global seasonRevenue:writable, seasonCosts:writable, monthlyIncome:writable,
           applyPostMatch:writable, endSeason:writable, vFinances:writable */
 
@@ -593,4 +593,189 @@
       return r;
     };
   }
+}());
+
+/* =====================================================================
+   ECONOMY PHASE THREE — the rule the EFL actually uses
+   ---------------------------------------------------------------------
+   Profit & Sustainability is a Premier League and Championship rule. It
+   was being applied to League One, League Two and the National League,
+   where the real regulation is the Salary Cost Management Protocol: a
+   cap on player wages as a share of turnover, monitored on projections,
+   and enforced by a transfer embargo until the club is compliant again
+   rather than by a points deduction.
+
+   The game is set in 2026/27 and the League One figure changed for that
+   season — down from 60% of turnover to 50%, with manager and coaching
+   costs folded into the cap for the first time. League Two stays at 55%
+   of player wages. Both are modelled as published.
+
+   This is deliberately a guard rail rather than a noose. Measured across
+   the divisions after phase one, clubs sit at 22-53% of turnover, so the
+   cap only bites if you go looking for it — and when it does, it stops
+   you making the commitment rather than punishing you for having made
+   it. An embargo you can lift by selling somebody is a decision. A
+   points deduction for something you did in August is not.
+   ===================================================================== */
+
+(function economySCMP() {
+  'use strict';
+
+  const has = (fn) => typeof fn === 'function';
+
+  /* share of turnover, and whether the backroom counts towards it */
+  const SCMP = {
+    L1: { share: 0.50, coaching: true, name: 'League One' },
+    L2: { share: 0.55, coaching: false, name: 'League Two' },
+    NL: { share: 0.65, coaching: false, name: 'National League' },
+  };
+
+  function guard(context, fn, fallback) {
+    try { return fn(); } catch (error) {
+      try { console.error(`[economy: ${context}]`, error); } catch (ignored) { /* no console */ }
+      return fallback;
+    }
+  }
+
+  /* Where the club stands against its cap. `extra` is a weekly wage you
+     are thinking about committing to, so the same function answers both
+     "where am I" and "may I do this". */
+  function scmpPosition(extra) {
+    return guard('scmp', () => {
+      const c = G.clubs[G.my];
+      const rule = SCMP[c.league];
+      if (!rule) return null;
+      const rev = has(seasonRevenue) ? seasonRevenue().total : 0;
+      const costs = has(seasonCosts) ? seasonCosts() : { wages: 0, staff: 0 };
+      const committed = costs.wages + (rule.coaching ? costs.staff : 0);
+      const spend = committed + Math.round((extra || 0) * 52);
+
+      /* A club can inherit a bill it did not agree to — the smallest
+         League One side in the game starts at 65% of turnover against a
+         50% cap, and a career that opens under embargo is a bug, not a
+         difficulty setting. The EFL agrees a compliance path with a club
+         in that position rather than freezing it. So the ceiling is the
+         cap or what you walked into, whichever is higher, snapshotted at
+         the start of the season: you can replace what you have, you
+         cannot inflate it, and you cannot ratchet the allowance up by
+         signing somebody. */
+      if (c.scmpBase == null || c.scmpSeason !== G.season) {
+        c.scmpBase = committed;
+        c.scmpSeason = G.season;
+      }
+      const cap = Math.round(rev * rule.share);
+      const limit = Math.max(cap, c.scmpBase);
+      return {
+        rule, limit, cap, spend, revenue: rev,
+        inherited: limit > cap,
+        room: limit - spend,
+        pct: rev > 0 ? spend / rev : 0,
+        ok: spend <= limit,
+      };
+    }, null);
+  }
+
+  /* -------------------------------------------------------------------
+     THE EMBARGO
+     -------------------------------------------------------------------
+     Every route that adds a wage to the bill goes through one of these
+     two: personal terms for a signing or a renewal, and taking a player
+     on loan. Both are stopped before the commitment rather than after.
+     ------------------------------------------------------------------- */
+  function blocked(extraWeekly, what) {
+    const p = scmpPosition(extraWeekly);
+    if (!p || p.ok) return false;
+    const over = Math.round(-p.room);
+    toast(`${p.rule.name} wage cap: ${what} would put you £${Math.round(over / 1e3)}K a year over`);
+    mail('board', '🚫 Wage cap — the registration would be refused',
+      `${p.rule.name} runs a Salary Cost Management Protocol: player wages` +
+      `${p.rule.coaching ? ' and coaching costs' : ''} cannot exceed <b>${Math.round(p.rule.share * 100)}%</b> ` +
+      `of turnover. That deal would take the club to <b>${fmtM(p.spend)}</b> against a ceiling of ` +
+      `<b>${fmtM(p.limit)}</b>, and the league would not register the player.` +
+      '<br><br>Move somebody on, get a wage off the books, or grow the turnover, and the room comes back.');
+    return true;
+  }
+
+  if (typeof ACTIONS !== 'undefined' && typeof ACTIONS.submitTerms === 'function') {
+    const previousTerms = ACTIONS.submitTerms;
+    ACTIONS.submitTerms = function submitTermsCapped() {
+      const stop = guard('scmp.terms', () => {
+        const n = G.negotiation;
+        if (!n) return false;
+        const p = playerById(n.pid);
+        if (!p) return false;
+        const want = Math.round(+(($('#tWage') || {}).value) || 0);
+        const delta = want - (n.renew ? (p.wage || 0) : 0);
+        if (delta <= 0) return false;
+        return blocked(delta, n.renew ? 'that new contract' : 'signing him');
+      }, false);
+      if (stop) return undefined;
+      return previousTerms.apply(this, arguments);
+    };
+  }
+
+  ['loanAskDo', 'loanInDo'].forEach((name) => {
+    if (typeof ACTIONS === 'undefined' || typeof ACTIONS[name] !== 'function') return;
+    const previous = ACTIONS[name];
+    ACTIONS[name] = function loanCapped(el) {
+      const stop = guard('scmp.loan', () => {
+        let weekly = 0;
+        if (name === 'loanInDo') {
+          const r = (G._loanList || [])[+el.dataset.v];
+          if (r) weekly = Math.round(r.p.wage * (100 - r.share) / 100);
+        } else {
+          const p = playerById(el.dataset.id);
+          if (p && has(loanTerms)) weekly = (loanTerms(p) || {}).weekly || 0;
+        }
+        if (weekly <= 0) return false;
+        return blocked(weekly, 'that loan');
+      }, false);
+      if (stop) return undefined;
+      return previous.apply(this, arguments);
+    };
+  });
+
+  /* -------------------------------------------------------------------
+     AND IT SAYS SO ON THE SCREEN
+     ------------------------------------------------------------------- */
+  if (has(vFinances)) {
+    const previousFin = vFinances;
+    vFinances = function vFinancesSCMP() {
+      let h = previousFin.apply(this, arguments);
+      guard('scmp.screen', () => {
+        const p = scmpPosition(0);
+        if (!p) return;
+        const pct = Math.round(p.pct * 100);
+        const cap = Math.round(p.rule.share * 100);
+        const col = !p.ok ? 'var(--danger)' : pct > cap - 8 ? 'var(--amber)' : 'var(--green)';
+        const panel = '<div class="card" style="margin-bottom:12px;border-color:' + col + '55">' +
+          '<div class="spread" style="margin-bottom:8px"><div><div class="small" style="font-weight:800">📋 Salary Cost Management</div>' +
+          '<div class="xs faint">' + esc(p.rule.name) + ' wage cap</div></div>' +
+          '<div style="text-align:right"><div class="num" style="font-size:17px;font-weight:800;color:' + col + '">' +
+          pct + '%<span class="small muted"> / ' + cap + '%</span></div>' +
+          '<div class="xs faint">' + (p.ok ? fmtM(p.room) + ' of room' : fmtM(-p.room) + ' over') + '</div></div></div>' +
+          '<div class="possbar"><i style="width:' + clamp(p.pct / p.rule.share * 100, 0, 100) + '%;background:' + col + '"></i>' +
+          '<i style="flex:1;background:rgba(255,255,255,.07)"></i></div>' +
+          '<div class="xs faint" style="margin-top:8px">Player wages' + (p.rule.coaching ? ' and coaching costs' : '') +
+          ' may not exceed <b>' + cap + '%</b> of turnover. ' +
+          (p.ok ? 'You can commit another <b>' + fmtM(p.room) + '</b> a year before the league stops registering players.'
+            : '<b style="color:var(--danger)">You are over the cap and under embargo</b> — no new contract or loan will be registered until the bill comes down.') +
+          (p.inherited ? '<br><br>You inherited a bill above the cap, so the league has agreed a ceiling of <b>' +
+            fmtM(p.limit) + '</b> for this season. You can replace what you have; you cannot add to it.' : '') +
+          '</div></div>';
+        const anchor = '<div class="sec"><div class="t">Annual income</div>';
+        h = h.indexOf(anchor) >= 0 ? h.replace(anchor, panel + anchor) : panel + h;
+      });
+      return h;
+    };
+  }
+
+  try {
+    if (typeof window !== 'undefined' && window.RBSEconomy) {
+      const api = {};
+      Object.keys(window.RBSEconomy).forEach((k) => { api[k] = window.RBSEconomy[k]; });
+      api.scmpPosition = scmpPosition;
+      window.RBSEconomy = Object.freeze(api);
+    }
+  } catch (error) { /* no window */ }
 }());

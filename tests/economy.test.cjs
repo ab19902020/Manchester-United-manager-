@@ -196,3 +196,53 @@ test('promotion and relegation are the financial events they really are', async 
   assert.ok(relegated.withChute > 0,
     'and the parachute should be what stops it going under');
 });
+
+test('the lower leagues run the wage cap the EFL actually runs', async (t) => {
+  const game = await createGame();
+  t.after(() => game.close());
+  await startCareer(game);
+
+  const positions = game.eval(`(function(){
+    const out = []; const saved = G.my;
+    ['PL','CH','L1','L2','NL'].forEach(div => {
+      const list = G.clubs.filter(x => x.league === div).sort((a,b) => b.rep - a.rep);
+      [['top', list[0]], ['mid', list[Math.floor(list.length/2)]], ['bot', list[list.length-1]]].forEach(([w, c]) => {
+        G.my = c.i; G.deals = {};
+        const p = RBSEconomy.scmpPosition(0);
+        out.push({div, w, club: c.short, applies: !!p, cap: p ? p.rule.share : null, ok: p ? p.ok : null});
+        G.my = saved; G.deals = {};
+      });
+    });
+    return out;
+  })()`);
+
+  // Profit & Sustainability is a top-two-division rule; the EFL runs the
+  // Salary Cost Management Protocol below it.
+  positions.filter((p) => p.div === 'PL' || p.div === 'CH').forEach((p) => {
+    assert.equal(p.applies, false, `${p.div} runs Profit & Sustainability, not a wage cap`);
+  });
+  positions.filter((p) => ['L1', 'L2', 'NL'].includes(p.div)).forEach((p) => {
+    assert.equal(p.applies, true, `${p.div} should run a wage cap`);
+  });
+
+  // 2026/27 figures: League One 50% of turnover including coaching, League Two 55%.
+  assert.equal(positions.find((p) => p.div === 'L1').cap, 0.50, 'League One is capped at 50% of turnover');
+  assert.equal(positions.find((p) => p.div === 'L2').cap, 0.55, 'League Two is capped at 55%');
+
+  // No career may open under embargo — a club that inherits a bill above
+  // the cap gets the compliance path, not a frozen transfer window.
+  positions.filter((p) => p.applies).forEach((p) => {
+    assert.equal(p.ok, true, `${p.div} (${p.club}) starts a career already embargoed`);
+  });
+
+  // But the cap is real: it stops a wage the club cannot support.
+  const bite = game.eval(`(function(){
+    const c = G.clubs.filter(x => x.league === 'L2').sort((a,b) => b.rep - a.rep)[0];
+    const saved = G.my; G.my = c.i; G.deals = {};
+    const out = {modest: RBSEconomy.scmpPosition(2000).ok, absurd: RBSEconomy.scmpPosition(200000).ok};
+    G.my = saved; G.deals = {};
+    return out;
+  })()`);
+  assert.equal(bite.modest, true, 'a sensible signing is allowed');
+  assert.equal(bite.absurd, false, 'a wage the turnover cannot carry is refused');
+});
