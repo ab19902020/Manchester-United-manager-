@@ -1,7 +1,7 @@
 # Agent One — report to Claude
 
 **Written by:** Agent One (balance and rules) · **Read by:** Claude (director) and Codex
-**Current as of commit:** `9ea4f69` · **Last updated:** 10 August 2026
+**Current as of commit:** `7950fcb` · **Last updated:** 10 August 2026 (cycle 2)
 
 ---
 
@@ -13,7 +13,7 @@ There are three of us now. The split, as I understand it:
 | --- | --- |
 | **Claude** | director. Design, the build, how the game feels, what happens next |
 | **Codex** | the eyes. Debugging, audits, real-world data, anything that needs the web |
-| **Agent One** (me) | the rules underneath. Gameplay balance, economy, the systems that are not the match itself |
+| **Agent One** (me) | the rules underneath. Gameplay balance, the economy, the systems that are not the match itself |
 
 I write this file. Nobody else should have to — if something in here is wrong,
 stale, or a bad call, say so and I will change it rather than have it quietly
@@ -24,14 +24,14 @@ rewritten, same protocol Claude and Codex already run between `CODEX.md` and
 and loan markets, and the inbox those things arrive in. Not the match engine, not
 the renderer, not the data.
 
-### The rule I work to: one line in the big file
+### The rule I work to: keep out of the big file
 
 `red-devil-manager.html` is three megabytes and 136 appended layers, and it is
 where three agents will collide. So my code does not live there.
 
-Everything I write goes in **`src/gameplay-balance.js`**, which loads after the
-game and patches it in place. The big file gets **one `<script src>` tag and
-nothing else**. If you are merging my work and hit a conflict in that file, the
+Everything I write goes in **`src/gameplay-balance.js`** and **`src/economy.js`**,
+which load after the game and patch it in place. The big file gets **two
+`<script src>` tags and nothing else**. If you are merging my work and hit a conflict in that file, the
 resolution is always "keep both, re-add my one line".
 
 That is also why I patch by wrapping rather than editing: I never need the
@@ -48,7 +48,58 @@ Onyeka, the nineteen shared ESPN IDs). Those are still open and still yours.
 
 ## Done, with SHAs
 
-Published on `main`. Two commits: `eef35a8` and `42234ea`.
+### Cycle 2 — the economy
+
+`d35f73b`, `b5de3b8`, `679cf6d`. Three phases, approved one at a time, each
+measured before and after. Everything lives in `src/economy.js`.
+
+**Phase one — the money has the shape of the pyramid.** Measured against the
+published 2024/25 distributions, the Premier League was close to right and
+everything below it was inflated, worse the further down you went:
+
+| central distribution | game | real 2024/25 | out by |
+| --- | ---: | ---: | ---: |
+| Premier League champion | £169.7M | £174.9M | ok |
+| Championship | £38–48M | ~£11M | 4× |
+| League One | £12–13M | ~£2M | 6× |
+| National League | £2.7–2.9M | ~£150K | ~18× |
+
+Three causes: a divisor of `{CH:.32, L1:.11, L2:.055, NL:.028}` against a real
+`1 : 0.08 : 0.014 : 0.011 : 0.001`; a flat £6.5M added to every club *before*
+that divisor, putting a Premier League floor under the whole pyramid; and
+commercial income counted twice, once through the sponsorship-deals system —
+which is well calibrated, Arsenal £216M against a real £218M — and again
+through a `rep × 1150` stream worth another £132M on top.
+
+Costs were wrong the other way. `cap × 760 + rep × 14000 + wages × 0.30`
+charged a 4,000-seat National League club **£28.7M a year to run**, so every
+club from League One down showed a £35–50M loss and sat permanently IN BREACH
+of PSR on day one of a career.
+
+**Calibrated deliberately soft, on the user's instruction.** The shape is real;
+the level is not. In actual football the Championship spends 94p in the pound on
+wages and the division lost £436M last season. Here every club at every level
+runs a modest profit if sensibly managed, because it is a game you are meant to
+be able to win. Basic awards are weighted towards the smallest club in each
+division — which is where a built club starts, and which is what solidarity is
+actually for.
+
+**Phase two — the cliff.** The flat `budget × 2.4 + £8M` on promotion is gone;
+phase one's tables do it. Parachute payments on the real taper — £49M, £40M, and
+a third year of £22M only for clubs up more than one season, which is the Luton
+rule and the reason a club gambles on staying up. They follow the club, so a
+Championship rival holding one is genuinely harder to compete with.
+
+**Phase three — the EFL's own rule.** PSR is a top-two-division regulation; below
+it the real rule is the Salary Cost Management Protocol. League One 50% of
+turnover including coaching costs — that figure changed *for* 2026/27, which is
+the season the game is set in — League Two 55%, enforced by refusing to register
+the player rather than by a points deduction. Clubs sit at 16–44%, so it only
+bites if you go looking for it.
+
+### Cycle 1 — six defects away from the pitch
+
+`eef35a8` and `42234ea`.
 
 Six defects, all of them away from the pitch, all reported from a created club in
 the National League.
@@ -111,10 +162,46 @@ new. `red-devil-manager.html` +1 line, `tests/game-harness.cjs` +1 line,
 
 ```text
 npm run check
-lint clean; tests 12; pass 12; fail 0; duration 67.2 s
+lint clean; tests 16; pass 16; fail 0; duration 70.9 s
 ```
 
-Ten of those twelve were already there and still pass. The two new ones are mine.
+Ten of those sixteen were already here and still pass. Six are mine.
+
+### The economy, measured before and after
+
+| revenue, mid-table club | before | after | real |
+| --- | ---: | ---: | ---: |
+| Premier League | £407M | £307M | ~£200M |
+| Championship | £93M | £58M | £39M |
+| League One | £34M | £20M | £7–8M |
+| League Two | £15M | £9M | £5–6M |
+| National League | £8.4M | £4.2M | £1.5–2.0M |
+
+The spread across the pyramid went from about 45:1 to about 250:1, against a
+real ~300:1. Wage-to-revenue moved from 0.11–0.41 to 0.16–0.59, so wages are now
+the dominant single cost everywhere without being fatal anywhere.
+
+Every division's mid and bottom club is profitable. The one club still losing
+money after phase one was a relegated side carrying a £76M wage bill on £129M of
+Championship income, at −£9.2M; with the parachute it is +£39.8M, which is
+exactly what the mechanism exists for. Every club in every division starts
+compliant with its own wage rule.
+
+Solvency, 150 days simulated, weakest club in each division: all five still in
+credit. Before this work a National League club was down to its last £65K by
+Christmas, because the old code credited the user alone while `dailyWages`
+debited everybody.
+
+Gate receipts paid now equal the Finances projection to within a rounding step
+— £5.22M paid against £5.18M projected at Old Trafford, £23K against £22K at a
+National League ground. They were two different ticket prices before.
+
+### Cycle 1
+
+```text
+npm run check
+lint clean; tests 12; pass 12; fail 0
+```
 
 Measured, not asserted:
 
@@ -176,7 +263,16 @@ League club going up to League Two appears to bank £8M. **I did not run this** 
 my probe did not actually trigger a promotion — so treat it as a code reading
 until somebody sits a season out and watches it.
 
-### 3. A goal bonus cannot help you close a deal below the Championship
+### 3. Commercial income is too flat across the Premier League
+
+The sponsorship-deals system is excellent at the very top — Arsenal £216M against
+a real £218M — and too generous in the middle, because it is linear in reputation
+and real commercial revenue is nothing like linear. Crystal Palace is modelled at
+£133M against a real ~£40M. I left it alone: it errs towards the user having
+money, which is the direction you asked for, and fixing it properly means
+deciding what reputation is supposed to mean rather than adjusting a constant.
+
+### 4. A goal bonus cannot help you close a deal below the Championship
 
 `red-devil-manager.html:11574`, inside `submitTerms`:
 `Math.min(4, bonus/8e3*4)`. £8,000 is a Premier League number, so the £50 bonus a
@@ -185,7 +281,7 @@ is worth. I could not patch it without re-implementing the whole acceptance
 score, which is your call not mine. The main acceptance path (meet the asking
 wage) is unaffected, so it is a dead lever rather than a broken one.
 
-### 4. The morale drip is still Premier-League-shaped
+### 5. The morale drip is still Premier-League-shaped
 
 `red-devil-manager.html:5180`: nothing until five matches, then −2.4 morale a week
 for anyone below `role share − 0.22`. My derived roles largely defused it — a
@@ -194,14 +290,14 @@ for sitting out August — but the trigger is still a fixed five matches and a
 fixed constant. If you want it consistent with the unrest gate it should be the
 same fraction of the season.
 
-### 5. Nobody outside your own country's top two tiers is ever suspended
+### 6. Nobody outside your own country's top two tiers is ever suspended
 
 `simFixture` (`red-devil-manager.html:17970`) sends anything that is not a cup tie
 or `fullSimDiv` to `fastSim`, which produces no cards, so no bans. Tables and
 results are unaffected; it just means discipline exists in your corner of the
 world and nowhere else. Probably fine, possibly not once somebody manages abroad.
 
-### 6. Dead code worth deleting when you are next in that block
+### 7. Dead code worth deleting when you are next in that block
 
 `ACTIONS.roleTalk` (`red-devil-manager.html:5187`) still resolves its player with
 `my.players.find(x => x._pending)` — the *first* flagged player, not the one the
@@ -219,7 +315,17 @@ Nothing. Everything I was asked for is in and measured.
 
 ## What I would like from you
 
-- **Claude:** items 1 and 2 above are yours — they are economy design decisions,
+- **Claude:** item 1 is still open and now matters more, not less — a built club's
+  chairman sets a wage ceiling that a `rep × 90` floor overwrites at the first
+  season end. Phase three softens the consequence, because turnover now caps wages
+  below the Championship whatever the ceiling says, but the chairman you chose
+  still stops meaning anything in May. Items 2 and 3 are economy design calls.
+- **Claude, on feel:** the economy is calibrated soft on the user's explicit
+  instruction — everybody profitable, nobody doomed. If you want it to bite
+  harder, the four numbers to move are `runs`, `seat`, `grant` and the division
+  `central` figures in `src/economy.js`, and every one of them is a one-line
+  change with a measurement in the tests to catch what it does.
+- **Claude:** items 1 and 2 of cycle one are yours — they are economy design decisions,
   not defects with an obvious right answer, and a created club's finances are the
   spine of that whole mode. Item 3 needs the acceptance score rewritten and I did
   not want to touch feel without asking.

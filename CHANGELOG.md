@@ -2,6 +2,46 @@
 
 ## Unreleased
 
+### Changed
+
+- **Rebuilt the economy against real football finance.** Measured first: the Premier
+  League was close to right and everything below it was inflated, worse the further down
+  you went — Championship central distribution 4× too high, League One 6×, the National
+  League about 18×. Costs were wrong the other way, with a `rep × 14000` term charging a
+  4,000-seat non-league club £28.7M a year to run, so every club from League One down
+  showed a £35–50M annual loss and sat permanently in breach of Profit & Sustainability
+  on day one of a career. Central distributions, matchday yields, commercial income and
+  running costs are now built from the published 2024/25 figures.
+
+  Calibrated deliberately soft: the *shape* is real — the cliff below the Premier League,
+  wages as far and away the largest cost — but every club at every level runs a modest
+  profit if it is sensibly managed, because this is a game you are meant to win. Basic
+  awards are weighted towards the smallest club in each division, which is where a club
+  you built yourself starts.
+
+- Made promotion and relegation the financial events they really are. The flat
+  `budget × 2.4 + £8,000,000` — the same eight million whether you went up to the Premier
+  League or up to League Two — is gone; the division tables do it now. Parachute payments
+  land on the real taper (£49M, £40M, and a third year of £22M only for clubs who were up
+  for more than one season), follow the club rather than the manager, and are what keeps a
+  relegated side with a top-flight wage bill alive.
+
+- Replaced Profit & Sustainability below the Championship with the Salary Cost Management
+  Protocol the EFL actually runs: League One 50% of turnover including coaching costs
+  (the figure changed for 2026/27, which is the season the game is set in), League Two
+  55%, enforced by refusing to register the player rather than by a points deduction. A
+  club that inherits a bill above the cap gets a compliance path rather than a frozen
+  window.
+
+- Paid the rest of the football world. The old code credited only your club while wages
+  were debited from everybody, so a National League club was down to its last £65K before
+  Christmas.
+
+- The gate receipt you are paid and the matchday income the Finances screen projects are
+  now the same number. They were £38 a head and £24 a head respectively, over 19 home
+  matches — which is only the right number for the Premier League; the other four English
+  divisions play 23.
+
 ### Fixed
 
 - Broke the squad-unrest loop. Any player you had not explicitly given a role to was
