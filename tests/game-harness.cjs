@@ -21,6 +21,7 @@ function gameHtml() {
     'src/career-store.js',
     'src/runtime-enhancements.js',
     'src/gameplay-balance.js',
+    'src/economy.js',
   ]) {
     html = inlineScript(html, fs.readFileSync(path.join(root, filename), 'utf8'), filename);
   }
