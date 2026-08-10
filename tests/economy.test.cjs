@@ -246,3 +246,67 @@ test('the lower leagues run the wage cap the EFL actually runs', async (t) => {
   assert.equal(bite.modest, true, 'a sensible signing is allowed');
   assert.equal(bite.absurd, false, 'a wage the turnover cannot carry is refused');
 });
+
+test('the chairman you picked when you built the club is the chairman you keep', async (t) => {
+  const game = await createGame();
+  t.after(() => game.close());
+  await startCareer(game);
+
+  const chairmen = game.eval(`(function(){
+    // the three chairmen a built club can have, as they are configured
+    const setups = [['Tight', 22000, 150000], ['Sensible', 38000, 450000], ['Generous', 72000, 1200000]];
+    const out = [];
+    setups.forEach(([name, wage, budget]) => {
+      const nl = G.clubs.filter(c => c.league === 'NL').sort((a,b) => a.rep - b.rep)[0];
+      const saved = G.my;
+      G.my = nl.i; G.deals = {};
+      nl.custom = true; nl.rep = 1850; nl.cap = 2400;
+      nl.wageCap = wage; nl.budget = budget; nl.bank = Math.round(budget * 0.8);
+      ['chairMult','chairCap0','chairBudMult','chairBud0','scmpBase','scmpSeason'].forEach(k => { delete nl[k]; });
+      dailyTickCore();                       // day one: the chairman is anchored
+      const owner = RBSEconomy.ownerFunding(nl);
+      const scmp = RBSEconomy.scmpPosition(0);
+      const rev = seasonRevenue();
+      nl.rep = 1878;                          // reputation drifts over a season
+      normaliseReps();                        // the summer that used to overwrite him
+      const promoted = (function(){ const was = nl.league; nl.league = 'L2';
+        const v = RBSEconomy.chairCeiling(nl); nl.league = was; return v; })();
+      out.push({name, wage, budget, owner,
+        capAfterSummer: nl.wageCap, budgetAfterSummer: nl.budget,
+        ceilingInL2: promoted, revenue: rev.total, ownerShown: rev.owner || 0,
+        scmpOk: scmp ? scmp.ok : null,
+        profit: rev.total - seasonCosts().total});
+      delete nl.custom; G.my = saved; G.deals = {};
+    });
+    return out;
+  })()`);
+
+  chairmen.forEach((c) => {
+    // 1. the summer no longer overwrites him. This used to become
+    //    £169,020 - rep x 90 - whichever chairman you picked.
+    assert.equal(c.capAfterSummer, c.wage,
+      `${c.name}: the wage ceiling was ${c.capAfterSummer}, the chairman set ${c.wage}`);
+    assert.ok(c.budgetAfterSummer >= c.budget,
+      `${c.name}: the transfer budget fell from £${c.budget} to £${c.budgetAfterSummer} over one summer`);
+
+    // 2. but it grows with the club, so he does not freeze you either.
+    assert.ok(c.ceilingInL2 > c.wage,
+      `${c.name}: promotion to League Two should lift the ceiling above £${c.wage}`);
+
+    // 3. and nobody is insolvent or embargoed on day one.
+    assert.ok(c.profit > 0, `${c.name}: a built club should not be losing money before it has played`);
+    assert.equal(c.scmpOk, true, `${c.name}: a built club should not start over the wage cap`);
+  });
+
+  // 4. a ceiling above what the club can earn is an owner writing
+  //    cheques, and it is shown as that rather than appearing from
+  //    nowhere. The tight chairman is not putting money in - that is
+  //    the entire point of picking him.
+  const tight = chairmen.find((c) => c.name === 'Tight');
+  const generous = chairmen.find((c) => c.name === 'Generous');
+  assert.equal(tight.owner, 0, 'the tight chairman funds nothing, as advertised');
+  assert.ok(generous.owner > 1e6,
+    `the generous chairman should be visibly bankrolling the club, got £${generous.owner}`);
+  assert.equal(generous.ownerShown, generous.owner, 'and it appears in the accounts as owner funding');
+  assert.ok(generous.revenue > tight.revenue, 'so his club turns over more');
+});

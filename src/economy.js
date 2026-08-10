@@ -2,7 +2,8 @@
           LEAGUES, commercialIncome, ensureCommercial, MU, ordinal, tableRows,
           fixCtx, DIV_ORDER, ACTIONS, playerById, toast, $, loanTerms */
 /* global seasonRevenue:writable, seasonCosts:writable, monthlyIncome:writable,
-          applyPostMatch:writable, endSeason:writable, vFinances:writable */
+          applyPostMatch:writable, endSeason:writable, vFinances:writable,
+          dailyTickCore:writable, normaliseReps:writable */
 
 /* =====================================================================
    ECONOMY — what football clubs actually earn, and what it costs them
@@ -775,6 +776,268 @@
       const api = {};
       Object.keys(window.RBSEconomy).forEach((k) => { api[k] = window.RBSEconomy[k]; });
       api.scmpPosition = scmpPosition;
+      window.RBSEconomy = Object.freeze(api);
+    }
+  } catch (error) { /* no window */ }
+}());
+
+/* =====================================================================
+   THE CHAIRMAN YOU CHOSE, FOR AS LONG AS YOU MANAGE THE CLUB
+   ---------------------------------------------------------------------
+   Building your own club starts with picking a chairman, and the pick is
+   the shape of the whole career: Generous hands you £72,000 a week of
+   wage ceiling and expects promotion, Tight hands you £22,000 and tells
+   you not to come back for more.
+
+   It lasted until May. `normaliseReps` runs every summer and ends with
+
+       c.wageCap = Math.max(c.wageCap, c.rep * 90)
+
+   which has no idea a club can have been given a deliberately small
+   ceiling by its own board. Measured on a National League club with the
+   Tight chairman, one season end and no promotion:
+
+       wageCap   £22,000  ->  £169,020     (rep 1878 x 90, exactly)
+       budget    £150,000 ->  £651,000
+
+   So the shoestring career the chairman promised became a mid-table
+   Championship wage bill in ten months, and the choice stopped meaning
+   anything.
+
+   The floor exists for a good reason — it stops a generated club
+   anywhere in the world being left with a ceiling it cannot field a team
+   on — so it is kept for every club except the one whose ceiling was set
+   deliberately.
+
+   WHAT REPLACES IT. A chairman is not a number, he is a multiple: how
+   far above or below the going rate for a club that size he is prepared
+   to go. That multiple is measured once and then reapplied every season
+   against what the club has become, so the ceiling grows as you climb
+   without the chairman changing character. Tight stays tight in the
+   Championship.
+
+   AND WHERE THE MONEY COMES FROM. A ceiling above what the club turns
+   over is an owner writing cheques, which is exactly what bankrolls a
+   non-league promotion push in real life. It is now modelled as what it
+   is — owner funding, shown on its own line in the accounts, paid in
+   monthly, and counting towards the wage cap, because the real Salary
+   Cost Management Protocol counts secured owner investment too. It
+   tapers away by itself: as the club grows into its own turnover the
+   subsidy shrinks to nothing, which is both realistic and the arc the
+   chairmen describe when you pick them.
+   ===================================================================== */
+
+(function economyChairman() {
+  'use strict';
+
+  const has = (fn) => typeof fn === 'function';
+  /* what a club that size would normally be allowed to pay, as a share
+     of turnover — the wage-cap shares where a cap exists, and roughly
+     the going rate above them */
+  const NORM_SHARE = { PL: 0.62, CH: 0.60, L1: 0.50, L2: 0.55, NL: 0.65 };
+
+  function guard(context, fn, fallback) {
+    try { return fn(); } catch (error) {
+      try { console.error(`[economy: ${context}]`, error); } catch (ignored) { /* no console */ }
+      return fallback;
+    }
+  }
+
+  const E = () => (typeof window !== 'undefined' ? window.RBSEconomy : null);
+
+  /* Revenue before any owner money, so the two cannot feed each other.
+     Merit money is left out of the structural figure the chairman is
+     anchored against: it moves with the league table, and a chairman who
+     cut your budget because you slipped to eleventh in March would be a
+     different kind of bug. */
+  function structuralRevenue(c) {
+    const api = E();
+    if (!api) return 0;
+    return api.centralFor(c) + api.matchdayRevenue(c) + api.commercialFor(c);
+  }
+
+  function baseRevenue(c) {
+    const api = E();
+    if (!api) return 0;
+    return structuralRevenue(c) + api.meritFor(c);
+  }
+
+  function typicalCap(c) {
+    const share = NORM_SHARE[c.league] || 0.60;
+    return Math.max(1000, Math.round(structuralRevenue(c) * share / 52));
+  }
+
+  /* Measured once, on the ceiling the chairman actually set. */
+  function anchorChairman(c) {
+    if (!c || !c.custom) return;
+    if (c.chairMult != null) return;
+    const t = typicalCap(c);
+    c.chairCap0 = c.wageCap || t;
+    c.chairMult = t > 0 ? clamp(c.chairCap0 / t, 0.4, 10) : 1;
+    const b = typicalBudget(c);
+    c.chairBud0 = c.budget || b;
+    c.chairBudMult = b > 0 ? clamp(c.chairBud0 / b, 0.2, 12) : 1;
+  }
+
+  function chairCeiling(c) {
+    anchorChairman(c);
+    if (!c || c.chairMult == null) return c ? c.wageCap : 0;
+    return Math.max(c.chairCap0 || 0, Math.round(typicalCap(c) * c.chairMult));
+  }
+
+  /* The transfer budget drifted the same way and for the same reason:
+     every summer adds `rep x 9000` to it, which is a Premier League
+     formula, and it took the Tight chairman's £150,000 to £613,000 in
+     one season without the club being promoted. The chairman allocates
+     a budget in proportion to what the club is, exactly as he does the
+     wage ceiling — and what you make from selling players is still
+     yours on top of it, in season. */
+  const BUDGET_SHARE = { PL: 0.22, CH: 0.18, L1: 0.12, L2: 0.12, NL: 0.12 };
+
+  function typicalBudget(c) {
+    return Math.max(1e4, Math.round(structuralRevenue(c) * (BUDGET_SHARE[c.league] || 0.15)));
+  }
+
+  function chairBudget(c) {
+    anchorChairman(c);
+    if (!c || c.chairBudMult == null) return c ? c.budget : 0;
+    /* Floored at what he first gave you, the same way the ceiling is.
+       Commercial income moves with where you finished, and a chairman
+       who cut the transfer budget a quarter because the sponsorship
+       revalued is not a chairman, it is a rounding error. */
+    return Math.max(1e4, c.chairBud0 || 0, Math.round(typicalBudget(c) * c.chairBudMult / 1e4) * 1e4);
+  }
+
+  /* The gap between what the chairman will underwrite and what the club
+     earns for itself. Zero for a chairman who is not putting money in,
+     which is the whole point of the Tight one. */
+  function ownerFunding(c) {
+    return guard('owner', () => {
+      if (!c || !c.custom) return 0;
+      anchorChairman(c);
+      const need = chairCeiling(c) * 52 * 1.15;
+      return Math.max(0, Math.round(need - baseRevenue(c)));
+    }, 0);
+  }
+
+  /* -------------------------------------------------------------------
+     IT IS INCOME, SO IT GOES IN THE ACCOUNTS
+     ------------------------------------------------------------------- */
+  if (has(seasonRevenue)) {
+    const prevRev = seasonRevenue;
+    seasonRevenue = function seasonRevenueOwner() {
+      const r = prevRev.apply(this, arguments);
+      return guard('revenue.owner', () => {
+        const owner = ownerFunding(G.clubs[G.my]);
+        if (!owner) return r;
+        return { tv: r.tv, gate: r.gate, com: r.com, spon: r.spon, owner, total: r.total + owner };
+      }, r);
+    };
+  }
+
+  if (has(monthlyIncome)) {
+    const prevInc = monthlyIncome;
+    monthlyIncome = function monthlyIncomeOwner() {
+      const r = prevInc.apply(this, arguments);
+      guard('income.owner', () => {
+        (G.clubs || []).forEach((c) => {
+          const owner = ownerFunding(c);
+          if (owner) c.bank = Math.round((c.bank || 0) + owner / 12);
+        });
+      });
+      return r;
+    };
+  }
+
+  if (has(vFinances)) {
+    const prevFin = vFinances;
+    vFinances = function vFinancesOwner() {
+      let h = prevFin.apply(this, arguments);
+      guard('screen.owner', () => {
+        const owner = ownerFunding(G.clubs[G.my]);
+        if (!owner) return;
+        /* the last row of the income card, immediately before the costs
+           heading that follows it */
+        const row = '<div class="spread" style="padding:5px 2px;border-bottom:1px solid var(--chalk)">' +
+          '<span class="small">🤝 Owner funding</span><b class="num small">' + fmtM(owner) + '</b></div>';
+        const anchor = '</div><div class="sec"><div class="t">Annual costs</div>';
+        if (h.indexOf(anchor) >= 0) h = h.replace(anchor, row + anchor);
+      });
+      return h;
+    };
+  }
+
+  /* -------------------------------------------------------------------
+     AND THE SUMMER LEAVES IT ALONE
+     ------------------------------------------------------------------- */
+  if (typeof normaliseReps === 'function') {
+    const prevNorm = normaliseReps;
+    normaliseReps = function normaliseRepsChairman() {
+      const held = [];
+      guard('chair.hold', () => {
+        (G.clubs || []).forEach((c) => { if (c && c.custom) { anchorChairman(c); held.push(c); } });
+      });
+      const r = prevNorm.apply(this, arguments);
+      guard('chair.restore', () => {
+        held.forEach((c) => {
+          const bill = has(squadWage) ? squadWage(c) : 0;
+          /* the chairman's number, or the bill already being paid if the
+             squad has outgrown him — never the rep x 90 floor */
+          c.wageCap = Math.max(chairCeiling(c), Math.round(bill * 1.02));
+          c.budget = chairBudget(c);
+        });
+      });
+      return r;
+    };
+  }
+
+  /* The summer is a chain of a dozen layers and three of them touch the
+     budget after `normaliseReps` has run — including this file's own
+     merit-payment correction, which was quietly taking £38,000 back off
+     the Tight chairman's allocation. So the chairman has the last word,
+     applied once the whole chain has finished. Prize money still lands
+     in the bank; the budget is what the chairman says it is. */
+  if (has(endSeason)) {
+    const prevEnd = endSeason;
+    endSeason = function endSeasonChairman() {
+      const r = prevEnd.apply(this, arguments);
+      guard('chair.final', () => {
+        (G.clubs || []).forEach((c) => {
+          if (!c || !c.custom) return;
+          anchorChairman(c);
+          const bill = has(squadWage) ? squadWage(c) : 0;
+          c.wageCap = Math.max(chairCeiling(c), Math.round(bill * 1.02));
+          c.budget = chairBudget(c);
+        });
+      });
+      return r;
+    };
+  }
+
+  /* anchored on the first tick of a career, before any summer can move it */
+  if (has(dailyTickCore)) {
+    const prevTick = dailyTickCore;
+    dailyTickCore = function dailyTickChairman() {
+      const r = prevTick.apply(this, arguments);
+      guard('chair.tick', () => {
+        const c = G.clubs[G.my];
+        if (c && c.custom) anchorChairman(c);
+      });
+      return r;
+    };
+  }
+
+  try {
+    if (typeof window !== 'undefined' && window.RBSEconomy) {
+      const api = {};
+      Object.keys(window.RBSEconomy).forEach((k) => { api[k] = window.RBSEconomy[k]; });
+      api.ownerFunding = ownerFunding;
+      api.chairCeiling = chairCeiling;
+      api.chairBudget = chairBudget;
+      api.typicalBudget = typicalBudget;
+      api.typicalCap = typicalCap;
+      api.baseRevenue = baseRevenue;
+      api.structuralRevenue = structuralRevenue;
       window.RBSEconomy = Object.freeze(api);
     }
   } catch (error) { /* no window */ }
