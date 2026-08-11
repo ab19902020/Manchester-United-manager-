@@ -4,6 +4,50 @@
 
 ### Changed
 
+- **Taught every conversation in the game which division it is in.** An audit for
+  the boardroom's bug — grading on `pos < target`, which cannot tell that first place
+  is good — turned it up seven more times. All of them were the same thing: a question,
+  a promise or a target written for one twenty-club Premier League with three
+  relegation places, then asked of a twenty-four-club division with different rules.
+  In a live career, 4th in League Two — an automatic promotion place — was asked
+  "Is Europe the target or the minimum?"; 14th of 24 in the National League was asked
+  whether it was a relegation fight, in the one division nobody is relegated from; and
+  the weakest club in every division was told the board expected "24th or better".
+
+  There is now a single description of a division's shape, read from the game rather
+  than written down: how many clubs, how many go up, how many go down, how many reach
+  Europe and how many matches the season actually is. Nothing names a division or
+  hardcodes a count, so it stays correct as the leagues grow.
+
+  - The table questions fire on real geometry. Europe is only mentioned where there is
+    a Europe; "mid-table" means mid-table; and the relegation question says how big the
+    zone is — the bottom 4 in League One, the bottom 3 in the Premier League.
+  - Two new questions the pyramid never had: promotion, which is what four of the five
+    English divisions are about, and a division with nothing left to play for.
+  - A promise to stay up is judged against the real drop zone. League One relegates
+    four, so 21st went down while the promise was marked kept; League Two relegates two,
+    so 22nd stayed up while the promise was marked broken; the National League relegates
+    nobody and the promise broke anyway.
+  - No board asks a club to finish last. The target floor is the last safe place where
+    clubs go down, and the board says what it means — "keep this club in League One"
+    rather than "finish 20th or better".
+  - Winning the league now counts towards your own contract. `dealMerit` had the same
+    ceiling bug, so a title-winning season against a title-winning target scored zero
+    and the board never offered you a new deal.
+  - Transfer targets ask for the division they would be joining. "European football" was
+    demanded of clubs all the way down to the National League, and 15th of 24 —
+    mid-table — was scored as relegation form.
+  - The supporters' feed has a sense of scale. "HERE WE GO" fired at £40M and "what a
+    signing" at overall 82, so a National League club-record signing and the best player
+    in League Two never registered at all.
+
+- Fixed the season length in the seven leagues that play three times rather than twice
+  — Scotland, Austria, Switzerland, Denmark, Serbia, Ukraine and Croatia, at 10 to 12
+  clubs each. A 12-club season the press room thought was 22 matches is 33, so "games
+  left" hit zero at matchday 22: the run-in questions were asked in midwinter and never
+  once in the actual run-in, and both the title-race and relegation-fight definitions
+  collapsed for the whole second half of the season.
+
 - **Gave the boardroom a league table it can read.** Reported from a real save: top of
   the league after five matches, four wins and a draw, against a target of 1st — and the
   monthly review said "which is about where we asked you to be", offered "Take the

@@ -144,11 +144,17 @@
     return out;
   }
 
+  /* The first version of this hardcoded the promotion and relegation counts
+     and got three of the five English divisions wrong — it had the National
+     League relegating four clubs when the game relegates nobody from it.
+     The world already knows: divShape reads PYRAMIDS, divMembers and
+     G.clSpots, so this stays right when the pyramid grows. */
   function zones(div, size) {
-    /* the shape of the division, so "the play-offs" means something */
-    if (div === 'PL' || div === 'EU') return { promo: 0, po: 0, drop: 3, euro: 4 };
-    if (div === 'NL') return { promo: 1, po: 7, drop: 4, euro: 0 };
-    return { promo: 2, po: 6, drop: size >= 20 ? 3 : 2, euro: 0 };
+    const shape = (window.RBSShape && window.RBSShape.divShape) ? window.RBSShape.divShape(div) : null;
+    if (shape) {
+      return { promo: shape.up, po: 0, drop: shape.down, euro: shape.euro, shape };
+    }
+    return { promo: 0, po: 0, drop: 3, euro: div === 'PL' ? 4 : 0, shape: null };
   }
 
   function brFacts() {
@@ -204,7 +210,7 @@
         absent: has(keyAbsences) ? keyAbsences(G.my) : [],
         zone: z,
         promoSpot: pos != null && z.promo > 0 && pos <= z.promo,
-        poSpot: pos != null && z.po > 0 && pos > z.promo && pos <= z.po,
+        chasingPromo: pos != null && z.promo > 0 && pos > z.promo && pos <= z.promo + 3,
         dropSpot: pos != null && z.drop > 0 && pos > size - z.drop,
         euroSpot: pos != null && z.euro > 0 && pos <= z.euro,
         earlyDays: played < 6,
@@ -389,13 +395,18 @@
       ], rng));
     } else if (F.dropSpot && !F.earlyDays) {
       bits.push(vary('col-drop', [
-        'And we are in the bottom three, which is the number that costs this club everything.',
+        `And we are in the bottom ${F.zone.drop}, which is the number that costs this club everything.`,
         'Relegation is not a word we want in the minutes of a meeting in ' + monthName() + '.',
       ], rng));
     } else if (F.promoSpot && GOOD(g)) {
       bits.push(vary('col-promo', [
-        'Automatic promotion is on from here, and this board would like it very much.',
+        `${F.zone.promo === 1 ? 'The one automatic place' : `The top ${F.zone.promo}`} is where we are sitting, and this board would like it very much.`,
         'That is a promotion place. We are all adults, so we will say it plainly: we want it.',
+      ], rng));
+    } else if (F.chasingPromo && GOOD(g)) {
+      bits.push(vary('col-chase', [
+        `${F.pos - F.zone.promo} off the ${F.zone.promo === 1 ? 'automatic place' : `top ${F.zone.promo}`}, and closing. Nobody up here is pretending not to look.`,
+        'You are close enough to promotion that the supporters have started doing arithmetic.',
       ], rng));
     }
 
@@ -960,12 +971,21 @@
       const t = previousTarget.apply(this, arguments) || {};
       guard('target', () => {
         if (t.pos == null) t.pos = expectPos(G.my);
-        t.exp = t.pos;
         t.div = myDiv();
-        const name = (typeof DIV_NAMES !== 'undefined' && DIV_NAMES[t.div]) || 'the league';
-        t.txt = (t.div === 'PL' || t.div === 'EU')
-          ? 'finish ' + ordinal(t.pos) + ' or better'
-          : 'finish ' + ordinal(t.pos) + ' or better in ' + name;
+        const s = (window.RBSShape && window.RBSShape.divShape) ? window.RBSShape.divShape(t.div) : null;
+        /* A season's target can be talked up or down in the boardroom, and
+           the option that softens it capped at a flat 20 — meaningless in a
+           division of 24. It can never be worse than the last safe place. */
+        if (s) t.pos = clamp(Math.round(t.pos), 1, s.floor);
+        t.exp = t.pos;
+        const name = s ? s.name : ((typeof DIV_NAMES !== 'undefined' && DIV_NAMES[t.div]) || 'the league');
+        /* "finish 24th or better" is not a target. When the number is the
+           last safe position, say what it actually means. */
+        if (s && s.hasRelegation && t.pos >= s.floor) t.txt = 'keep this club in ' + name;
+        else if (s && s.hasPromotion && t.pos <= s.upTo) {
+          t.txt = 'go up out of ' + name + ' (' + (s.up === 1 ? 'the one automatic place' : 'the top ' + s.up) + ')';
+        } else if (s && !s.hasEurope) t.txt = 'finish ' + ordinal(t.pos) + ' or better in ' + name;
+        else t.txt = 'finish ' + ordinal(t.pos) + ' or better';
       });
       return t;
     };
@@ -973,6 +993,25 @@
 
   if (has(boardScene)) {
     const previousScene = boardScene;
+    /* whichever scene runs, an answer may move the season's target — and it
+       must stay inside the division it belongs to */
+    const clampTarget = () => guard('clamp', () => {
+      const t = boardTarget();
+      const s = (window.RBSShape && window.RBSShape.divShape) ? window.RBSShape.divShape(myDiv()) : null;
+      if (t && s && t.pos != null) t.pos = clamp(Math.round(t.pos), 1, s.floor);
+    });
+    const guardOpts = (scene) => {
+      if (!scene || !Array.isArray(scene.opts)) return scene;
+      scene.opts = scene.opts.map((o) => {
+        if (!o || typeof o.go !== 'function') return o;
+        const inner = o.go;
+        return Object.assign({}, o, {
+          go() { const out = inner.apply(this, arguments); clampTarget(); return out; },
+        });
+      });
+      return scene;
+    };
+
     boardScene = function boardSceneGraded(kind) {
       const built = guard('scene', () => {
         if (kind !== 'monthly' && kind !== 'checkin' && kind !== 'review') return null;
@@ -986,9 +1025,9 @@
       }, null);
       if (built && built.opts && built.opts.length) {
         try { if (typeof BR !== 'undefined') BR.chain = null; } catch (e) { /* no chain */ }
-        return built;
+        return guardOpts(built);
       }
-      return previousScene.apply(this, arguments);
+      return guardOpts(previousScene.apply(this, arguments));
     };
   }
 

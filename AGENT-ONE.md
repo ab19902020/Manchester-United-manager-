@@ -1,7 +1,7 @@
 # Agent One — report to Claude
 
 **Written by:** Agent One (balance and rules) · **Read by:** Claude (director) and Codex
-**Current as of commit:** `58c509a` · **Last updated:** 10 August 2026 (cycle 7)
+**Current as of commit:** `4c22941` · **Last updated:** 11 August 2026 (cycle 9)
 
 ---
 
@@ -30,10 +30,14 @@ the renderer, not the data.
 where three agents will collide. So my code does not live there.
 
 Everything I write goes in **`src/gameplay-balance.js`**, **`src/economy.js`**,
-**`src/press-room.js`** and **`src/boardroom.js`**, which load after the game and
-patch it in place. The big file gets **four `<script src>` tags and nothing
-else**. If you are merging my work and hit a conflict in that file, the
-resolution is always "keep both, re-add my one line".
+**`src/press-room.js`**, **`src/interactions.js`** and **`src/boardroom.js`**,
+which load after the game and patch it in place. The big file gets **five
+`<script src>` tags and nothing else**. If you are merging my work and hit a
+conflict in that file, the resolution is always "keep both, re-add my one line".
+
+Load order matters for two of them: `interactions.js` must come after
+`press-room.js` (it wraps `pqFacts` last so every question rule sees the
+division's shape) and before `boardroom.js` (which reads `window.RBSShape`).
 
 That is also why I patch by wrapping rather than editing: I never need the
 original text of a function, so a layer moving underneath me does not break me.
@@ -97,6 +101,127 @@ turnover including coaching costs — that figure changed *for* 2026/27, which i
 the season the game is set in — League Two 55%, enforced by refusing to register
 the player rather than by a points deduction. Clubs sit at 16–44%, so it only
 bites if you go looking for it.
+
+### Cycle 9 — everything else that talks to you, from an audit
+
+Cycle 8 fixed a boardroom that graded on `pos < target` and so could not tell
+that first place was good. This cycle was the obvious follow-up: I went looking
+for the same shape of mistake everywhere else, and found it seven more times.
+
+They are all one idea. A question, a promise or a target was written for a
+single twenty-club Premier League with three relegation places, and then asked
+of a twenty-four-club division with different rules. Measured in a live career:
+
+```text
+4th in League Two — an automatic promotion place
+  "4th and in the mix. Is Europe the target or the minimum?"
+  with "Europe is what we are chasing. It is where this club belongs."
+  among the four answers offered
+
+14th of 24 in the National League — mid-table
+  "You are closer to the bottom than the top. Is this a relegation fight?"
+  in the one division this game relegates nobody from
+
+the weakest club in every division
+  "The board expects 24th or better"
+```
+
+**The fix is one helper used eight times.** `divShape(div)` in
+`src/interactions.js` asks the world rather than assuming: `divMembers` for the
+size, `PYRAMIDS` for how many go up and how many go down, `G.clSpots` for who is
+actually in Europe, and the same `n <= 12 ? (n-1)*3 : (n-1)*2` the fixture
+generator uses for the season length. **Nothing in the module names a division
+or hardcodes a count**, which is deliberate — it stays correct when the bigger
+leagues, the corrected clubs and the published fixtures land.
+
+England, read out of the game rather than out of my head:
+
+| division | size | up | down | relegated from | board's floor | matches |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Premier League | 20 | — | 3 | 18th | 17th | 38 |
+| Championship | 24 | 3 | 3 | 22nd | 21st | 46 |
+| League One | 24 | 3 | 4 | **21st** | 20th | 46 |
+| League Two | 24 | 4 | 2 | **23rd** | 22nd | 46 |
+| National League | 24 | 2 | **0** | nobody | 22nd | 46 |
+
+The eight:
+
+**1. Your own contract had the boardroom's bug.** `dealMerit()` scored the
+season with `pos < obj.pos`, so 1st against a target of 1st scored **0**, and so
+did 2nd against a target of 2nd. Merit of 3 is the threshold that makes the
+board come to you with a new deal mid-season, and the league title is only
+written into `G.honours` at `endSeason`, so winning the league could not earn a
+contract until after it stopped mattering. Now 1st scores 3 whatever the target
+says, and meeting the target exactly scores 1.
+
+**2. The table questions are gated on the division's real geometry.** `pos-euro`
+only fires where there is a Europe to qualify for. `pos-mid` means mid-table
+rather than 7th–13th. `pos-bad` fires on the real relegation zone and says how
+big it is — "you are in the bottom 4" in League One, "bottom 3" in the Premier
+League.
+
+**3. Two questions the pyramid never had.** `pos-promo` — promotion is what four
+of the five English divisions are actually about and nothing asked about it —
+and `pos-nothing`, for the bottom half of a division nobody is relegated from,
+which is a real situation the room had no words for. Four answers each, in the
+game's own shape, and both weighted up when they are the thing happening to you.
+
+**4. No board asks a club to finish last.** `expectPos()` gave the bottom-ranked
+club `index + 2` capped at the division size. The floor is now the last safe
+place where relegation exists, and "not the bottom two" where it does not, and
+`boardTarget().txt` says what the number means — "keep this club in League One"
+rather than "finish 20th or better".
+
+*This one needed measuring rather than reasoning.* `boardHealth()` scores
+`(exp - pos) * 1.6` every month, so the old target of 24th meant the weakest
+club in a division gained patience for finishing 22nd and was effectively
+unsackable. My first floor (`size - 4`) flipped it too far the other way:
+Worthing, the weakest club in the game, was sacked in season two of a soak. At
+`size - 2` the same career survives three seasons in two consecutive runs, which
+is the behaviour the user asked for — the shape is real, the difficulty is kind.
+
+**5. Promises judged against the real relegation zone.** `judgeSeasonPledges()`
+used `pos > rows.length - 3` everywhere:
+
+- League One relegates 4 — finish **21st**, go down, and "we will stay up" was
+  marked **KEPT**
+- League Two relegates 2 — finish **22nd**, stay up, and the same promise was
+  marked **BROKEN**
+- the National League relegates nobody — and the promise broke anyway
+
+Breaking one costs 7 fan approval and 6 patience, so it was not cosmetic. There
+is now a third outcome for a division with no drop, which says so.
+
+**6. Transfers that talk like the division they are in.** A target's demands
+listed "European football" whenever the club was not in the Champions Cup —
+every club outside the top five, down to the National League. `interestScore`
+used `pos<=4 => +5, pos>=15 => -5`, so 15th of 24 was scored as relegation form
+and `interestReasons` told you "Your league position puts him off". Both now
+read the zone: promotion is worth what Europe is worth, in the division that has
+it. The Cups screen also told a National League manager to "finish top four" for
+the Champions Cup.
+
+**7. A supporters' feed with a sense of scale.** "HERE WE GO" fired at £40M and
+"what a signing" at overall 82, so a National League club-record signing and the
+best player in League Two never registered at all. Thresholds now come from the
+division, the same way the goal bonus and the loan fee already do. Anything the
+pyramid work adds later is sized from its own clubs' reputations rather than
+falling back to Premier League money.
+
+**8. One of mine.** `src/boardroom.js` shipped yesterday with the promotion and
+relegation counts written down, and had three of the five English divisions
+wrong — including the National League relegating four clubs. It reads
+`window.RBSShape` now. While I was in there, an answer that moves the season's
+target is clamped to the division on the way out, which also fixes the
+`Math.min(20, …)` in the objectives scene — a hard 20 in a division of 24.
+
+**And one that was not on the list.** Seven leagues play `(n-1) * 3`, not
+`(n-1) * 2` — Scotland, Austria, Switzerland, Denmark, Serbia, Ukraine and
+Croatia, at 10 to 12 clubs each. The press room assumed twice, so a 12-club
+season it thought was 22 games long is 33: `games left` hit zero at matchday 22,
+**the run-in questions were asked in midwinter and never once in the actual
+run-in**, and both the title-race and relegation-fight definitions collapsed to
+their floor for the whole second half of the season.
 
 ### Cycle 8 — the boardroom, from a real save
 
@@ -624,6 +749,24 @@ or `fullSimDiv` to `fastSim`, which produces no cards, so no bans. Tables and
 results are unaffected; it just means discipline exists in your corner of the
 world and nowhere else. Probably fine, possibly not once somebody manages abroad.
 
+### 8. `interestScore` saturates before I can correct it
+
+`src/interactions.js` corrects the league-position term by subtracting what the
+original added and adding what the division actually deserves. The original
+clamps its result to 0–100 first, so on the rare score that has already
+saturated at either end my correction is absorbed. It is a couple of points on a
+hundred-point scale and only at the extremes, so I left it rather than
+reimplement a function I do not own.
+
+### 9. The board's target still ignores who you actually are
+
+`expectPos()` ranks a division by reputation and hands out `index + 2`. It now
+has a sensible floor, but it still knows nothing about whether you were just
+promoted, whether you have half a squad injured, or whether the club sold its
+best three players in July. A promoted side is asked for the same finish as a
+club that has been in the division a decade. This is a design question rather
+than a defect, and it is Claude's.
+
 ### 7. Dead code worth deleting when you are next in that block
 
 `ACTIONS.roleTalk` (`red-devil-manager.html:5187`) still resolves its player with
@@ -642,27 +785,41 @@ Nothing. Everything I was asked for is in and measured.
 
 ## What I would like from you
 
-- **Claude:** items 1 and 2 are now fixed. What is left on that list is item 3
-  (commercial income too flat across the Premier League), item 4 (a goal bonus
-  cannot help close a deal below the Championship — that one needs the acceptance
-  score rewriting, which is yours), item 5 (the morale drip still starts at a
-  fixed five matches) and item 7 (dead code).
-- **Claude:** one wart left that I chose not to touch before merging. The user's
-  bank compounds — £922M after four seasons — because everything is profitable by
-  design. It buys nothing the transfer budget does not already cap, so it harms
-  nothing, but a club hoarding a billion pounds is not a club. If you want it
-  handled, the honest mechanism is the board taking profit above a threshold for
-  the stadium and the training ground, and that is a feel decision rather than a
-  fix.
+- **Claude and Codex, on the pyramid work:** cycle 9 is built so it does not
+  collide with you. `src/interactions.js` names no division and hardcodes no
+  count — every number comes from `divMembers`, `PYRAMIDS`, `G.clSpots` and the
+  same `n <= 12 ? (n-1)*3 : (n-1)*2` the fixture generator uses. **Add a
+  league, resize one, change who goes up or down, and the press room, the
+  boardroom, the promises and the transfer market all follow it with no edit
+  from me.** The one thing that would break it is a new competition structure
+  that is *not* expressed in `PYRAMIDS` — play-offs, for instance, which this
+  game does not currently have. If you add any, tell me and I will teach
+  `divShape` about them rather than have you special-case it downstream.
+- **Codex:** the seven small leagues (Scotland, Austria, Switzerland, Denmark,
+  Serbia, Ukraine, Croatia, 10–12 clubs) play `(n-1) * 3`. If the bigger-leagues
+  work changes any division's size across the 12-club boundary, its season
+  length changes shape with it. `divShape().matches` already handles it; I am
+  flagging it because it is the sort of thing that is invisible until a run-in
+  question fires in December.
+- **Claude:** from the cycle-one list, what is left is item 3 (commercial income
+  too flat across the Premier League), item 4 (a goal bonus cannot help close a
+  deal below the Championship — that needs the acceptance score rewriting, which
+  is yours), item 5 (the morale drip still starts at a fixed five matches) and
+  item 7 (dead code). New this cycle: item 9, the board's target still ignores
+  promotion, injuries and who you sold in July.
+- **Claude:** the user's bank still compounds — £922M after four seasons —
+  because everything is profitable by design. It buys nothing the transfer
+  budget does not already cap, so it harms nothing, but a club hoarding a
+  billion pounds is not a club. The honest mechanism is the board taking profit
+  above a threshold for the stadium and the training ground, and that is a feel
+  decision rather than a fix.
 - **Claude, on feel:** the economy is calibrated soft on the user's explicit
-  instruction — everybody profitable, nobody doomed. If you want it to bite
-  harder, the four numbers to move are `runs`, `seat`, `grant` and the division
-  `central` figures in `src/economy.js`, and every one of them is a one-line
-  change with a measurement in the tests to catch what it does.
-- **Claude:** items 1 and 2 of cycle one are yours — they are economy design decisions,
-  not defects with an obvious right answer, and a created club's finances are the
-  spine of that whole mode. Item 3 needs the acceptance score rewritten and I did
-  not want to touch feel without asking.
-- **Codex:** item 2 is a one-season sim away from being confirmed or dismissed,
-  and you have the harness discipline for it. Item 5 is a judgement call about
-  how much of the world needs to be real.
+  instruction — everybody profitable, nobody doomed. The four numbers to move
+  are `runs`, `seat`, `grant` and the division `central` figures in
+  `src/economy.js`, and every one has a measurement in the tests to catch what
+  it does. The same caution applies to `divShape().floor`: I measured that one
+  rather than reasoned about it, because `boardHealth()` scores `(exp - pos)` at
+  1.6 a place a month and the weakest club in a division is one number away from
+  either unsackable or doomed.
+- **Codex:** the three duplicate-player problems from your cycle 3 (Jacquet,
+  Onyeka, the nineteen shared ESPN IDs) are still open and still yours.
