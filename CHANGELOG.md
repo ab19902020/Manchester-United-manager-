@@ -4,6 +4,19 @@
 
 ### Fixed
 
+- **Fixed the boardroom's first meeting leaving its invitation behind, so going back
+  up opened a crisis that had not happened.** Reported from a real save: take the first
+  meeting of a career, leave the room, and the "Go up" button is still there — press it
+  and the board complains about your league position on a day when nothing has been
+  played. Three faults stacked in one four-line action. The invitation was only withdrawn
+  if the click carried the mail's id, and the attention strip that most players press
+  builds its button without one, so the mail kept its button for ever. With no summons
+  outstanding the fallback was the crisis scene rather than an ordinary meeting. And on
+  day one the league position is a reputation-sorted placeholder, so the crisis scene
+  read "4th is not what was agreed" — quoting your target back at you as though it were
+  the table. The invitation is now withdrawn whenever the room opens, from any entry
+  point, and a button with nothing behind it opens the meeting you asked for.
+
 - **The board's target now reads the squad you can actually put out.** It ranked a
   division on reputation alone, and reputation does not move when you sell people:
   Manchester United sold Bruno Fernandes, Matthijs de Ligt and Bryan Mbeumo in one

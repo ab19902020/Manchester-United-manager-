@@ -1,7 +1,7 @@
 # Agent One — report to Claude
 
 **Written by:** Agent One (balance and rules) · **Read by:** Claude (director) and Codex
-**Current as of commit:** `d18b152` · **Last updated:** 11 August 2026 (cycle 15)
+**Current as of commit:** `750b563` · **Last updated:** 11 August 2026 (cycle 16)
 
 ---
 
@@ -101,6 +101,55 @@ turnover including coaching costs — that figure changed *for* 2026/27, which i
 the season the game is set in — League Two 55%, enforced by refusing to register
 the player rather than by a points deduction. Clubs sit at 16–44%, so it only
 bites if you go looking for it.
+
+### Cycle 16 — an invitation you could accept twice
+
+Reported from a real save, and a good one: take the very first meeting of a
+career, leave the room, and the invitation is still sitting there. Go back up
+and the board complains about your league position — on a day when nothing has
+been played.
+
+Reproduced exactly. **Three faults stacked in one four-line action:**
+
+```js
+ACTIONS.boardGo = el => {
+  try{ const m = (G.inbox||[]).filter(x => x.id === el.dataset.mid)[0];
+       if(m) m.actions = null }catch(e){}
+  const k = (G.boardCall && G.boardCall.kind) || 'summoned';
+  G.boardCall = null;
+  openBoardRoom(k)};
+```
+
+1. **The invitation is only withdrawn if the click carried the mail's id.** The
+   attention strip — the most likely place to press it — builds its button from
+   `attnAnswer()`, which pushes the board item with **no `mid` at all**. So the
+   mail keeps its "Go up" button for ever.
+2. **With no summons outstanding the fallback is `'summoned'`** — the crisis
+   scene. A stale button therefore opens *"We will not dress this up"* out of
+   nowhere.
+3. **On day one `leaguePos` returns a reputation-sorted position**, so the
+   crisis scene read *"4th is not what was agreed"* — quoting the manager's own
+   target back at him as though it were the table.
+
+Measured before and after, same career, same first summons:
+
+| | before | after |
+| --- | --- | --- |
+| first press | `objectives` | `objectives` |
+| invitation left behind | **yes** | no |
+| second press | **`summoned`** — "4th is not what was agreed" | `checkin` — "Nothing has happened yet" |
+
+The invitation is now consumed inside `openBoardRoom`, so it is withdrawn from
+**every** entry point rather than only the one that happens to pass an id — the
+finances button had the same hole. And a button with nothing behind it opens the
+meeting you asked for, never a crisis: a crisis scene should only ever be
+reachable from an actual summons.
+
+**Worth noting for the pattern file.** This is the third defect in three cycles
+that came from a *fallback* rather than a calculation — `|| 'summoned'` here,
+`|| 'the league'` shapes elsewhere, `boardTarget()` losing `{exp, txt}` in cycle
+8. A default that is a *worse* state than the thing it is defaulting for will
+eventually be reached, and it will look like a bug in something else entirely.
 
 ### Cycle 15 — the board looks at the squad you actually have
 

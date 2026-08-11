@@ -1,8 +1,8 @@
 /* global G, BR, clamp, ordinal, esc, fmtM, leaguePos, expectPos, gamesPlayed,
           tableRows, divMembers, myDiv, DIV_NAMES, CUP_DEFS, formStreak,
           fansShift, makePledge, mulberry, hashStr, boardPeople, boardTemper,
-          boardMood, boardOwner, sackManager, keyAbsences */
-/* global boardScene:writable, boardTarget:writable */
+          boardMood, boardOwner, sackManager, keyAbsences, ACTIONS */
+/* global boardScene:writable, boardTarget:writable, openBoardRoom:writable */
 
 /* =====================================================================
    THE BOARDROOM — a room that can read a league table
@@ -1041,7 +1041,76 @@
     };
   }
 
+  /* -------------------------------------------------------------------
+     7. AN INVITATION CAN ONLY BE ACCEPTED ONCE
+     -------------------------------------------------------------------
+     Reported from a real save: take the very first meeting of a career,
+     leave the room, and the invitation is still sitting there. Go back
+     up and the board complains about your league position — on a day
+     when nothing has been played.
+
+     Reproduced exactly. Three faults stacked in one four-line action:
+
+       ACTIONS.boardGo = el => {
+         try{ const m = (G.inbox||[]).filter(x => x.id === el.dataset.mid)[0];
+              if(m) m.actions = null }catch(e){}
+         const k = (G.boardCall && G.boardCall.kind) || 'summoned';
+         ...
+
+     1. The invitation is only withdrawn if the click carried the mail's
+        id. The attention strip — the most likely place to press it —
+        builds its button from `attnAnswer()`, which pushes the board item
+        with no `mid` at all. So the mail keeps its "Go up" button for
+        ever.
+     2. With no summons outstanding the fallback is **'summoned'**, which
+        is the crisis scene. A stale button therefore opens "We will not
+        dress this up" out of nowhere.
+     3. And on day one `leaguePos` returns a reputation-sorted position,
+        so the crisis scene reads "4th is not what was agreed" — quoting
+        the target back as though it were the table.
+
+     The invitation is now withdrawn whenever the room opens, from any
+     entry point, and a button with nothing behind it opens the meeting
+     you asked for rather than a crisis that has not happened.
+     ------------------------------------------------------------------- */
+  function consumeInvitation() {
+    G.boardCall = null;
+    (G.inbox || []).forEach((m) => {
+      if (!m || !m.actions || !m.actions.length) return;
+      if (m.actions.some((a) => a && a.act === 'boardGo')) m.actions = null;
+    });
+  }
+
+  if (has(openBoardRoom)) {
+    const previousOpen = openBoardRoom;
+    openBoardRoom = function openBoardRoomConsuming() {
+      const r = previousOpen.apply(this, arguments);
+      /* only if the room actually opened. openBoardRoom bails on a sacked
+         manager and on a missing world, and swallowing the summons in
+         either case would lose a meeting the player never got. */
+      guard('invite', () => {
+        if (typeof document === 'undefined') return;
+        if (!document.getElementById('brRoom')) return;
+        consumeInvitation();
+      });
+      return r;
+    };
+  }
+
+  if (typeof ACTIONS !== 'undefined' && has(ACTIONS.boardGo)) {
+    const previousGo = ACTIONS.boardGo;
+    ACTIONS.boardGo = function boardGoNoStaleCrisis() {
+      if (!(G.boardCall && G.boardCall.kind)) {
+        guard('invite', consumeInvitation);
+        return openBoardRoom('checkin');
+      }
+      return previousGo.apply(this, arguments);
+    };
+  }
+
   try {
-    window.RBSBoard = Object.freeze({ brFacts, gradeOf, seasonShape, cupState, BANDS });
+    window.RBSBoard = Object.freeze({
+      brFacts, gradeOf, seasonShape, cupState, BANDS, consumeInvitation,
+    });
   } catch (error) { /* no window */ }
 }());

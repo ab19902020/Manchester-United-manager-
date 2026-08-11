@@ -233,3 +233,69 @@ test('a boardroom meeting can be opened and answered on screen', async (t) => {
   assert.equal(screen.closed, true);
   assert.deepEqual(game.errors, []);
 });
+
+/*
+ * Reported from a real save: take the very first meeting of a career, leave the
+ * room, and the invitation is still sitting there. Go back up and the board
+ * complains about your league position — on a day when nothing has been played.
+ *
+ * Three faults stacked in one four-line action. The invitation was only
+ * withdrawn if the click carried the mail's id, and the attention strip builds
+ * its button from attnAnswer(), which pushes the board item with no mid at all.
+ * With no summons outstanding the fallback was 'summoned' — the crisis scene.
+ * And on day one leaguePos returns a reputation-sorted position, so it read
+ * "4th is not what was agreed", quoting the target back as the table.
+ */
+test('a summons can only be answered once', async (t) => {
+  const game = await createGame();
+  t.after(() => game.close());
+  await startCareer(game);
+
+  const run = game.eval(`(function(){
+    let d=0;
+    while(!G.boardCall && d++<12){simRestOfDay();dailyTickCore();G.day++}
+    if(!G.boardCall)return {skipped:true};
+
+    const invited={kind:G.boardCall.kind,
+      button:!!((G.inbox[0]||{}).actions||[]).length};
+
+    // the attention strip's button carries no data-mid, which is the whole bug
+    const strip=(typeof attnAnswer==='function')?attnAnswer():[];
+    const item=strip.filter(x=>x.act==='boardGo')[0]||null;
+
+    ACTIONS.boardGo({dataset:{}});
+    const first=(BR.scene||{}).kind;
+    ACTIONS.brDone();
+
+    const invitationLeft=(G.inbox||[]).some(m=>m&&m.actions&&
+      m.actions.some(a=>a&&a.act==='boardGo'));
+
+    ACTIONS.boardGo({dataset:{}});
+    const second={kind:(BR.scene||{}).kind,say:(BR.scene||{}).say};
+    ACTIONS.brDone();
+
+    return {invited,stripHasMid:item?('mid' in item):null,
+      first,invitationLeft,second,played:gamesPlayed(G.my)};
+  })()`);
+
+  if (run.skipped) return;
+
+  assert.equal(run.invited.kind, 'objectives', 'the first summons of a career');
+  assert.equal(run.invited.button, true, 'and it arrives with a button');
+  assert.equal(run.stripHasMid, false,
+    'the attention strip still carries no mail id — the fix must not depend on one');
+
+  assert.equal(run.first, 'objectives', 'the first press opens the meeting it invited you to');
+  assert.equal(run.invitationLeft, false,
+    'leaving the room must withdraw the invitation, however it was accepted');
+
+  // and a second press must never open the crisis scene
+  assert.notEqual(run.second.kind, 'summoned',
+    `pressing it again opened the crisis scene: ${run.second.say}`);
+  assert.equal(run.second.kind, 'checkin',
+    'a button with nothing behind it is a meeting you asked for');
+  assert.equal(run.played, 0, 'and none of this happened after a match');
+  assert.ok(!/not what was agreed/.test(run.second.say || ''),
+    `the board complained about a table that does not exist: ${run.second.say}`);
+  assert.deepEqual(game.errors, []);
+});
