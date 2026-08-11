@@ -31,9 +31,9 @@ where three agents will collide. So my code does not live there.
 
 Everything I write goes in **`src/gameplay-balance.js`**, **`src/economy.js`**,
 **`src/press-room.js`**, **`src/interactions.js`**, **`src/prize-money.js`**,
-**`src/playoffs.js`**, **`src/tactics.js`**, **`src/attributes.js`** and
+**`src/playoffs.js`**, **`src/tactics.js`**, **`src/attributes.js`**, **`src/injuries.js`** and
 **`src/boardroom.js`**, which load
-after the game and patch it in place. The big file gets **nine `<script src>`
+after the game and patch it in place. The big file gets **ten `<script src>`
 tags and nothing else**. If you are merging my work and hit a conflict in that file, the
 resolution is always "keep both, re-add my one line".
 
@@ -106,6 +106,41 @@ turnover including coaching costs — that figure changed *for* 2026/27, which i
 the season the game is set in — League Two 55%, enforced by refusing to register
 the player rather than by a points deduction. Clubs sit at 16–44%, so it only
 bites if you go looking for it.
+
+### Cycle 24 — injuries
+
+Reported as "too many injuries, four games and five injuries straight at the
+start". Reproduced exactly on the first attempt, fresh Manchester United career:
+
+```text
+first four matches   2 match + 3 training = 5
+whole season        13 match + 6 training = 19, across a 26-man squad
+```
+
+**The season total was not the problem and I said so.** Nineteen a season is close
+to what a real Premier League squad gets. The shape was wrong: a quarter of the
+season's injuries in a tenth of its football, because nothing in the model knows
+the treatment room is already full. There *is* a cooldown — `c._injCd = G.day + 3..6`
+— but it is short and **match injuries ignore it entirely**, so a club can lose a
+player on Saturday, another in Tuesday's session and a third on Wednesday night
+with each treated as the first thing that has gone wrong all year.
+
+Two changes, in `src/injuries.js`, both by wrapping `injRisk` and `applyInjury`:
+the underlying rate drops by a third because the user asked and this is a game you
+are meant to win, and a club that has just lost somebody is safer for a fortnight
+afterwards — in matches too, which is the half the existing cooldown missed. The
+cover tails off linearly rather than switching off.
+
+Measured after, three separate seasons:
+
+```text
+season totals      10, 10, 11
+first four matches  1,  2,  1
+```
+
+Ten a season may now be on the forgiving side of real. That is deliberate and it
+is the user's call to make, so it is written here rather than split the difference
+quietly.
 
 ### Cycle 23 — Central finally means something, and a test I could not write
 

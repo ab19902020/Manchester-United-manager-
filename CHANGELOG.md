@@ -101,6 +101,17 @@
 
 ### Fixed
 
+- **Fewer injuries, and not five of them in a fortnight.** Reported as five injuries in
+  the first four matches, and reproduced exactly on the first try: two in matches, three
+  in training, with nineteen across the season. The season total was close to what a real
+  Premier League squad gets — the shape was the problem. There is a cooldown after a
+  training injury but it lasts three to six days and match injuries ignore it entirely,
+  so a club could lose a player on Saturday, another on Tuesday and a third on Wednesday
+  with the model treating each as the first thing to go wrong all year. A club that has
+  just lost somebody is now safer for a fortnight, in matches as well as in training, and
+  the underlying rate comes down by a third. Measured across three seasons after: ten, ten
+  and eleven injuries, with one, two and one in the first four matches.
+
 - **Playing through the middle now actually means playing through the middle.** Choosing
   `Central` moved chance creation by half a percentage point, because two thirds of
   chances already came through the middle before any instruction applied, and nothing

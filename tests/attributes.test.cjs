@@ -72,23 +72,26 @@ test('the save model can tell one goalkeeper from another', async (t) => {
     const vals = keepers.map(rate);
     const old = keepers.map(p => (((p.attrs.positioning||10) + (p.attrs.agility||10)) / 2));
     const spread = (a) => Math.max.apply(null,a) - Math.min.apply(null,a);
-    let pairs = 0, split = 0;
+    // how far apart the new model puts keepers the old one rated the same.
+    // A mean gap is far steadier than counting pairs over a cutoff, which
+    // lands on a coin flip whenever the cutoff sits near the typical gap.
+    let pairs = 0, gap = 0;
     for (let i = 0; i < keepers.length; i++) {
       for (let j = i+1; j < keepers.length; j++) {
-        if (Math.abs(old[i]-old[j]) < 0.35) { pairs++; if (Math.abs(vals[i]-vals[j]) > 0.6) split++; }
+        if (Math.abs(old[i]-old[j]) < 0.35) { pairs++; gap += Math.abs(vals[i]-vals[j]); }
       }
     }
     return {n: keepers.length, spread: +spread(vals).toFixed(2),
-      oldSpread: +spread(old).toFixed(2), pairs, split};
+      oldSpread: +spread(old).toFixed(2), pairs, meanGap: gap / (pairs || 1)};
   })()`);
 
   assert.ok(run.n >= 20, 'a decent sample of goalkeepers');
   assert.ok(run.spread > 3,
     `the save model should rate the best and worst keeper differently (spread ${run.spread})`);
   assert.ok(run.pairs > 5, 'the old model rated plenty of keepers identically');
-  assert.ok(run.split / run.pairs > 0.5,
-    `keepers the old model could not tell apart should mostly be separated now `
-    + `(${run.split} of ${run.pairs})`);
+  assert.ok(run.meanGap > 0.6,
+    `keepers the old model could not tell apart should now differ by something `
+    + `worth having (mean gap ${run.meanGap.toFixed(2)} across ${run.pairs} pairs)`);
 });
 
 test('the goalkeeping attributes reach the engine and the player page', async (t) => {
