@@ -4,6 +4,29 @@
 
 ### Fixed
 
+- **A pre-season tour now funds your summer instead of vanishing into the bank.** Touring
+  never actually cost money — every option pays, from nothing for staying at home to
+  £16.9M for the Far East — but the fee went into the club's cash and the transfer budget
+  never moved a penny. So you flew a squad round America, earned eight million, and had
+  nothing extra to spend on players. The fee and any invitational prize now reach the
+  transfer budget as well as the accounts. Staying at the training ground earns a little
+  rather than nothing, because two friendlies at your own ground still sell tickets. And
+  the fee is sized by who you are: the old scale gave a National League club £2,000,000
+  for a North American tour, two and a half times its entire annual revenue. The
+  trade-off itself is unchanged — stay home for condition and small money, Iberia for a
+  balance, America and the Far East for a fortune and a squad that arrives on empty.
+
+- **The press room no longer asks why you have not signed anyone on your first day.**
+  "The supporters expected additions and there have been none" fired on pre-season with
+  no signings — both true by definition on day one of a career, before the window had
+  been open an hour. Early in the summer the room now asks what you plan to do and which
+  positions you are looking at; the complaint waits until the last fortnight before the
+  opener, when it is a fair question.
+
+- **The board's summons letter now leaves your mailbox once you have been up.** Taking
+  the button off it was not enough — the letter sat at the top of the inbox reading like
+  an appointment you still had to keep.
+
 - **Fixed the boardroom's first meeting leaving its invitation behind, so going back
   up opened a crisis that had not happened.** Reported from a real save: take the first
   meeting of a career, leave the room, and the "Go up" button is still there — press it

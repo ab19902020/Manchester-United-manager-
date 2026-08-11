@@ -1,12 +1,13 @@
 /* global G, PQ, PANS, LEAGUES, PYRAMIDS, DIV_NAMES, clamp, ordinal, esc, fmtM,
           fmtW, divMembers, myDiv, tableRows, playerById, offerById, MU, POSGROUP,
           pledgeKept, pledgeBroken, closeModal, render, boardTarget, ACTIONS,
-          askPrice, persInfo, playerCeiling, fixCtx, squadWage */
+          askPrice, persInfo, playerCeiling, fixCtx, squadWage, CUP_DEFS */
 /* global pqFacts:writable, pressBank:writable, expectPos:writable,
           dealMerit:writable, judgeSeasonPledges:writable, vCups:writable,
           openInterestPhase:writable, interestReasons:writable, leaguePos:writable,
           interestScore:writable, completeSigning:writable, buzz:writable,
-          scoutTick:writable, vDressingRoom:writable, mail:writable */
+          scoutTick:writable, vDressingRoom:writable, mail:writable,
+          initCups:writable, genYouthPlayer:writable */
 
 /* =====================================================================
    INTERACTIONS — everything that talks to you, in the division you are
@@ -382,6 +383,35 @@
     });
   });
 
+  /* -------------------------------------------------------------------
+     THE WINDOW HAS ONLY JUST OPENED
+     -------------------------------------------------------------------
+     Reported: first day of a career, one press conference, and the room
+     asked *"The supporters expected additions and there have been none.
+     What do you say to them?"* — about a window that opened that morning.
+
+     `pre-nosignings` fires on `preSeason && !signings.length`, and on day
+     one of a save both are true by definition. Nobody has failed to sign
+     anybody yet; they have not had a chance to.
+
+     The complaint is only fair once the summer has actually run. Early
+     on, the question a reporter would really ask is the forward-looking
+     one — do you intend to strengthen, and where.
+     ------------------------------------------------------------------- */
+  /* How far through the summer we are, measured as days still to go before
+     the opening fixture. `G.seasonStart` is the opener and sits AHEAD of
+     day one of a career — about thirty-one days — so `G.day - seasonStart`
+     is negative all through pre-season and a gate written on it never
+     opens. Counting down to the opener is the thing that actually moves. */
+  const QUIET_SUMMER_WITHIN = 14;  /* the last fortnight, when "why not?" is fair */
+
+  function daysToOpener() {
+    const start = G.seasonStart || 0;
+    const day = G.day || 0;
+    if (day >= start) return 0;      /* the season is under way */
+    return start - day;
+  }
+
   /* the two questions the pyramid needed and never had */
   const NEW_Q = [
     {
@@ -410,10 +440,34 @@
     },
   ];
 
+  /* what you are planning, asked when planning is all there is */
+  NEW_Q.push({
+    id: 'pre-plans',
+    w: (F) => F && F.preSeason && !(F.signings || []).length && daysToOpener() > QUIET_SUMMER_WITHIN,
+    q: (F) => {
+      const thin = (F.shape && F.shape.name) ? F.shape.name : 'this division';
+      return ['The window is open. Do you intend to strengthen this squad?',
+        'Which positions are you looking at?',
+        `What does this squad need to compete in ${thin} this season?`,
+        'Is the money there if the right player comes up?',
+        'Will your business be done early, or will it go to the deadline?'];
+    },
+  });
+
   guard('questions', () => {
     if (typeof PQ === 'undefined' || !Array.isArray(PQ)) return;
     const have = new Set(PQ.map((r) => r.id));
     NEW_Q.forEach((r) => { if (!have.has(r.id)) PQ.push(r); });
+
+    /* and "why have you signed nobody" waits until there has been time to */
+    const quiet = PQ.filter((r) => r.id === 'pre-nosignings')[0];
+    if (quiet && !quiet._gated) {
+      const was = quiet.w;
+      quiet._gated = true;
+      quiet.w = (F) => {
+        try { return daysToOpener() <= QUIET_SUMMER_WITHIN && !!was(F); } catch (error) { return false; }
+      };
+    }
   });
 
   guard('answers', () => {
@@ -430,6 +484,12 @@
         ['😠 Standards do not drop', 'Nothing to play for is a phrase I do not accept. People are playing for next season and for their careers.'],
         ['🧊 Finish it properly', 'You finish a season the way you want to start the next one. The supporters still pay the same money in April.'],
         ['📋 Planning already', 'Honestly? Part of my head is on the summer. Anyone who says otherwise is not doing the job properly.'],
+      ],
+      'pre-plans': [
+        ['🎯 Yes, and I know where', 'We will strengthen. I know the areas and I am not going to name them in here for every other club to read.'],
+        ['🧊 Only for the right player', 'If the right player is available we will move. I am not signing somebody to look busy in July.'],
+        ['👏 I like this group', 'I would back what is already in the building before I spent a penny. Improving them is a signing in itself.'],
+        ['📋 Early, if we can', 'I would rather have them in for pre-season than on deadline day. Whether the market allows it is another matter.'],
       ],
     };
     Object.keys(A).forEach((k) => { if (!PANS[k]) PANS[k] = () => A[k]; });
@@ -946,7 +1006,89 @@
   }
 
   /* -------------------------------------------------------------------
-     10. THE ACADEMY YOU PAY FOR DOES SOMETHING
+     10. THE LETTER THAT TELLS YOU WHAT YOU ARE PLAYING IN
+     -------------------------------------------------------------------
+     Reported: the competitions email listed the League Cup and the FA Cup
+     and never mentioned the Champions Cup — while the club had eight
+     Champions Cup fixtures already on the calendar.
+
+     Reproduced at Manchester United:
+
+         mail: "This season the club competes in the League Cup and FA Cup."
+         G.euroEntry.CL includes this club:  true
+         Champions Cup fixtures on the calendar: 8
+         English clubs in the Champions Cup: Liverpool, Arsenal, Man City,
+                                             Man Utd, Chelsea   (five)
+
+     The cause is a world that gets built twice. The letter is written by
+     an early `newGame` layer, at a point where `G.clSpots` is still empty;
+     the outer layers then rebuild the world and re-run `initCups()`, which
+     works out the real European entry. The rebuild pass even knows this
+     happens — it deletes the stale mail it created for the old world:
+
+         G.inbox = (G.inbox||[]).filter(m => !/draw|qualification|league
+                    phase/i.test(m.title||''));
+
+     "Cup competitions" simply does not match that pattern, so the one
+     letter that lists your season survives with the wrong list on it.
+
+     Rewritten from the finished world instead, and from what the club is
+     actually entered in rather than from a flag: the domestic cups, plus
+     whichever of the Champions Cup, Europa League and Conference the
+     European allocation actually put you in. It is refreshed every time
+     the cups are set up, so a season you qualify for Europe tells you so.
+     ------------------------------------------------------------------- */
+  function competitionsNow() {
+    return guard('comps', () => {
+      const cups = G.cups || {};
+      const euro = G.euroEntry || {};
+      const named = (k) => ((typeof CUP_DEFS !== 'undefined' && CUP_DEFS[k] && CUP_DEFS[k].name) || k);
+      const drawn = (k) => !!(cups[k] && (cups[k].ties || []).some((t) => t && (t.h === G.my || t.a === G.my)));
+      const out = [];
+      /* the domestic cups: every club in the league system is in both, and
+         the bigger ones simply enter at a later round */
+      ['LC', 'FA'].forEach((k) => { if (cups[k]) out.push(named(k)); });
+      /* Europe: whichever one the allocation actually put this club into */
+      ['CL', 'EL', 'EC'].forEach((k) => {
+        if (!cups[k]) return;
+        if ((euro[k] || []).indexOf(G.my) >= 0 || drawn(k)) out.push(named(k));
+      });
+      return out;
+    }, []);
+  }
+
+  if (typeof initCups === 'function') {
+    const previousInit = initCups;
+    initCups = function initCupsTellingYou() {
+      const r = previousInit.apply(this, arguments);
+      guard('comps.mail', () => {
+        const list = competitionsNow();
+        if (!list.length) return;
+        const last = list[list.length - 1];
+        const rest = list.slice(0, -1);
+        const phrase = rest.length
+          ? `${rest.map((n) => `<b>${esc(n)}</b>`).join(', ')} and <b>${esc(last)}</b>`
+          : `<b>${esc(last)}</b>`;
+        const body = `This season the club competes in ${phrase}. `
+          + 'Squad depth wins trophies — rotate wisely.';
+        const existing = (G.inbox || []).filter((m) => m && /Cup competitions|Competitions this season/i.test(String(m.title || '')))[0];
+        if (existing) {
+          existing.title = '🏆 Competitions this season';
+          existing.body = body;
+          return;
+        }
+        /* a season where you have newly qualified for Europe had no letter
+           at all — the original only ever wrote one at career start */
+        if (G._compsMailed === G.season) return;
+        G._compsMailed = G.season;
+        mail('info', '🏆 Competitions this season', body);
+      });
+      return r;
+    };
+  }
+
+  /* -------------------------------------------------------------------
+     11. THE ACADEMY YOU PAY FOR DOES SOMETHING
      -------------------------------------------------------------------
      Measured over four hundred generated intakes per level:
 

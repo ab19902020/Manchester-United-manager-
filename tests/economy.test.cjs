@@ -816,3 +816,106 @@ test('commercial income climbs the way it really climbs', async (t) => {
       `${d} spread is ${lower[d].spread.toFixed(1)}x — the power law is a top-flight effect`);
   });
 });
+
+/*
+ * Reported: the pre-season tour feels like it costs you. Measured, it never
+ * did — every option pays. But the money went into the club's cash and the
+ * transfer budget never moved:
+ *
+ *     North American tour   bank +£8,400,000   budget +£0
+ *     Far East tour         bank +£16,900,000  budget +£0
+ *
+ * So you fly a squad round America, earn eight million, and have not one extra
+ * pound to spend on players. Touring is how a club funds its summer.
+ */
+test('a pre-season tour funds the summer instead of vanishing into the bank', async (t) => {
+  const game = await createGame();
+  t.after(() => game.close());
+  await startCareer(game);
+
+  const tours = game.eval(`(function(){
+    const c=G.clubs[G.my];
+    return TOURS.map(t=>{
+      G.tour=null;
+      const bank0=c.bank, bud0=c.budget;
+      const quoted=tourFee(t);
+      ACTIONS.tourBook({dataset:{v:t.id}});
+      return {id:t.id,quoted:Math.round(quoted),
+        bank:Math.round(c.bank-bank0),budget:Math.round(c.budget-bud0),
+        fit:t.fit,sharp:t.sharp};
+    });
+  })()`);
+
+  tours.forEach((r) => {
+    // nothing about a tour may ever take money off you
+    assert.ok(r.bank >= 0, `${r.id} took ${-r.bank} off the bank`);
+    assert.ok(r.budget >= 0, `${r.id} took ${-r.budget} off the transfer budget`);
+    // and what it earns has to reach the money you can actually spend
+    assert.equal(r.budget, r.bank,
+      `${r.id} banked ${r.bank} but moved the transfer budget by ${r.budget}`);
+    assert.equal(r.bank, r.quoted, `${r.id} paid ${r.bank} against a quoted ${r.quoted}`);
+  });
+
+  const by = {};
+  tours.forEach((r) => { by[r.id] = r; });
+
+  // staying at home is a choice, not a punishment: some money, best condition
+  assert.ok(by.base.bank > 0, 'two friendlies at your own ground still sell tickets');
+  assert.ok(by.base.fit >= 8, 'and it is the best preparation available');
+
+  // the further you go the more it pays and the worse the legs are
+  assert.ok(by.usa.bank > by.scan.bank, 'America must out-earn Scandinavia');
+  assert.ok(by.scan.bank > by.ire.bank, 'Scandinavia must out-earn Ireland');
+  assert.ok(by.ire.bank > by.base.bank, 'and a tour must out-earn staying at home');
+  assert.ok(by.asia.bank > by.usa.bank, 'and the Far East is the biggest cheque');
+  assert.ok(by.usa.fit < by.iber.fit, 'long-haul travel has to cost condition');
+  assert.ok(by.asia.fit < by.usa.fit, 'and the furthest costs the most');
+  // the middle is the compromise: real money and the legs hold up
+  assert.ok(by.iber.fit >= 8 && by.iber.bank > by.base.bank,
+    'the training camp should pay something and still return them fit');
+});
+
+/* the old scale had a floor of 0.10 on reputation, so a National League club
+   earned £2,000,000 from a North American tour — two and a half times its
+   entire annual revenue. Nobody in Los Angeles buys a ticket to watch them. */
+test('tour money is sized by who you are', async (t) => {
+  const game = await createGame();
+  t.after(() => game.close());
+  await startCareer(game);
+
+  const levels = game.eval(`(function(){
+    const out={};
+    const saved=G.my;
+    ['PL','CH','L1','L2','NL'].forEach(d=>{
+      const mem=divMembers(d).slice().sort((a,b)=>G.clubs[b].rep-G.clubs[a].rep);
+      const i=mem[Math.floor(mem.length/2)];
+      G.my=i;
+      const c=G.clubs[i];
+      out[d]={club:c.short,rep:c.rep,
+        usa:tourFee(TOURS.filter(t=>t.id==='usa')[0]),
+        home:tourFee(TOURS.filter(t=>t.id==='base')[0]),
+        revenue:Math.round(RBSEconomy.revenueFor(c).total)};
+      G.my=saved;
+    });
+    return out;
+  })()`);
+
+  // every level earns something real rather than rounding to nothing
+  ['PL', 'CH', 'L1', 'L2', 'NL'].forEach((d) => {
+    assert.ok(levels[d].usa > 0, `a ${d} club earns nothing at all from a tour`);
+    assert.ok(levels[d].home > 0, `a ${d} club earns nothing from home friendlies`);
+  });
+
+  // and the money follows the standing, steeply
+  assert.ok(levels.PL.usa > levels.CH.usa * 2, 'a giant must out-earn a Championship club');
+  assert.ok(levels.CH.usa > levels.L1.usa, 'and so on down');
+  assert.ok(levels.L1.usa > levels.L2.usa);
+  assert.ok(levels.L2.usa > levels.NL.usa);
+
+  // nobody below the top flight earns a tour fee that dwarfs their own club
+  ['CH', 'L1', 'L2', 'NL'].forEach((d) => {
+    assert.ok(levels[d].usa < levels[d].revenue,
+      `a ${d} club earns £${Math.round(levels[d].usa / 1e3)}K from one tour against `
+      + `£${Math.round(levels[d].revenue / 1e3)}K of annual revenue`);
+  });
+});

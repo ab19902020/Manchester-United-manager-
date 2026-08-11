@@ -593,3 +593,116 @@ test('coming up and going down still set the right kind of target', async (t) =>
   assert.ok(ends.nlTop.target <= ends.nlTop.shape.upTo + 1,
     `and the same at the bottom of the pyramid, got ${ends.nlTop.target}`);
 });
+
+/*
+ * Reported: first day of a career, one press conference, and the room asked
+ * "The supporters expected additions and there have been none. What do you say
+ * to them?" — about a window that opened that morning. `pre-nosignings` fires
+ * on preSeason && no signings, and on day one both are true by definition.
+ */
+test('nobody is asked why they have not signed anyone on the first day', async (t) => {
+  const game = await createGame();
+  t.after(() => game.close());
+  await startCareer(game);
+
+  const ask = (jump) => game.eval(`(function(){
+    G.day += ${jump};
+    const nf=(function(){for(let x=G.day;x<G.day+140;x++){
+      const f=fixturesOn(x).find(y=>!y.played&&(y.h===G.my||y.a===G.my));if(f)return f}return null})();
+    G.pressCtx={kind:'pre',oppI:nf?(nf.h===G.my?nf.a:nf.h):1,q:0,_asked:[]};
+    G.pressSeen=[];
+    const F=pqFacts();
+    const fired=[];
+    PQ.forEach(r=>{ if(!/^pre-/.test(String(r.id)))return;
+      let ok=false;try{ok=!!r.w(F)}catch(e){}
+      if(ok){let q=[];try{q=r.q(F)}catch(e){q=[]}fired.push({id:r.id,lines:q})} });
+    G.pressCtx=null;
+    return {toOpener:Math.max(0,(G.seasonStart||0)-G.day),
+      signings:(F.signings||[]).length,fired};
+  })()`);
+
+  const dayOne = ask(0);
+  assert.equal(dayOne.signings, 0, 'nobody has signed anybody yet');
+  assert.ok(dayOne.toOpener > 14, 'and the season is still a way off');
+
+  const ids = dayOne.fired.map((f) => f.id);
+  assert.ok(!ids.includes('pre-nosignings'),
+    'the room blamed a manager for a window that opened this morning');
+  assert.ok(ids.includes('pre-plans'),
+    `the room should ask what he plans to do, got: ${ids.join(', ')}`);
+
+  const plans = dayOne.fired.filter((f) => f.id === 'pre-plans')[0];
+  const text = plans.lines.join(' ');
+  assert.ok(/intend to strengthen|positions|money is there|deadline/i.test(text), text);
+  assert.ok(!/expected additions|quiet summer/i.test(text), text);
+  // and it has answers written for it
+  const answers = game.eval(`(PANS['pre-plans']?PANS['pre-plans']({}):[]).length`);
+  assert.equal(answers, 4, 'pre-plans needs four answers');
+
+  // three weeks later, with still nobody signed, the complaint is fair
+  const late = ask(20);
+  const lateIds = late.fired.map((f) => f.id);
+  assert.ok(late.toOpener <= 14, 'the probe must reach the last fortnight');
+  assert.ok(lateIds.includes('pre-nosignings'),
+    `late in a quiet window the question is fair, got: ${lateIds.join(', ')}`);
+  assert.ok(!lateIds.includes('pre-plans'), 'and the forward-looking one steps aside');
+});
+
+/*
+ * Reported: the competitions email listed the League Cup and the FA Cup and
+ * never mentioned the Champions Cup — while the club had eight Champions Cup
+ * fixtures already on the calendar.
+ *
+ * The world is built twice. The letter is written by an early newGame layer
+ * while G.clSpots is still empty; the outer layers then rebuild the world and
+ * re-run initCups(), which works out the real European entry. The rebuild even
+ * deletes the stale mails it created — /draw|qualification|league phase/ — and
+ * "Cup competitions" does not match that pattern, so the one letter that lists
+ * your season survives with the wrong list on it.
+ */
+test('the competitions letter lists the competitions you are actually in', async (t) => {
+  const game = await createGame();
+  t.after(() => game.close());
+  await startCareer(game);
+
+  const top = game.eval(`(function(){
+    const m=(G.inbox||[]).filter(x=>x&&/Competitions this season|Cup competitions/i.test(String(x.title||'')))[0];
+    const euro=G.euroEntry||{};
+    const clTies=((G.cups&&G.cups.CL&&G.cups.CL.ties)||[]).filter(t=>t.h===G.my||t.a===G.my).length;
+    return {club:G.clubs[G.my].name,
+      body:m?String(m.body):null,
+      inCL:(euro.CL||[]).indexOf(G.my)>=0,
+      clFixtures:clTies,
+      englishInCL:(euro.CL||[]).filter(i=>G.clubs[i].cc==='ENG').length};
+  })()`);
+
+  assert.ok(top.body, 'a career must start by telling you what you are playing in');
+  assert.equal(top.inCL, true, 'the probe club should be in the Champions Cup');
+  assert.ok(top.clFixtures > 0, 'and have fixtures for it');
+
+  // the letter has to agree with the calendar
+  assert.ok(/Champions/i.test(top.body),
+    `eight Champions Cup fixtures and the letter says: ${top.body}`);
+  assert.ok(/FA Cup/i.test(top.body) && /League Cup/i.test(top.body), top.body);
+  assert.ok(!/undefined|NaN/.test(top.body), top.body);
+
+  // England's Champions Cup places — five, as the game already allocates
+  assert.ok(top.englishInCL >= 4 && top.englishInCL <= 5,
+    `England should send four or five clubs, got ${top.englishInCL}`);
+
+  // and a club with no European football must not be told it has any
+  const lower = game.eval(`(function(){
+    const nl=divMembers('NL');
+    newGame(G.clubs[nl[nl.length-1]].key);
+    const m=(G.inbox||[]).filter(x=>x&&/Competitions this season|Cup competitions/i.test(String(x.title||'')))[0];
+    const euro=G.euroEntry||{};
+    return {club:G.clubs[G.my].name,div:myDiv(),body:m?String(m.body):null,
+      inCL:(euro.CL||[]).indexOf(G.my)>=0};
+  })()`);
+
+  assert.equal(lower.inCL, false);
+  assert.ok(lower.body, 'every club gets the letter');
+  assert.ok(!/Champions|Europa|Conference/i.test(lower.body),
+    `a National League club was told it is in Europe: ${lower.body}`);
+  assert.ok(/FA Cup/i.test(lower.body), lower.body);
+});

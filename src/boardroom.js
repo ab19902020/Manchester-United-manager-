@@ -1073,12 +1073,31 @@
      entry point, and a button with nothing behind it opens the meeting
      you asked for rather than a crisis that has not happened.
      ------------------------------------------------------------------- */
+  /* Reported again after the first fix, and the report was right: taking
+     the button off the message is not enough. "Once you've met the board
+     it should remove that message from your mailbox — it shouldn't be in
+     your mailbox any more, it should disappear until your next board
+     meeting." So the invitation is withdrawn *and* the letter goes. It
+     has served its only purpose; leaving it sitting at the top of the
+     inbox reads as an appointment you still have to keep. */
   function consumeInvitation() {
     G.boardCall = null;
-    (G.inbox || []).forEach((m) => {
-      if (!m || !m.actions || !m.actions.length) return;
-      if (m.actions.some((a) => a && a.act === 'boardGo')) m.actions = null;
+    const before = (G.inbox || []).length;
+    const kept = (G.inbox || []).filter((m) => {
+      if (!m) return false;
+      const invite = !!(m.actions && m.actions.length
+        && m.actions.some((a) => a && a.act === 'boardGo'));
+      /* the letter that summoned you, whether or not it still has a button
+         on it — matched on the line boardSummon() always writes */
+      const summons = m.type === 'board' && /waiting for you upstairs/i.test(String(m.body || ''));
+      return !(invite || summons);
     });
+    if (kept.length !== before) {
+      /* an unread letter that disappears must not leave the badge counting it */
+      const goneUnread = (G.inbox || []).filter((m) => m && kept.indexOf(m) < 0 && !m.read).length;
+      G.inbox = kept;
+      if (goneUnread > 0) G.unread = Math.max(0, (G.unread || 0) - goneUnread);
+    }
   }
 
   if (has(openBoardRoom)) {

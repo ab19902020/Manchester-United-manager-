@@ -299,3 +299,42 @@ test('a summons can only be answered once', async (t) => {
     `the board complained about a table that does not exist: ${run.second.say}`);
   assert.deepEqual(game.errors, []);
 });
+
+/* Reported again after the first fix, and the report was right: taking the
+   button off the letter is not enough. "Once you've met the board it should
+   remove that message from your mailbox — it should disappear until your next
+   board meeting." */
+test('the summons letter leaves the mailbox once you have been up', async (t) => {
+  const game = await createGame();
+  t.after(() => game.close());
+  await startCareer(game);
+
+  const run = game.eval(`(function(){
+    let d=0;
+    while(!G.boardCall && d++<12){simRestOfDay();dailyTickCore();G.day++}
+    if(!G.boardCall)return {skipped:true};
+
+    const letters=(m)=>G.inbox.filter(x=>x&&/waiting for you upstairs/i.test(String(x.body||''))).length;
+    const before={inbox:G.inbox.length,unread:G.unread,letters:letters()};
+
+    ACTIONS.boardGo({dataset:{}});
+    ACTIONS.brDone();
+
+    return {skipped:false,before,
+      after:{inbox:G.inbox.length,unread:G.unread,letters:letters(),
+        anyButton:G.inbox.some(m=>m&&m.actions&&m.actions.some(a=>a&&a.act==='boardGo')),
+        attention:(typeof attnAnswer==='function'?attnAnswer():[]).length}};
+  })()`);
+
+  if (run.skipped) return;
+
+  assert.equal(run.before.letters, 1, 'the summons arrives as a letter');
+  assert.equal(run.after.letters, 0, 'and it is gone once the meeting has happened');
+  assert.equal(run.after.inbox, run.before.inbox - 1, 'exactly one letter removed');
+  assert.equal(run.after.anyButton, false, 'with no way back in');
+  assert.equal(run.after.attention, 0, 'and nothing left on the home screen either');
+  // an unread letter that vanishes must not leave the badge counting it
+  assert.equal(run.after.unread, run.before.unread - 1,
+    `the unread badge still counts the letter that was removed (${run.before.unread} -> ${run.after.unread})`);
+  assert.deepEqual(game.errors, []);
+});

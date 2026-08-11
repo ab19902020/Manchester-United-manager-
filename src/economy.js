@@ -2,11 +2,12 @@
           LEAGUES, commercialIncome, ensureCommercial, MU, ordinal, tableRows,
           fixCtx, DIV_ORDER, ACTIONS, playerById, toast, $, loanTerms, offerById,
           CC_CHAIRS, budLimits, budOrigin, sfx, render, DIV_NAMES, myDiv,
-          SPONSOR_SLOTS, dealValue, mulberry, hashStr */
+          SPONSOR_SLOTS, dealValue, mulberry, hashStr, TOURS */
 /* global seasonRevenue:writable, seasonCosts:writable, monthlyIncome:writable,
           applyPostMatch:writable, endSeason:writable, vFinances:writable,
           dailyTickCore:writable, normaliseReps:writable, completeSigning:writable,
-          vTransferBudget:writable, takeOverClub:writable, commercialPower:writable */
+          vTransferBudget:writable, takeOverClub:writable, commercialPower:writable,
+          tourFee:writable, tourSettle:writable */
 
 /* =====================================================================
    ECONOMY — what football clubs actually earn, and what it costs them
@@ -2142,7 +2143,119 @@
     };
   }
 
+  /* -------------------------------------------------------------------
+     13. A PRE-SEASON TOUR IS HOW A CLUB MAKES ITS SUMMER MONEY
+     -------------------------------------------------------------------
+     Reported: the tour feels like it costs you. Measured, it does not —
+     every option pays, from nothing for staying at home to £16.9M for the
+     Far East. But look at where it lands:
+
+         North American tour   bank +£8,400,000   budget +£0
+         Far East tour         bank +£16,900,000  budget +£0
+
+     The money goes into the club's cash and the transfer budget never
+     moves, so you fly a squad round America, earn eight million, and have
+     not one extra pound to spend on players. That is the complaint, and
+     it is a fair one: touring is how a club funds its summer.
+
+     Three things.
+
+     IT REACHES THE TRANSFER BUDGET. The fee, and any invitational prize,
+     is added to the budget as well as the bank. Those are not two pots —
+     a signing debits both — so this is the cash arriving and the
+     permission to spend it arriving with it.
+
+     STAYING AT HOME IS NOT NOTHING. Two friendlies at your own ground
+     still sell tickets. It was flatly zero, which made "stay at home"
+     read as a punishment rather than a choice.
+
+     AND THE FEE IS SIZED BY WHO YOU ARE. The old scale had a floor of
+     0.10 on reputation, so a National League club earned **£2,000,000**
+     from a North American tour — two and a half times its entire annual
+     revenue. Nobody in Los Angeles is buying a ticket to watch a
+     non-league side. The curve is steeper now, which also makes the far
+     tours something a club grows into rather than something it can farm
+     from the bottom division.
+
+     The trade-off itself was already right and is untouched: stay home
+     for fitness and no money, Iberia for a balance, America and the Far
+     East for a fortune and a squad that arrives on empty.
+     ------------------------------------------------------------------- */
+  const TOUR_CURVE = 3.2;      /* how sharply tour income follows standing */
+  const TOUR_FLOOR = 0.008;    /* what the smallest club can still draw */
+  const TOUR_REF = 9200;       /* the reputation the old scale treated as full */
+
+  function tourScale(c) {
+    const rep = (c && c.rep) || 6000;
+    return clamp(Math.pow(rep / TOUR_REF, TOUR_CURVE), TOUR_FLOOR, 1.15);
+  }
+
+  /* staying at the training ground was worth exactly nothing */
+  guard('tour.home', () => {
+    if (typeof TOURS === 'undefined' || !Array.isArray(TOURS)) return;
+    const home = TOURS.filter((t) => t && t.id === 'base')[0];
+    if (home && (!home.fee || !(home.fee[1] > 0))) home.fee = [140e3, 300e3];
+  });
+
+  /* Recomputed rather than rescaled. The original rounds to the nearest
+     £100,000 — `Math.round(raw * scale / 1e5) * 1e5` — so every tour a
+     lower-league club could take rounded to exactly nothing, and no
+     correction applied afterwards can recover a number that is already
+     zero. Same seed, so the figure quoted on the booking screen is the
+     figure that arrives. */
+  if (typeof tourFee === 'function') {
+    tourFee = function tourFeeByStanding(t) {
+      return guard('tour.fee', () => {
+        if (!t || !t.fee) return 0;
+        const c = G.clubs[G.my];
+        const r = mulberry(hashStr('tour' + t.id + G.season + (c.key || '')))();
+        const money = (t.fee[0] + (t.fee[1] - t.fee[0]) * r) * tourScale(c);
+        const step = money >= 1e6 ? 1e5 : (money >= 1e5 ? 1e4 : 1e3);
+        return Math.max(0, Math.round(money / step) * step);
+      }, 0);
+    };
+  }
+
+  /* the fee, and the invitational prize, reach the money you can spend */
+  if (typeof ACTIONS !== 'undefined' && has(ACTIONS.tourBook)) {
+    const previousBook = ACTIONS.tourBook;
+    ACTIONS.tourBook = function tourBookToBudget() {
+      const was = G.tour;
+      const r = previousBook.apply(this, arguments);
+      guard('tour.book', () => {
+        const t = G.tour;
+        if (!t || t === was || !t.booked || t.toBudget) return;
+        t.toBudget = true;
+        const fee = Math.round(t.fee || 0);
+        if (!(fee > 0)) return;
+        const c = G.clubs[G.my];
+        c.budget = Math.round((c.budget || 0) + fee);
+        mail('board', '💷 Tour money into the budget',
+          `The <b>${fmtM(fee)}</b> earned on tour has been added to the transfer budget as well as `
+          + `the club's accounts. Summer money is what a pre-season tour is for.<br><br>`
+          + `<span class="xs faint">Transfer budget now <b>${fmtM(c.budget)}</b>.</span>`);
+      });
+      return r;
+    };
+  }
+
+  if (typeof tourSettle === 'function') {
+    const previousSettle = tourSettle;
+    tourSettle = function tourSettleToBudget() {
+      const c = G.clubs[G.my];
+      const before = c ? (c.bank || 0) : 0;
+      const r = previousSettle.apply(this, arguments);
+      guard('tour.settle', () => {
+        /* the only money tourSettle moves is an invitational prize */
+        if (!c) return;
+        const won = Math.round((c.bank || 0) - before);
+        if (won > 0) c.budget = Math.round((c.budget || 0) + won);
+      });
+      return r;
+    };
+  }
+
   try {
-    window.RBSCommercial = Object.freeze({ marketCommercial, rewriteDeals });
+    window.RBSCommercial = Object.freeze({ marketCommercial, rewriteDeals, tourScale });
   } catch (error) { /* no window */ }
 }());

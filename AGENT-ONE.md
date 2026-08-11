@@ -1,7 +1,7 @@
 # Agent One — report to Claude
 
 **Written by:** Agent One (balance and rules) · **Read by:** Claude (director) and Codex
-**Current as of commit:** `750b563` · **Last updated:** 11 August 2026 (cycle 16)
+**Current as of commit:** `652f3e4` · **Last updated:** 11 August 2026 (cycle 17)
 
 ---
 
@@ -101,6 +101,67 @@ turnover including coaching costs — that figure changed *for* 2026/27, which i
 the season the game is set in — League Two 55%, enforced by refusing to register
 the player rather than by a points deduction. Clubs sit at 16–44%, so it only
 bites if you go looking for it.
+
+### Cycle 17 — the tour, the letter and a question nobody could answer
+
+Three reports from one session of play.
+
+**1. The pre-season tour felt like it cost money.** It never did — every option
+pays. But measured, this is where the money went:
+
+```text
+North American tour   bank +£8,400,000    budget +£0
+Far East tour         bank +£16,900,000   budget +£0
+```
+
+The fee lands in the club's cash and **the transfer budget never moves**, so you
+fly a squad round America, earn eight million, and have not one extra pound to
+spend on players. The user's framing was exactly right: touring is how a club
+funds its summer.
+
+Three things. The fee and any invitational prize now reach the **transfer
+budget** as well as the bank — those are not two pots, a signing debits both, so
+this is the cash arriving and the permission to spend it arriving with it.
+Staying at the training ground earns a little rather than a flat zero, which made
+"stay at home" read as a punishment rather than a choice. And the fee is sized by
+who you are: the old scale had a floor of 0.10 on reputation, so a National
+League club drew **£2,000,000** from a North American tour — two and a half times
+its entire annual revenue.
+
+*Recomputed rather than rescaled,* because the original rounds to the nearest
+£100,000 and every tour a lower-league club could take therefore rounded to
+exactly nothing. No correction applied afterwards can recover a zero.
+
+| | stay home | Ireland | Iberia | Scandinavia | America | Far East |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Manchester United | £220K | £850K | £2.0M | £3.7M | £8.2M | £16.5M |
+| a National League club | £2K | £9K | £14K | £22K | £72K | £130K |
+| condition | +10 | +8 | +9 | +5 | **−9** | **−12** |
+| sharpness | +2 | +6 | +5 | +7 | +9 | +9 |
+
+The trade-off itself was already right and is untouched.
+
+**2. The summons letter stayed in the mailbox.** Cycle 16 took the button off it;
+the report came back saying that is not enough — *"once you've met the board it
+should remove that message from your mailbox... it should disappear until your
+next board meeting."* Fair. The letter has served its only purpose and sitting at
+the top of the inbox it reads as an appointment you still have to keep. It is
+removed now, and the unread badge is decremented with it.
+
+**3. "Why have you not signed anyone?" on day one.** `pre-nosignings` fires on
+`preSeason && !signings.length` — and on the first morning of a career both are
+true *by definition*. Nobody has failed to sign anybody; they have not had the
+chance.
+
+Early in the window the room now asks the forward-looking question — *"Do you
+intend to strengthen this squad? Which positions are you looking at?"* — with
+four answers of its own. The complaint waits until the last fortnight before the
+opener, when a quiet summer is a real thing to answer for.
+
+*One measurement error of mine worth recording:* I first gated it on
+`G.day - G.seasonStart`, which is **negative** all through pre-season because
+`seasonStart` is the opener and sits about thirty-one days ahead of day one. A
+gate written on it never opens. It counts down to the opener now.
 
 ### Cycle 16 — an invitation you could accept twice
 
