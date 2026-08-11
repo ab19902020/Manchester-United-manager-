@@ -29,9 +29,10 @@ the renderer, not the data.
 `red-devil-manager.html` is three megabytes and 136 appended layers, and it is
 where three agents will collide. So my code does not live there.
 
-Everything I write goes in **`src/gameplay-balance.js`**, **`src/economy.js`** and
-**`src/press-room.js`**, which load after the game and patch it in place. The big
-file gets **three `<script src>` tags and nothing else**. If you are merging my work and hit a conflict in that file, the
+Everything I write goes in **`src/gameplay-balance.js`**, **`src/economy.js`**,
+**`src/press-room.js`** and **`src/boardroom.js`**, which load after the game and
+patch it in place. The big file gets **four `<script src>` tags and nothing
+else**. If you are merging my work and hit a conflict in that file, the
 resolution is always "keep both, re-add my one line".
 
 That is also why I patch by wrapping rather than editing: I never need the
@@ -96,6 +97,80 @@ turnover including coaching costs — that figure changed *for* 2026/27, which i
 the season the game is set in — League Two 55%, enforced by refusing to register
 the player rather than by a points deduction. Clubs sit at 16–44%, so it only
 bites if you go looking for it.
+
+### Cycle 8 — the boardroom, from a real save
+
+First meeting of the season: top of the league after five matches, four wins and
+a draw, against a target of 1st. The board said *"which is about where we asked
+you to be"*, offered **Take the criticism**, and took five points of patience off
+for asking to be backed.
+
+One line caused all of it (`red-devil-manager.html:45389`):
+
+```js
+const ahead = pos && obj.pos && pos < obj.pos;
+const level = pos && obj.pos && Math.abs(pos - obj.pos) <= 2;
+```
+
+With `pos = 1` and a target of 1st, `1 < 1` is false. There is nowhere above
+first to be, so the best available outcome fell straight through to the
+underperformance branch — graded identically to 12th against a target of 10th.
+Every answer in the scene then keyed off that one boolean, which is why
+`Ask for backing` ran `boardMood(-5)` while leading the league and
+`Take the criticism` was the best-scoring reply in a room that had not
+criticised anything.
+
+**What the room now knows.** `brFacts()` is the boardroom's `pqFacts()`: matches
+played against the length of the season, points per game, the last six results,
+the longest unbeaten / winning / losing / winless runs, which cups are still
+alive and what round they are at, promotion, play-off and relegation zones sized
+for the actual division, budget, bank, who is injured, and the phase of the
+season.
+
+**How it is graded.** A seven-band spectrum on the margin between where you are
+and where you promised to be — `flying · ahead · ontrack · justshort · short ·
+bad · crisis` — with a hard ceiling rule first: **1st is the top band whatever
+the target says.** Then form moves you a band, a live semi-final or final moves
+you a band, the bottom three caps you at `short` whatever was agreed, and nobody
+is graded below `short` inside the first six matches.
+
+| where you are | band | before |
+| --- | --- | --- |
+| 1st, target 1st, 5 played | `flying` | "about where we asked you to be" |
+| 2nd, target 10th | `flying` | ahead |
+| 6th, target 9th | `ahead` | ahead |
+| 9th, target 9th | `ontrack` | level |
+| 11th, target 9th | `justshort` | level |
+| 13th, target 9th | `short` | behind |
+| 16th, target 9th | `bad` | behind |
+| 20th, target 4th | `crisis` | behind |
+
+**How it sounds.** Every opening, verdict, answer label and reply comes from a
+bank of 3–6 versions, and `vary()` refuses the last **two** it used for that key,
+so a five-line bank cannot alternate between the same pair. Measured over 16
+consecutive meetings: 6+ distinct board lines, 8+ distinct answer labels, 6+
+distinct replies. The greeting itself carries a temperature, so a good month
+never opens with *"sit down, this is not an ambush"*.
+
+**The answers are built for the band.** A league leader is offered *keep our feet
+on the ground · back it while it is running · raise the target · credit the
+players*, and asking for money there gains budget and patience. Only a club
+actually behind is offered *this squad needs help* or *it is on me*, and only a
+club in crisis is offered *then sack me*. Raising the target is suppressed when
+the target is already 1st and you are already 1st — there is nothing to bid with,
+so it becomes a promise of silverware instead.
+
+**Two more things found while in there.** `boardScene('review')` is not the
+end-of-season debrief; it is the meeting behind **Request more transfer funds**,
+available once a season whenever you press it — so in October it was saying "You
+finished 14th… So. Next season." It now reads the calendar. And a later layer had
+replaced `boardTarget()` with a `{pos, agreed}` shape while the monthly board
+mail still read `{exp, txt}` from the older one, so every warning mail printed
+*"target undefinedth"*. Both shapes now come back from the one call.
+
+Three seasons soaked: 24 meetings taken and answered at random, zero JS errors,
+no `undefined`/`NaN` in any line or reply, no board mail printing an undefined
+target, no negative bank anywhere in the world.
 
 ### Cycle 7 — the press room, from a real save
 

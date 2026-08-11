@@ -4,6 +4,36 @@
 
 ### Changed
 
+- **Gave the boardroom a league table it can read.** Reported from a real save: top of
+  the league after five matches, four wins and a draw, against a target of 1st — and the
+  monthly review said "which is about where we asked you to be", offered "Take the
+  criticism" and docked five points of patience for asking to be backed. The scene graded
+  on `pos < target`, so first place against a target of first fell through to the
+  underperformance branch, and every answer in the room keyed off that one boolean.
+
+  The board now grades on a seven-band spectrum — flying, ahead, on track, just short,
+  short, bad, crisis — measured on the margin between where you are and where you promised
+  to be, with a ceiling rule first: 1st is the top band whatever the target says. Form,
+  a live semi-final or final, a relegation place and the honest fact that five games is
+  five games all move the band. The room also reads matches played against the length of
+  the season, points per game, unbeaten and losing runs, which cups are still alive and at
+  what round, the promotion, play-off and relegation zones of your actual division, and
+  who is injured.
+
+  Every opening, verdict, answer and reply now has three to six versions and will not
+  repeat the last two it used, so consecutive meetings do not read identically. The
+  answers on offer are built for the band: a league leader is never handed "Take the
+  criticism", asking a delighted board for money gains budget and goodwill instead of
+  costing it, and only a club in real trouble is offered "then sack me".
+
+- Fixed the "Request more transfer funds" meeting reading as an end-of-season debrief in
+  October — "You finished 14th… So. Next season." — when it is a meeting you can call any
+  time. It now follows the calendar.
+
+- Fixed every board warning mail printing "target undefinedth". A later layer replaced
+  `boardTarget()` with a `{pos, agreed}` shape while the monthly review mail still read
+  `{exp, txt}` from the older one; both shapes now come back from the one call.
+
 - **Rebuilt the economy against real football finance.** Measured first: the Premier
   League was close to right and everything below it was inflated, worse the further down
   you went — Championship central distribution 4× too high, League One 6×, the National
