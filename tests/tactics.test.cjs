@@ -168,8 +168,12 @@ test('the final-third instruction changes who scores and who makes it', async (t
   // through balls: the opposite shape — central creators, quick finishers
   assert.ok(run.through.wide < run.base.wide - 0.10,
     `through balls should come from inside, not from wide (${(run.through.wide*100).toFixed(1)}% wide)`);
-  assert.ok(run.through.pace > run.base.pace,
-    `through balls should be run onto by quicker players (${run.through.pace.toFixed(2)} vs ${run.base.pace.toFixed(2)})`);
+  // against crossing, not against Balanced: Balanced now weights movement
+  // too, so both favour mobile players and the gap there is small. The
+  // contrast that means something is with the instruction that wants a
+  // header rather than a run.
+  assert.ok(run.through.pace > run.crosses.pace,
+    `through balls should be run onto by quicker players than crosses are met by (${run.through.pace.toFixed(2)} vs ${run.crosses.pace.toFixed(2)})`);
   assert.ok(run.through.head < run.crosses.head,
     'a through-ball side should not be scoring the same headers as a crossing one');
 

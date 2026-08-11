@@ -4,6 +4,24 @@
 
 ### Added
 
+- **Goalkeepers have goalkeeping attributes.** They did not. A keeper's shot-stopping was
+  `(positioning + agility) / 2` — two outfield attributes — and his penalty saving was
+  agility alone. There is now **Handling**, **Reflexes**, **One-on-ones** and
+  **Distribution**, shown on his page and read by the save model, the penalty model and
+  the pass model. Two keepers with identical outfield attributes are no longer the same
+  goalkeeper.
+
+  Outfield players get **Off the ball** and **Marking** on the same basis. All six are
+  worked out from the attributes a player already has plus a variation seeded on his own
+  id, so they are stable for the life of a save, move when he trains, and change nobody's
+  overall rating — no save file is touched and no valuation moves.
+
+- **Better players get on the end of more chances.** The engine chose who shot from the
+  slot they were standing in and nothing else — `striker 4.0, attacker 2.9, centre-mid
+  1.8, anybody else 0.7`, not one attribute in it — so a twenty-rated striker and a
+  six-rated one were equally likely to be the man the ball fell to. Movement now tilts
+  that choice on top of the positional weighting.
+
 - **Two new instructions that change how goals are actually scored.** **Build-up** —
   play out from the back, balanced, or go long — and **Final third** — work it in,
   balanced, crosses, or through balls. Neither is a label: they change who the engine

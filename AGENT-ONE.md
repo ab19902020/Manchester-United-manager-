@@ -31,8 +31,9 @@ where three agents will collide. So my code does not live there.
 
 Everything I write goes in **`src/gameplay-balance.js`**, **`src/economy.js`**,
 **`src/press-room.js`**, **`src/interactions.js`**, **`src/prize-money.js`**,
-**`src/playoffs.js`**, **`src/tactics.js`** and **`src/boardroom.js`**, which load
-after the game and patch it in place. The big file gets **eight `<script src>`
+**`src/playoffs.js`**, **`src/tactics.js`**, **`src/attributes.js`** and
+**`src/boardroom.js`**, which load
+after the game and patch it in place. The big file gets **nine `<script src>`
 tags and nothing else**. If you are merging my work and hit a conflict in that file, the
 resolution is always "keep both, re-add my one line".
 
@@ -105,6 +106,93 @@ turnover including coaching costs — that figure changed *for* 2026/27, which i
 the season the game is set in — League Two 55%, enforced by refusing to register
 the player rather than by a points deduction. Clubs sit at 16–44%, so it only
 bites if you go looking for it.
+
+### Cycle 22 — what the attributes are worth, and the ones that were missing
+
+Asked to check the nineteen attributes mean something. I swept every one: hold
+the squad still, set one attribute to 5 for the whole side, play 150 matches,
+set it to 18, play 150 more, read the difference.
+
+**The first result was how noisy the engine is.** A control — the same squad,
+twice, nothing changed — swung 0.23 goals a game. Anything smaller than that is
+not a measurement, and I have been careful not to report it as one.
+
+| whole squad, 5 → 18 | goals | conceded |
+| --- | ---: | ---: |
+| *control (nothing changed)* | *−0.227* | *0.127* |
+| passing | 0.820 | 0.153 |
+| positioning | 0.247 | 0.940 |
+| firstTouch | 0.407 | −0.113 |
+| dribbling | 0.373 | −0.007 |
+| stamina | 0.347 | −0.120 |
+| tackling | −0.060 | 0.287 |
+| agility | 0.080 | 0.200 |
+| leadership | 0.040 | −0.053 |
+
+**Every one of the nineteen is read by the game somewhere.** None is decoration
+and I am not claiming any of them does nothing. What the sweep shows is that only
+`passing` and `positioning` move a result by more than the engine's own noise, and
+that most attributes are one of three names inside an average — about as much
+leverage as a third of a third.
+
+**The hole it found: goalkeepers have no goalkeeping attributes.** Shot-stopping
+is `(positioning + agility) / 2`, both outfield, and penalty saving is `agility`
+alone. Testing the keeper on his own, 150 matches each way:
+
+```text
+positioning   0.133 goals prevented
+agility       0.053
+decisions    -0.033
+handling      0.207   <- an attribute that does not exist
+```
+
+`handling` was a deliberate control — a made-up name, so setting it to 5 and then
+18 changes nothing whatsoever. It "outperformed" every real attribute the keeper
+has. That is the cleanest way I know to say that nothing measurable separated a
+good goalkeeper from a bad one.
+
+**What I added.** `handling`, `reflexes`, `oneOnOnes`, `distribution` for keepers;
+`offTheBall` and `marking` for everybody else. All six are **derived, not stored**
+— worked out from the attributes the player already has plus a variation seeded on
+his own id. Stable for the life of a save, moves when he trains, different for two
+players whose attributes are identical, and **not in the `W` tables**, so no
+overall rating moves, no valuation moves, and no save file changes. An explicit
+value on the player always wins, so real goalkeeping numbers can be authored later
+without any of this changing.
+
+They reach the engine through `effA` — the one method the save model, the penalty
+model and the pass model all use — so a keeper asked for his `agility` answers
+with his hands, without a line of the match engine being touched.
+
+Measured after: the keeper's four attributes are worth **0.44 goals a game** at
+4 → 19, against a made-up attribute at exactly 0.00 in the same run.
+
+**The second hole: who shoots was decided by position alone.** The engine's
+shooter weighting is `ST 4.0, attacker 2.9, centre-mid 1.8, anybody else 0.7` and
+not one attribute — a twenty-rated striker and a six-rated one were equally likely
+to be the man the ball fell to. Movement now tilts that on top of the slot
+weights, which are kept exactly as they are. Honest note on size: with United's
+XI, scorers averaged 87.08 overall against a position-weighted expectation of
+86.78, because their best players already play in the shooting positions. This
+will matter far more to a club whose best player is not its striker.
+
+**Not fixed, and said plainly.** `offTheBall` and `marking` measured inside the
+noise floor as whole-squad sweeps (0.00 and −0.10 goals). They blend at partial
+weight into attributes that are themselves one of three inside an average, so the
+effect is real but small. I have kept them because they de-homogenise players and
+feed the shooter pick, not because I can show them moving a scoreline.
+
+**A second probe that lied to me, the same way as last time.** My test captured
+the player page by replacing `window.openModal` — which replaced the wrapper doing
+the injecting, so it captured the page before it was patched and reported the new
+attributes missing. Reading `#sheetBody` after the fact fixed it. That is twice in
+two cycles: **a spy installed last sees the world first.**
+
+**Why one test is missing on purpose.** The 0.44 goals-a-game figure is real but
+the noise floor at that sample is about 0.28, so an assertion on goals conceded
+would fail roughly one run in three. The tests assert the deterministic part — the
+save model can tell keepers apart, the engine reads the new numbers, the page
+shows them — and the measurement lives here with its error bars.
 
 ### Cycle 21 — build-up, the final third, and the two-engines question
 

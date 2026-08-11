@@ -239,13 +239,45 @@
     });
   }
 
+  /* The engine's own shot weighting, unchanged, so tilting on top of it
+     does not quietly move who plays where. */
+  function slotWeight(slot) {
+    if (slot === 'ST') return 4.0;
+    if (isFwd(slot)) return 2.9;
+    if (slot === 'MC') return 1.8;
+    return 0.7;
+  }
+
+  function movementOf(p) {
+    const api = window.RBSAttributes;
+    if (api && has(api.derive)) return api.derive(p, 'offTheBall');
+    const a = (p && p.attrs) || {};
+    return ((a.positioning || 10) + (a.decisions || 10)) / 2;
+  }
+
+  /* Ability decides who the ball falls to, on top of position. */
+  function movementPick(sim, A, out) {
+    return guard('movement', () => {
+      const sh = sim.weighted(A, (x) => {
+        if (!x || !x.p || x.slot === 'GK') return 0.01;
+        return slotWeight(x.slot) * (0.5 + movementOf(x.p) / 20);
+      });
+      return sh ? { shooter: sh, creator: out.creator } : out;
+    }, out);
+  }
+
   /* who gets on the end of it */
   function reshapeChance(sim, A, shooter, creator, fromCorner) {
     const out = { shooter, creator };
     if (fromCorner || !creator || !A) return out;             /* a corner is already a corner */
     const f = thirdOf(A.tac);
-    if (f === 'Balanced') return out;
-    if (Math.random() > THIRD_BITE) return out;
+    /* Even with no instruction set, who gets on the end of a chance is
+       decided by the engine on position alone — `ST 4.0, attacker 2.9,
+       centre-mid 1.8, anybody else 0.7` and not one attribute. So a
+       twenty-rated striker and a six-rated one are equally likely to be
+       the man the ball falls to. The slot weights are kept exactly as
+       they are and movement is tilted on top of them. */
+    if (f === 'Balanced' || Math.random() > THIRD_BITE) return movementPick(sim, A, out);
     return guard('reshape', () => {
       const eff = (x, a) => sim.effA(x, a);
       const keeper = (x) => (x.slot === 'GK' ? 0.01 : 1);
