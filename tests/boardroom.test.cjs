@@ -323,7 +323,8 @@ test('the summons letter leaves the mailbox once you have been up', async (t) =>
     return {skipped:false,before,
       after:{inbox:G.inbox.length,unread:G.unread,letters:letters(),
         anyButton:G.inbox.some(m=>m&&m.actions&&m.actions.some(a=>a&&a.act==='boardGo')),
-        attention:(typeof attnAnswer==='function'?attnAnswer():[]).length}};
+        boardOnScreen:(typeof attnAnswer==='function'?attnAnswer():[])
+          .filter(n=>n&&(n.k==='board'||n.act==='boardGo')).length}};
   })()`);
 
   if (run.skipped) return;
@@ -332,7 +333,11 @@ test('the summons letter leaves the mailbox once you have been up', async (t) =>
   assert.equal(run.after.letters, 0, 'and it is gone once the meeting has happened');
   assert.equal(run.after.inbox, run.before.inbox - 1, 'exactly one letter removed');
   assert.equal(run.after.anyButton, false, 'with no way back in');
-  assert.equal(run.after.attention, 0, 'and nothing left on the home screen either');
+  // The home screen must not still be offering the meeting. It may well be
+  // offering something else — the loop above simulates up to twelve days and
+  // a press conference or a decision can land in that time, which is not
+  // this test's business.
+  assert.equal(run.after.boardOnScreen, 0, 'and no way up to the boardroom left on the home screen');
   // an unread letter that vanishes must not leave the badge counting it
   assert.equal(run.after.unread, run.before.unread - 1,
     `the unread badge still counts the letter that was removed (${run.before.unread} -> ${run.after.unread})`);

@@ -30,14 +30,18 @@ the renderer, not the data.
 where three agents will collide. So my code does not live there.
 
 Everything I write goes in **`src/gameplay-balance.js`**, **`src/economy.js`**,
-**`src/press-room.js`**, **`src/interactions.js`** and **`src/boardroom.js`**,
-which load after the game and patch it in place. The big file gets **five
-`<script src>` tags and nothing else**. If you are merging my work and hit a
-conflict in that file, the resolution is always "keep both, re-add my one line".
+**`src/press-room.js`**, **`src/interactions.js`**, **`src/prize-money.js`** and
+**`src/boardroom.js`**, which load after the game and patch it in place. The big
+file gets **six `<script src>` tags and nothing else**. If you are merging my
+work and hit a conflict in that file, the resolution is always "keep both, re-add
+my one line".
 
 Load order matters for two of them: `interactions.js` must come after
 `press-room.js` (it wraps `pqFacts` last so every question rule sees the
 division's shape) and before `boardroom.js` (which reads `window.RBSShape`).
+`prize-money.js` must come after `economy.js`, because it wraps `progressCups`
+on top of the gate-receipt layer and expects to be the outermost thing watching
+the bank across a cup day.
 
 That is also why I patch by wrapping rather than editing: I never need the
 original text of a function, so a layer moving underneath me does not break me.
@@ -101,6 +105,118 @@ turnover including coaching costs — that figure changed *for* 2026/27, which i
 the season the game is set in — League Two 55%, enforced by refusing to register
 the player rather than by a points deduction. Clubs sit at 16–44%, so it only
 bites if you go looking for it.
+
+### Cycle 18 — winning things pays
+
+The user asked whether league position and cup progression actually pay, and
+said to make it as realistic as possible. One of the three is fine. The other
+two were badly wrong.
+
+**1. The Champions League league phase paid nothing at all.** Eight matches
+against the best clubs in Europe. I forced a run of `W D L W D L W D` in a live
+career with Manchester United and watched the bank on every matchday:
+
+```text
+MD1 W   bank +£0   budget +£0
+MD2 D   bank +£0   budget +£0
+MD3 L   bank +£0   budget +£0
+MD4 W   bank +£0   budget +£0
+MD5 D   bank +£0   budget +£0
+MD6 L   bank +£0   budget +£0
+MD7 W   bank +£0   budget +£0
+MD8 D   bank +£0   budget +£0
+phase closed   bank +£11,000,000   budget +£0
+```
+
+Three wins and three draws against Europe's best, worth nothing. The only money
+in the whole phase was an £11M lump for finishing in the top eight.
+
+The figures to fix it were already in the file and nothing read them. `EURO_DEFS`
+carries `pot:[a,b]` per competition and `b` is, to the pound, the real UEFA
+per-win fee — £2.1M for the Champions League, £400K for the Europa League.
+`CUP_DEFS[key].prize[0]` is derived from it as `pot[1]*3`, so the per-win fee can
+be recovered as `prize[0]/3` **without this module naming a single competition**,
+which matters while the leagues are being rebuilt elsewhere. A draw is a third of
+a win in every UEFA competition at every level, and the ranking share is an
+eighth of that again. Against the published 2024/25 distribution:
+
+| | model | real |
+| --- | ---: | ---: |
+| win | £2.1M | €2.10M |
+| draw | £700K | €0.70M |
+| per placing in the table of 36 | £275K | €0.275M |
+
+**2. Nobody was paid for where they finished in that table.** UEFA pays one share
+per place — thirty-six shares for finishing first of thirty-six, one for
+finishing last. The game paid a flat lump to the top eight and nothing to anyone
+else, so ninth and thirty-sixth were financially identical. First is now worth
+£9,900,000 on top of the results themselves.
+
+**3. No cup money in the game had ever reached the transfer budget.** Not the FA
+Cup, not the League Cup, not the European knockout ladder, not the winners'
+cheque. Every one of them does `G.clubs[G.my].bank+=pr` and stops there, while
+the end-of-season merit payment and the tour fee both move the budget as well.
+So a cup run filled the accounts and gave the manager nothing to spend.
+
+I did not touch any of the code that pays it. A wrapper watches the bank across
+`progressCups` and moves the same amount onto the budget, which covers every
+payment made anywhere beneath it — current and any added later. Measured, winning
+every tie in both domestic cups:
+
+```text
+FA Third Round     bank +£500,000     budget +£500,000
+FA Fourth Round    bank +£900,000     budget +£900,000
+FA Fifth Round     bank +£1,500,000   budget +£1,500,000
+FA Quarter-final   bank +£2,500,000   budget +£2,500,000
+FA Semi-final      bank +£4,000,000   budget +£4,000,000
+FA Final           bank +£16,000,000  budget +£16,000,000
+```
+
+**4. League position was already right, and I am saying so rather than
+changing it.** The merit ladder built in cycle 2 pays per place and per division,
+measured:
+
+| | 1st | 2nd | mid | last |
+| --- | ---: | ---: | ---: | ---: |
+| Premier League | £68.0M | £64.6M | £37.4M | £3.4M |
+| Championship | £21.6M | £20.7M | £11.7M | £0.9M |
+| League One | £6.24M | £5.98M | £3.38M | £0.26M |
+| League Two | £4.56M | £4.37M | £2.47M | £0.19M |
+| National League | £3.12M | £2.99M | £1.69M | £0.13M |
+
+The real Premier League merit ladder in 2023/24 ran £62M for first to £3.1M for
+twentieth. Nothing to do here.
+
+**5. And the accounts never admitted any of it had happened.** `seasonRevenue`
+has four lines — broadcast, gate, commercial, merit — and no cup money has ever
+been in any of them, so the Finances screen showed a club that had just won
+£100M in Europe exactly the same revenue as one that failed to qualify. That was
+survivable while cup money was small and is not now. UEFA money is broadcast
+money, and the parachute layer already puts its payments in the same bucket, so
+the season's prize total goes on the broadcast line, where the Finances screen
+and the PSR position pick it up without being told about it.
+
+New file `src/prize-money.js`, wrapping `progressCups`, `euroInit` and
+`seasonRevenue`. Three
+tests in `tests/prize-money.test.cjs`, all written against the *shape* of the
+reward — a win beats a draw beats a defeat, a later round beats an earlier one,
+first beats last, and every penny in the bank is also in the budget — so
+re-tuning the numbers leaves them green and paying nothing does not.
+
+**A flaky test of my own, fixed while I was here.** `the summons letter leaves
+the mailbox once you have been up` asserted the home screen's attention list was
+*empty* after the meeting. It simulates up to twelve days to get the summons, and
+in some of those runs a press conference or a blocking decision has legitimately
+landed by then, so the test failed on things that were not its business. It now
+asserts what it actually meant: no route back up to the boardroom is left on the
+screen. Ran the file three times to confirm.
+
+**What I deliberately did not do.** Prize money in this game has always been the
+manager's club alone; AI clubs are funded by the income model in `economy.js`,
+which knows nothing about Europe. A Champions League club really does out-earn a
+non-European rival by £80M+ a season, and modelling that would move every club's
+spending power in the world. That wants a ten-season soak before it goes in, not
+a guess. Logged here rather than done.
 
 ### Cycle 17 — the tour, the letter and a question nobody could answer
 

@@ -2,6 +2,31 @@
 
 ## Unreleased
 
+### Added
+
+- **Winning European matches pays, and every prize now reaches the transfer budget.**
+  The Champions League league phase is eight matches against the best clubs in Europe
+  and it paid nothing whatsoever. Measured in a live career, a run of three wins and
+  three draws moved the bank by exactly £0 across all eight matchdays; the only money in
+  the phase was an £11M lump when it closed. A win is now worth £2.1M, a draw £700K, a
+  defeat nothing — the published UEFA figures, and they were already in the file, sitting
+  in a field nothing read. Where you finish in the table of thirty-six pays as well:
+  £275K for every club you finish above, so first is worth £9.9M and ninth is no longer
+  worth the same as thirty-sixth. The Europa League and the Conference League are priced
+  from their own figures the same way.
+
+  None of the game's cup money had ever reached the transfer budget — not the FA Cup, not
+  the League Cup, not the knockout ladder, not the winners' cheque. Prize money filled
+  the accounts and gave the manager nothing to spend, which is the opposite of what a
+  cup run is for. All of it now moves the budget as well as the bank. Winning the FA Cup
+  is worth £16M on the day of the final, and every round on the way there pays more than
+  the round before it.
+
+  The league phase draw letter now tells you what the competition is worth before you
+  play a minute of it, and the Finances screen finally counts the money — cup and
+  European prize money had never appeared in the accounts at all, so a club that had won
+  a hundred million in Europe reported the same revenue as one that never qualified.
+
 ### Fixed
 
 - **A pre-season tour now funds your summer instead of vanishing into the bank.** Touring

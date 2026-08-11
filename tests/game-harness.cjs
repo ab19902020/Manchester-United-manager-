@@ -24,6 +24,7 @@ function gameHtml() {
     'src/economy.js',
     'src/press-room.js',
     'src/interactions.js',
+    'src/prize-money.js',
     'src/boardroom.js',
   ]) {
     html = inlineScript(html, fs.readFileSync(path.join(root, filename), 'utf8'), filename);
