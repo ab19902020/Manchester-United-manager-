@@ -30,11 +30,11 @@ the renderer, not the data.
 where three agents will collide. So my code does not live there.
 
 Everything I write goes in **`src/gameplay-balance.js`**, **`src/economy.js`**,
-**`src/press-room.js`**, **`src/interactions.js`**, **`src/prize-money.js`** and
-**`src/boardroom.js`**, which load after the game and patch it in place. The big
-file gets **six `<script src>` tags and nothing else**. If you are merging my
-work and hit a conflict in that file, the resolution is always "keep both, re-add
-my one line".
+**`src/press-room.js`**, **`src/interactions.js`**, **`src/prize-money.js`**,
+**`src/playoffs.js`** and **`src/boardroom.js`**, which load after the game and
+patch it in place. The big file gets **seven `<script src>` tags and nothing
+else**. If you are merging my work and hit a conflict in that file, the
+resolution is always "keep both, re-add my one line".
 
 Load order matters for two of them: `interactions.js` must come after
 `press-room.js` (it wraps `pqFacts` last so every question rule sees the
@@ -105,6 +105,86 @@ turnover including coaching costs — that figure changed *for* 2026/27, which i
 the season the game is set in — League Two 55%, enforced by refusing to register
 the player rather than by a points deduction. Clubs sit at 16–44%, so it only
 bites if you go looking for it.
+
+### Cycle 19 — the play-offs, played
+
+`endSeason` promoted whoever was in the top N of the table and that was the whole
+mechanism. The counts in `PYRAMIDS.ENG` were already right — three, three, four,
+two — but three of those three, and the last of those four, are decided at
+Wembley in the real world and were being handed out on goal difference here.
+
+|  | automatic | play-off |
+| --- | ---: | --- |
+| Championship | 2 | 3rd–6th |
+| League One | 2 | 3rd–6th |
+| League Two | 3 | 4th–7th |
+| National League | 1 | 2nd–5th |
+
+Nothing about the number going up changes. What changes is who.
+
+**They are played, not simulated.** The game already had everything needed and
+nothing had ever used it that way: a cup engine with two-legged ties and neutral
+finals, a day loop that stops on `userMatchOn()` and opens the match screen for
+a tie in *any* competition in `G.cups`, a Cups screen that renders whatever is
+there, and a `checkSeasonEnd` that already knew how to hold a season open while a
+final was outstanding. So a play-off is built as a competition rather than as a
+special case, and all of that works on it without being told. Measured — this is
+the same question `advanceDay()` asks before it opens the match screen:
+
+```json
+{"found": true, "cup": "POCH",
+ "comp": "Championship play-offs · Play-off semi-final",
+ "day": 328, "isTheTie": true}
+```
+
+**Two wrappers, no new promotion code.** `checkSeasonEnd` builds the competitions
+the moment the last league fixture has been played and before anything can close
+the season; the existing cup-hold then keeps the season open on its own. `WORLD_PR`
+hands `endSeason` the function that does promotions — reputation, budget, wage
+ceiling, the movement mail, the honour, the board's patience — and rather than
+reimplement any of it I hand it a sealed table with the play-off winner moved
+into the last promotion place, and hand the real one back in a `finally`. The
+final table the player sees is never altered.
+
+Measured across a season, with the four winners and where they had finished:
+
+```text
+Championship     Burnley (3rd)
+League One       Barnsley (4th)
+League Two       Crewe (4th)
+National League  Boston Utd (4th)
+```
+
+Three of the four would not have gone up under the old rule. Division sizes after
+promotion and relegation: 20 / 24 / 24 / 24 / 24, unchanged.
+
+Soaked over two full seasons — eight competitions, all eight settled, no page
+errors, sizes stable — and the winners are not the seedings:
+
+```text
+season 1   West Ham (3rd)   Sheffield Wed (4th)  Rotherham (6th)  Boston Utd (5th)
+season 2   Queens Park (3rd) Swansea (5th)       Walsall (4th)    Halifax (2nd)
+```
+
+**One thing I got wrong and measured rather than assumed.** I first scheduled the
+play-offs four days after `seasonLastDay()`. The real Premier League schedule runs
+to day 334 and `seasonLastDay()` is 324, so that put a play-off semi-final ten
+days *before* the top division had finished playing. They are now anchored on the
+last fixture actually in the list, whatever the calendar says.
+
+**Known and deliberate.** The National League really runs a six-club play-off with
+byes for second and third; this runs four, like the three divisions above it.
+England only — the English pyramid is the one modelled club by club, and the rest
+of the world is promoted on the table because the rest of the world is not played
+out. `ladders()` reads `PYRAMIDS`, so adding a country is a one-line change if a
+modelled second tier abroad lands.
+
+**For Claude and Codex:** `divShape()` in `interactions.js` still reports `up` as
+the number promoted, and the press and the boardroom still call 3rd "a promotion
+place". That is now a play-off place, and the language should eventually follow.
+`window.RBSPlayOffs.playOffPlaces(div)` returns `{auto, from, to, up}` for exactly
+this. I have not changed the wording yet because it is press-room copy and I would
+rather do it in one pass.
 
 ### Cycle 18 — winning things pays
 

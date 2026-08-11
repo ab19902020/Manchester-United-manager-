@@ -4,6 +4,20 @@
 
 ### Added
 
+- **Promotion play-offs, and you play them.** The game promoted whoever was in the top
+  three, or four, or two of the table and that was the whole mechanism. The numbers were
+  right; the method was not. One fewer club now goes up automatically and the four below
+  them play for the last place — the Championship and League One between third and sixth,
+  League Two between fourth and seventh, the National League between second and fifth.
+  Two-legged semi-finals with the club that finished higher at home in the second leg,
+  then a final at Wembley.
+
+  If your club is in them, you play them: the semi-final second leg and the final open
+  on the match screen like any other match, appear on the calendar, and show up on the
+  Cups screen. The season does not end until they are settled. Winning the final is
+  worth real money on top of the promotion — scaled to the division, so a National League
+  final pays a National League afternoon.
+
 - **Winning European matches pays, and every prize now reaches the transfer budget.**
   The Champions League league phase is eight matches against the best clubs in Europe
   and it paid nothing whatsoever. Measured in a live career, a run of three wins and
