@@ -237,3 +237,136 @@ test('a wage rise is funded, and a player asking for minutes cannot hold up the 
   assert.equal(inbox.previews, true, 'and every row shows a line of the message itself');
   assert.equal(inbox.transferTabIsTransfersOnly, true, 'a filter that does not filter is worse than none');
 });
+
+/*
+ * The complaint mail was gated on a third of the season. The silent morale
+ * drip underneath it was not: weeklyTraining takes 2.4 a week off anybody
+ * below his role's share from the fifth match, so a player was ground down
+ * for weeks before he was allowed to say anything about it — and five
+ * matches is a different fraction of a 46-game season than of a 38-game one.
+ */
+test('nobody loses morale for not playing before he is allowed to complain', async (t) => {
+  const game = await createGame();
+  t.after(() => game.close());
+  await startCareer(game);
+
+  const early = game.eval(`(function(){
+    const c=G.clubs[G.my];
+    // put some matches on the board, but stay under the gate
+    const gate=RBSBalance.unrestOpensAt();
+    let d=0;
+    while(gamesPlayed(G.my)<Math.max(2,Math.floor(gate/2)) && d++<300){
+      const um=fixturesOn(G.day).find(f=>!f.played&&(f.h===G.my||f.a===G.my));
+      if(um){quickSim(um);finishDayAfterMatch()}
+      else{simRestOfDay();dailyTickCore();G.day++}
+    }
+    // the best player in the squad, who has not had a minute. A fringe
+    // player is not supposed to drip — his role does not promise him
+    // minutes — so the test has to use somebody whose role does.
+    const star=(c.players||[]).filter(p=>!p.youth&&!p.loan&&!p.injury)
+      .sort((a,b)=>b.ovr-a.ovr)[0];
+    star.stats.apps=0;
+    star.morale=70;
+    weeklyTraining();
+    return {gate,played:gamesPlayed(G.my),name:star.name,
+      role:roleOf(star),morale:star.morale};
+  })()`);
+
+  assert.ok(early.played < early.gate, 'the probe must stay under the gate');
+  assert.ok(early.morale >= 69,
+    `${early.name} lost morale at match ${early.played} of a ${early.gate}-match gate (now ${early.morale})`);
+
+  const late = game.eval(`(function(){
+    const c=G.clubs[G.my];
+    const gate=RBSBalance.unrestOpensAt();
+    let d=0;
+    while(gamesPlayed(G.my)<=gate+1 && d++<400){
+      const um=fixturesOn(G.day).find(f=>!f.played&&(f.h===G.my||f.a===G.my));
+      if(um){quickSim(um);finishDayAfterMatch()}
+      else{simRestOfDay();dailyTickCore();G.day++}
+    }
+    const star=(c.players||[]).filter(p=>!p.youth&&!p.loan&&!p.injury)
+      .sort((a,b)=>b.ovr-a.ovr)[0];
+    star.stats.apps=0;
+    star.morale=70;
+    weeklyTraining();
+    return {gate,played:gamesPlayed(G.my),name:star.name,role:roleOf(star),morale:star.morale};
+  })()`);
+
+  assert.ok(late.played > late.gate, 'and then get past it');
+  assert.ok(late.morale < 70,
+    `past the gate, ${late.name} (${late.role}) with no minutes should start to mind, morale stayed at ${late.morale}`);
+});
+
+/*
+ * simFixture sends anything that is not a cup tie and not one of the divisions
+ * the real engine runs to fastSim, which accrues appearances, goals, assists,
+ * ratings and injuries — and no cards. Measured over thirty matchdays before
+ * this fix: Premier League 5.07 bookings a match and 10 suspensions, League
+ * One 0.39 and none, League Two 0.33 and none, National League 0.19 and none.
+ */
+test('discipline exists in every division, not just the one you are in', async (t) => {
+  const game = await createGame();
+  t.after(() => game.close());
+  await startCareer(game);
+
+  const cards = game.eval(`(function(){
+    let d=0;
+    while(gamesPlayed(G.my)<26 && d++<400){
+      if(G.boardCall)G.boardCall=null;
+      if(G.pressCtx)G.pressCtx=null;
+      const um=fixturesOn(G.day).find(f=>!f.played&&(f.h===G.my||f.a===G.my));
+      if(um){quickSim(um);finishDayAfterMatch()}
+      else{simRestOfDay();dailyTickCore();G.day++}
+    }
+    const res={};
+    ['PL','CH','L1','L2','NL'].forEach(div=>{
+      let yc=0,susp=0;
+      divMembers(div).forEach(i=>{(G.clubs[i].players||[]).forEach(p=>{
+        if(p.youth)return;
+        yc+=p.seasonYellows||0;
+        if((p.susp||0)>0)susp++;
+      })});
+      const fx=G.fixtures.filter(f=>f.div===div&&f.played).length;
+      res[div]={fullSim:fullSimDiv(div),perMatch:fx?yc/fx:0,suspended:susp};
+    });
+    return res;
+  })()`);
+
+  const engine = cards.PL.perMatch;
+  assert.ok(engine > 2, `the real engine should book people, got ${engine.toFixed(2)} a match`);
+  ['L1', 'L2', 'NL'].forEach((div) => {
+    assert.equal(cards[div].fullSim, false, `${div} should be on the fast model`);
+    assert.ok(cards[div].perMatch > engine * 0.5,
+      `${div} books ${cards[div].perMatch.toFixed(2)} a match against the engine's ${engine.toFixed(2)}`);
+    assert.ok(cards[div].suspended > 0,
+      `nobody in ${div} has ever served a suspension`);
+  });
+});
+
+/* ACTIONS.roleTalk resolved its player with players.find(x => x._pending) —
+   the first flagged player, not the one the message was about */
+test('a conversation about a player is about that player', async (t) => {
+  const game = await createGame();
+  t.after(() => game.close());
+  await startCareer(game);
+
+  const talked = game.eval(`(function(){
+    const c=G.clubs[G.my];
+    const list=(c.players||[]).filter(p=>!p.youth&&!p.loan);
+    const decoy=list[0], subject=list[3];
+    decoy._pending=true; subject._pending=false;
+    decoy.morale=60; subject.morale=60;
+    mail('board','😤 '+subject.name+' wants a word','He wants minutes.',
+      [{lbl:'Promise more minutes',act:'roleTalk',arg:'promise'}]);
+    const m=G.inbox[0];
+    ACTIONS.roleTalk({dataset:{arg:'promise',mid:m.id}});
+    return {subject:subject.name,subjectMorale:subject.morale,
+      decoy:decoy.name,decoyMorale:decoy.morale};
+  })()`);
+
+  assert.ok(talked.subjectMorale > 60,
+    `the promise went to somebody else — ${talked.subject} is still on ${talked.subjectMorale}`);
+  assert.equal(talked.decoyMorale, 60,
+    `${talked.decoy} was cheered up by a conversation about ${talked.subject}`);
+});

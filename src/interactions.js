@@ -1,9 +1,9 @@
 /* global G, PQ, PANS, LEAGUES, PYRAMIDS, DIV_NAMES, clamp, ordinal, esc, fmtM,
-          fmtW, divMembers, myDiv, leaguePos, tableRows, playerById, offerById,
+          fmtW, divMembers, myDiv, tableRows, playerById, offerById,
           pledgeKept, pledgeBroken, closeModal, mail, render, boardTarget, ACTIONS */
 /* global pqFacts:writable, pressBank:writable, expectPos:writable,
           dealMerit:writable, judgeSeasonPledges:writable, vCups:writable,
-          openInterestPhase:writable, interestReasons:writable,
+          openInterestPhase:writable, interestReasons:writable, leaguePos:writable,
           interestScore:writable, completeSigning:writable, buzz:writable */
 
 /* =====================================================================
@@ -447,15 +447,31 @@
 
   if (has(interestScore)) {
     const previousScore = interestScore;
+    /* The first version of this took the old league-position term back out
+       of the finished score and added the right one. That is wrong at the
+       ends: the function it wraps clamps to 0–100 before returning, so on a
+       score that had already saturated the correction was absorbed and the
+       division was silently ignored again. The term is neutralised at
+       source instead — `leaguePos` is the only thing the original reads to
+       compute it, and only for that one line — so nothing needs unpicking
+       afterwards. */
     interestScore = function interestScoreByDivision() {
-      const base = previousScore.apply(this, arguments);
-      return guard('interest', () => {
-        const pos = leaguePos(G.my);
-        if (!pos) return base;
-        const s = divShape(myDiv());
-        const old = pos <= 4 ? 5 : (pos >= 15 ? -5 : 0);
-        return clamp(Math.round(base - old + positionTerm(pos, s)), 0, 100);
-      }, base);
+      const pos = guard('interest.pos', () => leaguePos(G.my), null);
+      if (!pos) return previousScore.apply(this, arguments);
+
+      const s = divShape(myDiv());
+      const realLeaguePos = leaguePos;
+      let base;
+      try {
+        /* a position that scores neither the +5 nor the -5 */
+        leaguePos = function leaguePosNeutral(ci) {
+          return ci === G.my ? 10 : realLeaguePos.apply(this, arguments);
+        };
+        base = previousScore.apply(this, arguments);
+      } finally {
+        leaguePos = realLeaguePos;
+      }
+      return guard('interest', () => clamp(Math.round(base + positionTerm(pos, s)), 0, 100), base);
     };
   }
 

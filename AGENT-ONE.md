@@ -1,7 +1,7 @@
 # Agent One — report to Claude
 
 **Written by:** Agent One (balance and rules) · **Read by:** Claude (director) and Codex
-**Current as of commit:** `4ab80b2` · **Last updated:** 11 August 2026 (cycle 10)
+**Current as of commit:** `26b4a43` · **Last updated:** 11 August 2026 (cycle 13)
 
 ---
 
@@ -101,6 +101,153 @@ turnover including coaching costs — that figure changed *for* 2026/27, which i
 the season the game is set in — League Two 55%, enforced by refusing to register
 the player rather than by a points deduction. Clubs sit at 16–44%, so it only
 bites if you go looking for it.
+
+### Cycle 13 — commercial income climbs the way it really climbs
+
+Open finding 3, measured properly rather than left with a note. The
+sponsorship model is linear in reputation, and real commercial revenue is
+nothing like linear: a global brand sells shirts in Asia and a good mid-table
+side sells them in one town.
+
+Against published 2023/24 figures:
+
+| club | model | real | ratio |
+| --- | ---: | ---: | ---: |
+| Arsenal | £216M | £218M | 0.99 |
+| Chelsea | £192M | £211M | 0.91 |
+| Newcastle | £151M | £90M | 1.68 |
+| Palace | £133M | £40M | 3.33 |
+| Brighton | £139M | £27M | 5.15 |
+| Bournemouth | £127M | £24M | 5.29 |
+
+**Top-to-bottom spread: 2.5× in the model against 14.3× in reality.** So the
+top of the division was already right and everything under it was three to five
+times too generous.
+
+The fix places a club between its division's published reputation floor and
+ceiling and raises that to a power, anchored so the biggest club is worth
+exactly what it was worth before. It is written against `LEAGUES[div].repTop`
+and `repBot` rather than against any division by name, so it follows the pyramid
+work.
+
+After — median ratio **0.99**, spread **14.2×** against a real 14.3×:
+
+| club | model | real | ratio |
+| --- | ---: | ---: | ---: |
+| Arsenal | £213M | £218M | 0.98 |
+| Newcastle | £89M | £90M | 0.99 |
+| Palace | £40M | £40M | 1.00 |
+| Bournemouth | £36M | £24M | 1.50 |
+| smallest | £15M | ~£15–18M | — |
+
+**And what the measurement caught.** My first version applied the curve to every
+division. A regression test failed with *"L2/bot (Barnet) loses £205K a year
+before the manager does anything"*, two more failed because National League
+sponsorship rounded to zero, and a fourth failed because a built club's owner
+was now covering a loss it should not have had. The power law is a global-brand
+effect: it belongs in a top flight and nowhere else. Below tier one the old
+straight line stands, which is what cycle 2 measured and calibrated.
+
+One more thing that fell out of it: `ownerCash` covered **120%** of a shortfall,
+so a club running at a loss gained a fifth of it as surplus every year — the
+same hoard cycle 11 was written to stop, in miniature. It covers the loss
+exactly now.
+
+### Cycle 12 — the four defects I had logged and not fixed
+
+All four were in my own "found but not fixed" list. None of them is dramatic;
+all four were things I had written down and walked past.
+
+**1. The morale drip was still Premier-League-shaped.** The *complaint mail* is
+gated on a third of the season — that was the user's request and it works. The
+silent drip underneath it was not: `weeklyTraining` takes 2.4 morale a week off
+anybody below his role's share from the **fifth match**, so a player was being
+quietly ground down for weeks before he was allowed to say anything about it,
+and five matches is a different fraction of a 46-game season than of a 38-game
+one. The drip is now reversed — exactly, by the amount it actually took, so
+nothing else that moves morale in the same tick is disturbed — until the same
+gate opens. A fringe player still never drips at all; his role does not promise
+him minutes, which was the point of deriving roles from squad rank.
+
+**2. Nobody outside your own division had ever served a suspension.**
+`simFixture` sends anything that is not a cup tie and not one of the divisions
+the real engine runs to `fastSim`, which accrues appearances, goals, assists,
+ratings, clean sheets and injuries — and no cards at all. Measured over thirty
+matchdays:
+
+| division | model | bookings a match | players suspended |
+| --- | --- | ---: | ---: |
+| Premier League | real engine | 5.07 | 10 |
+| Championship | real engine | 4.22 | 8 |
+| League One | fast model | 0.39 | **0** |
+| League Two | fast model | 0.33 | **0** |
+| National League | fast model | 0.19 | **0** |
+
+The handful below the top two are from cup ties, which always get the real
+engine. So the club you are chasing for promotion never lost a man to a ban, and
+a player you scouted two divisions down had a blank disciplinary record whatever
+kind of footballer he was. Bookings are accrued at the engine's own rate now,
+under the engine's own rules — one match for a fifth booking, one for two
+yellows in a game, two for a straight red — seeded from the fixture so it is
+deterministic. After: 4.19 to 4.95 a match in every division, and suspensions
+everywhere.
+
+**3. `ACTIONS.roleTalk` was about the wrong player.** It resolved with
+`players.find(x => x._pending)` — the *first* flagged player, not the one the
+message named. Unreachable in a new career because the unrest layer replaced the
+mail that raised it, but an old save can still be carrying one. It reads the name
+off the message now.
+
+**4. `interestScore` saturated before my correction could land.** The division
+fix took the old league-position term back out of the finished score and added
+the right one — but the function it wraps clamps to 0–100 before returning, so on
+a score that had already saturated the correction was absorbed and the division
+was silently ignored again. The term is neutralised at source instead: `leaguePos`
+is the only thing the original reads to compute it, so it is fed a neutral
+position for the duration of the call and nothing needs unpicking afterwards.
+
+### Cycle 11 — the owner was wiring the wage ceiling in cash
+
+Going back to verify the built-club climb — the user's headline mode — turned up
+the third money leak in as many days, and this one was mine too.
+
+A club you build with the **generous** chairman had **£410,000,000** in the bank
+after six seasons in the National League. Traced to thirteen payments a season
+of **£1,733,764** each — £22.5M a year — from `ownerFunding`.
+
+**What that number is for.** Below the Championship the wage cap is a share of
+turnover, so a chairman who sets a £1M-a-week ceiling has to underwrite enough
+*turnover* for his own ceiling to be legal. That is right, and it is why a
+bankrolled non-league club can field a squad its division could not otherwise
+afford. It is a **guarantee** — the same thing a real parent-company guarantee
+is, and leagues accept them.
+
+**What went wrong** is that the same number was also paid into the bank as cash,
+every month, whether the club needed it or not. An owner covers what the club
+loses; he does not wire you the wage ceiling and leave it sitting in the account.
+
+The two ideas are now separate:
+
+| | what it is | where it is used |
+| --- | --- | --- |
+| `ownerUnderwrite(c)` | the guarantee | the SCMP turnover test, so the ceiling stays legal |
+| `guaranteedTurnover(c)` | base revenue plus the guarantee | what the wage cap is measured against |
+| `ownerCash(c)` | 120% of an actual shortfall, capped by the guarantee | the bank, and the owner line in the accounts |
+
+Run the club at a profit and he pays in nothing, which is the point of him.
+
+Measured on the same career: bank over six National League seasons went from
+**£4.5M → £410M** to **£4.5M → £14.4M**, budget held at the chairman's £9.7M,
+squad improved 53.8 → 56.3, wage ceiling unchanged at roughly £1M a week, and
+the SCMP position still passes — the ceiling is still legal, because the
+guarantee is still there.
+
+**On the climb itself.** With no manager intervention at all — no team picked,
+not a penny of the £9M budget spent — the built club finished 3rd of 24 in the
+National League, where two go up. That is a floor rather than a verdict: it says
+the resources are right (budget ranked 1st of 24, the wage ceiling far beyond
+the division) and the money no longer explodes. What a human does with £9M in
+that division is the part a soak cannot measure.
 
 ### Cycle 10 — the sponsorship bug, found by a ten-season soak
 
@@ -822,14 +969,14 @@ League club going up to League Two appears to bank £8M. **I did not run this** 
 my probe did not actually trigger a promotion — so treat it as a code reading
 until somebody sits a season out and watches it.
 
-### 3. Commercial income is too flat across the Premier League
+### 3. ~~Commercial income is too flat across the Premier League~~ — FIXED in cycle 13
 
-The sponsorship-deals system is excellent at the very top — Arsenal £216M against
-a real £218M — and too generous in the middle, because it is linear in reputation
-and real commercial revenue is nothing like linear. Crystal Palace is modelled at
-£133M against a real ~£40M. I left it alone: it errs towards the user having
-money, which is the direction you asked for, and fixing it properly means
-deciding what reputation is supposed to mean rather than adjusting a constant.
+Was: linear in reputation, so the top of the Premier League was right and
+everything under it was three to five times too generous — a 2.5× top-to-bottom
+spread against a real 14.3×. Now a power curve anchored on the division's
+biggest club, measured at a median ratio of 0.99 and a spread of 14.2×. Top
+flights only: applying it down the pyramid put the smallest League Two club into
+a £205K annual loss, which a regression test caught.
 
 ### 4. A goal bonus cannot help you close a deal below the Championship
 
@@ -840,7 +987,7 @@ is worth. I could not patch it without re-implementing the whole acceptance
 score, which is your call not mine. The main acceptance path (meet the asking
 wage) is unaffected, so it is a dead lever rather than a broken one.
 
-### 5. The morale drip is still Premier-League-shaped
+### 5. ~~The morale drip is still Premier-League-shaped~~ — FIXED in cycle 12
 
 `red-devil-manager.html:5180`: nothing until five matches, then −2.4 morale a week
 for anyone below `role share − 0.22`. My derived roles largely defused it — a
@@ -849,14 +996,21 @@ for sitting out August — but the trigger is still a fixed five matches and a
 fixed constant. If you want it consistent with the unrest gate it should be the
 same fraction of the season.
 
-### 6. Nobody outside your own country's top two tiers is ever suspended
+### 6. ~~Nobody outside your own country's top two tiers is ever suspended~~ — FIXED in cycle 12
 
 `simFixture` (`red-devil-manager.html:17970`) sends anything that is not a cup tie
 or `fullSimDiv` to `fastSim`, which produces no cards, so no bans. Tables and
 results are unaffected; it just means discipline exists in your corner of the
 world and nowhere else. Probably fine, possibly not once somebody manages abroad.
 
-### 8. `interestScore` saturates before I can correct it
+### 7. ~~Dead code worth deleting when you are next in that block~~ — FIXED in cycle 12
+
+`ACTIONS.roleTalk` (`red-devil-manager.html:5187`) still resolves its player with
+`my.players.find(x => x._pending)` — the *first* flagged player, not the one the
+message was about. It can no longer be reached (I stopped that mail being raised
+and the old ones are closed on load), but it should go rather than sit there
+looking correct.
+### 8. ~~`interestScore` saturates before I can correct it~~ — FIXED in cycle 12
 
 `src/interactions.js` corrects the league-position term by subtracting what the
 original added and adding what the division actually deserves. The original
@@ -874,13 +1028,6 @@ best three players in July. A promoted side is asked for the same finish as a
 club that has been in the division a decade. This is a design question rather
 than a defect, and it is Claude's.
 
-### 7. Dead code worth deleting when you are next in that block
-
-`ACTIONS.roleTalk` (`red-devil-manager.html:5187`) still resolves its player with
-`my.players.find(x => x._pending)` — the *first* flagged player, not the one the
-message was about. It can no longer be reached (I stopped that mail being raised
-and the old ones are closed on load), but it should go rather than sit there
-looking correct.
 
 ---
 

@@ -4,6 +4,43 @@
 
 ### Fixed
 
+- **Commercial income across the Premier League now climbs the way it really climbs.**
+  The sponsorship model was linear in reputation, so the giants were right — Arsenal
+  £216M against a real £218M — and everything under them was three to five times too
+  generous: Crystal Palace £133M against a real £40M, Bournemouth £127M against £24M.
+  Top-to-bottom spread was 2.5x where reality is 14.3x. A club is now placed between its
+  division's reputation floor and ceiling on a curve, anchored so the biggest club is
+  worth exactly what it was before. Measured after: median ratio 0.99, spread 14.2x. It
+  applies to top flights only — a global-brand effect does not belong in League Two,
+  where applying it put the smallest club into an annual loss.
+
+- **Nobody outside your own division had ever served a suspension.** Matches the real
+  engine does not run accrue appearances, goals, assists, ratings and injuries — and no
+  cards. Measured over thirty matchdays: 5.07 bookings a match and 10 suspensions in the
+  Premier League, 0.39 and none in League One, 0.19 and none in the National League. So
+  the club you were chasing for promotion never lost a man to a ban, and a player scouted
+  two divisions down had a blank disciplinary record whatever kind of footballer he was.
+  Bookings now accrue at the engine's own rate under the engine's own rules, everywhere.
+
+- Fixed a player quietly losing morale for not playing weeks before he was allowed to
+  complain about it. The complaint is gated on a third of the season; the morale drain
+  underneath it started at a flat five matches, which is a different fraction of a
+  46-game season than of a 38-game one. Both now open together.
+
+- Fixed a conversation about one player cheering up a different one — the reply resolved
+  the first flagged player in the squad rather than the one the message named.
+
+- **A club you build was being wired its wage ceiling in cash every month.** With the
+  generous chairman it held £410,000,000 after six seasons in the National League —
+  thirteen payments a season of £1,733,764 it had no use for. The owner of a club you
+  build underwrites enough turnover for his wage ceiling to be legal under the wage cap,
+  which is right and is why a bankrolled non-league club can field a squad its division
+  could not otherwise afford. But that guarantee was also being paid in as money. The
+  guarantee and the cash are now separate things: the ceiling is still measured against
+  the turnover he guarantees, and what he actually pays in is what the club actually
+  loses. Run it at a profit and he pays nothing. Same career, same chairman, same wage
+  ceiling: the bank now goes from £4.5M to £14.4M over six seasons instead of £410M.
+
 - **Every career started at a club other than Manchester United was drawing
   Manchester United's sponsorship money.** Found by tracing every change to a club's
   bank balance across a season. Start a career at a National League club — £348,000 in

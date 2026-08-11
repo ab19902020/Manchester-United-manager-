@@ -2,12 +2,12 @@
           fmtM, fmtW, fmtDateShort, valueFor, clubTier, fixturesOn, tiesOn,
           LEAGUES, leaguesOf, divMembers, gamesPlayed, formAvg, expectedWage,
           loanStanding, blockingMails, closeMail, openModal, closeModal,
-          mailFrom, mailPriority, freezeMailOrder, unreadMails,
+          mailFrom, mailPriority, freezeMailOrder, unreadMails, mulberry, hashStr,
           roleLabel, SQUAD_ROLES, MAIL_ICON, MatchSim, WEEKS_IN_YEAR */
 /* global openContractSheet:writable, loanTerms:writable, loanFeeFor:writable,
           rumourMill:writable, dailyTickCore:writable, weeklyTraining:writable,
           renderMailbox:writable, mailListFresh:writable, mailList:writable, roleOf:writable,
-          loadSlot:writable, newGame:writable */
+          loadSlot:writable, newGame:writable, fastSim:writable */
 
 /* =====================================================================
    GAMEPLAY BALANCE — six things the game got wrong away from the pitch
@@ -316,14 +316,47 @@
      it was, and takes only the mail away from it. */
   if (has(weeklyTraining)) {
     const previousWeekly = weeklyTraining;
+    /* The complaint mail is gated on a third of the season. The silent
+       morale drip underneath it was not: `weeklyTraining` takes 2.4 a week
+       off anybody below his role's share from the fifth match onwards, so
+       a player was being quietly ground down for weeks before he was
+       allowed to say anything about it — and five matches is a different
+       fraction of a 46-game season than of a 38-game one. The drip is
+       reversed, exactly, until the same gate opens. */
+    function wouldDrip(p) {
+      return guard('drip.test', () => {
+        if (p.loan || p.youth || p.injury) return false;
+        const roles = (typeof SQUAD_ROLES !== 'undefined') ? SQUAD_ROLES : null;
+        if (!roles) return false;
+        const c = myClub();
+        const played = Math.max(1, (c.players || []).reduce((n, x) => Math.max(n, (x.stats && x.stats.apps) || 0), 0));
+        const row = roles.find((r) => r[0] === roleOf(p)) || roles[2];
+        const want = row[2];
+        return ((p.stats && p.stats.apps) || 0) / played < want - 0.22;
+      }, false)();
+    }
+
     weeklyTraining = function weeklyTrainingBalanced() {
       const c = myClub();
       const marked = [];
       if (c) (c.players || []).forEach((p) => { if (!p._pending) { p._pending = true; marked.push(p); } });
+
+      const early = guard('drip.gate', () => gamesPlayed(G.my) < Math.ceil(seasonMatches() * UNREST_SEASON_OPENS), false)();
+      const owed = [];
+      if (early && c) {
+        (c.players || []).forEach((p) => {
+          if (!wouldDrip(p)) return;
+          const before = p.morale == null ? 60 : p.morale;
+          owed.push([p, before - clamp(before - 2.4, 1, 100)]);
+        });
+      }
+
       try {
         return previousWeekly.apply(this, arguments);
       } finally {
         marked.forEach((p) => { p._pending = false; });
+        /* give back exactly what the drip took, and nothing else */
+        owed.forEach(([p, taken]) => { if (taken > 0) p.morale = clamp(p.morale + taken, 1, 100); });
         guard('unrest.weekly', () => { stampArrivals(); settlePromises(); raiseUnrest(); })();
       }
     };
@@ -858,6 +891,119 @@
     ACTIONS.mailbox = function mailboxOpened() {
       UI.mailFilter = 'all';
       return previousOpen.apply(this, arguments);
+    };
+  }
+
+  /* ===================================================================
+     8. DISCIPLINE EXISTS OUTSIDE YOUR OWN DIVISION
+     ===================================================================
+     `simFixture` sends anything that is not a cup tie and not one of the
+     divisions the real engine runs to `fastSim`, which accrues
+     appearances, goals, assists, ratings, clean sheets and injuries — and
+     no cards at all. Measured over thirty matchdays:
+
+         Premier League   5.07 bookings a match, 10 players suspended
+         Championship     4.22 a match,           8 suspended
+         League One       0.39 a match,           0 suspended
+         League Two       0.33 a match,           0 suspended
+         National League  0.19 a match,           0 suspended
+
+     The handful below the top two come from cup ties, which always get
+     the real engine. Nobody outside your own corner of the world has ever
+     served a suspension: the club you are chasing for promotion never
+     loses a man to a ban, and a player you scout from two divisions down
+     has a blank disciplinary record whatever kind of footballer he is.
+
+     Bookings are accrued at the rate the real engine produces, using the
+     same rules the real engine applies — one match for a fifth booking,
+     one for two yellows in a game, two for a straight red. It is seeded
+     from the fixture, so it is deterministic and reproducible, and it
+     touches nothing the match model owns.
+     =================================================================== */
+  const FAST_YELLOWS = 4.4;              /* matched to the engine's own rate */
+  const FAST_RED = 0.055;
+
+  function fastRng(fix) {
+    const seed = `fscards|${fix.h}|${fix.a}|${fix.day}|${G.season}|${fix.r || 0}`;
+    return (has(mulberry) && has(hashStr)) ? mulberry(hashStr(seed)) : Math.random;
+  }
+
+  function bookSide(club, n, rng) {
+    const xi = (club.players || [])
+      .filter((p) => !p.youth && !p.loan && !(p.injury && p.injury.days > 0))
+      .sort((a, b) => b.ovr - a.ovr)
+      .slice(0, 11);
+    if (!xi.length) return;
+    const booked = new Set();
+    for (let i = 0; i < n; i += 1) {
+      /* a midfielder who tackles collects more of them than a winger */
+      const p = xi[Math.floor(rng() * xi.length)];
+      if (!p) continue;
+      p.seasonYellows = (p.seasonYellows || 0) + 1;
+      if (booked.has(p)) {
+        /* two in a game is a sending off, and one match */
+        p.susp = Math.max(p.susp || 0, 1);
+        p.suspDay = G.day;
+      } else booked.add(p);
+      if (p.seasonYellows % 5 === 0) {
+        p.susp = Math.max(p.susp || 0, 1);
+        p.suspDay = G.day;
+      }
+    }
+    if (rng() < FAST_RED) {
+      const p = xi[Math.floor(rng() * xi.length)];
+      if (p) { p.susp = Math.max(p.susp || 0, 2); p.suspDay = G.day; }
+    }
+  }
+
+  if (has(fastSim)) {
+    const previousFast = fastSim;
+    fastSim = function fastSimWithDiscipline(fix) {
+      const r = previousFast.apply(this, arguments);
+      guard('fast.cards', () => {
+        const H = G.clubs[fix.h];
+        const A = G.clubs[fix.a];
+        if (!H || !A) return;
+        const rng = fastRng(fix);
+        /* split the match's bookings between the two sides */
+        const total = Math.max(0, Math.round(FAST_YELLOWS + (rng() - 0.5) * 3));
+        const home = Math.round(total * (0.42 + rng() * 0.16));
+        bookSide(H, home, rng);
+        bookSide(A, Math.max(0, total - home), rng);
+      })();
+      return r;
+    };
+  }
+
+  /* ===================================================================
+     9. A CONVERSATION WITH THE RIGHT PLAYER
+     ===================================================================
+     `ACTIONS.roleTalk` resolved its player with `players.find(x =>
+     x._pending)` — the FIRST flagged player, not the one the message was
+     about. The mail that raised it is no longer produced (the unrest
+     layer above replaces it), so this is unreachable in a new career, but
+     an old save can still be carrying one. It reads the name off the
+     message it was attached to now, and only falls back to the old guess
+     if there is nothing to read.
+     =================================================================== */
+  if (ACTIONS && has(ACTIONS.roleTalk)) {
+    const previousRoleTalk = ACTIONS.roleTalk;
+    ACTIONS.roleTalk = function roleTalkRightPlayer(el) {
+      guard('roletalk', () => {
+        const c = myClub();
+        if (!c || !el || !el.dataset) return;
+        const m = (G.inbox || []).filter((x) => x.id === el.dataset.mid)[0];
+        if (!m) return;
+        const name = String(m.title || '').replace(/^[^\w]*\s*/, '').replace(/\s+wants a word$/, '').trim();
+        if (!name) return;
+        const who = (c.players || []).filter((p) => p.name === name)[0];
+        if (!who) return;
+        /* the old code takes the first player carrying the flag, so make
+           sure that is the man the message names */
+        (c.players || []).forEach((p) => { if (p !== who) p._pending = false; });
+        who._pending = true;
+      })();
+      return previousRoleTalk.apply(this, arguments);
     };
   }
 

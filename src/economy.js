@@ -2,11 +2,11 @@
           LEAGUES, commercialIncome, ensureCommercial, MU, ordinal, tableRows,
           fixCtx, DIV_ORDER, ACTIONS, playerById, toast, $, loanTerms, offerById,
           CC_CHAIRS, budLimits, budOrigin, sfx, render, DIV_NAMES, myDiv,
-          SPONSOR_SLOTS, commercialPower, dealValue, mulberry, hashStr */
+          SPONSOR_SLOTS, dealValue, mulberry, hashStr */
 /* global seasonRevenue:writable, seasonCosts:writable, monthlyIncome:writable,
           applyPostMatch:writable, endSeason:writable, vFinances:writable,
           dailyTickCore:writable, normaliseReps:writable, completeSigning:writable,
-          vTransferBudget:writable, takeOverClub:writable */
+          vTransferBudget:writable, takeOverClub:writable, commercialPower:writable */
 
 /* =====================================================================
    ECONOMY — what football clubs actually earn, and what it costs them
@@ -186,6 +186,68 @@
   const COMMERCIAL_DIV = { PL: 1, EU: 1, CH: 0.30, L1: 0.10, L2: 0.05, NL: 0.025 };
   const SLOT_TOTAL = 1.692e8;  /* the four default slots at full value */
 
+  /* HOW STEEPLY COMMERCIAL MONEY CLIMBS.
+
+     The sponsorship model is linear in reputation, and real commercial
+     revenue is nothing like linear — a global brand sells shirts in Asia
+     and a good mid-table side sells them in one town. Measured across the
+     Premier League against published 2023/24 figures:
+
+         Arsenal    £216M model / £218M real   0.99
+         Chelsea    £192M / £211M              0.91
+         Palace     £133M / £40M               3.33
+         Brighton   £139M / £27M               5.15
+         Bournemouth £127M / £24M              5.29
+
+         top-to-bottom spread: 2.5x in the model, 14.3x in reality
+
+     So the top of the division was already right and everything under it
+     was three to five times too generous. The curve below places a club
+     between its division's published reputation floor and ceiling and
+     raises that to a power, which keeps the biggest club exactly where it
+     is and lets the rest fall away the way they really do. It is written
+     against LEAGUES[div].repTop/repBot rather than against any division
+     by name, so it follows the pyramid work. */
+  const COM_CURVE = 2.8;       /* how convex; 1 is the old straight line */
+  const COM_FLOOR = 0.11;      /* what the smallest club in a division keeps regardless */
+
+  function repShape(c) {
+    const linear = (c.rep || 2000) / 11500;
+    return guard('repshape', () => {
+      const L = (typeof LEAGUES !== 'undefined' && LEAGUES[c.league]) || null;
+      /* Only in a top flight. The power law is a global-brand effect — a
+         League Two club's sponsorship is local, its range across the
+         division is nothing like fourteen to one, and the lower divisions
+         were measured and calibrated in cycle 2. Applying the curve to
+         them took the smallest League Two club to a £205K annual loss,
+         which a regression test caught before it shipped. */
+      if (!L || L.tier !== 1) return linear;
+      const top = L.repTop || 9400;
+      const bot = L.repBot || 6300;
+      if (!(top > bot)) return linear;
+      const t = clamp(((c.rep || bot) - bot) / (top - bot), 0, 1);
+      const shape = COM_FLOOR + (1 - COM_FLOOR) * Math.pow(t, COM_CURVE);
+      /* anchored on the division's biggest club, so the top of the league
+         is worth what it was worth before */
+      return (top / 11500) * shape;
+    }, linear);
+  }
+
+  /* the same curve for your own club, whose sponsorship comes from the
+     deal system rather than from the division table */
+  if (typeof commercialPower === 'function') {
+    const previousPower = commercialPower;
+    commercialPower = function commercialPowerShaped() {
+      const base = previousPower.apply(this, arguments);
+      return guard('power', () => {
+        const c = G.clubs[G.my];
+        const linear = (c.rep || 2000) / 11500;
+        if (!(linear > 0) || !(base > 0)) return base;
+        return base * (repShape(c) / linear);
+      }, base);
+    };
+  }
+
   function commercialFor(c) {
     return guard('commercial', () => {
       if (c.i === G.my && has(commercialIncome)) {
@@ -197,7 +259,7 @@
         const L = (typeof LEAGUES !== 'undefined') && LEAGUES[c.league];
         divM = L && L.tier === 1 ? clamp((L.coef || 2) / 5, 0.12, 1) : 0.08;
       }
-      return Math.round(((c.rep || 2000) / 11500) * divM * SLOT_TOTAL / 1e4) * 1e4;
+      return Math.round(repShape(c) * divM * SLOT_TOTAL / 1e4) * 1e4;
     }, 0);
   }
 
@@ -752,7 +814,15 @@
       const c = G.clubs[G.my];
       const rule = SCMP[c.league];
       if (!rule) return null;
-      const rev = has(seasonRevenue) ? seasonRevenue().total : 0;
+      /* A bankrolled club's wage ceiling is measured against the turnover
+         its owner guarantees, not only the turnover it has banked. The
+         guarantee lives in the chairman block below this one, so it is
+         looked up when the question is asked rather than when this is
+         written. */
+      const guarantee = (typeof window !== 'undefined' && window.RBSEconomy
+        && typeof window.RBSEconomy.guaranteedTurnover === 'function')
+        ? window.RBSEconomy.guaranteedTurnover(c) : 0;
+      const rev = Math.max(has(seasonRevenue) ? seasonRevenue().total : 0, guarantee);
       const costs = has(seasonCosts) ? seasonCosts() : { wages: 0, staff: 0 };
       const committed = costs.wages + (rule.coaching ? costs.staff : 0);
       const spend = committed + Math.round((extra || 0) * 52);
@@ -1077,18 +1147,51 @@
   /* The gap between what the chairman will underwrite and what the club
      earns for itself. Zero for a chairman who is not putting money in,
      which is the whole point of the Tight one. */
-  function ownerFunding(c) {
+  /* WHAT THE OWNER GUARANTEES, which is not the same as what he pays in.
+
+     A ceiling you are not allowed to spend is not a ceiling. Below the
+     Championship the wage cap is a share of turnover, so the owner has to
+     underwrite enough turnover for his own ceiling to be legal — which is
+     exactly what a bankrolled non-league club does, and why one can field
+     a squad its division could not otherwise afford. That is a guarantee
+     the league accepts, in the same way a real parent-company guarantee
+     is accepted. */
+  function ownerUnderwrite(c) {
     return guard('owner', () => {
       if (!c || !c.custom) return 0;
       anchorChairman(c);
-      /* A ceiling you are not allowed to spend is not a ceiling. Below
-         the Championship the wage cap is a share of turnover, so the
-         owner has to underwrite enough turnover for his own ceiling to
-         be legal — which is exactly what a bankrolled non-league club
-         does, and why one can field a squad its division cannot. */
       const share = NORM_SHARE[c.league] || 0.60;
       const need = chairCeiling(c) * 52 / share * 1.10;
       return Math.max(0, Math.round(need - baseRevenue(c)));
+    }, 0);
+  }
+
+  function guaranteedTurnover(c) {
+    const u = ownerUnderwrite(c);
+    return u ? baseRevenue(c) + u : 0;
+  }
+
+  /* AND WHAT HE ACTUALLY WIRES OVER.
+
+     This was the same number as the guarantee, paid into the bank every
+     month. Measured on a built National League club with the generous
+     chairman: thirteen payments of £1,733,764 — £22.5M a season it had no
+     use for — compounding to £410M by season six. An owner covers what
+     the club loses; he does not send you the wage ceiling in cash and
+     leave it sitting there. Run the club at a profit and he pays in
+     nothing, which is the point of him. */
+  function ownerCash(c) {
+    return guard('owner.cash', () => {
+      const cover = ownerUnderwrite(c);
+      if (!cover) return 0;
+      const api = E();
+      if (!api || !has(api.revenueFor) || !has(api.costsFor)) return 0;
+      const rev = api.revenueFor(c);
+      const shortfall = api.costsFor(c, rev).total - rev.total;
+      /* exactly what the club loses. At 1.2 he handed it a fifth of the
+         shortfall as surplus every year, which compounds into the same
+         hoard this was written to stop. */
+      return clamp(Math.round(shortfall), 0, cover);
     }, 0);
   }
 
@@ -1100,7 +1203,7 @@
     seasonRevenue = function seasonRevenueOwner() {
       const r = prevRev.apply(this, arguments);
       return guard('revenue.owner', () => {
-        const owner = ownerFunding(G.clubs[G.my]);
+        const owner = ownerCash(G.clubs[G.my]);
         if (!owner) return r;
         return { tv: r.tv, gate: r.gate, com: r.com, spon: r.spon, owner, total: r.total + owner };
       }, r);
@@ -1113,7 +1216,7 @@
       const r = prevInc.apply(this, arguments);
       guard('income.owner', () => {
         (G.clubs || []).forEach((c) => {
-          const owner = ownerFunding(c);
+          const owner = ownerCash(c);
           if (owner) c.bank = Math.round((c.bank || 0) + owner / 12);
         });
       });
@@ -1126,12 +1229,17 @@
     vFinances = function vFinancesOwner() {
       let h = prevFin.apply(this, arguments);
       guard('screen.owner', () => {
-        const owner = ownerFunding(G.clubs[G.my]);
-        if (!owner) return;
+        const cash = ownerCash(G.clubs[G.my]);
+        const cover = ownerUnderwrite(G.clubs[G.my]);
+        if (!cover) return;
         /* the last row of the income card, immediately before the costs
-           heading that follows it */
+           heading that follows it. The guarantee is shown as well as the
+           cash, because the guarantee is what makes the wage ceiling
+           legal and it is the more useful number of the two. */
         const row = '<div class="spread" style="padding:5px 2px;border-bottom:1px solid var(--chalk)">' +
-          '<span class="small">🤝 Owner funding</span><b class="num small">' + fmtM(owner) + '</b></div>';
+          '<span class="small">🤝 Owner funding</span><b class="num small">' + fmtM(cash) + '</b></div>' +
+          '<div class="xs faint" style="padding:0 2px 5px">Guaranteed turnover of ' + fmtM(guaranteedTurnover(G.clubs[G.my])) +
+          ' — what the ceiling on your wage bill is measured against.</div>';
         const anchor = '</div><div class="sec"><div class="t">Annual costs</div>';
         if (h.indexOf(anchor) >= 0) h = h.replace(anchor, row + anchor);
       });
@@ -1266,7 +1374,9 @@
     if (typeof window !== 'undefined' && window.RBSEconomy) {
       const api = {};
       Object.keys(window.RBSEconomy).forEach((k) => { api[k] = window.RBSEconomy[k]; });
-      api.ownerFunding = ownerFunding;
+      api.ownerUnderwrite = ownerUnderwrite;
+      api.ownerCash = ownerCash;
+      api.guaranteedTurnover = guaranteedTurnover;
       api.chairCeiling = chairCeiling;
       api.chairBudget = chairBudget;
       api.typicalBudget = typicalBudget;

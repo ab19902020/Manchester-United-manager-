@@ -264,14 +264,16 @@ test('the chairman you picked when you built the club is the chairman you keep',
       nl.wageCap = wage; nl.budget = budget; nl.bank = Math.round(budget * 0.8);
       ['chairMult','chairCap0','chairBudMult','chairBud0','chairCapAdd','chairBudAdd','scmpBase','scmpSeason'].forEach(k => { delete nl[k]; });
       dailyTickCore();                       // day one: the chairman is anchored
-      const owner = RBSEconomy.ownerFunding(nl);
+      const owner = RBSEconomy.ownerUnderwrite(nl);
+      const ownerCash = RBSEconomy.ownerCash(nl);
+      const guarantee = RBSEconomy.guaranteedTurnover(nl);
       const scmp = RBSEconomy.scmpPosition(0);
       const rev = seasonRevenue();
       nl.rep = 1878;                          // reputation drifts over a season
       normaliseReps();                        // the summer that used to overwrite him
       const promoted = (function(){ const was = nl.league; nl.league = 'L2';
         const v = RBSEconomy.chairCeiling(nl); nl.league = was; return v; })();
-      out.push({name, wage, budget, owner,
+      out.push({name, wage, budget, owner, ownerCash, guarantee,
         capAfterSummer: nl.wageCap, budgetAfterSummer: nl.budget,
         ceilingInL2: promoted, revenue: rev.total, ownerShown: rev.owner || 0,
         scmpOk: scmp ? scmp.ok : null,
@@ -298,17 +300,23 @@ test('the chairman you picked when you built the club is the chairman you keep',
     assert.equal(c.scmpOk, true, `${c.name}: a built club should not start over the wage cap`);
   });
 
-  // 4. a ceiling above what the club can earn is an owner writing
-  //    cheques, and it is shown as that rather than appearing from
-  //    nowhere. The tight chairman is not putting money in - that is
-  //    the entire point of picking him.
+  // 4. a ceiling above what the club can earn is an owner GUARANTEEING
+  //    turnover, which is what makes the ceiling legal under the wage
+  //    cap. That guarantee is not the same as cash: paying it into the
+  //    bank every month put £22.5M a season into a National League club
+  //    that had no use for it and compounded to £410M by season six.
+  //    He covers what the club loses, and nothing more.
   const tight = chairmen.find((c) => c.name === 'Tight');
   const generous = chairmen.find((c) => c.name === 'Generous');
   assert.ok(tight.owner > 1e6, 'every chairman is underwriting the wage ceiling he set');
   assert.ok(generous.owner > tight.owner * 2,
     'and the generous one is visibly bankrolling the club harder than the tight one');
-  assert.equal(generous.ownerShown, generous.owner, 'it appears in the accounts as owner funding');
-  assert.ok(generous.revenue > tight.revenue, 'so his club turns over more');
+  assert.ok(generous.guarantee > generous.revenue,
+    'the guaranteed turnover is what the wage ceiling is measured against');
+  assert.ok(generous.ownerCash <= generous.owner,
+    'the cash he actually wires cannot exceed what he has guaranteed');
+  assert.equal(generous.ownerShown, generous.ownerCash,
+    'and the accounts show the money that moves, not the guarantee');
 });
 
 test('a club you build can actually climb out of the division it starts in', async (t) => {
@@ -630,4 +638,181 @@ test('the running costs on the Finances screen actually leave the account', asyn
   })()`);
   assert.ok(consistent.gap <= Math.max(1000, consistent.ops * 0.05),
     `monthly movement should be steady, got ${consistent.first} then ${consistent.second}`);
+});
+
+/*
+ * The owner of a club you build underwrites enough turnover for his own wage
+ * ceiling to be legal. That guarantee was also being paid into the bank as
+ * cash every month — thirteen payments of £1,733,764 on a National League
+ * club with the generous chairman, £22.5M a season it had no use for,
+ * compounding to £410M by season six. An owner covers what the club loses.
+ */
+test('a club you build is funded, not showered', async (t) => {
+  const game = await createGame();
+  t.after(() => game.close());
+  await startCareer(game);
+
+  const built = game.eval(`(function(){
+    // build the club the way the creator does
+    CC.on=true;
+    CC.spec.name='Testbed FC';CC.spec.short='Testbed';CC.spec.code='TBD';
+    CC.spec.town='Testbed';CC.spec.stadium='The Ground';CC.spec.cap=2400;
+    CC.spec.chair='gen';
+    CC.pending=true;
+    newGame('__CC__');
+    const c=G.clubs[G.my];
+    return {custom:!!c.custom,div:myDiv()};
+  })()`);
+  if (!built.custom) return;             // creator path unavailable in this build
+
+  const money = game.eval(`(function(){
+    const c=G.clubs[G.my];
+    const api=window.RBSEconomy;
+    const cover=api.ownerUnderwrite(c);
+    const cash=api.ownerCash(c);
+    const guarantee=api.guaranteedTurnover(c);
+    const rev=api.revenueFor(c);
+    const costs=api.costsFor(c,rev);
+    return {cover,cash,guarantee,revenue:Math.round(rev.total),costs:Math.round(costs.total),
+      wageCap:Math.round(c.wageCap||0),budget:Math.round(c.budget)};
+  })()`);
+
+  // the guarantee is real and large — it is what makes the wage ceiling legal
+  assert.ok(money.cover > 0, 'a bankrolled club must be underwritten');
+  assert.ok(money.guarantee > money.revenue, 'the guarantee must exceed banked turnover');
+  // but the cash is only what the club actually loses, never the whole ceiling
+  assert.ok(money.cash <= money.cover, 'cash cannot exceed the guarantee');
+  const shortfall = Math.max(0, money.costs - money.revenue);
+  assert.ok(money.cash <= Math.round(shortfall * 1.2) + 1,
+    `owner paid ${money.cash} against a shortfall of ${shortfall}`);
+  // and the club still has the money it was promised to spend
+  assert.ok(money.budget > 5e6, `the generous chairman should fund a real budget, got ${money.budget}`);
+
+  // over a season the bank must not run away
+  const season = game.eval(`(function(){
+    const c=G.clubs[G.my];
+    const before=Math.round(c.bank);
+    const start=G.season;let d=0;
+    while(G.season===start&&d++<600){
+      G.sacked=false;
+      if(G.boardCall)G.boardCall=null;
+      if(G.pressCtx)G.pressCtx=null;
+      const um=fixturesOn(G.day).find(f=>!f.played&&(f.h===G.my||f.a===G.my));
+      if(um){quickSim(um);finishDayAfterMatch()}
+      else{simRestOfDay();dailyTickCore();G.day++;checkSeasonEnd()}
+    }
+    return {before,after:Math.round(c.bank)};
+  })()`);
+  assert.ok(season.after < season.before * 4,
+    `a National League season took the bank from ${season.before} to ${season.after}`);
+  assert.ok(season.after > 0, 'and it must not go bust either');
+});
+
+/* promotion never touched the sponsorship, so climbing the pyramid earned
+   nothing commercially until a contract happened to expire */
+test('going up is worth money', async (t) => {
+  const game = await createGame();
+  t.after(() => game.close());
+  await startCareer(game);
+
+  const climbed = game.eval(`(function(){
+    // drop into a National League club, then win the division outright
+    const nl=divMembers('NL');
+    newGame(G.clubs[nl[Math.floor(nl.length/2)]].key);
+    const before={div:myDiv(),commercial:Math.round(commercialIncome())};
+    const div=myDiv();
+    G.fixtures.filter(f=>f.div===div&&(f.h===G.my||f.a===G.my)).forEach(f=>{
+      if(f.h===G.my){f.hs=5;f.as=0}else{f.hs=0;f.as=5}
+    });
+    let d=0;
+    while(G.season===1&&d++<600){
+      G.sacked=false;
+      if(G.boardCall)G.boardCall=null;
+      if(G.pressCtx)G.pressCtx=null;
+      const um=fixturesOn(G.day).find(f=>!f.played&&(f.h===G.my||f.a===G.my));
+      if(um){quickSim(um);finishDayAfterMatch()}
+      else{simRestOfDay();dailyTickCore();G.day++;checkSeasonEnd()}
+    }
+    return {before,after:{div:myDiv(),commercial:Math.round(commercialIncome())},
+      honours:(G.honours||[]).map(h=>h.comp)};
+  })()`);
+
+  if (climbed.after.div === climbed.before.div) {
+    // the blind sim did not go up; the revaluation is still checked directly
+    const direct = game.eval(`(function(){
+      const before=Math.round(commercialIncome());
+      const c=G.clubs[G.my];
+      c.league='CH';
+      G.deals=null;
+      if(typeof ensureCommercial==='function')ensureCommercial();
+      return {before,after:Math.round(commercialIncome())};
+    })()`);
+    assert.ok(direct.after > direct.before * 2,
+      `a Championship club should out-earn a National League one, ${direct.before} -> ${direct.after}`);
+    return;
+  }
+
+  assert.ok(climbed.after.commercial > climbed.before.commercial,
+    `promotion left commercial income at ${climbed.after.commercial}`);
+});
+
+/*
+ * The sponsorship model was linear in reputation and real commercial revenue
+ * is nothing like linear — a global brand sells shirts in Asia, a good
+ * mid-table side sells them in one town. Measured against published 2023/24
+ * figures the top of the Premier League was already right (Arsenal £216M
+ * model / £218M real) and everything under it was three to five times too
+ * generous (Bournemouth £127M / £24M), giving a top-to-bottom spread of 2.5x
+ * against a real 14.3x.
+ */
+test('commercial income climbs the way it really climbs', async (t) => {
+  const game = await createGame();
+  t.after(() => game.close());
+  await startCareer(game);
+
+  const pl = game.eval(`(function(){
+    const saved=G.my, savedDeals=G.deals;
+    const out=divMembers('PL').map(i=>{
+      G.my=i; G.deals=null;
+      if(typeof ensureCommercial==='function')ensureCommercial();
+      return {club:G.clubs[i].short,rep:G.clubs[i].rep,com:Math.round(commercialIncome())};
+    }).sort((a,b)=>b.com-a.com);
+    G.my=saved; G.deals=savedDeals;
+    return out;
+  })()`);
+
+  const top = pl[0];
+  const bottom = pl[pl.length - 1];
+  // the giants were right and must stay right
+  assert.ok(top.com > 1.7e8 && top.com < 2.6e8,
+    `the biggest club should draw around £200M, got £${Math.round(top.com / 1e6)}M`);
+  // and the spread should look like the real one rather than flat
+  const spread = top.com / bottom.com;
+  assert.ok(spread > 8, `top-to-bottom spread is only ${spread.toFixed(1)}x — it was 2.5x and reality is 14.3x`);
+  assert.ok(spread < 22, `top-to-bottom spread of ${spread.toFixed(1)}x is steeper than reality`);
+  // nobody in the top flight is on non-league money
+  assert.ok(bottom.com > 8e6,
+    `the smallest Premier League club draws only £${Math.round(bottom.com / 1e6)}M`);
+  // it must stay monotonic in reputation
+  for (let i = 1; i < pl.length; i += 1) {
+    assert.ok(pl[i].com <= pl[i - 1].com + 1, 'a smaller club must not out-earn a bigger one');
+  }
+
+  // the curve is a top-flight effect and must not reach into the pyramid,
+  // where the lower divisions were measured and calibrated separately
+  const lower = game.eval(`(function(){
+    const out={};
+    ['CH','L1','L2','NL'].forEach(d=>{
+      const mem=divMembers(d).slice().sort((a,b)=>G.clubs[b].rep-G.clubs[a].rep);
+      const big=RBSEconomy.commercialFor(G.clubs[mem[0]]);
+      const small=RBSEconomy.commercialFor(G.clubs[mem[mem.length-1]]);
+      out[d]={big:Math.round(big),small:Math.round(small),spread:small>0?big/small:0};
+    });
+    return out;
+  })()`);
+  ['CH', 'L1', 'L2', 'NL'].forEach((d) => {
+    assert.ok(lower[d].small > 0, `${d} clubs must still have commercial income`);
+    assert.ok(lower[d].spread < 6,
+      `${d} spread is ${lower[d].spread.toFixed(1)}x — the power law is a top-flight effect`);
+  });
 });
