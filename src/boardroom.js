@@ -986,6 +986,16 @@
           t.txt = 'go up out of ' + name + ' (' + (s.up === 1 ? 'the one automatic place' : 'the top ' + s.up) + ')';
         } else if (s && !s.hasEurope) t.txt = 'finish ' + ordinal(t.pos) + ' or better in ' + name;
         else t.txt = 'finish ' + ordinal(t.pos) + ' or better';
+
+        /* And why it is that number rather than simply where this club
+           usually finishes. The expectation reads the squad you can
+           actually put out, so selling your best three moves it — and a
+           board that quietly moves the target without saying so is worse
+           than one that never moved it at all. */
+        const why = (window.RBSInteractions && typeof window.RBSInteractions.expectWhy === 'function')
+          ? window.RBSInteractions.expectWhy(G.my) : '';
+        t.why = why || '';
+        if (why) t.txt += ' — ' + why;
       });
       return t;
     };

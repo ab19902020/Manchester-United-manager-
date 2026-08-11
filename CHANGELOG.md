@@ -4,6 +4,15 @@
 
 ### Fixed
 
+- **The board's target now reads the squad you can actually put out.** It ranked a
+  division on reputation alone, and reputation does not move when you sell people:
+  Manchester United sold Bruno Fernandes, Matthijs de Ligt and Bryan Mbeumo in one
+  window — the top sixteen dropped from 85.2 to 83.7 — and the board still asked for
+  5th, not one place different. The expectation is now half the club's standing and half
+  its playing squad, bounded so it responds without collapsing, and it eases faster than
+  it tightens so nobody's day-one target got harder. The board also says why: "finish 6th
+  or better — the squad is a little lighter than the badge suggests".
+
 - **The academy you pay for now does something.** Measured over four hundred generated
   intakes: Manchester United at academy level 1 produced a mean potential of 85.2, and at
   level 5 it produced 85.8. Five levels of investment, worth 0.6. The bonus lived in a

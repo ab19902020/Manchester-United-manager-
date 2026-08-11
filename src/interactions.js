@@ -170,15 +170,113 @@
      board expects 24th or better". No board asks a club to finish last.
      The floor is the last safe position where relegation exists.
      ------------------------------------------------------------------- */
+  /* THE SQUAD YOU ACTUALLY HAVE.
+
+     `expectPos` ranks a division by reputation, and reputation does not
+     move when you sell people. Measured: Manchester United sold Bruno
+     Fernandes, Matthijs de Ligt and Bryan Mbeumo in one window — the top
+     sixteen dropped from 85.2 to 83.7 — and the board still asked for
+     <b>5th</b>. Not one place. The same blindness covers an injury crisis
+     and a promoted side that never strengthened.
+
+     (Promotion itself was already handled and did not need touching: a
+     promoted club carries a low reputation into its new division, so
+     Ipswich, Coventry and Hull all sit on the floor of 17th in the
+     Premier League. Worth saying, because I had it on the open list as a
+     defect and it is not one.)
+
+     So the expectation is now half what the club is and half what it can
+     put out, and bounded so it can move a few places rather than
+     collapse — a board that halves its demands the moment you sell
+     somebody is as wrong as one that never notices. */
+  const SQUAD_WEIGHT = 0.5;    /* how much of the expectation is the squad, not the badge */
+  const EXPECT_SWING = 5;      /* most places the squad may move it from reputation */
+  /* A board notices a weakened squad faster than it rewards a strengthened
+     one. Symmetric weighting also moved the default Manchester United
+     target from 5th to 3rd before the manager had done anything, which is
+     a difficulty change nobody asked for; this keeps the response to
+     selling your best players while leaving day one roughly where it was. */
+  const HARDEN = 0.4;
+
+  function squadRating(c) {
+    const list = (c.players || [])
+      .filter((p) => p && !p.youth && !p.loan)
+      .map((p) => p.ovr || 0)
+      .sort((a, b) => b - a);
+    if (!list.length) return 0;
+    const n = Math.min(16, list.length);
+    let total = 0;
+    for (let i = 0; i < n; i += 1) total += list[i];
+    return total / n;
+  }
+
+  let EXPECT_CACHE = {};
+  let expectKey = '';
+
+  function expectationTable(div) {
+    const key = `${G.season}|${G.day}|${(G.clubs || []).length}`;
+    if (expectKey !== key) { EXPECT_CACHE = {}; expectKey = key; }
+    if (EXPECT_CACHE[div]) return EXPECT_CACHE[div];
+
+    const mem = (divMembers(div) || []).slice();
+    const s = divShape(div);
+    const byRep = mem.slice().sort((a, b) => (G.clubs[b].rep || 0) - (G.clubs[a].rep || 0));
+    const bySquad = mem.slice().sort((a, b) => squadRating(G.clubs[b]) - squadRating(G.clubs[a]));
+    const repRank = {};
+    const squadRank = {};
+    byRep.forEach((i, ix) => { repRank[i] = ix; });
+    bySquad.forEach((i, ix) => { squadRank[i] = ix; });
+
+    const blended = mem.slice().sort((a, b) => {
+      const sa = repRank[a] * (1 - SQUAD_WEIGHT) + squadRank[a] * SQUAD_WEIGHT;
+      const sb = repRank[b] * (1 - SQUAD_WEIGHT) + squadRank[b] * SQUAD_WEIGHT;
+      return sa - sb || repRank[a] - repRank[b];
+    });
+
+    const out = {};
+    blended.forEach((i, ix) => {
+      /* the original's "+2" slack, kept */
+      const fromSquad = Math.min(mem.length, ix + 2);
+      const fromRep = Math.min(mem.length, repRank[i] + 2);
+      const move = fromSquad - fromRep;
+      const eased = fromRep + move * (move > 0 ? 1 : HARDEN);
+      const bounded = clamp(eased, fromRep - EXPECT_SWING, fromRep + EXPECT_SWING);
+      out[i] = { pos: clamp(Math.round(bounded), 1, s.floor), rep: clamp(fromRep, 1, s.floor) };
+    });
+    EXPECT_CACHE[div] = out;
+    return out;
+  }
+
+  /* why this club's target is not simply its reputation rank */
+  function expectWhy(ci) {
+    return guard('why', () => {
+      const c = (G.clubs || [])[ci];
+      if (!c) return '';
+      const row = expectationTable(c.league)[ci];
+      if (!row) return '';
+      const moved = row.pos - row.rep;
+      if (moved >= 3) return 'the squad is short of what this club usually puts out';
+      if (moved >= 1) return 'the squad is a little lighter than the badge suggests';
+      if (moved <= -3) return 'the squad is a good deal stronger than this club\u2019s standing';
+      if (moved <= -1) return 'the squad is stronger than the badge suggests';
+      return '';
+    }, '');
+  }
+
   if (has(expectPos)) {
     const previousExpect = expectPos;
-    expectPos = function expectPosWithFloor(ci) {
+    expectPos = function expectPosBySquad(ci) {
       const raw = previousExpect.apply(this, arguments);
       return guard('expect', () => {
         const club = (G.clubs || [])[ci];
         if (!club) return raw;
         const s = divShape(club.league);
-        return clamp(Math.round(raw), 1, s.floor);
+        /* a takeover that promises the title overrides everything, and the
+           layer under this one signals it by returning 1 */
+        if (raw === 1) return 1;
+        const row = expectationTable(club.league)[ci];
+        if (!row) return clamp(Math.round(raw), 1, s.floor);
+        return row.pos;
       }, raw);
     };
   }
@@ -915,6 +1013,7 @@
   try {
     window.RBSInteractions = Object.freeze({
       divShape, zoneOf, positionTerm, levelOf, scoutVerdict, bestAtPosition, ACADEMY_STEP,
+      squadRating, expectationTable, expectWhy,
     });
   } catch (error) { /* no window */ }
 }());

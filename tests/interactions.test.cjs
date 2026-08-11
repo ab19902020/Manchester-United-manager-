@@ -498,3 +498,98 @@ test('the academy you pay for changes what comes out of it', async (t) => {
   assert.ok(intake.smallL2 > 41 && intake.smallL2 < 48,
     `level 2 at a non-league club should stay near its old 44, got ${intake.smallL2.toFixed(1)}`);
 });
+
+/*
+ * The board's target ranked a division by reputation, and reputation does not
+ * move when you sell people. Measured: Manchester United sold Bruno Fernandes,
+ * Matthijs de Ligt and Bryan Mbeumo in one window — the top sixteen dropped
+ * from 85.2 to 83.7 — and the board still asked for 5th. Not one place.
+ *
+ * (Promotion itself was already handled: a promoted club carries a low
+ * reputation into its new division, so the promoted trio all sit on the
+ * Premier League floor of 17th. That half of the finding was wrong.)
+ */
+test('the board looks at the squad you actually have', async (t) => {
+  const game = await createGame();
+  t.after(() => game.close());
+  await startCareer(game);
+
+  const stripped = game.eval(`(function(){
+    const c=G.clubs[G.my];
+    const out=[];
+    const note=(label)=>{
+      G.day+=1; G.boardObj=null;
+      out.push({label,target:expectPos(G.my),
+        squad:+RBSInteractions.squadRating(c).toFixed(1),
+        why:RBSInteractions.expectWhy(G.my),
+        txt:boardTarget().txt});
+    };
+    note('full squad');
+    [3,3,3,3].forEach((n,ix)=>{
+      const order=(c.players||[]).filter(p=>!p.youth&&!p.loan).sort((a,b)=>b.ovr-a.ovr);
+      const gone=order.slice(0,n);
+      c.players=c.players.filter(p=>gone.indexOf(p)<0);
+      note('sold the best '+((ix+1)*3));
+    });
+    return out;
+  })()`);
+
+  const full = stripped[0];
+  const last = stripped[stripped.length - 1];
+
+  // stripping the squad has to move the number
+  assert.ok(last.target > full.target,
+    `selling twelve of the best players left the target at ${full.target}`);
+  assert.ok(last.squad < full.squad, 'the probe must actually weaken the squad');
+  // and it has to be graduated rather than a cliff
+  for (let i = 1; i < stripped.length; i += 1) {
+    assert.ok(stripped[i].target >= stripped[i - 1].target,
+      'the target must not tighten as the squad is stripped');
+  }
+  // it must not collapse either — a board does not halve its demands
+  assert.ok(last.target - full.target <= 6,
+    `the target moved ${last.target - full.target} places, which is a collapse rather than a response`);
+  // and the board has to say why, rather than moving the number quietly
+  assert.ok(/lighter|short of/.test(last.why), `no explanation given: "${last.why}"`);
+  assert.ok(last.txt.indexOf(last.why) > 0, `the target text should carry it: "${last.txt}"`);
+
+  // the floor from the division shape still binds
+  const floors = game.eval(`(function(){
+    const out={};
+    ['PL','CH','L1','L2','NL'].forEach(d=>{
+      const s=RBSShape.divShape(d);
+      out[d]={floor:s.floor,worst:Math.max.apply(null,divMembers(d).map(i=>expectPos(i)))};
+    });
+    return out;
+  })()`);
+  Object.keys(floors).forEach((d) => {
+    assert.ok(floors[d].worst <= floors[d].floor,
+      `${d}: a target of ${floors[d].worst} exceeds the floor of ${floors[d].floor}`);
+  });
+});
+
+/* a promoted side is asked to survive and a relegated one to come back —
+   this was already true through reputation, and must stay true */
+test('coming up and going down still set the right kind of target', async (t) => {
+  const game = await createGame();
+  t.after(() => game.close());
+  await startCareer(game);
+
+  const ends = game.eval(`(function(){
+    const pick=(div,which)=>{
+      const mem=divMembers(div).slice().sort((a,b)=>G.clubs[b].rep-G.clubs[a].rep);
+      const i=which==='top'?mem[0]:mem[mem.length-1];
+      return {club:G.clubs[i].short,target:expectPos(i),shape:RBSShape.divShape(div)};
+    };
+    return {plBottom:pick('PL','bot'),chTop:pick('CH','top'),nlTop:pick('NL','top')};
+  })()`);
+
+  // the weakest club in the top flight is asked to stay up, not to finish 20th
+  assert.equal(ends.plBottom.target, ends.plBottom.shape.floor,
+    'a promoted side should be asked to survive');
+  // the strongest club in the division below is asked to go up
+  assert.ok(ends.chTop.target <= ends.chTop.shape.upTo + 1,
+    `a relegated giant should be asked to go back up, got ${ends.chTop.target}`);
+  assert.ok(ends.nlTop.target <= ends.nlTop.shape.upTo + 1,
+    `and the same at the bottom of the pyramid, got ${ends.nlTop.target}`);
+});

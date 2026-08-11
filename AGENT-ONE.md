@@ -1,7 +1,7 @@
 # Agent One — report to Claude
 
 **Written by:** Agent One (balance and rules) · **Read by:** Claude (director) and Codex
-**Current as of commit:** `290a104` · **Last updated:** 11 August 2026 (cycle 14)
+**Current as of commit:** `d18b152` · **Last updated:** 11 August 2026 (cycle 15)
 
 ---
 
@@ -101,6 +101,59 @@ turnover including coaching costs — that figure changed *for* 2026/27, which i
 the season the game is set in — League Two 55%, enforced by refusing to register
 the player rather than by a points deduction. Clubs sit at 16–44%, so it only
 bites if you go looking for it.
+
+### Cycle 15 — the board looks at the squad you actually have
+
+Open finding 9, and half of it turned out to be wrong.
+
+**What was real.** `expectPos` ranks a division by reputation, and reputation
+does not move when you sell people. Measured — Manchester United, one window:
+
+```text
+sold Bruno Fernandes, Matthijs de Ligt, Bryan Mbeumo
+top sixteen: 85.2 -> 83.7
+board's target: 5th -> 5th
+```
+
+Not one place. The same blindness covers an injury crisis and a promoted side
+that never strengthened.
+
+**What was not real.** I had also written that the target ignores promotion. It
+does not: a promoted club carries a low reputation into its new division, so
+Ipswich, Coventry and Hull all sit on the Premier League floor of 17th — "stay
+up", which is exactly right. I had it on the open list as a defect for two
+cycles and it never was one.
+
+**The fix.** The expectation is now half what the club *is* (reputation) and
+half what it can *put out* (the mean of the top sixteen), ranked within the
+division and bounded to five places either side of the reputation baseline —
+because a board that halves its demands the moment you sell somebody is as
+wrong as one that never notices.
+
+**Asymmetric, deliberately.** A board notices a weakened squad faster than it
+rewards a strengthened one, and symmetric weighting also moved the default
+Manchester United target from 5th to 3rd before the manager had done anything —
+a difficulty change nobody asked for. Softening applies in full; hardening at
+0.4.
+
+Measured after, stripping the same squad three players at a time:
+
+| sold | top sixteen | target | what the board says |
+| --- | ---: | ---: | --- |
+| nothing | 85.2 | 4th | the squad is stronger than the badge suggests |
+| best 3 | 83.7 | 5th | — |
+| best 6 | 82.1 | 6th | the squad is a little lighter than the badge suggests |
+| best 9 | 79.5 | 7th | the squad is a little lighter than the badge suggests |
+| best 12 | 77.7 | 9th | the squad is short of what this club usually puts out |
+
+And the ends of the pyramid still read correctly: the weakest Premier League
+club is asked to survive, the strongest Championship club to go back up, the
+strongest National League club to go up.
+
+**The board says why.** `boardTarget().txt` carries the reason — *"finish 6th or
+better — the squad is a little lighter than the badge suggests"*. A board that
+quietly moves the target without saying so is worse than one that never moved
+it.
 
 ### Cycle 14 — the audit: scouting, the dressing room, the academy
 
@@ -1093,14 +1146,16 @@ saturated at either end my correction is absorbed. It is a couple of points on a
 hundred-point scale and only at the extremes, so I left it rather than
 reimplement a function I do not own.
 
-### 9. The board's target still ignores who you actually are
+### 9. ~~The board's target still ignores who you actually are~~ — FIXED in cycle 15
 
-`expectPos()` ranks a division by reputation and hands out `index + 2`. It now
-has a sensible floor, but it still knows nothing about whether you were just
-promoted, whether you have half a squad injured, or whether the club sold its
-best three players in July. A promoted side is asked for the same finish as a
-club that has been in the division a decade. This is a design question rather
-than a defect, and it is Claude's.
+Was: `expectPos()` ranked purely on reputation, which does not move when you
+sell people — Manchester United sold three of its best and the target did not
+shift a single place. Now half reputation and half the squad you can actually
+put out, bounded to five places and asymmetric so it eases faster than it
+tightens. **Correction to my own note:** I also claimed it ignored promotion. It
+did not — a promoted club carries a low reputation into its new division and
+lands on the floor, which is "stay up". That half of the finding was wrong for
+two cycles.
 
 
 ---
@@ -1143,11 +1198,17 @@ Nothing. Everything I was asked for is in and measured.
   lies about your costs is a defect rather than a difficulty setting — but it
   makes the user's club meaningfully poorer than it was. If it bites in play, the
   honest dial is the `runs` fraction in `DIV_FIN`, not removing the debit again.
-- **Claude:** what is left on the open list is item 4 (a goal bonus cannot help
-  close a deal below the Championship — that needs the acceptance score
-  rewriting, which is yours) and item 9 (the board's target still ignores
-  promotion, injuries and who you sold in July). Both are design calls rather
-  than defects.
+- **Claude:** the only thing left on the open list is item 4 — a goal bonus
+  cannot help close a deal below the Championship, because
+  `Math.min(4, bonus/8e3*4)` is a Premier-League-sized divisor. That one needs
+  the acceptance score rewriting, which is yours.
+- **A note on my own reliability.** Item 9 said the board's target ignored
+  promotion *and* squad churn. The churn half was real and is fixed; the
+  promotion half was never true — a promoted club carries a low reputation into
+  its new division and lands on the floor, which is "stay up". I had it written
+  down as a defect for two cycles without checking. If something in this file
+  reads like an assertion rather than a measurement, treat it as a hypothesis
+  until one of us has run it.
 - **Claude, on the economy's calibration:** it is soft on the user's explicit
   instruction — everybody profitable, nobody doomed. The four numbers to move are
   `runs`, `seat`, `grant` and the division `central` figures in `src/economy.js`,
