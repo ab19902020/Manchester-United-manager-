@@ -4,6 +4,29 @@
 
 ### Added
 
+- **Two new instructions that change how goals are actually scored.** **Build-up** —
+  play out from the back, balanced, or go long — and **Final third** — work it in,
+  balanced, crosses, or through balls. Neither is a label: they change who the engine
+  puts on the end of a chance and who makes it. Measured over 70 matches a setting,
+  against the same squad:
+
+  | final third | assists from wide | scorer's heading | scorer's pace |
+  | --- | ---: | ---: | ---: |
+  | Balanced | 60.7% | 16.00 | 17.85 |
+  | Crosses | 68.8% | 16.51 | 17.71 |
+  | Through balls | 28.4% | 15.60 | 18.16 |
+  | Work it in | 32.1% | 15.95 | 17.97 |
+
+  Crossing puts the ball on the head of whoever in your side can head it; through balls
+  are slid in from the middle for whoever is quickest; working it in is patient and
+  central and makes fewer chances of higher quality. Build-up is the only instruction in
+  the game that reads what the opponent is doing — playing out against a high press is
+  how you get caught on your own eighteen-yard line, and going long is how you refuse to
+  play that game.
+
+  Opposition clubs pick both from their own squads, which gives the pyramid a shape:
+  every Premier League side plays out from the back, National League sides mostly do not.
+
 - **The attacking focus has a neutral, and a strength you can dial.** The row offered
   Left Flank, Central and Right Flank and nothing else, so every save ever played was
   committed to a channel — there was no way to say "play it wherever it is on". There is

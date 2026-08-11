@@ -123,6 +123,94 @@ test('a deliberate flank choice survives, and Strong leans twice as far as Sligh
     `Strong should lean further than Slight (${(strongGain*100).toFixed(1)} vs ${(slightGain*100).toFixed(1)}pts)`);
 });
 
+test('the final-third instruction changes who scores and who makes it', async (t) => {
+  const game = await createGame();
+  t.after(() => game.close());
+  await startCareer(game);
+
+  const run = game.eval(`(function(){
+    const WIDE = ['DL','WBL','ML','AML','DR','WBR','MR','AMR'];
+    const fix = G.fixtures.find(f => f.h===G.my || f.a===G.my);
+    const mine = fix.h===G.my ? 0 : 1;
+    const measure = (third) => {
+      G.tacs.passFocus='Balanced'; G.tacs.focusPower='Slight';
+      G.tacs.buildUp='Balanced'; G.tacs.finalThird=third;
+      let head=0, pace=0, goals=0, wideAssists=0, assists=0;
+      for (let i = 0; i < 70; i++) {
+        G.clubs.forEach(c => c.players.forEach(p => {
+          p.cond=95; p.sharp=90; p.injury=null; p.susp=0; }));
+        const f = {h:fix.h, a:fix.a, day:fix.day, div:fix.div, r:0,
+          played:false, hs:0, as:0, sc:[]};
+        const m = quickSim(f);
+        (m.sides[mine].onfield||[]).forEach(x => {
+          const a = (x.p && x.p.attrs) || {};
+          if (x.goals) { head += (a.heading||0)*x.goals; pace += (a.pace||0)*x.goals; goals += x.goals; }
+          if (x.assists) { assists += x.assists; if (WIDE.indexOf(x.slot)>=0) wideAssists += x.assists; }
+        });
+      }
+      return {goals, assists, head: head/(goals||1), pace: pace/(goals||1),
+        wide: wideAssists/(assists||1)};
+    };
+    return {base: measure('Balanced'), crosses: measure('Crosses'),
+      through: measure('Through balls'), worked: measure('Work it in')};
+  })()`);
+
+  ['base', 'crosses', 'through', 'worked'].forEach((k) => {
+    assert.ok(run[k].goals > 60, `${k}: not enough goals sampled (${run[k].goals})`);
+  });
+
+  // crossing: wingers supply it, and the men heading it in can head
+  assert.ok(run.crosses.wide > run.base.wide + 0.04,
+    `crossing should make more of the assists come from wide (${(run.crosses.wide*100).toFixed(1)}% vs ${(run.base.wide*100).toFixed(1)}%)`);
+  assert.ok(run.crosses.head > run.base.head,
+    `crossing should put the ball on better heads (${run.crosses.head.toFixed(2)} vs ${run.base.head.toFixed(2)})`);
+
+  // through balls: the opposite shape — central creators, quick finishers
+  assert.ok(run.through.wide < run.base.wide - 0.10,
+    `through balls should come from inside, not from wide (${(run.through.wide*100).toFixed(1)}% wide)`);
+  assert.ok(run.through.pace > run.base.pace,
+    `through balls should be run onto by quicker players (${run.through.pace.toFixed(2)} vs ${run.base.pace.toFixed(2)})`);
+  assert.ok(run.through.head < run.crosses.head,
+    'a through-ball side should not be scoring the same headers as a crossing one');
+
+  // and the three are genuinely different from each other, not three labels
+  assert.ok(Math.abs(run.crosses.wide - run.through.wide) > 0.2,
+    'crossing and through balls should not produce the same chances');
+});
+
+test('build-up leans the way the squad can actually play', async (t) => {
+  const game = await createGame();
+  t.after(() => game.close());
+  await startCareer(game);
+
+  const spread = game.eval(`(function(){
+    const fix = G.fixtures.find(f => f.h===G.my || f.a===G.my);
+    const m = new MatchSim({h:fix.h,a:fix.a,day:fix.day,div:fix.div,r:0,
+      played:false,hs:0,as:0,sc:[]});
+    const out = {};
+    ['PL','L2','NL'].forEach(d => {
+      const build = {}, third = {};
+      G.clubs.filter(c => c.league===d && c.i!==G.my).slice(0,14).forEach(c => {
+        const s = MatchSim.prototype._side.call(m, c.i, true);
+        build[s.tac.buildUp] = (build[s.tac.buildUp]||0)+1;
+        third[s.tac.finalThird] = (third[s.tac.finalThird]||0)+1;
+      });
+      out[d] = {build, third};
+    });
+    return out;
+  })()`);
+
+  const playOut = (d) => spread[d].build['Play out'] || 0;
+  assert.ok(playOut('PL') > playOut('NL'),
+    `Premier League sides should play out more than National League ones (${playOut('PL')} vs ${playOut('NL')})`);
+  assert.ok(Object.keys(spread.NL.build).length >= 1, 'the National League should have a plan too');
+  // and the final third is not one plan copied across the world
+  const kinds = new Set();
+  ['PL', 'L2', 'NL'].forEach((d) => Object.keys(spread[d].third).forEach((k) => kinds.add(k)));
+  assert.ok(kinds.size >= 2,
+    `every club in the world finishes the same way: ${JSON.stringify(spread)}`);
+});
+
 test('the opposition no longer all funnel through the middle', async (t) => {
   const game = await createGame();
   t.after(() => game.close());

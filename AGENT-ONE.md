@@ -106,6 +106,73 @@ the season the game is set in — League Two 55%, enforced by refusing to regist
 the player rather than by a points deduction. Clubs sit at 16–44%, so it only
 bites if you go looking for it.
 
+### Cycle 21 — build-up, the final third, and the two-engines question
+
+**The two instructions.** `Build-up` (Play out / Balanced / Go long) and
+`Final third` (Work it in / Balanced / Crosses / Through balls). Both had to
+bite in something measurable or they would be decoration, which is the one
+thing the user explicitly did not want.
+
+Build-up moves the `_im` multipliers the engine already runs on, and it is the
+only instruction in the game that reads the other bench: playing out against a
+high press costs you, going long refuses that game. That clash cannot be settled
+in `_side`, because the sides are built one at a time and the second one does not
+exist yet — it is settled once, on the first tick.
+
+The final third re-picks the creator and the shooter of each chance the engine
+builds, on the instruction, 75% of the time. Measured over 70 matches a setting
+against the same squad, reading who actually scored and who actually assisted:
+
+| final third | assists from wide | scorer's heading | scorer's pace | goals/game |
+| --- | ---: | ---: | ---: | ---: |
+| Balanced | 60.7% | 16.00 | 17.85 | 1.73 |
+| Crosses | 68.8% | 16.51 | 17.71 | 1.97 |
+| Through balls | 28.4% | 15.60 | 18.16 | 1.81 |
+| Work it in | 32.1% | 15.95 | 17.97 | 1.50 |
+
+The composition differences are the real result — a 40-point spread in where the
+assists come from is far outside the sampling noise. **I am not claiming the
+goals-per-game column.** At 70 matches and ~120 goals a cell, the difference
+between 1.73 and 1.97 is inside what I can distinguish; an earlier run of the
+same probe had Play out ahead of Go long and this one has it behind. The tests
+assert composition and deliberately do not assert goal totals.
+
+AI clubs pick both from their own squad, which gives the pyramid a shape rather
+than one plan copied everywhere:
+
+```text
+PL   build: 13 play out
+CH   build: 10 play out, 4 balanced
+L1   build:  7 play out, 7 balanced
+L2   build:  3 play out, 10 balanced, 1 go long
+NL   build: 13 balanced, 1 go long
+```
+
+**A probe that lied to me, and how.** My first measurement said the final third
+did nothing: crossing moved the wide-creator share from 49.8% to 50.6%. The
+recorder was wrapping `MatchSim.prototype.shotEvent` *after* my module had, so it
+was outermost and read the arguments before my re-pick, then handed them down. It
+was faithfully recording the decision I had just overridden. Measuring the players
+who actually finished with a goal or an assist on their name — downstream of
+everything — showed the real effect. Worth remembering: **a spy installed last
+sees the world first, which is the opposite of what you want.**
+
+**On "it shouldn't be two different engines".** It is not two engines, and that is
+worth being precise about because it changes who should fix what.
+`MU.m = new MatchSim(MU.fix)` — the match you watch *is* the simulation. One
+engine produces every result in the game. What sits on top of it is an animation
+layer (`MU.play`, `choosePass`, the dots) that improvises its own ball movement to
+have something to draw while the engine ticks. So there is one engine and one
+renderer that does not ask the engine where the ball went.
+
+The part of that which was actually causing the reported problem — the tactic
+being read in both places with different strengths — is fixed: both now resolve
+the same setting through the same function. The remaining half, making the
+animation a *rendering of engine events* so a pass you watch is a pass the engine
+recorded, is a rewrite of the renderer's ball model. That is Claude's lane and a
+much bigger job than anything in this file. I have said so to the user rather than
+starting it.
+
 ### Cycle 20 — an attacking focus with an off switch
 
 The report was "if I click attack down the centre it will only literally attack
