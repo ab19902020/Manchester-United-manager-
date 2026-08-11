@@ -31,9 +31,9 @@ where three agents will collide. So my code does not live there.
 
 Everything I write goes in **`src/gameplay-balance.js`**, **`src/economy.js`**,
 **`src/press-room.js`**, **`src/interactions.js`**, **`src/prize-money.js`**,
-**`src/playoffs.js`** and **`src/boardroom.js`**, which load after the game and
-patch it in place. The big file gets **seven `<script src>` tags and nothing
-else**. If you are merging my work and hit a conflict in that file, the
+**`src/playoffs.js`**, **`src/tactics.js`** and **`src/boardroom.js`**, which load
+after the game and patch it in place. The big file gets **eight `<script src>`
+tags and nothing else**. If you are merging my work and hit a conflict in that file, the
 resolution is always "keep both, re-add my one line".
 
 Load order matters for two of them: `interactions.js` must come after
@@ -105,6 +105,82 @@ turnover including coaching costs — that figure changed *for* 2026/27, which i
 the season the game is set in — League Two 55%, enforced by refusing to register
 the player rather than by a points deduction. Clubs sit at 16–44%, so it only
 bites if you go looking for it.
+
+### Cycle 20 — an attacking focus with an off switch
+
+The report was "if I click attack down the centre it will only literally attack
+down the centre, and there is no mixed". Both halves are true, and measuring them
+turned up two more things underneath.
+
+**1. There is no neutral, and never was.** The row offers Left Flank, Central and
+Right Flank. Every save ever played has been committed to a channel. The engines
+handle a neutral perfectly well — every focus branch is an `if/else if` chain
+with no `else`, so an unrecognised value produces no bias — the setting existed
+and could not be chosen.
+
+**2. The two engines disagree about what the setting means.** In `choosePass`,
+which drives the 2D match you watch, Central multiplies every central receiver by
+1.5 and every wide one by 0.7 — a 2.14:1 lean on *every pass of every move*.
+Compounded over a five-pass move that is about 45:1. In the simulated engine it is
+close to decorative. Measured, 80 matches per setting, chances by the channel they
+were created in:
+
+| focus | left | central | right |
+| --- | ---: | ---: | ---: |
+| Balanced | 12.3% | 49.8% | 37.9% |
+| Central | 10.6% | 52.9% | 36.4% |
+| Left Flank | 21.2% | 40.9% | 37.9% |
+| Right Flank | 12.3% | 38.5% | 49.1% |
+
+Central moves chance creation by three percentage points. So the instruction is
+overwhelming in the game you watch and almost nothing in the game that decides the
+score.
+
+**3. Every AI club in the world was hard-wired to Central.** `_side` builds the
+opposition's tactics fresh for every match with a literal `passFocus:'Central'`.
+Nobody in the game has ever played down a wing on purpose.
+
+**What I did.** Added `Balanced`, and a `Focus strength` row with `Slight` and
+`Strong`, applied to *both* engines from the same setting so what you watch and
+what you get move together. Opposition clubs pick a channel from where their best
+creator actually plays.
+
+**How, without copying the pass model.** The engines only understand three hard
+values and a strength dial needs values in between. Rather than copy 25 lines of
+pass weighting out of the 2D engine — which would rot the moment Claude touches it
+— each individual decision draws whether it is a biased one: Strong biases every
+decision, Slight biases 45% of them. That is a genuine half-strength lean built
+out of the engine's own weighting, with the engine untouched. The value goes back
+in a `finally`, so a tactic is never left changed behind the player's back.
+
+Measured after, same method:
+
+| setting | left | central | right |
+| --- | ---: | ---: | ---: |
+| Balanced | 17.6% | 65.0% | 17.4% |
+| Left Flank / Slight | 22.5% | 59.9% | 17.6% |
+| Left Flank / Strong | 27.4% | 56.9% | 15.8% |
+| Right Flank / Strong | 16.9% | 54.9% | 28.2% |
+
+Strong leans about twice as far as Slight, and the two flanks are now symmetric.
+Opposition clubs across 39 sampled: 26 Balanced, 12 Central, 1 Right Flank.
+
+**Migration.** A save sitting on Central was not choosing Central — that is where
+the game put it and nothing else was on offer — so it comes across as Balanced. A
+save on a flank was a real decision and is kept.
+
+**Still true and not fixed: Central does nothing in the simulated engine.** After
+the change it is 64.5% central at Strong against 65.0% at Balanced. The cause is
+upstream of the focus: the creator weighting gives every central slot a flat `+4`
+bonus, so central creation is already saturated at about two thirds before any
+instruction is applied. Boosting it further would need the flanks suppressed
+instead, and that is a change to the balance of the chance model rather than to
+the focus setting. Measured and logged rather than guessed at.
+
+**Lane note for Claude:** this is your match engine and I have not touched a line
+of it — `src/tactics.js` only wraps `vTactics`, `MatchSim.prototype._side`,
+`MatchSim.prototype.tickOnce` and `choosePass`, and the only thing it ever writes
+is `tac.passFocus`, restored immediately. The user asked for this directly.
 
 ### Cycle 19 — the play-offs, played
 

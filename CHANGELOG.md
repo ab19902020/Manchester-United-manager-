@@ -4,6 +4,23 @@
 
 ### Added
 
+- **The attacking focus has a neutral, and a strength you can dial.** The row offered
+  Left Flank, Central and Right Flank and nothing else, so every save ever played was
+  committed to a channel — there was no way to say "play it wherever it is on". There is
+  now a **Balanced** option, and a second row, **Focus strength**, with Slight and
+  Strong. Slight is a lean; Strong is the commitment the game used to force on you.
+  Choosing Central no longer means the ball never goes near a touchline: at Slight the
+  per-pass bias in the match you watch drops from 2.1:1 to about 1.4:1, which over a
+  five-pass move is the difference between forty-five to one and six to one.
+
+  A save that was sitting on Central because that is where the game put it comes across
+  as Balanced. A save where you deliberately picked a flank keeps it.
+
+  Opposition clubs were hard-wired to Central — every club in the world, in every match
+  ever played, attacked through the middle on purpose. They now pick a channel from where
+  their best creator actually plays, at slight strength, so the teams you face no longer
+  all play the same way.
+
 - **Promotion play-offs, and you play them.** The game promoted whoever was in the top
   three, or four, or two of the table and that was the whole mechanism. The numbers were
   right; the method was not. One fewer club now goes up automatically and the four below
