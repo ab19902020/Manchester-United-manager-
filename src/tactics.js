@@ -255,14 +255,53 @@
     return ((a.positioning || 10) + (a.decisions || 10)) / 2;
   }
 
-  /* Ability decides who the ball falls to, on top of position. */
+  /* WHY THE CREATOR IS PICKED HERE RATHER THAN LEFT TO THE ENGINE.
+
+     Choosing `Central` moved chance creation by half a percentage point —
+     64.5% against 65.0% for Balanced. The cause is upstream of the focus:
+     the engine weights a creator as `vision + 4 if central`, and six of
+     the eleven slots in a 4-2-3-1 are central, so two thirds of all
+     chances are made through the middle before any instruction is
+     applied. Multiplying an already-saturated share by 1.5 does nothing,
+     and — the real omission — nothing anywhere suppresses the flanks.
+     An instruction to play through the middle has to mean the ball goes
+     down the wings *less*, or it means nothing at all.
+
+     These are the full-strength multipliers. The Slight/Strong dial is
+     already applied before this runs, by the per-decision draw in
+     `withResolvedFocus`, so applying it again here would square it. */
+  const CHANNEL = {
+    Balanced: { left: 1, central: 1, right: 1 },
+    Central: { left: 0.4, central: 1.35, right: 0.4 },
+    'Left Flank': { left: 2.3, central: 0.8, right: 0.4 },
+    'Right Flank': { left: 0.4, central: 0.8, right: 2.3 },
+  };
+
+  function laneOf(slot) {
+    if (LEFT_SLOTS.indexOf(slot) >= 0) return 'left';
+    if (RIGHT_SLOTS.indexOf(slot) >= 0) return 'right';
+    return 'central';
+  }
+
+  function creatorPick(sim, A, exclude) {
+    const ch = CHANNEL[focusOf(A.tac)] || CHANNEL[BALANCED];
+    return sim.weighted(A, (x) => {
+      if (!x || !x.p || x.slot === 'GK') return 0.01;
+      const base = sim.effA(x, 'vision') + (isMid(x.slot) || isFwd(x.slot) ? 3 : 0);
+      return Math.max(0.05, base) * ch[laneOf(x.slot)];
+    }, exclude);
+  }
+
+  /* Ability decides who the ball falls to, on top of position; the
+     instruction decides which side of the pitch it came from. */
   function movementPick(sim, A, out) {
     return guard('movement', () => {
       const sh = sim.weighted(A, (x) => {
         if (!x || !x.p || x.slot === 'GK') return 0.01;
         return slotWeight(x.slot) * (0.5 + movementOf(x.p) / 20);
       });
-      return sh ? { shooter: sh, creator: out.creator } : out;
+      const cr = creatorPick(sim, A, sh || out.shooter);
+      return { shooter: sh || out.shooter, creator: cr || out.creator };
     }, out);
   }
 

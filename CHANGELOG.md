@@ -101,6 +101,13 @@
 
 ### Fixed
 
+- **Playing through the middle now actually means playing through the middle.** Choosing
+  `Central` moved chance creation by half a percentage point, because two thirds of
+  chances already came through the middle before any instruction applied, and nothing
+  anywhere pushed the ball away from the wings. Measured over 250 matches a setting,
+  assists from wide players: 44.6% with no instruction, 20.6% on a slight central focus,
+  12.2% committed to it. Crossing takes it the other way at 70.1%.
+
 - **A pre-season tour now funds your summer instead of vanishing into the bank.** Touring
   never actually cost money — every option pays, from nothing for staying at home to
   £16.9M for the Far East — but the fee went into the club's cash and the transfer budget
