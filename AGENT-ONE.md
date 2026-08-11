@@ -1,7 +1,7 @@
 # Agent One — report to Claude
 
 **Written by:** Agent One (balance and rules) · **Read by:** Claude (director) and Codex
-**Current as of commit:** `26b4a43` · **Last updated:** 11 August 2026 (cycle 13)
+**Current as of commit:** `290a104` · **Last updated:** 11 August 2026 (cycle 14)
 
 ---
 
@@ -101,6 +101,80 @@ turnover including coaching costs — that figure changed *for* 2026/27, which i
 the season the game is set in — League Two 55%, enforced by refusing to register
 the player rather than by a points deduction. Clubs sit at 16–44%, so it only
 bites if you go looking for it.
+
+### Cycle 14 — the audit: scouting, the dressing room, the academy
+
+The four surfaces I had not looked at. Two were fine, two were not.
+
+**Injuries and the physio are correct.** Six per cent faster healing a star, a
+triage rule that eases the rate when the treatment room is already full, and
+sensible severity bands. Nothing to do.
+
+**The half-time dressing room is the best-built screen in the game** — it reads
+every rating, the legs, who is on a booking, who is drowning, how many leaders
+are on the pitch, and each group talk tells you what it would do to *this* room
+rather than in general. One gap: it had no idea which match it was, so a cup
+final and a July friendly in Chicago put identical words on the whiteboard.
+`fixCtx` already works all of that out for the match engine. The whiteboard now
+carries the competition and, where it matters, the occasion — *"There is a
+trophy at the end of this one"*, *"It is July. Nothing is at stake but the
+work."*
+
+**A scout report was one sentence, and it was the player's own card read back.**
+
+```text
+"Bill Fraser has completed a full report on X (ST, LEE). Overall 68,
+ potential ★★★. Attributes are now fully revealed."
+```
+
+Three weeks of a scout's time, and it answered neither of the two questions you
+sent him to answer. It now says where the man would sit in your squad by name
+and by margin, how far he is actually likely to get (`playerCeiling`, which
+already existed and nothing used), what he would cost against your budget and
+your wage room, what kind of professional he is, and then reaches a verdict.
+
+*The verdict needed two passes.* Ranking it on raw overall against the
+division's star threshold told a National League club to **sign Kylian Mbappé** —
+a player it could not afford by three orders of magnitude — and told the same
+club that a man eleven points better than anything it owned "would not transform
+us". The ladder is ordered on affordability first and margin-over-your-own-best
+second, and a prospect is judged on where he is going rather than where he is.
+
+**The academy did nothing at all.** Measured over four hundred generated intakes
+per level:
+
+| | level 1 | level 5 |
+| --- | ---: | ---: |
+| Manchester United, mean intake potential | 85.2 | 85.8 |
+| smallest National League club | 43.9 | 44.5 |
+
+Five levels of investment, worth 0.6. The board hands academy upgrades out as a
+reward, the facility has a 1–5 rating on the stadium screen, and it changed
+nothing.
+
+**The cause is an overwrite, not a calculation.** The bonus lives in a wrapper
+at line 3563 — `const _genYouthPlayer = genYouthPlayer; genYouthPlayer =
+function(...)` — and a later layer at **19401** assigns `genYouthPlayer =
+function(...)` outright instead of wrapping it. The whole wrapper, bonus and
+all, is thrown away. Nothing errors; the facility silently stops existing. It is
+the same failure mode as the `boardTarget` shape mismatch in cycle 8: a layer
+replacing rather than wrapping.
+
+Reapplied against the *reach* the current generator produces rather than as a
+flat number, so it works at every level of the pyramid — and **centred on level
+2 rather than level 1**, because every club in the world has an academy level
+(92 at level 1, 271 at 2, 105 at 3, 16 at 4) and a bonus applied upward from
+level 1 lifts the entire world. The median club is untouched; a neglected
+academy is slightly worse; one you have paid for is meaningfully better.
+
+| | level 1 | level 2 | level 5 |
+| --- | ---: | ---: | ---: |
+| Manchester United | 83.6 | 85.5 | 90.6 |
+| smallest National League club | 42.9 | 44.0 | 47.4 |
+
+Sized twice: the first attempt put United's mean intake potential at 94.2 with a
+top decile of 97, which is a world-class player every single year and a decade
+of that inflates everything.
 
 ### Cycle 13 — commercial income climbs the way it really climbs
 
@@ -1039,41 +1113,47 @@ Nothing. Everything I was asked for is in and measured.
 
 ## What I would like from you
 
-- **Claude and Codex, on the pyramid work:** cycle 9 is built so it does not
-  collide with you. `src/interactions.js` names no division and hardcodes no
-  count — every number comes from `divMembers`, `PYRAMIDS`, `G.clSpots` and the
-  same `n <= 12 ? (n-1)*3 : (n-1)*2` the fixture generator uses. **Add a
-  league, resize one, change who goes up or down, and the press room, the
-  boardroom, the promises and the transfer market all follow it with no edit
-  from me.** The one thing that would break it is a new competition structure
-  that is *not* expressed in `PYRAMIDS` — play-offs, for instance, which this
-  game does not currently have. If you add any, tell me and I will teach
-  `divShape` about them rather than have you special-case it downstream.
+- **Claude, one to watch for:** cycle 14 turned up the same failure mode as cycle
+  8 — a layer that *replaces* a function instead of wrapping it, silently
+  throwing away every wrapper beneath it. In cycle 8 it was `boardTarget` losing
+  the `{exp, txt}` shape a mail still read, printing "target undefinedth" for
+  months. In cycle 14 it was line **19401** assigning `genYouthPlayer =
+  function(...)` outright and discarding the academy bonus at 3563, so the
+  stadium screen has had a 1–5 academy rating that did nothing at all. Both were
+  invisible: nothing throws, the feature just stops. If you are appending a layer
+  that redefines an existing function, wrapping it costs one line and would have
+  prevented both.
+- **Claude and Codex, on the pyramid work:** `src/interactions.js` names no
+  division and hardcodes no count — every number comes from `divMembers`,
+  `PYRAMIDS`, `G.clSpots` and the same `n <= 12 ? (n-1)*3 : (n-1)*2` the fixture
+  generator uses. Add a league, resize one, change who goes up or down, and the
+  press room, the boardroom, the promises, the transfer market and the scout
+  reports all follow with no edit from me. The one thing that would break it is a
+  competition structure `PYRAMIDS` cannot express — play-offs, which this game
+  does not currently have. If you add any, tell me and I will teach `divShape`
+  about them rather than have you special-case it downstream.
 - **Codex:** the seven small leagues (Scotland, Austria, Switzerland, Denmark,
   Serbia, Ukraine, Croatia, 10–12 clubs) play `(n-1) * 3`. If the bigger-leagues
-  work changes any division's size across the 12-club boundary, its season
-  length changes shape with it. `divShape().matches` already handles it; I am
-  flagging it because it is the sort of thing that is invisible until a run-in
-  question fires in December.
-- **Claude:** from the cycle-one list, what is left is item 3 (commercial income
-  too flat across the Premier League), item 4 (a goal bonus cannot help close a
-  deal below the Championship — that needs the acceptance score rewriting, which
-  is yours), item 5 (the morale drip still starts at a fixed five matches) and
-  item 7 (dead code). New this cycle: item 9, the board's target still ignores
-  promotion, injuries and who you sold in July.
-- **Claude:** the user's bank still compounds — £922M after four seasons —
-  because everything is profitable by design. It buys nothing the transfer
-  budget does not already cap, so it harms nothing, but a club hoarding a
-  billion pounds is not a club. The honest mechanism is the board taking profit
-  above a threshold for the stadium and the training ground, and that is a feel
-  decision rather than a fix.
-- **Claude, on feel:** the economy is calibrated soft on the user's explicit
-  instruction — everybody profitable, nobody doomed. The four numbers to move
-  are `runs`, `seat`, `grant` and the division `central` figures in
-  `src/economy.js`, and every one has a measurement in the tests to catch what
-  it does. The same caution applies to `divShape().floor`: I measured that one
-  rather than reasoned about it, because `boardHealth()` scores `(exp - pos)` at
-  1.6 a place a month and the weakest club in a division is one number away from
-  either unsackable or doomed.
+  work moves any division across the 12-club boundary its season length changes
+  shape with it. `divShape().matches` handles it; I am flagging it because it is
+  invisible until a run-in question fires in December.
+- **Claude, on feel — the one change here a player will notice.** The Finances
+  screen has always shown a running-costs line and nothing ever debited it, about
+  £165M a year at Manchester United. It is charged now, because a screen that
+  lies about your costs is a defect rather than a difficulty setting — but it
+  makes the user's club meaningfully poorer than it was. If it bites in play, the
+  honest dial is the `runs` fraction in `DIV_FIN`, not removing the debit again.
+- **Claude:** what is left on the open list is item 4 (a goal bonus cannot help
+  close a deal below the Championship — that needs the acceptance score
+  rewriting, which is yours) and item 9 (the board's target still ignores
+  promotion, injuries and who you sold in July). Both are design calls rather
+  than defects.
+- **Claude, on the economy's calibration:** it is soft on the user's explicit
+  instruction — everybody profitable, nobody doomed. The four numbers to move are
+  `runs`, `seat`, `grant` and the division `central` figures in `src/economy.js`,
+  and every one has a measurement in the tests to catch what it does. The same
+  caution applies to `divShape().floor`, `ACADEMY_STEP` and `COM_CURVE`: I
+  measured all three rather than reasoning about them, because each is one number
+  away from breaking something a test would not have caught on its own.
 - **Codex:** the three duplicate-player problems from your cycle 3 (Jacquet,
   Onyeka, the nineteen shared ESPN IDs) are still open and still yours.

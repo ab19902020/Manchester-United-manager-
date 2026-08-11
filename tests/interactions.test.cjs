@@ -359,3 +359,142 @@ test('a career runs a season with the new layers and stays clean', async (t) => 
   assert.ok(!/undefined|NaN/.test(run.target + ' ' + run.board), run.target + ' | ' + run.board);
   assert.deepEqual(game.errors, []);
 });
+
+/*
+ * Three weeks of a scout's time produced one sentence — the numbers already
+ * on the player's card — and read identically whether a Premier League scout
+ * was watching a superstar or a National League scout was watching a
+ * non-league centre half. A scout is sent to answer one question: is he any
+ * good, and is he any good FOR US.
+ */
+test('a scout report is about your squad and your money', async (t) => {
+  const game = await createGame();
+  t.after(() => game.close());
+  await startCareer(game);
+
+  const reports = game.eval(`(function(){
+    const pool=[];
+    G.clubs.forEach(c=>{ if(c.i===G.my)return; (c.players||[]).forEach(p=>{if(!p.youth)pool.push(p)}) });
+    pool.sort((a,b)=>b.ovr-a.ovr);
+    const best=pool[0], ordinary=pool[Math.floor(pool.length*0.6)];
+    const out=[best,ordinary].map(p=>{
+      G.scouts[0].job={pid:p.id,days:1};
+      scoutTick();
+      const m=G.inbox[0];
+      return {ovr:p.ovr,title:String(m.title),body:String(m.body)};
+    });
+    return out;
+  })()`);
+
+  reports.forEach((r) => {
+    assert.ok(/Scout report/.test(r.title), r.title);
+    assert.ok(/Verdict:/.test(r.body), 'a scout must reach a verdict');
+    // it must talk about your squad, your budget and the man himself
+    assert.ok(/Character:/.test(r.body), 'and say what kind of professional he is');
+    assert.ok(/£/.test(r.body), 'and what he would cost');
+    assert.ok(!/undefined|NaN|\[object/.test(r.body), r.body.slice(0, 200));
+  });
+
+  // the same player, read by a club that cannot possibly buy him
+  const contrast = game.eval(`(function(){
+    const star=(function(){let b=null;G.clubs.forEach(c=>{if(c.i===G.my)return;
+      (c.players||[]).forEach(p=>{if(!p.youth&&(!b||p.ovr>b.ovr))b=p})});return b})();
+    const rich=String(G.inbox.length);
+    void rich;
+    const nl=divMembers('NL');
+    newGame(G.clubs[nl[nl.length-1]].key);
+    const again=(function(){let b=null;G.clubs.forEach(c=>{if(c.i===G.my)return;
+      (c.players||[]).forEach(p=>{if(!p.youth&&(!b||p.ovr>b.ovr))b=p})});return b})();
+    G.scouts[0].job={pid:again.id,days:1};
+    scoutTick();
+    return {div:myDiv(),body:String(G.inbox[0].body),name:again.name,starName:star.name};
+  })()`);
+
+  assert.equal(contrast.div, 'NL');
+  // a National League club must not be told to sign the best player on earth
+  assert.ok(!/Sign him/.test(contrast.body),
+    `a National League club was told to sign a world superstar: ${contrast.body.slice(0, 240)}`);
+  assert.ok(/cannot|Ask me again|distance/i.test(contrast.body),
+    `the report should say the money is impossible: ${contrast.body.slice(0, 240)}`);
+});
+
+/* the half-time room reads the score, the ratings, the legs and who is on a
+   booking — and had no idea whether it was a cup final or a July friendly */
+test('the dressing room knows what match it is', async (t) => {
+  const game = await createGame();
+  t.after(() => game.close());
+  await startCareer(game);
+
+  const room = game.eval(`(function(){
+    // get to a real match and open the room at half time
+    let d=0;
+    while(d++<300){
+      const um=fixturesOn(G.day).find(f=>!f.played&&(f.h===G.my||f.a===G.my));
+      if(um){
+        const sim=quickSim(um);
+        MU.fix=um; MU.m=sim; MU.over=false;
+        break;
+      }
+      simRestOfDay(); dailyTickCore(); G.day++;
+    }
+    if(!MU.fix)return {skipped:true};
+    const league=vDressingRoom();
+    // and the same room in a cup final
+    const was={cup:MU.fix.cup,r:MU.fix.r,comp:MU.fix.comp,neutral:MU.fix.neutral};
+    MU.fix.cup='FA'; MU.fix.r=(CUP_DEFS.FA.days.length-1); MU.fix.neutral=true;
+    MU.fix.comp=CUP_DEFS.FA.name+' · '+CUP_DEFS.FA.rn[MU.fix.r];
+    const final=vDressingRoom();
+    Object.assign(MU.fix,was);
+    return {league,final};
+  })()`);
+
+  if (room.skipped) return;
+  assert.ok(/HALF TIME/.test(room.league), 'the whiteboard still says half time');
+  assert.notEqual(room.league, room.final,
+    'a cup final and a league game put identical words on the whiteboard');
+  assert.ok(/trophy at the end/i.test(room.final),
+    `a final should say so: ${room.final.slice(0, 400)}`);
+});
+
+/*
+ * The academy facility had no effect at all. Measured over 400 generated
+ * intakes: Manchester United level 1 -> mean potential 85.2, level 5 -> 85.8.
+ * The bonus lived in a wrapper that a later layer overwrote by assigning
+ * genYouthPlayer outright instead of wrapping it.
+ */
+test('the academy you pay for changes what comes out of it', async (t) => {
+  const game = await createGame();
+  t.after(() => game.close());
+  await startCareer(game);
+
+  const intake = game.eval(`(function(){
+    const sample=(ci,lvl,n)=>{
+      const c=G.clubs[ci];
+      const was=(c.stad&&c.stad.youth)||2;
+      if(c.stad)c.stad.youth=lvl;
+      let sum=0;
+      for(let i=0;i<300;i++)sum+=genYouthPlayer(ci).pot;
+      if(c.stad)c.stad.youth=was;
+      return sum/300;
+    };
+    const nl=divMembers('NL').sort((a,b)=>G.clubs[a].rep-G.clubs[b].rep)[0];
+    return {
+      bigL1:sample(G.my,1), bigL2:sample(G.my,2), bigL5:sample(G.my,5),
+      smallL1:sample(nl,1), smallL2:sample(nl,2), smallL5:sample(nl,5),
+    };
+  })()`);
+
+  // it has to matter, at both ends of the pyramid
+  assert.ok(intake.bigL5 > intake.bigL1 + 3,
+    `a five-level academy is worth only ${(intake.bigL5 - intake.bigL1).toFixed(1)} potential at a big club`);
+  assert.ok(intake.smallL5 > intake.smallL1 + 2,
+    `and only ${(intake.smallL5 - intake.smallL1).toFixed(1)} at a small one`);
+  assert.ok(intake.bigL5 > intake.bigL2 && intake.bigL2 > intake.bigL1, 'it must be monotonic');
+
+  // and level 2 — what most of the world has — must be where it always was,
+  // or the whole pyramid inflates on the back of it
+  assert.ok(intake.bigL2 > 82 && intake.bigL2 < 89,
+    `level 2 at a giant should stay near its old 85, got ${intake.bigL2.toFixed(1)}`);
+  assert.ok(intake.smallL2 > 41 && intake.smallL2 < 48,
+    `level 2 at a non-league club should stay near its old 44, got ${intake.smallL2.toFixed(1)}`);
+});

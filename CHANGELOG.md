@@ -4,6 +4,29 @@
 
 ### Fixed
 
+- **The academy you pay for now does something.** Measured over four hundred generated
+  intakes: Manchester United at academy level 1 produced a mean potential of 85.2, and at
+  level 5 it produced 85.8. Five levels of investment, worth 0.6. The bonus lived in a
+  wrapper that a later layer overwrote by assigning the youth generator outright instead
+  of wrapping it, so the facility silently stopped existing. It is reapplied against the
+  growth headroom the generator actually produces, and centred on level 2 — what most of
+  the world has — so upgrading is worth real money without the whole pyramid inflating
+  behind it. A level-5 academy at a big club is now worth about seven points of potential
+  over a level-1 one, and about four and a half at a non-league club.
+
+- **A scout report now has an opinion.** Three weeks of a scout's time produced one
+  sentence containing the numbers already on the player's card, and read identically
+  whether a Premier League scout was watching a superstar or a National League scout was
+  watching a non-league centre half. It now says where he would sit in your squad by name
+  and margin, how far he is actually likely to get, what he would cost against your
+  budget and wage room, what kind of professional he is, and reaches a verdict — one
+  ordered on what you can afford first, so a National League club is no longer advised to
+  sign the best player on earth.
+
+- The half-time dressing room now knows which match it is. It read every rating, the
+  legs, the bookings and the mood, and put identical words on the whiteboard for a cup
+  final and a pre-season friendly.
+
 - **Commercial income across the Premier League now climbs the way it really climbs.**
   The sponsorship model was linear in reputation, so the giants were right — Arsenal
   £216M against a real £218M — and everything under them was three to five times too

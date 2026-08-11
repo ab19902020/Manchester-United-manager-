@@ -1,10 +1,12 @@
 /* global G, PQ, PANS, LEAGUES, PYRAMIDS, DIV_NAMES, clamp, ordinal, esc, fmtM,
-          fmtW, divMembers, myDiv, tableRows, playerById, offerById,
-          pledgeKept, pledgeBroken, closeModal, mail, render, boardTarget, ACTIONS */
+          fmtW, divMembers, myDiv, tableRows, playerById, offerById, MU, POSGROUP,
+          pledgeKept, pledgeBroken, closeModal, render, boardTarget, ACTIONS,
+          askPrice, persInfo, playerCeiling, fixCtx, squadWage */
 /* global pqFacts:writable, pressBank:writable, expectPos:writable,
           dealMerit:writable, judgeSeasonPledges:writable, vCups:writable,
           openInterestPhase:writable, interestReasons:writable, leaguePos:writable,
-          interestScore:writable, completeSigning:writable, buzz:writable */
+          interestScore:writable, completeSigning:writable, buzz:writable,
+          scoutTick:writable, vDressingRoom:writable, mail:writable */
 
 /* =====================================================================
    INTERACTIONS — everything that talks to you, in the division you are
@@ -649,5 +651,270 @@
     };
   }
 
-  try { window.RBSInteractions = Object.freeze({ divShape, zoneOf, positionTerm, levelOf }); } catch (error) { /* no window */ }
+  /* -------------------------------------------------------------------
+     8. A SCOUT WHO HAS AN OPINION
+     -------------------------------------------------------------------
+     Three weeks of a scout's time produced one sentence:
+
+       "Bill Fraser has completed a full report on X (ST, LEE). Overall
+        68, potential ★★★. Attributes are now fully revealed."
+
+     which is the numbers you can already see on his card, and reads
+     identically whether a Premier League scout is watching a superstar or
+     a National League scout is watching a non-league centre half. A scout
+     is sent to answer one question — is he any good, and is he any good
+     FOR US — and nothing in there answered it.
+
+     The report now says where he would sit in your squad, what he would
+     cost against what you have, what kind of professional he is, how far
+     he is likely to actually get, and then gives a verdict. Every figure
+     is measured against your club and your division rather than against
+     the Premier League.
+     ------------------------------------------------------------------- */
+  function bestAtPosition(club, pos) {
+    const grouper = (typeof POSGROUP === 'function') ? POSGROUP : null;
+    const group = grouper ? grouper(pos) : null;
+    let best = null;
+    (club.players || []).forEach((x) => {
+      if (x.youth || x.loan) return;
+      const same = group && grouper ? grouper(x.pos) === group : x.pos === pos;
+      if (!same) return;
+      if (!best || x.ovr > best.ovr) best = x;
+    });
+    return best;
+  }
+
+  function scoutVerdict(p, me) {
+    const s = divShape(myDiv());
+    const [, goodOvr, starOvr] = levelOf(s);
+    const rival = bestAtPosition(me, p.pos);
+    const gap = rival ? p.ovr - rival.ovr : null;
+    const ceiling = has(playerCeiling) ? playerCeiling(p) : (p.pot || p.ovr);
+    const ask = has(askPrice) ? askPrice(p) : (p.value || 0);
+    const wage = p.wage || 0;
+    const room = Math.max(0, (me.wageCap || 0) * 1.18 - (has(squadWage) ? squadWage(me) : 0));
+    const affordFee = ask <= (me.budget || 0);
+    const affordWage = wage <= room;
+
+    const lines = [];
+
+    /* where he would sit */
+    if (gap == null) {
+      lines.push(`You have nobody else who plays there, so he would walk into the side.`);
+    } else if (gap >= 4) {
+      lines.push(`He is <b>${gap}</b> better than ${esc(rival.name)}, who is the best you have in that position. He improves you on day one.`);
+    } else if (gap >= 1) {
+      lines.push(`Marginally ahead of ${esc(rival.name)} — <b>${gap}</b> on overall. He would compete rather than walk in.`);
+    } else if (gap >= -3) {
+      lines.push(`About the same as ${esc(rival.name)}. Squad depth rather than a first choice.`);
+    } else {
+      lines.push(`${esc(rival.name)} is <b>${-gap}</b> better than him. He does not get in this side as things stand.`);
+    }
+
+    /* how far he actually gets */
+    if (p.age <= 23) {
+      const growth = ceiling - p.ovr;
+      if (growth >= 10) lines.push(`At ${p.age} there is a lot still to come — my honest read is he tops out around <b>${ceiling}</b>.`);
+      else if (growth >= 4) lines.push(`He will improve, though not transform: I would expect him to settle around <b>${ceiling}</b>.`);
+      else lines.push(`He is closer to the finished article than his age suggests. Around <b>${ceiling}</b> is where he lands.`);
+    } else if (p.age >= 31) {
+      lines.push(`He is ${p.age}. What you see is what you get, and it will not be there for long.`);
+    }
+
+    /* what it costs, in this club's money */
+    const feeWord = affordFee ? 'inside the budget' : `beyond the <b>${fmtM(me.budget || 0)}</b> you have`;
+    const wageWord = affordWage ? 'and the wages fit' : 'and the wages are the problem, not the fee';
+    lines.push(`They want about <b>${fmtM(ask)}</b>, which is ${feeWord}, ${wageWord} — he is on <b>${fmtW(wage)}</b>.`);
+
+    /* what kind of professional */
+    const pers = has(persInfo) ? persInfo(p) : null;
+    if (pers) lines.push(`Character: <b>${esc(pers.lbl)}</b>. ${esc(pers.d)}`);
+
+    /* The verdict is about THIS squad and THIS club's money, in that
+       order. A first pass ranked it on raw overall against the division's
+       star threshold, which told a National League club to sign Kylian
+       Mbappé — a player it could not afford by three orders of magnitude
+       — and told the same club that a man eleven better than anything it
+       owned "would not transform us". What a scout answers is: could we
+       have him, and would he improve us. */
+    let verdict;
+    const reachable = affordFee && affordWage;
+    const better = gap == null ? 6 : gap;
+    if (!affordFee && !affordWage) {
+      verdict = 'Admire him from a distance. We can pay neither the fee nor the wages, and he knows it.';
+    } else if (!reachable && better >= 4) {
+      verdict = affordFee
+        ? 'He would improve us and we cannot afford to pay him. That is the whole report.'
+        : 'Exactly what we need and about double what we can spend. Ask me again if the money changes.';
+    } else if (better >= 8 && reachable) {
+      verdict = p.ovr >= starOvr
+        ? 'Sign him. Players of this standard do not come to clubs like ours often.'
+        : 'Sign him. He is a level above what we have there and we can pay for him.';
+    } else if (better >= 2 && reachable) {
+      verdict = 'I would take him. A clear improvement and the numbers work.';
+    } else if (p.age <= 21 && rival && ceiling - rival.ovr >= 4 && reachable) {
+      /* a prospect is judged on where he is going, not on where he is —
+         "not for us" is the wrong answer about a twenty-year-old who will
+         be better than anything you own inside two seasons */
+      verdict = `Not yet, but not for long. He tops out above ${esc(rival.name)} and he is ${p.age}.`;
+    } else if (better <= -4) {
+      verdict = 'Not for us. We are already better served there.';
+    } else if (p.age <= 21 && ceiling - p.ovr >= 8) {
+      verdict = 'One to keep watching. He is not ready, but he might be worth waiting for.';
+    } else {
+      verdict = 'Worth a conversation. He would not embarrass us and he would not transform us.';
+    }
+    void goodOvr;
+
+    return { lines, verdict };
+  }
+
+  if (has(scoutTick)) {
+    const previousScout = scoutTick;
+    scoutTick = function scoutTickWithOpinion() {
+      /* the scouts about to hand in, noted before the tick decrements them */
+      const finishing = [];
+      guard('scout.pre', () => {
+        (G.scouts || []).forEach((sc) => {
+          if (sc.job && sc.job.days <= 1) finishing.push({ scout: sc.name, pid: sc.job.pid });
+        });
+      });
+      if (!finishing.length) return previousScout.apply(this, arguments);
+
+      const realMail = mail;
+      mail = function suppressScout(type, title) {
+        if (type === 'scout' && String(title).indexOf('Scout report:') === 0) return undefined;
+        return realMail.apply(this, arguments);
+      };
+      try {
+        return previousScout.apply(this, arguments);
+      } finally {
+        mail = realMail;
+        guard('scout.report', () => {
+          const me = G.clubs[G.my];
+          finishing.forEach(({ scout, pid }) => {
+            const p = playerById(pid);
+            if (!p) return;
+            const club = (G.clubs || [])[p.club];
+            const v = scoutVerdict(p, me);
+            realMail('scout', `🔭 Scout report: ${p.name}`,
+              `<b>${esc(scout)}</b> has finished three weeks on <b>${esc(p.name)}</b> — `
+              + `${p.pos}, ${p.age}, ${esc((club && club.name) || 'a free agent')}. `
+              + `Overall <b>${p.ovr}</b>.<br><br>`
+              + v.lines.map((l) => `• ${l}`).join('<br>')
+              + `<br><br><b>Verdict:</b> ${esc(v.verdict)}`
+              + '<br><br><span class="xs faint">His full attributes are now visible on his profile.</span>');
+          });
+        });
+      }
+    };
+  }
+
+  /* -------------------------------------------------------------------
+     9. THE DRESSING ROOM KNOWS WHAT MATCH THIS IS
+     -------------------------------------------------------------------
+     The half-time room reads the score, the ratings, the legs, who is on
+     a booking and who is drowning — it is the best-built screen in the
+     game. The one thing it does not know is which match it is, so a cup
+     final at half time and a July friendly in Chicago put the identical
+     words on the whiteboard. `fixCtx` already works all of that out for
+     the match engine.
+     ------------------------------------------------------------------- */
+  if (has(vDressingRoom)) {
+    const previousRoom = vDressingRoom;
+    vDressingRoom = function vDressingRoomInContext() {
+      let h = previousRoom.apply(this, arguments);
+      guard('dressing', () => {
+        const f = (typeof MU !== 'undefined' && MU) ? MU.fix : null;
+        if (!f || !has(fixCtx)) return;
+        const ctx = fixCtx(f) || {};
+        let line = ctx.label || ctx.comp || '';
+        if (ctx.friendly && !ctx.trophy) line = 'Pre-season friendly';
+        if (!line) {
+          const sh = divShape(myDiv());
+          line = sh.name;
+        }
+        const note = ctx.isFinal ? 'There is a trophy at the end of this one.'
+          : ctx.isSemi ? 'Forty-five minutes from a final.'
+            : ctx.friendly && !ctx.trophy ? 'It is July. Nothing is at stake but the work.'
+              : ctx.euro ? 'A European night. They will remember this one either way.'
+                : '';
+        const html = `<div class="dr-comp" style="font-size:11px;font-weight:800;opacity:.8;letter-spacing:.04em">${esc(line)}</div>`
+          + (note ? `<div class="dr-note" style="font-size:10px;opacity:.6">${esc(note)}</div>` : '');
+        h = h.replace('<div class="dr-bh">HALF TIME</div>', `<div class="dr-bh">HALF TIME</div>${html}`);
+      });
+      return h;
+    };
+  }
+
+  /* -------------------------------------------------------------------
+     10. THE ACADEMY YOU PAY FOR DOES SOMETHING
+     -------------------------------------------------------------------
+     Measured over four hundred generated intakes per level:
+
+         Manchester United, academy level 1 -> mean potential 85.2
+         Manchester United, academy level 5 -> mean potential 85.8
+
+     Five levels of investment, worth 0.6. The board hands academy
+     upgrades out as a reward and the facility is on the stadium screen
+     with a 1-5 rating, and it has no effect on anything.
+
+     The cause is an overwrite rather than a calculation. The academy
+     bonus lives in a wrapper at line 3563:
+
+         const _genYouthPlayer = genYouthPlayer;
+         genYouthPlayer = function(ci, rng){
+           const p = _genYouthPlayer(ci, rng);
+           const lvl = (G.clubs[ci].stad && G.clubs[ci].stad.youth) || 1;
+           p.pot = clamp(p.pot + (lvl-1)*2, 58, 97);
+           return p };
+
+     and a later layer at 19401 assigns `genYouthPlayer = function(...)`
+     outright rather than wrapping it, so that whole wrapper — bonus and
+     all — is thrown away. Nothing errors; the facility simply stops
+     existing.
+
+     Reapplied here against the reach the current generator produces
+     rather than as a flat number, so it works at every level of the
+     pyramid: a National League intake is pitched at a National League
+     club and a level-5 academy stretches what its best prospects might
+     become. Level 1 is exactly what it is today, so nothing is nerfed.
+     ------------------------------------------------------------------- */
+  /* Sized twice. 0.13 applied from level 1 upward put Manchester United's
+     mean intake potential at 94.2 with a top decile of 97 — a world-class
+     player every year, and a decade of that inflates the world. And every
+     club in the world has an academy level, not just yours: 92 at level 1,
+     271 at level 2, 105 at 3, 16 at 4. So a bonus applied upward from
+     level 1 lifts the entire pyramid.
+
+     It is centred on level 2 instead, which is what most of the world has.
+     The median club is untouched, a neglected academy is slightly worse,
+     and the one you have paid to upgrade is meaningfully better. The world
+     cannot inflate on it because the middle of the distribution does not
+     move. */
+  const ACADEMY_STEP = 0.09;   /* growth headroom gained per level above 2 */
+  const ACADEMY_MID = 2;
+
+  if (has(window.genYouthPlayer)) {
+    const previousYouth = window.genYouthPlayer;
+    window.genYouthPlayer = function genYouthPlayerWithAcademy(ci) {
+      const p = previousYouth.apply(this, arguments);
+      guard('academy', () => {
+        const c = (G.clubs || [])[ci];
+        if (!p || !c) return;
+        const lvl = clamp((c.stad && c.stad.youth) || ACADEMY_MID, 1, 5);
+        if (lvl === ACADEMY_MID) return;
+        const reach = (p.pot || p.ovr) - p.ovr;
+        if (!(reach > 0)) return;
+        p.pot = clamp(Math.round(p.ovr + reach * (1 + (lvl - ACADEMY_MID) * ACADEMY_STEP)), p.ovr + 3, 97);
+      });
+      return p;
+    };
+  }
+
+  try {
+    window.RBSInteractions = Object.freeze({
+      divShape, zoneOf, positionTerm, levelOf, scoutVerdict, bestAtPosition, ACADEMY_STEP,
+    });
+  } catch (error) { /* no window */ }
 }());
