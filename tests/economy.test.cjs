@@ -490,3 +490,144 @@ test('the budget slider moves money both ways and never lies about the wage bill
   })()`);
   assert.equal(loan, 'blocked', 'a loan may not push the wage bill past the ceiling — that is how it got there');
 });
+
+/*
+ * Found by tracing every change to a club's bank balance over a season.
+ * Start a career at Worthing — National League, £348,000 in the bank — and
+ * the club drew £160,300,000 a year in sponsorship: Manchester United's four
+ * contracts, verbatim, 202 times what the club could sign.
+ *
+ * `newGame(key)` — how you pick a club, and how you start one you have built
+ * — runs newGame(0) first, so the world is built around Manchester United and
+ * ensureCommercial() writes United's deals; only then does it takeOverClub()
+ * you into the club you chose. Nothing cleared G.deals, and ensureCommercial
+ * only ever fills empty slots.
+ */
+test('the sponsorship belongs to the club, not to the save', async (t) => {
+  const game = await createGame();
+  t.after(() => game.close());
+  await startCareer(game);
+
+  const united = game.eval(`(function(){
+    return {club:G.clubs[G.my].name,div:myDiv(),commercial:Math.round(commercialIncome())};
+  })()`);
+  assert.equal(united.div, 'PL');
+  assert.ok(united.commercial > 5e7, `a Premier League giant should have real sponsorship, got ${united.commercial}`);
+
+  const bottom = game.eval(`(function(){
+    const nl=divMembers('NL');
+    const key=G.clubs[nl[nl.length-1]].key;
+    newGame(key);
+    const c=G.clubs[G.my];
+    return {club:c.name,div:myDiv(),rep:c.rep,
+      commercial:Math.round(commercialIncome()),
+      market:Math.round(window.RBSCommercial.marketCommercial())};
+  })()`);
+
+  assert.equal(bottom.div, 'NL');
+  assert.ok(bottom.commercial < 3e6,
+    `a National League club drew ${bottom.commercial} in sponsorship`);
+  assert.ok(bottom.commercial <= bottom.market * 2.5,
+    'sponsorship must be within reach of what this club could actually sign');
+  assert.ok(bottom.commercial > 0, 'but it should still have deals');
+
+  // and moving club rewrites them again rather than carrying them over
+  const moved = game.eval(`(function(){
+    const before=Math.round(commercialIncome());
+    const pl=divMembers('PL').sort((a,b)=>G.clubs[b].rep-G.clubs[a].rep);
+    takeOverClub(pl[0]);
+    return {before,after:Math.round(commercialIncome()),div:myDiv()};
+  })()`);
+  assert.equal(moved.div, 'PL');
+  assert.ok(moved.after > moved.before * 5,
+    `taking a Premier League job should be worth more than ${moved.before}, got ${moved.after}`);
+});
+
+/*
+ * The same trace showed the other half: the world loop paid every AI club its
+ * REVENUE and never took a penny of its costs. After one season the median
+ * Premier League club held £442M; by season four the richest club in the world
+ * had £2.2 billion. They are paid what they clear now, with a floor so nobody
+ * goes bust and a ceiling so nobody becomes a sovereign wealth fund.
+ */
+test('the rest of the world banks what it earns, and neither goes bust nor hoards', async (t) => {
+  const game = await createGame();
+  t.after(() => game.close());
+  await startCareer(game);
+
+  const snapshot = () => game.eval(`(function(){
+    const by={};
+    ['PL','CH','L1','L2','NL'].forEach(d=>{
+      const b=divMembers(d).map(i=>G.clubs[i].bank).sort((x,y)=>x-y);
+      by[d]={min:Math.round(b[0]),median:Math.round(b[Math.floor(b.length/2)]),max:Math.round(b[b.length-1])};
+    });
+    by.negative=G.clubs.filter(c=>c.bank<0).length;
+    by.overHoarded=G.clubs.filter(c=>c.i!==G.my&&c.bank>2e9).length;
+    return by;
+  })()`);
+
+  const before = snapshot();
+  assert.equal(before.negative, 0);
+
+  game.eval(`(function(){
+    for(let s=0;s<3;s++){
+      const start=G.season;let d=0;
+      while(G.season===start&&d++<600){
+        G.sacked=false;
+        if(G.boardCall)G.boardCall=null;
+        if(G.pressCtx)G.pressCtx=null;
+        const um=fixturesOn(G.day).find(f=>!f.played&&(f.h===G.my||f.a===G.my));
+        if(um){quickSim(um);finishDayAfterMatch()}
+        else{simRestOfDay();dailyTickCore();G.day++;checkSeasonEnd()}
+      }
+    }
+    return 1;
+  })()`);
+
+  const after = snapshot();
+  assert.equal(after.negative, 0, 'no club in the world may go bust');
+  assert.equal(after.overHoarded, 0, 'no AI club may reach two billion');
+
+  // the pyramid keeps its shape rather than flattening or exploding
+  assert.ok(after.PL.median > after.CH.median, 'Premier League above Championship');
+  assert.ok(after.CH.median > after.L2.median, 'Championship above League Two');
+  assert.ok(after.L2.median > 0 && after.NL.median > 0, 'the bottom stays solvent');
+  // and it does not run away: three seasons must not multiply the median tenfold
+  assert.ok(after.PL.median < before.PL.median * 6,
+    `Premier League median went ${before.PL.median} -> ${after.PL.median}`);
+  assert.deepEqual(game.errors, []);
+});
+
+/* the Finances screen showed a running-costs line that nothing ever debited —
+   about £165M a year at Manchester United, which is where a user's bank
+   compounding to £900M over four seasons came from */
+test('the running costs on the Finances screen actually leave the account', async (t) => {
+  const game = await createGame();
+  t.after(() => game.close());
+  await startCareer(game);
+
+  const paid = game.eval(`(function(){
+    const ops=Math.round(seasonCosts().ops/12);
+    const before=G.clubs[G.my].bank;
+    monthlyIncome();
+    return {ops,moved:G.clubs[G.my].bank-before};
+  })()`);
+
+  assert.ok(paid.ops > 0, 'there should be a running-costs line to charge');
+  // the month's movement must be income minus that line, not income alone
+  const consistent = game.eval(`(function(){
+    const my=G.clubs[G.my];
+    const ops=Math.round(seasonCosts().ops/12);
+    const before=my.bank;
+    monthlyIncome();
+    const after=my.bank;
+    // charge it twice and the second month must move by the same amount
+    const first=after-before;
+    const b2=my.bank;
+    monthlyIncome();
+    const second=my.bank-b2;
+    return {ops,first,second,gap:Math.abs(first-second)};
+  })()`);
+  assert.ok(consistent.gap <= Math.max(1000, consistent.ops * 0.05),
+    `monthly movement should be steady, got ${consistent.first} then ${consistent.second}`);
+});

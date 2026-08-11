@@ -1,7 +1,7 @@
 # Agent One — report to Claude
 
 **Written by:** Agent One (balance and rules) · **Read by:** Claude (director) and Codex
-**Current as of commit:** `4c22941` · **Last updated:** 11 August 2026 (cycle 9)
+**Current as of commit:** `4ab80b2` · **Last updated:** 11 August 2026 (cycle 10)
 
 ---
 
@@ -101,6 +101,113 @@ turnover including coaching costs — that figure changed *for* 2026/27, which i
 the season the game is set in — League Two 55%, enforced by refusing to register
 the player rather than by a points deduction. Clubs sit at 16–44%, so it only
 bites if you go looking for it.
+
+### Cycle 10 — the sponsorship bug, found by a ten-season soak
+
+Nobody reported this one. It came out of running a career for ten seasons and
+measuring the world every May — the kind of drift you only meet in month three
+of a real save, by which point the save is not worth keeping.
+
+**Start a career at Worthing.** National League, £348,000 in the bank,
+reputation 2,050. The club draws:
+
+```text
+£160,300,000 a year in sponsorship
+£13,358,333 a month, against the £795,516 it could actually sign
+```
+
+That is Manchester United's four contracts — shirt £65M, kit £60M, sleeve £21M,
+training £15M — verbatim, **202 times what the club is worth**. Northampton Town
+went from £1.5M to £174M in one League Two season on it. It is the real cause of
+the user's bank compounding to £922M, which I had previously written up as "the
+economy is calibrated soft"; it was not, it was this.
+
+**The cause is the ordinary career-start path.** `newGame(key)` — which is how
+you pick a club from the browser, and how you start a club you have built —
+does:
+
+```js
+newGame = function(sel){
+  if (typeof sel === 'string') {
+    _newGameKey(0);                 // builds the world around club 0, Man Utd,
+                                    // and the wrapper at 9289 does
+                                    //   G.deals = null; ensureCommercial();
+    const ix = liveIndexForKey(sel);
+    if (ix >= 0 && ix !== G.my) takeOverClub(ix);   // ...and nothing clears G.deals
+```
+
+`ensureCommercial()` only ever fills slots that are empty (`if(G.deals[k])
+return`), so the contracts are never revalued. They lapse after one to three
+seasons and reprice correctly then — long after the save has been decided.
+
+The same hole runs the other way, and matters just as much for a club climbing
+the pyramid: promotion and relegation never touch the deals either, so going up
+earns nothing commercially until a contract happens to expire.
+
+**Three things, in `src/economy.js`.** The contracts are rewritten to the club
+whenever the club changes. They are rebased when the division changes — repriced
+upward at once on promotion, and on relegation kept at no less than 65% of their
+old value for the rest of the term, which is the clause every real deal has.
+And `commercialIncome()` carries a bound at two and a half times what the club
+could sign today, so no path I have not found can leak two hundred times a
+club's worth again.
+
+Measured after: Worthing draws **£800,000**, against a computed market of
+£795,516. Manchester United is unchanged at £160.3M.
+
+### Cycle 10b — and the world had income with no costs
+
+The same trace turned up the other half, and this one was mine. The world loop
+I added in cycle 2 — "so the pyramid does not go bust" — paid every AI club its
+**revenue** and never took a penny of its **costs**:
+
+```js
+c.bank = Math.round((c.bank||0) + (centralFor(c)+commercialFor(c))/12 + gate);
+```
+
+A club with income and no wage bill compounds. Measured after a single season
+the median Premier League club held **£442M**; by season four the richest club
+in the world had **£2.2 billion**.
+
+AI clubs are paid what they actually clear now, through the same
+`revenueFor`/`costsFor` model the Finances screen is built from, so an AI club's
+balance means the same thing yours does. Two bounds on it, both from the user's
+standing instruction that this is a game you are meant to win:
+
+- **nobody goes bust.** A club that would lose money banks 3% of turnover
+  instead, and never drops below a month and a bit of wages. The real
+  Championship lost £436M last season; here the shape is real and the level is
+  kind.
+- **nobody hoards.** A bank is capped at one and a half seasons of turnover —
+  a club with more than that has spent it, on the ground, the training ground
+  and the squad.
+
+Six seasons measured, no manager intervention:
+
+| | day 0 | after 6 |
+| --- | ---: | ---: |
+| Premier League median | £139M | £148M |
+| Championship median | £14.4M | £2.7M |
+| League One median | £2.95M | £1.30M |
+| League Two median | £1.20M | £808K |
+| National League median | £410K | £460K |
+| clubs overdrawn | 0 | 0 |
+
+Flat rather than exploding, which is the point.
+
+**And the last piece: the Finances screen was charging you for something that
+never left your account.** `costsFor` has always had a running-costs line — the
+ground, the matchdays, everything that is not a wage — and only wages were ever
+debited. About **£165M a year** at Manchester United, shown to you and never
+taken. It is charged monthly now, so the projection on the screen is the money
+that actually moves.
+
+**A caution for whoever reads this next.** That last change makes the user's own
+club meaningfully poorer than it was, and I did it because a screen that lies
+about your costs is a defect rather than a difficulty setting. But it is the one
+change in this cycle that a player will *feel*. If it turns out to bite, the
+honest dial is the `runs` fraction in `DIV_FIN` rather than removing the debit
+again.
 
 ### Cycle 9 — everything else that talks to you, from an audit
 

@@ -2,6 +2,34 @@
 
 ## Unreleased
 
+### Fixed
+
+- **Every career started at a club other than Manchester United was drawing
+  Manchester United's sponsorship money.** Found by tracing every change to a club's
+  bank balance across a season. Start a career at a National League club — £348,000 in
+  the bank — and it received £160,300,000 a year in sponsorship, which is United's four
+  contracts verbatim and 202 times what the club could actually sign. A League Two club
+  went from £1.5M to £174M in a single season on it. The cause is the ordinary
+  career-start path: picking a club, or starting one you have built, quietly begins the
+  save at Manchester United to construct the world and then hands you your club without
+  clearing the sponsorship. The contracts are now rewritten whenever the club changes,
+  rebased when the division changes — repriced upward at once on promotion, and kept at
+  no less than 65% of their value for the rest of the term on relegation, which is the
+  clause every real deal has — and bounded so no other path can do this again.
+
+- Fixed AI clubs receiving income and never paying costs. They were credited their
+  revenue every month with no wage bill against it, so the median Premier League club
+  held £442M after one season and the richest club in the world reached £2.2 billion by
+  season four. Every club is now credited what it actually clears, through the same
+  revenue and cost model the Finances screen is built from — with a floor so nobody
+  goes bust and a ceiling of a season and a half of turnover so nobody hoards. Measured
+  over six seasons the pyramid now holds its shape instead of exploding.
+
+- Fixed the running-costs line on the Finances screen never leaving the account. The
+  ground, the matchdays and everything that is not a wage — about £165M a year at
+  Manchester United — was shown to you and never charged. It is charged monthly now, so
+  the projection on the screen is the money that actually moves.
+
 ### Changed
 
 - **Taught every conversation in the game which division it is in.** An audit for

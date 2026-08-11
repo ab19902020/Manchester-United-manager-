@@ -1,11 +1,12 @@
 /* global G, esc, clamp, fmtM, fmtW, WEEKS_IN_YEAR, mail, squadWage, staffWage, divMembers, leaguePos,
           LEAGUES, commercialIncome, ensureCommercial, MU, ordinal, tableRows,
           fixCtx, DIV_ORDER, ACTIONS, playerById, toast, $, loanTerms, offerById,
-          CC_CHAIRS, budLimits, budOrigin, sfx, render */
+          CC_CHAIRS, budLimits, budOrigin, sfx, render, DIV_NAMES, myDiv,
+          SPONSOR_SLOTS, commercialPower, dealValue, mulberry, hashStr */
 /* global seasonRevenue:writable, seasonCosts:writable, monthlyIncome:writable,
           applyPostMatch:writable, endSeason:writable, vFinances:writable,
           dailyTickCore:writable, normaliseReps:writable, completeSigning:writable,
-          vTransferBudget:writable */
+          vTransferBudget:writable, takeOverClub:writable */
 
 /* =====================================================================
    ECONOMY — what football clubs actually earn, and what it costs them
@@ -335,19 +336,59 @@
         const me = G.clubs[G.my];
         const central = Math.round(centralFor(me) / 12);
         const com = Math.round(commercialFor(me) / 12);
-        me.bank += central + com;
+        /* The Finances screen has always shown a running-costs line — the
+           ground, the matchdays, everything that is not a wage — and
+           nothing ever debited it. Only wages left the account, so the
+           screen and the bank disagreed by the whole of that line: about
+           £165M a year at Manchester United. It is charged now, so the
+           projection you are shown is the money that actually moves. */
+        const ops = Math.round(costsFor(me).ops / 12);
+        me.bank += central + com - ops;
         if (!G.fin) G.fin = {};
         G.fin.commercialYTD = (G.fin.commercialYTD || 0) + com;
-        mail('info', 'Monthly income received',
+        mail('info', 'Monthly accounts',
           `Central distribution: <b>${fmtM(central)}</b> · Commercial and sponsorship: <b>${fmtM(com)}</b> ` +
-          'have been added to the club accounts.' +
-          `<br><br><span class="xs faint">Matchday income is paid on the day. Merit money for your final ` +
-          `league position is paid at the end of the season.</span>`);
-        /* and the rest of the world, so the pyramid does not go bust */
+          `· Running costs: <b>−${fmtM(ops)}</b>.` +
+          `<br><br><span class="xs faint">Matchday income is paid on the day and wages come out daily. ` +
+          `Merit money for your final league position is paid at the end of the season.</span>`);
+        /* And the rest of the world, so the pyramid does not go bust.
+           This paid every AI club its REVENUE and never took a penny of
+           its costs, which is a different bug from the one it was fixing:
+           a club with income and no wage bill compounds. Measured after a
+           single season, the median Premier League club held £442M and the
+           richest club in the world reached £2.2 billion by season four.
+           They are paid what they actually clear now — the same revenue
+           and cost model the Finances screen shows you, so an AI club's
+           balance means the same thing yours does. The division solvency
+           floor already guarantees the median club in every league clears
+           its bills, which is what makes paying net safe. */
         (G.clubs || []).forEach((c) => {
           if (!c || c.i === G.my) return;
-          const gate = Math.round(matchdayRevenue(c) / 12);
-          c.bank = Math.round((c.bank || 0) + (centralFor(c) + commercialFor(c)) / 12 + gate);
+          const rev = revenueFor(c);
+          /* Every club in this world clears a small profit — the user's
+             rule, and the whole reason this economy is calibrated soft.
+             The real Championship lost £436M last season; here the shape of
+             the pyramid is real and the level is kind, so a club that would
+             genuinely lose money instead banks three per cent of turnover.
+             It is a floor, not a payment: a club earning properly keeps
+             what it actually earns. */
+          const net = Math.max(rev.total * 0.03, rev.total - costsFor(c, rev).total);
+          /* No club in this world is allowed to go bust — the user's rule,
+             and the reason the whole economy is calibrated soft. A club
+             that is losing money drifts down to a month's wages and stops
+             there rather than falling into an overdraft it can never
+             clear. The floor is a month rather than nothing because the
+             transfer market debits these balances between monthly ticks,
+             and a floor of zero simply moves the overdraft to a Tuesday. */
+          const reserve = Math.round((has(squadWage) ? squadWage(c) : 0) * 4.4);
+          let bank = Math.max(reserve, Math.round((c.bank || 0) + net / 12));
+          /* And nobody hoards. A club sitting on more than a season and a
+             half of turnover has spent it — on the ground, the training
+             ground, the wage bill, the squad. Without this the richest
+             club in the world reached £2.2 billion by season four, which
+             is not a football club, it is a sovereign wealth fund. */
+          bank = Math.min(bank, Math.round(rev.total * 1.5) || bank);
+          c.bank = bank;
           /* the AI transfer code subtracts a fee without checking it has
              one, so a club that gets carried away in a window carries a
              negative transfer budget for the rest of the season */
@@ -1842,4 +1883,156 @@
       return previous.apply(this, arguments);
     };
   });
+
+  /* -------------------------------------------------------------------
+     12. THE SPONSORSHIP BELONGS TO THE CLUB, NOT TO THE SAVE
+     -------------------------------------------------------------------
+     Found by tracing every change to a club's bank balance over a season.
+     Start a career at Worthing — National League, £348,000 in the bank,
+     reputation 2,050 — and the club draws
+
+         £160,300,000 a year in sponsorship
+         £13,358,333 a month, against £795,516 it could actually sign
+
+     which is Manchester United's four contracts, verbatim, 202 times what
+     the club is worth. Northampton Town went from £1.5M to £174M in one
+     League Two season on it.
+
+     The cause is the career-start path, not an exotic one. `newGame(key)`
+     — which is how you pick a club and how you start one you have built —
+     runs `newGame(0)` first, so the world is built around Manchester
+     United and `ensureCommercial()` writes United's deals; only then does
+     it `takeOverClub()` you into the club you actually chose. Nothing
+     clears `G.deals`, and `ensureCommercial()` only ever fills slots that
+     are empty, so the contracts are never revalued. They lapse after one
+     to three seasons and reprice correctly then — long after the save has
+     been decided.
+
+     The same hole runs the other way and matters just as much for a club
+     climbing the pyramid: promotion and relegation never touch the deals
+     either, so going up earns you nothing commercially until a contract
+     happens to expire.
+
+     Three things here. The contracts are rewritten to the club whenever
+     the club changes. They are rebased when the division changes, with a
+     relegation clause so a contract does not collapse the moment you go
+     down. And `commercialFor` carries a bound, so no path I have not
+     found can leak two hundred times a club's worth again.
+     ------------------------------------------------------------------- */
+  function slotKeys() {
+    return (typeof SPONSOR_SLOTS === 'undefined') ? [] : Object.keys(SPONSOR_SLOTS);
+  }
+
+  /* what this club could sign today, across every slot it has sold */
+  function marketCommercial() {
+    return guard('market', () => {
+      if (!has(dealValue)) return 0;
+      let total = 0;
+      slotKeys().forEach((k) => {
+        if (k === 'stadium') return;              /* never sold by default */
+        total += dealValue(k) || 0;
+      });
+      return Math.round(total);
+    }, 0);
+  }
+
+  /* the raw sum of whatever contracts are on the books, read without going
+     back through the bound below — which calls this, and would otherwise
+     recurse the moment it found a total worth rewriting */
+  function dealTotal() {
+    let total = 0;
+    Object.keys(G.deals || {}).forEach((k) => { if (G.deals[k]) total += G.deals[k].annual || 0; });
+    return Math.round(total);
+  }
+
+  function rewriteDeals(why) {
+    return guard('rewrite', () => {
+      if (!has(ensureCommercial)) return null;
+      const before = dealTotal();
+      G.deals = null;
+      ensureCommercial();
+      const after = dealTotal();
+      G.finDivSeen = myDiv();
+      return { before, after, why };
+    }, null);
+  }
+
+  /* changing club changes your commercial partners */
+  if (has(takeOverClub)) {
+    const previousTakeOver = takeOverClub;
+    takeOverClub = function takeOverClubOwnDeals(idx) {
+      const moved = idx != null && idx !== G.my && (G.clubs || [])[idx];
+      const r = previousTakeOver.apply(this, arguments);
+      if (moved) guard('takeover', () => { rewriteDeals('new club'); });
+      return r;
+    };
+  }
+
+  /* and changing division changes what they are worth. Real contracts run
+     their term, so a relegated club keeps the better part of its deal to
+     the end of it; a promoted club is repriced upward at once, which is
+     what a promotion clause is for. */
+  if (has(endSeason)) {
+    const previousEnd = endSeason;
+    endSeason = function endSeasonRebaseDeals() {
+      const wasDiv = guard('div-before', () => myDiv(), null);
+      const r = previousEnd.apply(this, arguments);
+      guard('rebase', () => {
+        const nowDiv = myDiv();
+        if (!nowDiv || nowDiv === wasDiv) return;
+        if (!G.deals || !has(dealValue)) return;
+        const wentUp = (typeof DIV_ORDER !== 'undefined' && DIV_ORDER.indexOf)
+          ? DIV_ORDER.indexOf(nowDiv) < DIV_ORDER.indexOf(wasDiv)
+          : true;
+        let before = 0;
+        let after = 0;
+        slotKeys().forEach((k) => {
+          const d = G.deals[k];
+          if (!d) return;
+          const market = dealValue(k) || 0;
+          before += d.annual || 0;
+          /* up: repriced at once. down: the contract runs on, worth no less
+             than 65% of what it was, which is the clause every real deal has */
+          d.annual = wentUp
+            ? Math.max(d.annual || 0, market)
+            : Math.max(market, Math.round((d.annual || 0) * 0.65));
+          after += d.annual;
+        });
+        if (!before || before === after) return;
+        mail('board', wentUp ? '📈 The sponsors have moved on the numbers' : '📉 Sponsorship revalued',
+          `Promotion and relegation clauses have been triggered across the club's commercial deals. `
+          + `Annual commercial income moves from <b>${fmtM(before)}</b> to <b>${fmtM(after)}</b> `
+          + `in ${esc((typeof DIV_NAMES !== 'undefined' && DIV_NAMES[nowDiv]) || 'the new division')}.`);
+      });
+      return r;
+    };
+  }
+
+  /* Belt and braces. If any path ever hands this club somebody else's
+     contracts again, it cannot be worth more than a club of this size
+     could plausibly sign — set generously, at two and a half times the
+     market across every slot, so a good negotiation is never clipped. */
+  if (has(commercialIncome)) {
+    const previousCommercial = commercialIncome;
+    let bounding = false;
+    commercialIncome = function commercialIncomeBounded() {
+      const raw = previousCommercial.apply(this, arguments) || 0;
+      if (bounding) return raw;
+      return guard('bound', () => {
+        const ceiling = marketCommercial() * 2.5;
+        if (!(ceiling > 0) || raw <= ceiling) return raw;
+        /* rewrite rather than merely clip, so the Finances screen, the deal
+           list and the money all agree about what the club is earning */
+        bounding = true;
+        try {
+          const fixed = rewriteDeals('bound');
+          return fixed ? fixed.after : Math.round(ceiling);
+        } finally { bounding = false; }
+      }, raw);
+    };
+  }
+
+  try {
+    window.RBSCommercial = Object.freeze({ marketCommercial, rewriteDeals });
+  } catch (error) { /* no window */ }
 }());
