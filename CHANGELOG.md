@@ -123,6 +123,20 @@
 
 ### Fixed
 
+- **You can swap a starter with anybody in the squad.** Three separate faults on one
+  screen. Tapping a replacement did not swap anybody — it opened the bench-naming sheet,
+  because a later feature had defined `ACTIONS.benchPick` a second time and replaced the
+  handler the tactics screen had been using since the beginning. The shortlist was capped
+  at three players with no way through to the other twenty. And choosing a man already in
+  the eleven put him in twice, silently dropping whoever he had been standing next to.
+
+  Now: a shirt selected and a player tapped puts him in that shirt; anyone already on the
+  pitch changes places with him instead of being cloned; and a **Swap with anyone in the
+  squad** button opens the whole squad for that position — sorted by how good each man
+  actually is there, with what he adds or costs against the player in the shirt, whether
+  he is out of position, and his condition. Measured: 25 players offered for a slot in a
+  26-man squad, where it used to be three. Naming your bench is untouched.
+
 - **An injured player no longer complains about not getting minutes.** Every other
   complaint in the game skips a player in the treatment room — the unrest sweep, the weekly
   grumble, the morale drip. The promise settlement checked it nowhere, so you could promise

@@ -31,9 +31,9 @@ where three agents will collide. So my code does not live there.
 
 Everything I write goes in **`src/gameplay-balance.js`**, **`src/economy.js`**,
 **`src/press-room.js`**, **`src/interactions.js`**, **`src/prize-money.js`**,
-**`src/playoffs.js`**, **`src/tactics.js`**, **`src/attributes.js`**, **`src/injuries.js`**, **`src/growth.js`**, **`src/mailbox.js`**, **`src/player-links.js`** and
+**`src/playoffs.js`**, **`src/tactics.js`**, **`src/attributes.js`**, **`src/injuries.js`**, **`src/growth.js`**, **`src/mailbox.js`**, **`src/player-links.js`**, **`src/lineup.js`** and
 **`src/boardroom.js`**, which load
-after the game and patch it in place. The big file gets **thirteen `<script src>`
+after the game and patch it in place. The big file gets **fourteen `<script src>`
 tags and nothing else**. If you are merging my work and hit a conflict in that file, the
 resolution is always "keep both, re-add my one line".
 
@@ -106,6 +106,42 @@ turnover including coaching costs — that figure changed *for* 2026/27, which i
 the season the game is set in — League Two 55%, enforced by refusing to register
 the player rather than by a points deduction. Clubs sit at 16–44%, so it only
 bites if you go looking for it.
+
+### Cycle 30 — picking the side: one screen, three faults
+
+Reported as one bug. It was three.
+
+**1. Two features own `ACTIONS.benchPick`.** The original tactics screen answered a
+shirt tap with a list of replacements, each row carrying `data-action="benchPick"`,
+and `ACTIONS.benchPick` put that man into the selected slot. Much later a "name your
+bench" feature defined `ACTIONS.benchPick` **again**, to mean "add him to the nine".
+The second definition replaced the first, so tapping a replacement stopped swapping
+anybody and started opening the bench sheet — exactly what was reported.
+
+There is a comment in the big file from whoever hit this before me, routing a later
+panel around it with a different action name rather than untangling it. **This is the
+third time this session that a later layer taking a name already in use has produced
+a user-visible bug**, and the first time it has been one I did not cause. It is worth
+Claude and Codex knowing that `ACTIONS` is a single flat namespace with no collision
+check in it.
+
+**2. The shortlist is capped at three.** `s.opts.slice(0, 3)`, with no route from
+that panel to the rest of the squad.
+
+**3. Filling a slot cloned the player.** `sugPick` did
+`G.tacs.xi[UI.selSlot] = id` with no check on whether he was already on the pitch,
+so choosing a starter put him in two shirts and dropped a third man without saying
+so.
+
+**Fixed by state, not by renaming.** `benchPick` now means "put him in the shirt"
+when a shirt is selected and "name the bench" when none is — so neither feature had
+to move, and opening the bench sheet clears the selection so they cannot overlap.
+Slot filling swaps when the man is already on the pitch. And a *Swap with anyone in
+the squad* button opens the full list for that position with the effectiveness
+delta, out-of-position flag and condition on every row.
+
+Measured: 25 players offered for a slot in a 26-man squad; the eleven stays eleven;
+no duplicates; the bench sheet still names players when no shirt is selected.
 
 ### Cycle 29 — the injured complainer, and names you can tap
 
