@@ -4,6 +4,14 @@
 
 ### Added
 
+- **Player names in the mail are tappable.** A letter saying a player wants a word, a
+  scout report, a suggested transfer target — tap the name and his full card opens, so you
+  can look at the man before deciding what to do about him. Nothing new was built for it:
+  the profile screen has always existed and every letter has always bolded the name; there
+  was simply no way in from the words. Names that match nobody are left alone, and so is a
+  name two players share, because sending you to the wrong card is worse than sending you
+  nowhere.
+
 - **The mailbox has folders.** Every letter arrived in one stream — a contract expiry, a
   scout report, a cup draw, the board asking to see you and a newspaper column all looked
   the same and all queued behind each other. There are now folders for the **Boardroom**,
@@ -114,6 +122,14 @@
   a hundred million in Europe reported the same revenue as one that never qualified.
 
 ### Fixed
+
+- **An injured player no longer complains about not getting minutes.** Every other
+  complaint in the game skips a player in the treatment room — the unrest sweep, the weekly
+  grumble, the morale drip. The promise settlement checked it nowhere, so you could promise
+  a man he would start, watch him do a hamstring in October, and in January he would lose
+  sixteen morale, have a 45% chance of asking for the transfer list, and write to say "you
+  gave me your word" about eleven matches he spent on crutches. The promise now waits while
+  he is out, and the time he missed comes off what he could reasonably have played.
 
 - **Leaving the boardroom no longer drops you back on the invitation.** The letter was
   already being removed, but the manager was left looking at the space where it had been.

@@ -31,9 +31,9 @@ where three agents will collide. So my code does not live there.
 
 Everything I write goes in **`src/gameplay-balance.js`**, **`src/economy.js`**,
 **`src/press-room.js`**, **`src/interactions.js`**, **`src/prize-money.js`**,
-**`src/playoffs.js`**, **`src/tactics.js`**, **`src/attributes.js`**, **`src/injuries.js`**, **`src/growth.js`**, **`src/mailbox.js`** and
+**`src/playoffs.js`**, **`src/tactics.js`**, **`src/attributes.js`**, **`src/injuries.js`**, **`src/growth.js`**, **`src/mailbox.js`**, **`src/player-links.js`** and
 **`src/boardroom.js`**, which load
-after the game and patch it in place. The big file gets **twelve `<script src>`
+after the game and patch it in place. The big file gets **thirteen `<script src>`
 tags and nothing else**. If you are merging my work and hit a conflict in that file, the
 resolution is always "keep both, re-add my one line".
 
@@ -106,6 +106,40 @@ turnover including coaching costs — that figure changed *for* 2026/27, which i
 the season the game is set in — League Two 55%, enforced by refusing to register
 the player rather than by a points deduction. Clubs sit at 16–44%, so it only
 bites if you go looking for it.
+
+### Cycle 29 — the injured complainer, and names you can tap
+
+**An injured player complaining about minutes.** Every other complaint checks
+`p.injury` — `raiseUnrest`, the original weekly grumble, the morale drip all skip a
+man in the treatment room. `settlePromises` checked it **nowhere**. Promise a player
+he will start, watch him do a hamstring in October, and in January he loses sixteen
+morale, has a 45% chance of asking for the transfer list, and writes to say "you gave
+me your word" about matches he spent on crutches.
+
+Two changes: while he is actually injured the promise waits rather than being lost,
+and the days he spent out inside the window come off what he could reasonably have
+played. If he was hurt for most of it there is no case to answer.
+
+Measured: injured player keeps his promise, loses **0** morale, is not listed, sends
+no letter. A fit player frozen out over the same window still loses **13.6** morale
+and still writes — the mechanism did not get switched off, which is the failure mode
+I was watching for.
+
+**Names you can tap.** `ACTIONS.profile` has opened the full player card from a
+`data-id` since the beginning, and the squad list has used it all along. What never
+existed was a way in from the words: every letter writes `<b>Name</b>` and stops
+there.
+
+So nothing new was built. `openModal` is wrapped, bolded text is checked against the
+players who actually exist, and the existing action is hung on the ones that match.
+Deliberately narrow — only `<b>…</b>`, because matching bare text would rewrite the
+middle of sentences and names inside attributes. Measured on a letter naming two
+players, a club and a fee: both players linked, `Manchester United` untouched,
+`£12.5M` untouched, and the tap opened the right card.
+
+**A name two players share maps to nothing.** Sending a manager to the wrong man's
+card is worse than sending him nowhere, and this world has duplicate names in it —
+Codex logged three of them in cycle 3 and they are still open.
 
 ### Cycle 28 — the mailbox, and the board's calendar
 

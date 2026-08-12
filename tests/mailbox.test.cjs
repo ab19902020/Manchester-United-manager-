@@ -174,3 +174,60 @@ test('leaving the boardroom puts you on the next letter, not on the one you just
   assert.equal(run.openedIsInvite, false,
     'and it must not be the invitation you have just used');
 });
+
+/* Reported: "a player is moaning he hasn't had minutes and I'm a new
+   manager — I should click on the player and look at his attributes."
+   The profile screen already existed; what was missing was a way in from
+   the words. */
+test('a player named in a letter opens his card, and nothing else does', async (t) => {
+  const game = await createGame();
+  t.after(() => game.close());
+  await startCareer(game);
+
+  const run = game.eval(`(function(){
+    const api = window.RBSPlayerLinks;
+    const c = G.clubs[G.my];
+    const one = c.players[3], two = c.players[5];
+    const html = '<div><b>' + one.name + '</b> has knocked on your door. ' +
+      '<b>Manchester United</b> are fourth and <b>' + two.name + '</b> is fit again. ' +
+      'The fee was <b>£12.5M</b>.</div>';
+    const out = api.linkify(html);
+    const ids = (out.match(/data-id="([^"]+)"/g)||[])
+      .map(x => x.replace(/.*data-id="/,'').replace('"',''));
+
+    // through the real screen, on real mail
+    for (let i = 0; i < 25; i++) { simRestOfDay(); dailyTickCore(); G.day++; }
+    const letter = (G.inbox||[]).find(m => /<b>/.test(m.body||''));
+    UI.mailView = letter ? letter.id : null;
+    renderMailbox();
+    const body = (document.getElementById('sheetBody')||{}).innerHTML || '';
+
+    // and tapping one lands on that player's card
+    let opened = false, openedRight = false;
+    if (ids.length) {
+      ACTIONS.profile({dataset:{id: ids[0]}});
+      const sheet = (document.getElementById('sheetBody')||{}).innerHTML || '';
+      opened = /Technical/.test(sheet) && /Physical/.test(sheet);
+      openedRight = sheet.indexOf(playerById(ids[0]).name) >= 0;
+    }
+    return {ids, wanted: [String(one.id), String(two.id)],
+      linkedClub: /data-action="profile"[^>]*>Manchester United/.test(out),
+      linkedMoney: /data-action="profile"[^>]*>£/.test(out),
+      inboxLinks: api.linkedCount(body), opened, openedRight};
+  })()`);
+
+  // 1. both players are linked, and to the right ids
+  assert.equal(Array.from(run.ids).join(','), Array.from(run.wanted).join(','),
+    'both players named in the letter should be tappable');
+
+  // 2. and nothing that is not a player is touched
+  assert.equal(run.linkedClub, false, 'a club name is not a player');
+  assert.equal(run.linkedMoney, false, 'nor is a fee');
+
+  // 3. it reaches the real mailbox
+  assert.ok(run.inboxLinks >= 0, 'the mailbox renders without throwing');
+
+  // 4. and the tap opens the full card for that player
+  assert.ok(run.opened, 'tapping a name should open the full player card');
+  assert.ok(run.openedRight, 'and it should be the player who was named');
+});
