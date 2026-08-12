@@ -107,6 +107,45 @@ the season the game is set in — League Two 55%, enforced by refusing to regist
 the player rather than by a points deduction. Clubs sit at 16–44%, so it only
 bites if you go looking for it.
 
+### Cycle 26 — width, marking, and a test I deleted without noticing
+
+**Width was worth 3.5% and marking 2%** — both inside the engine's noise, so
+neither could be shown to do anything. Width is not a small bonus; it is a
+decision about where the pitch is. It now moves the same channel weighting the
+attacking focus uses, so it changes where your chances come from:
+
+| width | assists from wide |
+| --- | ---: |
+| Wide | 56.6% |
+| Standard | 39.6% |
+| Narrow | 17.0% |
+
+Set-piece marking did nothing at a set piece, which is the only place it is about.
+`cornerEvent` decides the header on
+`avg(D, ['heading','strength','positioning'])`, so man-marking now makes those
+defenders harder to beat in the air and zonal holds shape instead. The flat
+open-play bonus moved from man to zonal so the two are a choice; before, man was
+strictly better and still lost every corner it was supposed to win.
+
+**And a mistake of mine, found by accident.** Cycle 23 removed two flaky tests
+with a long comment explaining which coverage survived. The block replacement I
+used to insert that comment ran from the first flaky test to `build-up leans…`,
+which swallowed `the final-third instruction changes who scores` in between. So I
+deleted a good test, and the comment I wrote in its place *claimed it was still
+there*. Two commits shipped that way. Restored from `fc86d36`.
+
+Restoring it brought back assertions I had already removed once, and it went flaky
+again for the same reasons. What survives is measured against the other
+instructions rather than against Balanced — Balanced's own wide share moves a long
+way between generated careers, depending on which wide players the squad has, so
+every comparison with it was unstable. The scorer's heading and pace contrasts are
+recorded in comments rather than asserted: both are the right way round and both
+are about two standard errors at this sample. Five clean runs after.
+
+**The lesson worth keeping:** a block replacement anchored on "from this comment
+to that test" deletes whatever is between them. Check the test count before and
+after — `grep -c '^test('` would have caught this in one second, two commits ago.
+
 ### Cycle 25 — the six-club play-off, and the language that had gone stale
 
 **The National League play-off is six clubs.** Cycle 19 built four everywhere and

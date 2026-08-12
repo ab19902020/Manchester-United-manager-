@@ -283,12 +283,29 @@
     return 'central';
   }
 
+  /* WIDTH, WHICH USED TO BE WORTH 3.5%.
+
+     `Wide` multiplied attack by 1.035 and `Narrow` defence by 1.03 —
+     inside the engine's own noise, so neither could be shown to do
+     anything. Width is not a small bonus, it is a decision about where
+     the pitch is: a wide side works the touchlines and a narrow one
+     packs the middle. It now moves the same channel weighting the
+     attacking focus uses, so it changes where your chances come from,
+     which is something you can see. */
+  const WIDTH = {
+    Wide: { left: 1.45, central: 0.8, right: 1.45 },
+    Standard: { left: 1, central: 1, right: 1 },
+    Narrow: { left: 0.65, central: 1.3, right: 0.65 },
+  };
+
   function creatorPick(sim, A, exclude) {
     const ch = CHANNEL[focusOf(A.tac)] || CHANNEL[BALANCED];
+    const w = WIDTH[(A.tac && A.tac.width) || 'Standard'] || WIDTH.Standard;
     return sim.weighted(A, (x) => {
       if (!x || !x.p || x.slot === 'GK') return 0.01;
+      const lane = laneOf(x.slot);
       const base = sim.effA(x, 'vision') + (isMid(x.slot) || isFwd(x.slot) ? 3 : 0);
-      return Math.max(0.05, base) * ch[laneOf(x.slot)];
+      return Math.max(0.05, base) * ch[lane] * w[lane];
     }, exclude);
   }
 
@@ -408,6 +425,13 @@
           s.tac.finalThird = plan.finalThird;
         }
         shapeInstructions(s);
+        /* the flat open-play bonus was on man-marking, which also wins the
+           air. Zonal keeps its shape instead, so the choice is a choice. */
+        if (s._im) {
+          const mk = (s.tac && s.tac.marking) || 'Zonal';
+          if (mk === 'Man') s._im.def /= 1.02;
+          else s._im.def *= 1.02;
+        }
       });
       return s;
     };
@@ -424,6 +448,47 @@
         guard('clash', () => pressClash(this.sides));
       }
       return withResolvedFocus(this.sides, () => previousTick.apply(self, arguments));
+    };
+
+    /* SET-PIECE MARKING, WHICH USED TO BE WORTH 2%.
+
+       `Man` gave a flat `def *= 1.02` in open play and did nothing
+       whatsoever at a set piece, which is the only place the instruction
+       is about. The corner is decided by
+       `avg(D, ['heading','strength','positioning'])` against the
+       attacker's header, so man-marking now means the defenders
+       contesting it are harder to beat in the air, and zonal means they
+       hold their shape instead — better with the ball in front of them,
+       worse with a good header attacking it. The flat open-play bonus
+       moves to zonal so the two are a choice rather than one being
+       strictly better. */
+    const MARK_AIR = { Man: 1.10, Zonal: 0.96 };
+
+    if (has(MatchSim.prototype.cornerEvent)) {
+      const previousCorner = MatchSim.prototype.cornerEvent;
+      MatchSim.prototype.cornerEvent = function cornerEventWithMarking(A, D) {
+        this._rbsMarking = D;
+        try {
+          return previousCorner.apply(this, arguments);
+        } finally {
+          this._rbsMarking = null;
+        }
+      };
+    }
+
+    const AIR = ['heading', 'strength', 'positioning'];
+    const previousEffMark = MatchSim.prototype.effA;
+    MatchSim.prototype.effA = function effAAtSetPieces(pl, attr) {
+      const v = previousEffMark.apply(this, arguments);
+      if (typeof v !== 'number' || !this._rbsMarking || AIR.indexOf(attr) < 0) return v;
+      try {
+        const D = this._rbsMarking;
+        if (!D.onfield || D.onfield.indexOf(pl) < 0) return v;   /* the attacker is not marking */
+        const m = MARK_AIR[(D.tac && D.tac.marking) || 'Zonal'];
+        return m ? v * m : v;
+      } catch (error) {
+        return v;
+      }
     };
 
     /* who gets on the end of the chance the engine just built */
@@ -450,6 +515,7 @@
     window.RBSTactics = Object.freeze({
       FOCUS_OPTIONS, POWER_OPTIONS, BUILD_OPTIONS, THIRD_OPTIONS, SLIGHT, THIRD_BITE,
       focusOf, powerOf, decide, focusForSquad, buildOf, thirdOf, planForSquad,
+      WIDTH, CHANNEL, creatorPick,
     });
   } catch (error) { /* no window */ }
 }());

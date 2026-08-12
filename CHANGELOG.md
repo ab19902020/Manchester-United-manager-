@@ -101,6 +101,20 @@
 
 ### Fixed
 
+- **Width and set-piece marking do something now.** Width was worth `attack x 1.035`
+  and man-marking `defence x 1.02` — both inside the engine's own noise, so neither could
+  be shown to change anything at all. Width now decides where the pitch is: it moves the
+  same channel weighting the attacking focus uses, so a wide side works the touchlines
+  and a narrow one packs the middle. Measured over 200 matches a setting, assists from
+  wide players came out at **56.6% wide, 39.6% standard and 17.0% narrow**, where before
+  the three were indistinguishable.
+
+  Set-piece marking now applies at set pieces, which is the only place the instruction is
+  about — it previously did nothing whatsoever at a corner. Man-marking makes the
+  defenders contesting the header harder to beat in the air; zonal holds its shape and
+  keeps the small open-play edge instead, so the two are a choice rather than one being
+  strictly better.
+
 - **The National League play-off is six clubs, as it really is.** Second and third stand
   out of a one-off eliminator round — fourth plays seventh, fifth plays sixth — and come
   in at the semi-finals, with the final at a neutral ground. The draw is corrected so the
