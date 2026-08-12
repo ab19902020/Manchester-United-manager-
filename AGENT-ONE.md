@@ -31,9 +31,9 @@ where three agents will collide. So my code does not live there.
 
 Everything I write goes in **`src/gameplay-balance.js`**, **`src/economy.js`**,
 **`src/press-room.js`**, **`src/interactions.js`**, **`src/prize-money.js`**,
-**`src/playoffs.js`**, **`src/tactics.js`**, **`src/attributes.js`**, **`src/injuries.js`**, **`src/growth.js`** and
+**`src/playoffs.js`**, **`src/tactics.js`**, **`src/attributes.js`**, **`src/injuries.js`**, **`src/growth.js`**, **`src/mailbox.js`** and
 **`src/boardroom.js`**, which load
-after the game and patch it in place. The big file gets **eleven `<script src>`
+after the game and patch it in place. The big file gets **twelve `<script src>`
 tags and nothing else**. If you are merging my work and hit a conflict in that file, the
 resolution is always "keep both, re-add my one line".
 
@@ -106,6 +106,54 @@ turnover including coaching costs — that figure changed *for* 2026/27, which i
 the season the game is set in — League Two 55%, enforced by refusing to register
 the player rather than by a points deduction. Clubs sit at 16–44%, so it only
 bites if you go looking for it.
+
+### Cycle 28 — the mailbox, and the board's calendar
+
+**Folders, out of a classification that was already there.** Every letter has
+carried a `type` since `mail()` was written, and nothing had ever read it except to
+choose an icon:
+
+```text
+board 74 · transfer 44 · news 37 · info 18 · match 15
+contract 15 · award 12 · train 6 · injury 5 · squad 4 · scout 3
+```
+
+Grouped into Boardroom, Transfers, Squad, Media and Results, with unread counts and
+a marker on any folder holding a letter that needs answering. The filter is applied
+to `G.inbox` around the call to `renderMailbox()` and the real array put back in a
+`finally`, so the existing renderer sorts, prioritises, counts and paginates a
+shorter list without knowing anything happened. The only markup this file writes is
+the chip row.
+
+**A wrong turn worth recording.** I built it against the inbox inside `vHome`
+first, and the probe came back with the counts correct but zero chips and zero mail
+rows. There are two inboxes: the summary list on the home screen and the real
+mailbox overlay that the Inbox tile opens, built by `renderMailbox()` and handed to
+`openModal`. I had wired the folders to the one the player mostly does not use.
+Measuring the render rather than assuming it worked is what caught it.
+
+**The board's calendar.** There was a meeting in August to agree the season's terms
+and one in May to review it, plus the unscheduled ones — patience through the floor,
+the week after a broken pledge. The ordinary mid-season one did not exist. There is
+now a January meeting, gated to the 6th–20th, once a season, and only once ten
+matches have been played so there is something to review.
+
+`boardScene` in this file only graded `monthly`, `checkin` and `review`; a new kind
+would have fallen through to a builder that had never heard of it, so `midseason`
+was added to that list rather than left to find out.
+
+**Two things the user asked for that already existed**, and I checked rather than
+built: the January transfer window is open — `windowOpen()` returns true for July,
+August, the first of September and the whole of January — and the end-of-season
+review already fires from `endSeason`. Both are now asserted in the test so they
+cannot quietly stop.
+
+**And the report about the boardroom, third time round.** The letter was already
+being consumed; what was left was the manager staring at the gap where it had been.
+`closeBoardRoom` now opens whatever is at the top of the inbox, so you land on the
+next letter. Worth noting that the first two attempts at this fixed real problems
+that were not the one being described — removing the button, then removing the
+letter — and the actual complaint was about *where you end up*.
 
 ### Cycle 27 — player growth, and something underneath it I did not find
 

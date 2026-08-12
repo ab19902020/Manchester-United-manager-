@@ -1,8 +1,9 @@
 /* global G, BR, clamp, ordinal, esc, fmtM, leaguePos, expectPos, gamesPlayed,
           tableRows, divMembers, myDiv, DIV_NAMES, CUP_DEFS, formStreak,
           fansShift, makePledge, mulberry, hashStr, boardPeople, boardTemper,
-          boardMood, boardOwner, sackManager, keyAbsences, ACTIONS */
-/* global boardScene:writable, boardTarget:writable, openBoardRoom:writable */
+          boardMood, boardOwner, sackManager, keyAbsences, ACTIONS, UI, dateOf */
+/* global boardScene:writable, boardTarget:writable, openBoardRoom:writable,
+          dailyTickCore:writable, closeBoardRoom:writable */
 
 /* =====================================================================
    THE BOARDROOM — a room that can read a league table
@@ -1042,7 +1043,12 @@
 
     boardScene = function boardSceneGraded(kind) {
       const built = guard('scene', () => {
-        if (kind !== 'monthly' && kind !== 'checkin' && kind !== 'review') return null;
+        /* 'midseason' is the January sit-down. It gets the same graded
+           treatment as the monthly review — the same facts, read at the
+           halfway point — rather than falling through to a scene builder
+           that has never heard of it. */
+        if (kind !== 'monthly' && kind !== 'checkin' && kind !== 'review'
+          && kind !== 'midseason') return null;
         const F = brFacts();
         if (!F) return null;
         const g = gradeOf(F);
@@ -1145,9 +1151,78 @@
     };
   }
 
+  /* =====================================================================
+     TWICE A SEASON, AND WHERE YOU LAND AFTERWARDS
+     ---------------------------------------------------------------------
+     The board called you in when the season's terms were agreed in
+     August, when patience fell through the floor, the week after you
+     broke your word in public, and for the end-of-season review. What was
+     missing was the ordinary one: the mid-season sit-down in January,
+     with half a season played and the window open, which is when a real
+     board either backs a manager or starts asking questions.
+
+     The January window itself already exists — `windowOpen()` returns
+     true for July, August, the first of September and the whole of
+     January — so the meeting lands while you can actually act on what
+     comes out of it.
+     ===================================================================== */
+
+  const MID_SEASON_MONTH = 0;          /* January */
+
+  function midSeasonDue() {
+    return guard('midSeason', () => {
+      if (!G || G.sacked || G.boardCall) return false;
+      if (typeof dateOf !== 'function') return false;
+      const d = dateOf(G.day);
+      if (d.getUTCMonth() !== MID_SEASON_MONTH) return false;
+      if (d.getUTCDate() < 6 || d.getUTCDate() > 20) return false;
+      if (G.brMidSeason === G.season) return false;
+      /* half a season of evidence, or there is nothing to review */
+      if (typeof gamesPlayed === 'function' && gamesPlayed(G.my) < 10) return false;
+      G.brMidSeason = G.season;
+      return true;
+    }, false);
+  }
+
+  if (has(window.dailyTickCore)) {
+    const previousTick = window.dailyTickCore;
+    window.dailyTickCore = function dailyTickCoreWithMidSeason() {
+      const r = previousTick.apply(this, arguments);
+      guard('midSeasonCall', () => {
+        if (!midSeasonDue() || !has(window.boardSummon)) return;
+        window.boardSummon('midseason', 'The mid-season review',
+          'Half a season gone and the window is open. The board would like to go ' +
+          'through where the club stands, and what you want to do about it.');
+      });
+      return r;
+    };
+  }
+
+  /* "It takes you straight back to the screen that invited you upstairs."
+     The letter is removed, but the manager was left looking at the space
+     where it had been. Closing the room now opens whatever is at the top
+     of the inbox, so you land on the next thing rather than on nothing. */
+  if (has(window.closeBoardRoom)) {
+    const previousClose = window.closeBoardRoom;
+    window.closeBoardRoom = function closeBoardRoomOntoTheNextLetter() {
+      guard('afterMeeting', () => {
+        consumeInvitation();
+        const box = G.inbox || [];
+        const next = box.find((m) => m && !m.read) || box[0];
+        if (next) {
+          box.forEach((m) => { if (m) m.open = false; });
+          next.open = true;
+          if (!next.read) { next.read = true; G.unread = Math.max(0, (G.unread || 0) - 1); }
+        }
+        if (typeof UI !== 'undefined' && UI) UI.view = 'home';
+      });
+      return previousClose.apply(this, arguments);
+    };
+  }
+
   try {
     window.RBSBoard = Object.freeze({
-      brFacts, gradeOf, seasonShape, cupState, BANDS, consumeInvitation,
+      brFacts, gradeOf, seasonShape, cupState, BANDS, consumeInvitation, midSeasonDue,
     });
   } catch (error) { /* no window */ }
 }());

@@ -4,6 +4,20 @@
 
 ### Added
 
+- **The mailbox has folders.** Every letter arrived in one stream — a contract expiry, a
+  scout report, a cup draw, the board asking to see you and a newspaper column all looked
+  the same and all queued behind each other. There are now folders for the **Boardroom**,
+  **Transfers**, **Squad**, **Media** and **Results**, with unread counts and a dot on any
+  folder holding something you have to answer. Nothing was reclassified to do it: the mail
+  has been stamped with a type since the beginning and nothing had ever read it except to
+  pick an icon.
+
+- **The board sees you twice a season.** There was a meeting in August to agree the
+  season's terms and one in May to review it, plus the unscheduled ones when results go
+  badly or you break your word in public. Missing was the ordinary one: a mid-season
+  sit-down in January, with half a season played and the transfer window open, which is
+  when a real board either backs a manager or starts asking questions.
+
 - **Goalkeepers have goalkeeping attributes.** They did not. A keeper's shot-stopping was
   `(positioning + agility) / 2` — two outfield attributes — and his penalty saving was
   agility alone. There is now **Handling**, **Reflexes**, **One-on-ones** and
@@ -100,6 +114,11 @@
   a hundred million in Europe reported the same revenue as one that never qualified.
 
 ### Fixed
+
+- **Leaving the boardroom no longer drops you back on the invitation.** The letter was
+  already being removed, but the manager was left looking at the space where it had been.
+  Closing the room now opens whatever is at the top of the inbox, so you land on the next
+  thing rather than on nothing.
 
 - **Players no longer reach the high nineties in two seasons.** Reported, and reproduced:
   the best prospects in the world were going 82 → 90 → 93 and 85 → 92, and the whole world

@@ -338,8 +338,13 @@ test('the summons letter leaves the mailbox once you have been up', async (t) =>
   // a press conference or a decision can land in that time, which is not
   // this test's business.
   assert.equal(run.after.boardOnScreen, 0, 'and no way up to the boardroom left on the home screen');
-  // an unread letter that vanishes must not leave the badge counting it
-  assert.equal(run.after.unread, run.before.unread - 1,
+  // An unread letter that vanishes must not leave the badge counting it.
+  // Leaving the room also opens the next letter, which is read by
+  // definition once you are looking at it, so the badge can legitimately
+  // drop by two: the summons that went, and the one you landed on.
+  assert.ok(run.after.unread <= run.before.unread - 1,
     `the unread badge still counts the letter that was removed (${run.before.unread} -> ${run.after.unread})`);
+  assert.ok(run.after.unread >= run.before.unread - 2,
+    `leaving the boardroom marked too much as read (${run.before.unread} -> ${run.after.unread})`);
   assert.deepEqual(game.errors, []);
 });
