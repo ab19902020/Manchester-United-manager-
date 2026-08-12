@@ -293,6 +293,44 @@
   /* A promise you keep is worth something and a promise you break costs
      you. Without this, "promise more minutes" was a button that added
      sixteen morale and changed nothing about the football. */
+  /* A PROMISE CANNOT BE BROKEN AGAINST MATCHES HE COULD NOT PLAY IN.
+
+     Reported: an injured player complaining he is not getting minutes.
+     Every other complaint in the game checks `p.injury` — the unrest
+     sweep, the original weekly grumble, the morale drip — but the promise
+     settlement did not check it anywhere. Promise a man he will start,
+     watch him do a hamstring in October, and in January he loses sixteen
+     morale, has a 45% chance of asking for the transfer list, and writes
+     to say "you gave me your word" about eleven matches he spent on
+     crutches.
+
+     Two changes. While he is actually in the treatment room the promise
+     is not judged at all — it waits until he is fit enough for the answer
+     to mean something. And the days he spent injured inside the window
+     come off what he could reasonably have played, so the share is
+     measured against the football that was available to him. */
+  const PROMISE_MIN_GAMES = 3;   /* below this there is nothing to judge */
+
+  function availableGames(pr, games) {
+    const out = (pr && pr.out) || 0;
+    if (out <= 0) return games;
+    const share = clamp(1 - out / PROMISE_DAYS, 0, 1);
+    return games * share;
+  }
+
+  /* The days a promised player spends injured, counted as they happen —
+     the weekly pass is the only thing that runs often enough to see them
+     and cheap enough to do it on every player. */
+  const WEEK = 7;
+
+  function countTimeOut() {
+    const c = myClub();
+    if (!c) return;
+    (c.players || []).forEach((p) => {
+      if (p.promise && p.injury) p.promise.out = (p.promise.out || 0) + WEEK;
+    });
+  }
+
   function settlePromises() {
     const c = myClub();
     if (!c) return;
@@ -300,8 +338,13 @@
     (c.players || []).forEach((p) => {
       const pr = p.promise;
       if (!pr || G.day < pr.until) return;
+      /* still injured: the promise waits rather than being lost */
+      if (p.injury) { pr.until = G.day + 14; return; }
+      const rawGames = Math.max(1, played - (pr.games0 || 0));
+      const games = availableGames(pr, rawGames);
+      /* he was hurt for most of it — there is no case to answer */
+      if (games < PROMISE_MIN_GAMES) { pr.until = G.day + 21; return; }
       p.promise = null;
-      const games = Math.max(1, played - (pr.games0 || 0));
       const apps = ((p.stats && p.stats.apps) || 0) - (pr.apps0 || 0);
       const share = apps / games;
       const want = roleShare(pr.role);
@@ -313,9 +356,12 @@
       p.morale = clamp(p.morale - 16, 1, 100);
       p.unrestDay = G.day;
       if (Math.random() < 0.45) p.listed = true;
+      const missed = Math.round(rawGames - games);
       mail('squad', `😠 ${p.name}: "You gave me your word"`,
         `You told <b>${esc(p.name)}</b> he would be a <b>${roleLabel(pr.role).toLowerCase()}</b> here. ` +
-        `Since that conversation he has played <b>${apps}</b> of <b>${games}</b> matches.` +
+        `Since that conversation he has played <b>${apps}</b> of the <b>${Math.round(games)}</b> ` +
+        `matches he was fit for` +
+        (missed > 0 ? `, with <b>${missed}</b> more missed through injury` : '') + '.' +
         `<br><br>${p.listed ? 'He has asked to be put on the transfer list.' : 'He has not asked to leave. Yet.'}`);
     });
   }
@@ -368,7 +414,7 @@
         marked.forEach((p) => { p._pending = false; });
         /* give back exactly what the drip took, and nothing else */
         owed.forEach(([p, taken]) => { if (taken > 0) p.morale = clamp(p.morale + taken, 1, 100); });
-        guard('unrest.weekly', () => { stampArrivals(); settlePromises(); raiseUnrest(); })();
+        guard('unrest.weekly', () => { countTimeOut(); stampArrivals(); settlePromises(); raiseUnrest(); })();
       }
     };
   }

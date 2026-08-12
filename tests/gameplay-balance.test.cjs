@@ -378,3 +378,62 @@ test('a conversation about a player is about that player', async (t) => {
   assert.equal(talked.decoyMorale, 60,
     `${talked.decoy} was cheered up by a conversation about ${talked.subject}`);
 });
+
+/* Reported: an injured player complaining he is not getting minutes.
+   Every other complaint checks `p.injury` — the unrest sweep, the weekly
+   grumble, the morale drip — but the promise settlement checked it
+   nowhere, so a man who spent the window on crutches was judged on
+   matches he could not physically have played in. */
+test('a promise is not broken against matches he was injured for', async (t) => {
+  const game = await createGame();
+  t.after(() => game.close());
+  await startCareer(game);
+
+  const run = game.eval(`(function(){
+    const c = G.clubs[G.my];
+    const pick = (n) => c.players.filter(x => !x.youth && !x.loan)[n];
+
+    // promised, then hurt for the whole window
+    const hurt = pick(3);
+    hurt.promise = {role:'star', until:G.day+1, apps0:(hurt.stats&&hurt.stats.apps)||0, games0:-30};
+    hurt.injury = {name:'Broken leg', days:200, total:200};
+    const hurtMorale = hurt.morale, hurtListed = !!hurt.listed;
+    G.day += 2;
+    weeklyTraining();
+    const injured = {
+      stillPromised: !!hurt.promise,
+      moraleChange: hurt.morale - hurtMorale,
+      listed: !!hurt.listed && !hurtListed,
+      mails: (G.inbox||[]).filter(m => /gave me your word/.test(m.title||'')).length,
+    };
+
+    // fit, and genuinely neglected
+    const fit = c.players.filter(x => !x.youth && !x.loan && x !== hurt)[4];
+    fit.injury = null;
+    fit.stats.apps = 0;
+    fit.promise = {role:'star', until:G.day-1, apps0:0, games0:-30};
+    const fitMorale = fit.morale;
+    weeklyTraining();
+    const healthy = {
+      stillPromised: !!fit.promise,
+      moraleChange: fit.morale - fitMorale,
+      mails: (G.inbox||[]).filter(m => /gave me your word/.test(m.title||'')).length,
+    };
+    return {injured, healthy};
+  })()`);
+
+  // 1. the injured man is not judged, and not punished
+  assert.equal(run.injured.stillPromised, true,
+    'the promise should wait until he is fit, not be lost while he is out');
+  assert.equal(run.injured.moraleChange, 0,
+    `an injured player lost ${run.injured.moraleChange} morale over minutes he could not play`);
+  assert.equal(run.injured.listed, false, 'and he did not ask for the transfer list');
+  assert.equal(run.injured.mails, 0,
+    'nor did he write to say you gave him your word');
+
+  // 2. but a fit player you have frozen out still has a case
+  assert.equal(run.healthy.stillPromised, false, 'a fit player\'s promise is settled');
+  assert.ok(run.healthy.moraleChange < -5,
+    `breaking a promise to a fit player should cost him morale (${run.healthy.moraleChange})`);
+  assert.equal(run.healthy.mails, 1, 'and he should say so');
+});
