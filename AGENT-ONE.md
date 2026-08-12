@@ -31,9 +31,9 @@ where three agents will collide. So my code does not live there.
 
 Everything I write goes in **`src/gameplay-balance.js`**, **`src/economy.js`**,
 **`src/press-room.js`**, **`src/interactions.js`**, **`src/prize-money.js`**,
-**`src/playoffs.js`**, **`src/tactics.js`**, **`src/attributes.js`**, **`src/injuries.js`** and
+**`src/playoffs.js`**, **`src/tactics.js`**, **`src/attributes.js`**, **`src/injuries.js`**, **`src/growth.js`** and
 **`src/boardroom.js`**, which load
-after the game and patch it in place. The big file gets **ten `<script src>`
+after the game and patch it in place. The big file gets **eleven `<script src>`
 tags and nothing else**. If you are merging my work and hit a conflict in that file, the
 resolution is always "keep both, re-add my one line".
 
@@ -106,6 +106,55 @@ turnover including coaching costs — that figure changed *for* 2026/27, which i
 the season the game is set in — League Two 55%, enforced by refusing to register
 the player rather than by a points deduction. Clubs sit at 16–44%, so it only
 bites if you go looking for it.
+
+### Cycle 27 — player growth, and something underneath it I did not find
+
+Reported: players hit the high nineties far too quickly, and improvement should
+taper with age. Reproduced over three simulated seasons:
+
+```text
+Álvaro Ruiz     20, pot 94    82 -> 90 -> 93
+Nathan Cissé    21, pot 94    83 -> 90 -> 94
+Enzo Camara     17, pot 93    85 -> 92 -> 92
+world: players rated 90+   12 -> 24 -> 33
+```
+
+The season-end settlement granted an age band's ceiling scaled by minutes played:
+ten points at seventeen, eight at nineteen, six at twenty-two — and **zero from
+thirty-one onwards, forever, from the birthday**. Ten in a season is about double
+what the best prospect alive manages in his best year, and the top of the curve was
+a cliff rather than a taper.
+
+New shape: 5 / 4 / 3 / 2 / 1 down to thirty, then a point about a third of the time
+at 31–32 and a sixth of the time at 33–35. The veteran bands are drawn per season
+rather than given a small fraction, because the settlement is in **whole points** —
+any factor meaning "a little" rounds to nothing, which is the cliff again with extra
+steps. The average is the small number intended; the granularity is what the game
+can store.
+
+After, over four seasons: `82 -> 84 -> 88 -> 89`, `83 -> 87 -> 90 -> 92`, and the
+90-rated count held at `12 -> 12 -> 17 -> 17`.
+
+**What slowing the curve exposed, and what I did about it.** With the ceiling
+lowered, a one-season audit found 68 players rising by six or more and several by
+eleven — and the tell was that they landed *exactly on their potential with zero
+appearances*. Ben Nelson, 22, 50 to 61, potential 61, not a minute played. The
+development model cannot do that: with no minutes, merit is 0.25 and the grant is
+under a point. Some other path walks players up to their ceiling and the season-end
+settlement does not catch it.
+
+**I did not find that path.** I read `weeklyTraining` and its dozen layers,
+`capGrowth`, `growAllowance`, `growMerit`, the loan-return bonus, the academy
+end-of-season bump and the rollover recompute, and could not account for it before
+I ran out of room. So the module does not claim to fix it: it adds a backstop that
+makes the age band authoritative, clamping anyone at season end who has risen
+further than his age allows, measured from where he actually started. After the
+clamp, players gaining six or more in a season: **68 → 0**.
+
+That is a patch over a cause I have not identified, and it is labelled as one in the
+file. The next person should instrument `p.ovr` with a property setter across one
+season — the same trick that found the three money leaks in cycle 10 — and read off
+which stack frame is doing it.
 
 ### Cycle 26 — width, marking, and a test I deleted without noticing
 

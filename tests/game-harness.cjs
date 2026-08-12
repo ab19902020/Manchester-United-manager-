@@ -29,6 +29,7 @@ function gameHtml() {
     'src/tactics.js',
     'src/attributes.js',
     'src/injuries.js',
+    'src/growth.js',
     'src/boardroom.js',
   ]) {
     html = inlineScript(html, fs.readFileSync(path.join(root, filename), 'utf8'), filename);

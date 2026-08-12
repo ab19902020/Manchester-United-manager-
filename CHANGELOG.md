@@ -101,6 +101,20 @@
 
 ### Fixed
 
+- **Players no longer reach the high nineties in two seasons.** Reported, and reproduced:
+  the best prospects in the world were going 82 → 90 → 93 and 85 → 92, and the whole world
+  came up with them — clubs holding a player rated 90 or better went from 12 to 24 to 33
+  across two seasons. The season-end settlement allowed a seventeen-year-old ten points of
+  overall in a single year, roughly double what the best prospect alive manages in his
+  best season, and then cut him off completely on his thirty-first birthday.
+
+  The curve is now five points at eighteen, four to twenty-one, three to twenty-four, two
+  to twenty-seven and one to thirty — and instead of a cliff, a thirty-one or thirty-two
+  year old still nicks a point about a third of the time and a thirty-three to
+  thirty-five year old about a sixth. Measured over four seasons after: 82 → 84 → 88 → 89
+  and 83 → 87 → 90 → 92, so a good young player still climbs but arrives in his
+  mid-twenties, and the count of 90-rated players held at 12 → 12 → 17 → 17.
+
 - **Width and set-piece marking do something now.** Width was worth `attack x 1.035`
   and man-marking `defence x 1.02` — both inside the engine's own noise, so neither could
   be shown to change anything at all. Width now decides where the pitch is: it moves the
