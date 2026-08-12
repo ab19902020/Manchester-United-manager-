@@ -177,7 +177,15 @@ test('a wage rise is funded, and a player asking for minutes cannot hold up the 
   assert.equal(unrest.blocking, false, 'but it must never sit in front of the Continue button');
   assert.equal(unrest.options, 3, 'promise, be honest, or tell him to earn it');
   assert.equal(unrest.hasHonestOption, true, 'you can tell him what he actually is here');
-  assert.notEqual(unrest.roleAfter, unrest.roleBefore, 'promising minutes changes his role, not just his mood');
+  // A player already at the top of the ladder has no rung left to be
+  // promised, so his role stays put — the promise is still recorded and he
+  // still holds you to the minutes. Anyone below the top must move up.
+  if (unrest.roleBefore === 'star') {
+    assert.equal(unrest.roleAfter, 'star', 'a star player stays a star player');
+  } else {
+    assert.notEqual(unrest.roleAfter, unrest.roleBefore,
+      'promising minutes changes his role, not just his mood');
+  }
   assert.equal(unrest.promiseRecorded, true, 'and you can be held to it');
   assert.equal(unrest.mailClosed, true, 'answering closes the message');
   assert.ok(unrest.openAfterAMonth <= 1, 'a month of Mondays cannot queue up a month of demands');

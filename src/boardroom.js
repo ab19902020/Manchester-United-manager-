@@ -152,7 +152,16 @@
   function zones(div, size) {
     const shape = (window.RBSShape && window.RBSShape.divShape) ? window.RBSShape.divShape(div) : null;
     if (shape) {
-      return { promo: shape.up, po: 0, drop: shape.down, euro: shape.euro, shape };
+      /* `promo` is the automatic places only; `po` is the last place the
+         play-offs reach. Before the play-offs existed these were the same
+         thing, which is why the board used to call third an automatic
+         promotion place. */
+      return {
+        promo: shape.auto != null ? shape.auto : shape.up,
+        po: shape.hasPlayOff ? shape.poTo : 0,
+        poFrom: shape.hasPlayOff ? shape.poFrom : 0,
+        drop: shape.down, euro: shape.euro, shape,
+      };
     }
     return { promo: 0, po: 0, drop: 3, euro: div === 'PL' ? 4 : 0, shape: null };
   }
@@ -210,7 +219,9 @@
         absent: has(keyAbsences) ? keyAbsences(G.my) : [],
         zone: z,
         promoSpot: pos != null && z.promo > 0 && pos <= z.promo,
-        chasingPromo: pos != null && z.promo > 0 && pos > z.promo && pos <= z.promo + 3,
+        poSpot: pos != null && z.po > 0 && pos >= z.poFrom && pos <= z.po,
+        chasingPromo: pos != null && z.promo > 0 && pos > Math.max(z.promo, z.po)
+          && pos <= Math.max(z.promo, z.po) + 3,
         dropSpot: pos != null && z.drop > 0 && pos > size - z.drop,
         euroSpot: pos != null && z.euro > 0 && pos <= z.euro,
         earlyDays: played < 6,
@@ -402,6 +413,13 @@
       bits.push(vary('col-promo', [
         `${F.zone.promo === 1 ? 'The one automatic place' : `The top ${F.zone.promo}`} is where we are sitting, and this board would like it very much.`,
         'That is a promotion place. We are all adults, so we will say it plainly: we want it.',
+      ], rng));
+    } else if (F.poSpot && GOOD(g)) {
+      bits.push(vary('col-po', [
+        `That is a play-off place, and a play-off place is a chance rather than a promotion. ` +
+        'We would rather not need it, but we will take it.',
+        `${ordinal(F.pos)} puts us in the play-offs. One good fortnight in May and none of ` +
+        'the rest of this matters.',
       ], rng));
     } else if (F.chasingPromo && GOOD(g)) {
       bits.push(vary('col-chase', [

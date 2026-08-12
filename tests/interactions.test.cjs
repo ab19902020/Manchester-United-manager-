@@ -107,7 +107,7 @@ test('the press room asks about the thing that decides your division', async (t)
       return {zone:F.zone,rules:out};
     };
     return {
-      l2Promo:probe('L2',4), l2Chase:probe('L2',6),
+      l2Promo:probe('L2',2), l2PlayOff:probe('L2',4), l2Chase:probe('L2',9),
       nlMid:probe('NL',14), nlNothing:probe('NL',22),
       l1Down:probe('L1',21), l1Safe:probe('L1',12),
       plEuro:probe('PL',4), plDown:probe('PL',19),
@@ -117,13 +117,22 @@ test('the press room asks about the thing that decides your division', async (t)
   const idsOf = (r) => r.rules.map((x) => x.id);
   const textOf = (r) => r.rules.map((x) => x.lines.join(' ')).join(' ');
 
-  // 4th in League Two is an automatic promotion place, not a European one
+  // 2nd in League Two is an automatic promotion place, not a European one.
+  // (This used to say 4th. League Two promotes four, but only three of them
+  // automatically — the fourth is the play-off place, which is the whole
+  // point of the play-offs existing.)
   assert.equal(asked.l2Promo.zone, 'promotion');
   assert.ok(idsOf(asked.l2Promo).includes('pos-promo'), idsOf(asked.l2Promo).join());
   assert.ok(!idsOf(asked.l2Promo).includes('pos-euro'), 'Europe must not be mentioned in League Two');
   assert.ok(/promotion/i.test(textOf(asked.l2Promo)));
   assert.ok(!/Europe/i.test(textOf(asked.l2Promo)));
 
+  // and 4th is a play-off place, which is a different thing to be asked about
+  assert.equal(asked.l2PlayOff.zone, 'playoff');
+  assert.ok(idsOf(asked.l2PlayOff).includes('pos-promo'), idsOf(asked.l2PlayOff).join());
+  assert.ok(!/Europe/i.test(textOf(asked.l2PlayOff)));
+
+  // chasing is now the places just outside the play-offs, not outside the top four
   assert.equal(asked.l2Chase.zone, 'chasing');
   assert.ok(idsOf(asked.l2Chase).includes('pos-promo'));
 

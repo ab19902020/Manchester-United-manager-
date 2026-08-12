@@ -1,6 +1,7 @@
 /* global G, CUP_DEFS, PYRAMIDS, LEAGUES, DIV_NAMES, esc, fmtM, fmtDate, ordinal,
           tableRows, makeTie */
-/* global mail:writable, checkSeasonEnd:writable, WORLD_PR:writable */
+/* global mail:writable, checkSeasonEnd:writable, WORLD_PR:writable,
+          progressCups:writable */
 
 /* =====================================================================
    THE PLAY-OFFS — the four matches that decide most promotions, and
@@ -15,7 +16,7 @@
        Championship   2 automatic + play-off between 3rd and 6th
        League One     2 automatic + play-off between 3rd and 6th
        League Two     3 automatic + play-off between 4th and 7th
-       National League 1 automatic + play-off between 2nd and 5th
+       National League 1 automatic + six-club play-off, 2nd to 7th
 
    Nothing about the number going up changes. What changes is who.
 
@@ -50,9 +51,13 @@
    elsewhere add a modelled second tier abroad, this reads `PYRAMIDS` and
    will want its country adding to the list.
 
-   The National League really runs a six-club play-off with byes for
-   second and third. This runs four, like the three divisions above it.
-   Logged rather than pretended about.
+   A division that sends only one club up automatically runs the wider
+   six-club version instead, which is what the National League does:
+   second and third stand out of a one-off eliminator round and come in
+   at the semi-finals, and the final is at a neutral ground. The engine
+   draws each round at random, so a small correction after the semi-final
+   draw keeps the two clubs that had a bye apart, which is the whole
+   point of having earned one.
    ===================================================================== */
 
 (function installPlayOffs() {
@@ -88,13 +93,20 @@
     }, []);
   }
 
-  /* Places `up` to `up + 3`: the four clubs that missed automatic
-     promotion by the least. */
-  function contenders(div, up) {
+  /* The `count` clubs that missed automatic promotion by the least:
+     places `up` to `up + count - 1`. */
+  function contenders(div, up, count) {
     const rows = (has(tableRows) && tableRows(div)) || [];
-    if (rows.length < up + 3) return null;
-    const four = rows.slice(up - 1, up + 3).map((r) => r && r.i);
-    return four.length === 4 && four.every((i) => i != null && G.clubs[i]) ? four : null;
+    if (rows.length < up - 1 + count) return null;
+    const list = rows.slice(up - 1, up - 1 + count).map((r) => r && r.i);
+    return list.length === count && list.every((i) => i != null && G.clubs[i]) ? list : null;
+  }
+
+  /* A division that sends only one club up automatically runs the wider
+     six-club version, which is what the National League does: 2nd and 3rd
+     stand out of an eliminator round and enter at the semi-finals. */
+  function isWide(rung) {
+    return rung.up - 1 === 1;
   }
 
   /* ---- what it is worth --------------------------------------------
@@ -112,15 +124,29 @@
     }, [0, 0, 0]);
   }
 
-  function define(div, startDay) {
+  function define(div, startDay, wide) {
     const start = startDay - (G.seasonStart || 0);
-    CUP_DEFS[KEY(div)] = {
+    const money = purse(div);
+    CUP_DEFS[KEY(div)] = wide ? {
+      name: (DIV_NAMES[div] || div) + ' play-offs',
+      icon: '🎟️',
+      venue: 'Wembley Stadium',
+      /* eliminator, semi-final, final — all one-off ties, which is how the
+         six-club version is actually played */
+      days: [start + FIRST_LEG, start + SECOND_LEG, start + FINAL],
+      rn: ['Play-off eliminator', 'Play-off semi-final', 'Play-off final'],
+      prize: [Math.round(money[0] * 0.5), money[0], money[2]],
+      stages: [0, 1, 2],
+      neutralFrom: 2,
+      playOff: div,
+      wide: true,
+    } : {
       name: (DIV_NAMES[div] || div) + ' play-offs',
       icon: '🎟️',
       venue: 'Wembley Stadium',
       days: [start + FIRST_LEG, start + SECOND_LEG, start + FINAL],
       rn: ['Play-off semi-final', 'Play-off semi-final, second leg', 'Play-off final'],
-      prize: purse(div),
+      prize: money,
       legs: { 0: 2 },
       stages: [0, 2],
       neutralFrom: 2,
@@ -148,44 +174,88 @@
 
   function build(rung) {
     const div = rung.lo;
-    const four = contenders(div, rung.up);
-    if (!four) return false;
+    const wide = isWide(rung);
+    const list = contenders(div, rung.up, wide ? 6 : 4);
+    if (!list) return false;
     const key = KEY(div);
-    const def = define(div, lastLeagueDay());
+    const def = define(div, lastLeagueDay(), wide);
 
     G.cupHistory = G.cupHistory || {};
     G.cupHistory[key] = G.cupHistory[key] || [];
     G.cups[key] = { key, round: 0, stage: 0, winner: null, ties: [],
-      history: G.cupHistory[key], teams: four.slice() };
+      history: G.cupHistory[key], teams: list.slice() };
 
-    /* first plays fourth and second plays third, and the club that
-       finished higher plays the second leg at home — which is what the
-       second argument to `makeTie` means. */
-    makeTie(key, 0, four[3], four[0]);
-    makeTie(key, 0, four[2], four[1]);
+    if (wide) {
+      /* 2nd and 3rd stand out of the eliminator and come in at the
+         semi-finals; 4th plays 7th and 5th plays 6th, higher at home. */
+      G.cups[key].entryLater = { 1: [list[0], list[1]] };
+      makeTie(key, 0, list[2], list[5]);
+      makeTie(key, 0, list[3], list[4]);
+    } else {
+      /* first plays fourth and second plays third, and the club that
+         finished higher plays the second leg at home — which is what the
+         second argument to `makeTie` means. */
+      makeTie(key, 0, list[3], list[0]);
+      makeTie(key, 0, list[2], list[1]);
+    }
 
-    if (four.indexOf(G.my) >= 0) tellTheManager(rung, four, def);
+    if (list.indexOf(G.my) >= 0) tellTheManager(rung, list, def, wide);
     return true;
   }
 
-  function tellTheManager(rung, four, def) {
+  /* The engine draws the next round at random, which in the six-club
+     version can put the two clubs that had a bye against each other. They
+     finished 2nd and 3rd; they are meant to be kept apart. */
+  function keepSeedsApart(key) {
+    guard('seeds', () => {
+      const cup = (G.cups || {})[key];
+      const def = CUP_DEFS[key];
+      if (!cup || !def || !def.wide || cup.stage !== 1) return;
+      const seeds = (cup.entryLater && cup.entryLater[1]) || [];
+      if (seeds.length !== 2) return;
+      const semis = (cup.ties || []).filter((t) => t.r === 1 && !t.played);
+      if (semis.length !== 2) return;
+      const both = semis.find((t) => seeds.indexOf(t.h) >= 0 && seeds.indexOf(t.a) >= 0);
+      if (!both) return;
+      const other = semis.find((t) => t !== both);
+      if (!other) return;
+      /* swap the away side of each: one seed moves across, and each tie
+         ends up with exactly one club that had the bye */
+      const moved = both.a;
+      both.a = other.a;
+      other.a = moved;
+    });
+  }
+
+  function tellTheManager(rung, four, def, wide) {
     guard('mail', () => {
       const seat = four.indexOf(G.my);
-      const oppIx = seat === 0 ? 3 : seat === 3 ? 0 : seat === 1 ? 2 : 1;
-      const opp = G.clubs[four[oppIx]];
+      /* in the six-club version 2nd and 3rd have no opponent yet */
+      const oppIx = wide
+        ? (seat < 2 ? -1 : seat === 2 ? 5 : seat === 5 ? 2 : seat === 3 ? 4 : 3)
+        : (seat === 0 ? 3 : seat === 3 ? 0 : seat === 1 ? 2 : 1);
+      const opp = oppIx >= 0 ? G.clubs[four[oppIx]] : null;
       const place = (n) => ordinal(rung.up - 1 + n + 1);
       const first = (G.cups[KEY(rung.lo)].ties || [])
         .filter((t) => t.h === G.my || t.a === G.my)
         .sort((a, b) => a.day - b.day)[0];
       const money = def.prize[2];
+      const field = wide ? 'six of you' : 'four of you';
+      const tie = opp
+        ? (wide ? 'Eliminator' : 'Semi-final') + ': <b>' + esc(opp.name) + '</b> (' +
+          place(oppIx) + ')' + (wide ? ', one match' : ', over two legs') +
+          (first ? ', <b>' + fmtDate(first.day) + '</b>' : '') +
+          (wide
+            ? (seat < oppIx ? '. At your ground.' : '. At theirs.')
+            : (seat < oppIx ? '. You play the second leg at home.' : '. They play the second leg at home.'))
+        : 'Finishing <b>' + place(seat) + '</b> means no eliminator: you are straight ' +
+          'into the semi-finals and you will play whoever comes through' +
+          (first ? ', <b>' + fmtDate(first.day) + '</b>' : '') + '.';
       mail('board', '🎟️ Into the ' + (DIV_NAMES[rung.lo] || rung.lo) + ' play-offs',
         'You finished <b>' + place(seat) + '</b>. ' +
         '<b>' + (rung.up - 1) + '</b> ' + (rung.up - 1 === 1 ? 'club goes' : 'clubs go') +
         ' up automatically and the last place is decided over the next fortnight, ' +
-        'between the four of you.<br><br>' +
-        'Semi-final: <b>' + esc(opp.name) + '</b> (' + place(oppIx) + '), over two legs' +
-        (first ? ', first leg <b>' + fmtDate(first.day) + '</b>' : '') +
-        (seat < oppIx ? '. You play the second leg at home.' : '. They play the second leg at home.') +
+        'between the ' + field + '.<br><br>' + tie +
         '<br><br>Win it and the final is at <b>' + esc(def.venue) + '</b> — ' +
         (money ? '<b>' + fmtM(money) + '</b> and ' : '') + 'promotion.');
     });
@@ -205,6 +275,16 @@
           'Four clubs in each division below the top flight now play for the last one.');
       }
     });
+  }
+
+  /* ---- keep the two byes apart after the engine draws the semis ----- */
+  if (has(window.progressCups)) {
+    const previousProgress = window.progressCups;
+    window.progressCups = function progressCupsSeedingPlayOffs() {
+      const out = previousProgress.apply(this, arguments);
+      ladders().forEach((r) => keepSeedsApart(KEY(r.lo)));
+      return out;
+    };
   }
 
   /* ---- 1. build them before anything can close the season ---------- */
@@ -261,7 +341,9 @@
   function playOffPlaces(div) {
     const rung = ladders().find((r) => r.lo === div);
     if (!rung) return null;
-    return { auto: rung.up - 1, from: rung.up, to: rung.up + 3, up: rung.up };
+    const span = isWide(rung) ? 5 : 3;
+    return { auto: rung.up - 1, from: rung.up, to: rung.up + span, up: rung.up,
+      wide: isWide(rung) };
   }
 
   try {

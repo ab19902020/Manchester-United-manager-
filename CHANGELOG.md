@@ -66,7 +66,7 @@
   three, or four, or two of the table and that was the whole mechanism. The numbers were
   right; the method was not. One fewer club now goes up automatically and the four below
   them play for the last place — the Championship and League One between third and sixth,
-  League Two between fourth and seventh, the National League between second and fifth.
+  League Two between fourth and seventh, the National League between second and seventh.
   Two-legged semi-finals with the club that finished higher at home in the second leg,
   then a final at Wembley.
 
@@ -100,6 +100,24 @@
   a hundred million in Europe reported the same revenue as one that never qualified.
 
 ### Fixed
+
+- **The National League play-off is six clubs, as it really is.** Second and third stand
+  out of a one-off eliminator round — fourth plays seventh, fifth plays sixth — and come
+  in at the semi-finals, with the final at a neutral ground. The draw is corrected so the
+  two clubs that earned a bye cannot be drawn against each other, which is the whole point
+  of having earned one.
+
+- **The press and the board know a play-off place from an automatic one.** Third in the
+  Championship was being described as a promotion place and fourth in League Two as an
+  automatic one. They are play-off places now, and every question and every boardroom
+  line says so: "4th — a play-off place, 1 off going up without them. Is the aim to avoid
+  May altogether?" Being just outside the running now means outside the *play-offs*, which
+  it never used to — the phrase had quietly stopped applying to anybody at all.
+
+- **A star player is no longer offered a promotion he already has.** An unhappy player at
+  the top of the squad ladder got a "promise him star player football" button that changed
+  nothing, because there was no rung above him to be promised. The promise is real — it
+  commits you to the minutes and he holds you to them — so it now reads as what it is.
 
 - **Fewer injuries, and not five of them in a fortnight.** Reported as five injuries in
   the first four matches, and reproduced exactly on the first try: two in matches, three

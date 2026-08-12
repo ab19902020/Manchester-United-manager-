@@ -55,6 +55,8 @@ test('the last promotion place is decided by a play-off, and you play it', async
       const legs = cup.ties.slice().sort((a,b) => a.day - b.day || a.tid - b.tid);
       out.divisions[r.lo] = {
         up: r.up,
+        wide: !!CUP_DEFS[key].wide,
+        size: cup.teams.length,
         name: CUP_DEFS[key].name,
         places: cup.teams.map(placeOf).sort((a,b) => a-b),
         ties: legs.length,
@@ -87,18 +89,31 @@ test('the last promotion place is decided by a play-off, and you play it', async
     const d = run.divisions[div];
     assert.ok(!d.missing, `${div}: no play-off competition was created`);
 
-    // 1. the right four clubs: the ones just below the automatic places
+    // 1. the right clubs: the ones just below the automatic places. A
+    // division sending only one club up automatically runs the wider
+    // six-club version, which is what the National League does.
     // (joined rather than deep-compared: these arrays come back from the
     // page's realm, so a strict deep equal fails on the prototype alone)
-    const expected = [d.up, d.up + 1, d.up + 2, d.up + 3];
+    const count = d.wide ? 6 : 4;
+    assert.equal(d.size, count, `${div}: ${count} clubs should contest the play-offs`);
+    const expected = [];
+    for (let i = 0; i < count; i += 1) expected.push(d.up + i);
     assert.equal(Array.from(d.places).join(','), expected.join(','),
       `${div}: the play-offs should be between places ${expected.join(', ')}`);
+    assert.equal(d.wide, d.up - 1 === 1,
+      `${div}: only a division with one automatic promotion runs the six-club version`);
 
-    // 2. two-legged semi-finals and a final at a neutral ground
-    assert.equal(d.ties, 4, `${div}: two semi-finals over two legs is four matches`);
-    assert.equal(d.twoLegged, 2, `${div}: both semi-finals should have a second leg`);
-    assert.ok(d.secondLegHosts,
-      `${div}: the club that finished higher should play the second leg at home`);
+    // 2. the right shape of tie, and a final at a neutral ground
+    if (d.wide) {
+      // two one-off eliminators; 2nd and 3rd are not in them
+      assert.equal(d.ties, 2, `${div}: the eliminator round is two one-off matches`);
+      assert.equal(d.twoLegged, 0, `${div}: the six-club version has no second legs`);
+    } else {
+      assert.equal(d.ties, 4, `${div}: two semi-finals over two legs is four matches`);
+      assert.equal(d.twoLegged, 2, `${div}: both semi-finals should have a second leg`);
+      assert.ok(d.secondLegHosts,
+        `${div}: the club that finished higher should play the second leg at home`);
+    }
     assert.match(d.neutralFinalVenue, /\w/, `${div}: the final needs a venue`);
 
     // 3. after the league has finished, not during it
@@ -171,8 +186,11 @@ test('the club that wins the play-off is the club that goes up', async (t) => {
     const a = run.after[div];
     assert.ok(a.winnerWentUp, `${div}: the play-off winner was not promoted`);
     assert.ok(a.autoWentUp, `${div}: the automatic places were not honoured`);
-    assert.ok(a.winnerPlace >= a.up && a.winnerPlace <= a.up + 3,
-      `${div}: the winner finished ${a.winnerPlace}, outside the play-off places`);
+    // a division with one automatic promotion runs six clubs, not four
+    const last = a.up + (a.up - 1 === 1 ? 5 : 3);
+    assert.ok(a.winnerPlace >= a.up && a.winnerPlace <= last,
+      `${div}: the winner finished ${a.winnerPlace}, outside the play-off places ` +
+      `(${a.up}-${last})`);
     if (!a.nextInLineIsWinner) {
       assert.equal(a.nextInLineWentUp, false,
         `${div}: ${a.up}th place went up without winning the play-off`);

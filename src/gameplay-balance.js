@@ -223,7 +223,9 @@
       'and turns the rest against you.';
 
     mail('squad', `😤 ${p.name} wants a word`, body, [
-      { lbl: `Promise him ${roleLabel(promotedRole(p)).toLowerCase()} football`, act: 'unrestTalk', arg: `promise:${p.id}` },
+      { lbl: atTheTop(p) ? 'Promise him he stays your first name on the teamsheet'
+        : `Promise him ${roleLabel(promotedRole(p)).toLowerCase()} football`,
+      act: 'unrestTalk', arg: `promise:${p.id}` },
       { lbl: `Be straight — he is a ${roleLabel(honest).toLowerCase()}`, act: 'unrestTalk', arg: `honest:${p.id}` },
       { lbl: 'Tell him to earn it', act: 'unrestTalk', arg: `earn:${p.id}`, ghost: 1 },
     ]);
@@ -236,6 +238,15 @@
   function promotedRole(p) {
     const ix = ROLE_LADDER.indexOf(roleOf(p));
     return ROLE_LADDER[Math.min(ROLE_LADDER.length - 1, (ix < 0 ? 2 : ix) + 1)];
+  }
+
+  /* A star player is already at the top of the ladder, so there is no rung
+     to promise him. The promise is still real — it commits you to the
+     minutes and he will hold you to them — but offering to "promise him
+     star player football" to the man who is already your star player reads
+     like the game is not listening. */
+  function atTheTop(p) {
+    return roleOf(p) === ROLE_LADDER[ROLE_LADDER.length - 1];
   }
 
   ACTIONS.unrestTalk = guard('unrestTalk', (el) => {

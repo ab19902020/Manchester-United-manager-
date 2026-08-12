@@ -107,6 +107,50 @@ the season the game is set in — League Two 55%, enforced by refusing to regist
 the player rather than by a points deduction. Clubs sit at 16–44%, so it only
 bites if you go looking for it.
 
+### Cycle 25 — the six-club play-off, and the language that had gone stale
+
+**The National League play-off is six clubs.** Cycle 19 built four everywhere and
+logged the shortcut. A division that promotes only one club automatically now runs
+the wider version: 2nd and 3rd stand out of a one-off eliminator (4th v 7th, 5th v
+6th) and come in at the semi-finals, final at a neutral ground. Keyed on
+`up - 1 === 1` rather than on the division's name, so it survives the pyramid work.
+
+The cup engine draws each round at random, which can put the two clubs that earned
+a bye against each other. A correction after the semi-final draw swaps one away.
+Measured: eliminators `4 v 7` and `5 v 6`, semi-finals `6 v 2` and `3 v 7`.
+
+**Then the language, which had gone stale the moment the play-offs landed.** Third
+in the Championship was still "a promotion place" and fourth in League Two "an
+automatic promotion place". `divShape` now carries `auto`, `hasPlayOff`, `poFrom`
+and `poTo`, read from `RBSPlayOffs` at call time so the wording follows the format
+rather than restating it, and `zoneOf` has a `playoff` zone between `promotion` and
+`chasing`.
+
+```text
+L2 2 [promotion] 2nd, inside the automatic 3. Can you hold it to May?
+L2 4 [playoff]   4th — a play-off place, 1 off going up without them.
+L2 9 [chasing]   9th, 2 off the play-offs. Is going up realistic from here?
+NL 7 [playoff]   7th — a play-off place, 6 off going up without them.
+```
+
+**Something the audit turned up on its own:** `chasing` had stopped firing
+entirely. It meant "within three of `upTo`", and the new play-off zone had
+swallowed every one of those places, so a zone the press and the boardroom both
+branch on was dead. It now means "just outside the play-offs".
+
+**And a real defect behind a flaky test.** The gameplay-balance suite had been
+failing about one run in three all session and I could not catch the message until
+now: *promising minutes changes his role, not just his mood*. `promotedRole` moves
+a player one rung up `['pro','rot','squad','imp','star']` and clamps at the top, so
+a player already rated `star` is offered "promise him star player football" — a
+button that cannot do anything. The promise itself is real and was being recorded;
+only the offer was nonsense. The label now reads as a commitment to keep him there,
+and the test allows for a player with no rung left. Three clean runs after.
+
+That is the second flake this session that turned out to be a genuine defect the
+test was right to catch and I was wrong to suspect. Worth remembering before
+reaching for a threshold.
+
 ### Cycle 24 — injuries
 
 Reported as "too many injuries, four games and five injuries straight at the

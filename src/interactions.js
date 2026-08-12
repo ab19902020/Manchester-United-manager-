@@ -95,6 +95,12 @@
         hasEurope: euro > 0,
         /* 1 .. upTo are promoted; dropFrom .. size are relegated */
         upTo: up,
+        /* Of those, only 1 .. auto go up automatically; the rest of the
+           promotion places are decided in the play-offs. Read from
+           `RBSPlayOffs` at call time because it loads after this file, and
+           it is the thing that actually builds them — so if the format
+           changes there, the language follows without an edit here. */
+        ...playOffShape(d, up),
         dropFrom: down > 0 ? (size - down + 1) : null,
         /* The worst finish a board would ever ask for. Where clubs go down
            it is the last safe place, which explains itself. Where none do —
@@ -112,17 +118,39 @@
     }, {
       div: div || 'PL', name: 'the league', size: 20, tier: 1, up: 0, down: 3, euro: 4,
       hasPromotion: false, hasRelegation: true, hasEurope: true,
-      upTo: 0, dropFrom: 18, floor: 17, matches: 38,
+      upTo: 0, auto: 0, hasPlayOff: false, poFrom: 0, poTo: 0,
+      dropFrom: 18, floor: 17, matches: 38,
     });
+  }
+
+  /* Whether this division's last promotion places are played for, and
+     which ones. Falls back to "all of them are automatic" if the play-off
+     module is not loaded, which is what the game used to do. */
+  function playOffShape(div, up) {
+    try {
+      const api = window.RBSPlayOffs;
+      const places = api && typeof api.playOffPlaces === 'function' && api.playOffPlaces(div);
+      if (!places || !(places.auto >= 1) || !(places.to > places.auto)) {
+        return { auto: up, hasPlayOff: false, poFrom: 0, poTo: 0 };
+      }
+      return { auto: places.auto, hasPlayOff: true, poFrom: places.from, poTo: places.to };
+    } catch (error) {
+      return { auto: up, hasPlayOff: false, poFrom: 0, poTo: 0 };
+    }
   }
 
   /* what a position means in this division, in words */
   function zoneOf(pos, s) {
     if (pos == null) return 'none';
-    if (s.hasPromotion && pos <= s.upTo) return 'promotion';
+    if (s.hasPromotion && pos <= (s.auto == null ? s.upTo : s.auto)) return 'promotion';
+    if (s.hasPlayOff && pos >= s.poFrom && pos <= s.poTo) return 'playoff';
     if (s.hasEurope && pos <= s.euro) return 'europe';
     if (s.hasRelegation && pos >= s.dropFrom) return 'relegation';
-    if (s.hasPromotion && pos <= s.upTo + 3) return 'chasing';
+    /* "chasing" is now the places just outside whatever the last route up
+       is — the play-offs where there are play-offs, automatic promotion
+       where there are not. Without this it never fired at all, because the
+       play-off zone had swallowed the places it used to describe. */
+    if (s.hasPromotion && pos <= (s.hasPlayOff ? s.poTo : s.upTo) + 3) return 'chasing';
     if (s.hasRelegation && pos >= s.dropFrom - 3) return 'trouble';
     if (!s.hasRelegation && pos > Math.round(s.size * 0.6)) return 'nothing';
     return 'mid';
@@ -332,8 +360,13 @@
             `You are ${ordinal(F.pos)}. Does this squad believe it can stay there?`,
             'Top of the pile. Is the pressure different up here?'];
         }
+        const howUp = s.hasPlayOff
+          ? (s.auto === 1
+            ? `only the champions go up automatically and ${ordinal(s.poFrom)} to ${ordinal(s.poTo)} play off for the other place`
+            : `the top ${s.auto} go up automatically and ${ordinal(s.poFrom)} to ${ordinal(s.poTo)} play off for the last one`)
+          : (s.up === 1 ? 'only the champions go up' : `the top ${s.up} go up`);
         return [`${ordinal(F.pos)} in ${s.name}. Are you allowed to say the word promotion yet?`,
-          `You are ${ordinal(F.pos)}, and ${s.up === 1 ? 'only the champions go up' : `the top ${s.up} go up`}. Is this squad built to hold it?`,
+          `You are ${ordinal(F.pos)}, and ${howUp}. Is this squad built to hold it?`,
           `Top of ${s.name}. Does a club like this handle being favourite?`];
       },
     },
@@ -416,17 +449,27 @@
   const NEW_Q = [
     {
       id: 'pos-promo',
+      /* the last route up is the play-offs where there are play-offs, and
+         automatic promotion where there are not */
       w: (F) => F && F.shape && F.pos && !F.shape.hasEurope && F.shape.hasPromotion
-        && F.pos >= 2 && F.pos <= F.shape.upTo + 3,
+        && F.pos >= 2
+        && F.pos <= (F.shape.hasPlayOff ? F.shape.poTo : F.shape.upTo) + 3,
       q: (F) => {
         const s = F.shape;
-        const inIt = F.pos <= s.upTo;
-        return [inIt
-          ? `${ordinal(F.pos)}, inside the ${s.up === 1 ? 'automatic place' : `top ${s.up}`}. Can you hold it to May?`
-          : `${ordinal(F.pos)}, ${F.pos - s.upTo} off the ${s.up === 1 ? 'one automatic place' : `top ${s.up}`}. Is going up realistic from here?`,
-        `Promotion out of ${s.name} — is that what this season is for, or is it a bonus?`,
-        `Does this squad know how to get out of ${s.name}?`,
-        `${F.left} to play. Is it in your hands?`];
+        const auto = s.auto == null ? s.up : s.auto;
+        const autoWord = auto === 1 ? 'automatic place' : `automatic ${auto}`;
+        const outer = s.hasPlayOff ? s.poTo : s.upTo;
+        const first = F.pos <= auto
+          ? `${ordinal(F.pos)}, inside the ${autoWord}. Can you hold it to May?`
+          : s.hasPlayOff && F.pos <= s.poTo
+            ? `${ordinal(F.pos)} — a play-off place, ${F.pos - auto} off going up without them. ` +
+              'Is the aim to avoid May altogether?'
+            : `${ordinal(F.pos)}, ${F.pos - outer} off the ` +
+              `${s.hasPlayOff ? 'play-offs' : autoWord}. Is going up realistic from here?`;
+        return [first,
+          `Promotion out of ${s.name} — is that what this season is for, or is it a bonus?`,
+          `Does this squad know how to get out of ${s.name}?`,
+          `${F.left} to play. Is it in your hands?`];
       },
     },
     {
@@ -505,7 +548,7 @@
         const F = pqFacts();
         if (!F || !F.shape || !bank.length) return bank;
         const boost = {};
-        if (F.zone === 'promotion' || F.zone === 'chasing') boost['pos-promo'] = 5;
+        if (F.zone === 'promotion' || F.zone === 'playoff' || F.zone === 'chasing') boost['pos-promo'] = 5;
         if (F.zone === 'relegation') boost['pos-bad'] = 5;
         if (F.zone === 'nothing') boost['pos-nothing'] = 4;
         const extra = [];
@@ -598,7 +641,7 @@
   function positionTerm(pos, s) {
     if (!pos) return 0;
     const z = zoneOf(pos, s);
-    if (z === 'promotion' || z === 'europe') return 5;
+    if (z === 'promotion' || z === 'playoff' || z === 'europe') return 5;
     if (z === 'chasing') return 3;
     if (z === 'relegation') return -6;
     if (z === 'trouble') return -3;
@@ -646,7 +689,8 @@
         const s = divShape(myDiv());
         const z = zoneOf(pos, s);
         if (z === 'europe') out.push(['+', 'You are in the European places']);
-        else if (z === 'promotion') out.push(['+', `You are in the ${s.up === 1 ? 'automatic promotion place' : `top ${s.up}`} and going up`]);
+        else if (z === 'promotion') out.push(['+', `You are in the ${s.auto === 1 ? 'automatic promotion place' : `automatic ${s.auto}`} and going up`]);
+        else if (z === 'playoff') out.push(['+', `You are in the play-off places in ${s.name}`]);
         else if (z === 'chasing') out.push(['+', `You are pushing for promotion out of ${s.name}`]);
         else if (z === 'relegation') out.push(['-', `He can see you are in the bottom ${s.down}`]);
         else if (z === 'trouble') out.push(['-', 'You are too close to the drop for his liking']);
@@ -672,7 +716,7 @@
         else if (p.ovr >= 74 && s.hasPromotion) want.push('a club that is actually going up');
         /* Europe only where there is a Europe to be had */
         if (s.hasEurope && (G.clSpots || []).indexOf(G.my) < 0) want.push('European football');
-        else if (s.hasPromotion && z !== 'promotion' && z !== 'chasing') {
+        else if (s.hasPromotion && z !== 'promotion' && z !== 'playoff' && z !== 'chasing') {
           want.push(`to believe this club can get out of ${s.name}`);
         }
         if (z === 'relegation' || z === 'trouble') want.push('to see you out of trouble first');
