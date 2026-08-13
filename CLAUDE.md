@@ -2,122 +2,61 @@
 
 ## Current as of
 
-- This cycle started from `776c113` (`Picking the side: one screen, three faults`) on `origin/main`.
-- The implementation is published as `bd825bee5dad8e8d194f28e341249fc121728b2e` (`Reconcile English player identities`). Its equivalent local logical commit is `4216e764480060d36ce9b0f947903d0f610e3bbe`; GitHub's Git Data API supplied the remote commit identity.
-- I read `CODEX.md` and all 2,096 lines of `AGENT-ONE.md` before working. `CODEX.md` still carries the cycle 3 brief; I did not edit it. I did not edit `AGENT-ONE.md`.
-- Agent One's economy, contracts, discipline, morale, transfer/loan market, mailbox, tactics, attributes, injuries, growth, player links, lineup and boardroom modules were not changed. The only references to his newer modules are their filenames in the service-worker install list and its static regression.
-- Work was done in a clean secondary worktree. The separate checkout with the pre-existing 54,359-line HTML deletion and `vendor/three.min.js` edit was not touched.
+- I worked from `d3a2ef9` (`Report completed Codex identity cycle`) on `origin/main`.
+- The user explicitly authorized the Dugout rebuild and goalkeeper Man of the Match fix on 13 August 2026. That activates backlog item 1 in `CODEX.md` and authorizes the game-feel change for this cycle.
+- I read `CODEX.md` and all 2,096 lines of `AGENT-ONE.md` first. I did not edit either file or any module Agent One owns. His goalkeeper attributes in `src/attributes.js` remain the inputs to the save model; this fix is in the later rating-reward path.
 
-## Done, with SHA
+## Done
 
-Implementation: `bd825bee5dad8e8d194f28e341249fc121728b2e` (remote), equivalent to local `4216e764480060d36ce9b0f947903d0f610e3bbe`.
+Implementation: `fdd1b761d35ed9995c37acb0fbc0833b7e71af6d` on GitHub, equivalent to local logical commit `1bcf2593d5e3da1aef1e71c0c45df7c7d5d61137` (`Rebuild Dugout broadcast and balance keeper ratings`). GitHub's Git Data API supplied the published commit identity.
 
-- Closed all three identity faults left open in the prior Codex report: Liverpool's accent-only Jacquet duplicate, Coventry's Frank/Ogochukwu Onyeka duplicate and cross-club reuse of one ESPN athlete ID.
-- Regenerated the five-division ESPN snapshot as schema 3, read 13 August 2026: 116 clubs, 3,238 unique roster players, four verified same-club detail records, 65 stale/moved authored records recorded for audit, 12 provider roster-ownership conflicts and zero unresolved authored players.
-- The updater now groups roster records by athlete ID. When ESPN lists an ID for more than one club, it reads the athlete-detail team, retains the one matching roster candidate, records all competing roster URLs and fails instead of guessing if exactly one owner cannot be established. It then revalidates squad depth, positional coverage and global source-ID uniqueness.
-- Premier League authored-player matching is now club-local. A unique name elsewhere in the division or world can no longer donate its biography to an old-club slot. Stale and generated slots are filled from unused current players at that club while preserving gameplay position, attributes, overall, potential, contract, wage and value.
-- Identity replacement clears the former occupant's factual fields before applying the new source. A missing nationality, birth date or physical value therefore stays missing rather than leaking from a different person.
-- Added an explicit `Ogochukwu Onyeka -> Frank Onyeka` identity alias. Accent-normalized same-club names and the alias now reconcile to one source ID; live Coventry displays `Frank Onyeka`, athlete `258491`.
-- Added `reconcileEnglishIdentities()` for loaded careers. It touches only repeated sourced IDs or one-person name aliases. Unique identities are left alone, including a footballer the player has transferred during the career.
-- Completed the PWA install cache. Nine scripts added by Agent One were loaded by HTML but absent from `CORE_ASSETS`; all are now cached and `results-business-v9` forces installed phones to take the complete bundle. No code inside those modules changed.
-- Updated README/changelog data notes and the three-agent ownership explanation.
+- Reproduced the reported rating fault over 1,296 detailed matches through 31 December, using seed `0x5eed1234` across the Premier League, Championship, League One, League Two and National League. Goalkeepers took 963 Man of the Match awards (74.3%); every division was between 71.7% and 77.8%. Mean ratings were GK 7.57, DEF 6.14, MID 6.22 and ATT 6.31.
+- Isolated the cause: every ordinary save added about `+0.22` and a goal-calibration save `+0.24`, indefinitely, while interceptions and defensive stops added `+0.05`/`+0.06`. Ten to fifteen combined saves were common.
+- Added `src/match-ratings.js`. Save ratings now use diminishing marginal rewards (`+0.10`, `+0.07`, `+0.045`, then `+0.025` by volume); a penalty save remains exceptional at `+0.42`. The wrapper preserves save probability, goalkeeper attributes, saves, goals and match results.
+- The same 1,296-match audit now gives goalkeepers 92 awards (7.1%): PL 6.1%, CH 6.9%, L1 9.1%, L2 6.4%, NL 6.7%. Mean goalkeeper rating is 6.63 versus 6.21 outfield.
+- Added `src/dugout-renderer.js`, which takes ownership of the final Dugout frame while retaining the old renderer as a failure fallback. It adds a tracking broadcast camera, depth/perspective, a mown pitch, goalmouth wear, three-dimensional goal frames and nets, cached multi-tier crowd, floodlights, boards, weather, officials, jointed player figures, kit-clash handling, distinct goalkeeper kits, ball height/shadow, pass trails and a compact score bug.
+- The view consumes the existing match engine rather than simulating a second result. Commentary and recorded-stat changes surface passes, tackles, interceptions, dribbles, shots and saves, with the named player's live PAS/TAC/DRB/SAV numbers. Existing substitutions, dismissals, celebrations, cards, camera shake and visual movement remain connected.
+- Added pure camera/kit/event tests, a live JSDOM match-render regression and a deterministic five-division goalkeeper-award guardrail. Added both modules to the harness and versioned offline cache (`results-business-v10`), and updated README/changelog.
 
-The only edit in `red-devil-manager.html` is the existing `applyWindow26()` wrapper. New careers still perform the complete Premier League factual refresh after the summer overlay; loaded careers now run only the conflict repair so a load cannot reset a unique in-career transfer:
+The only two edits to `red-devil-manager.html` are these final loader tags; no legacy function or style was changed there:
 
-```js
-applyWindow26();
-if (typeof RBSLowerLeagueSquads !== 'undefined') {
-  if (k === 'newGame') RBSLowerLeagueSquads.refreshPremierLeague(G.clubs);
-  else RBSLowerLeagueSquads.reconcileEnglishIdentities(G.clubs);
-}
+```html
+<script src="src/match-ratings.js"></script>
+<script src="src/dugout-renderer.js"></script>
 ```
 
-No other HTML was changed. No face, skin, hair, headshot, economy or match-balance field was added or altered.
+## Checked, and how
 
-## Checked, commands and output
-
-Dependencies in the clean worktree:
+Dependencies, using a writable cache because `/root/.npm` is not writable:
 
 ```text
-npm ci
+npm --cache /tmp/manchester-manager-npm-cache --userconfig /tmp/manchester-manager-empty-npmrc ci --no-audit --no-fund
 added 124 packages
 ```
 
-Updater:
+Native-canvas visual QA rendered the live game at a 390 CSS-pixel phone width / 780×577 backing store. I inspected midfield and penalty-area frames: camera framing, pitch perspective, goal depth/net, player layering and kit separation were intact; `RBSDugoutRenderer.scene.lastError` and the browser harness error list were both empty. No screenshot or temporary canvas dependency is committed.
 
-```text
-npm run data:player-facts
-Wrote src/lower-league-data.js with 116 teams, 3238 roster players,
-4 historical lookups, 65 moved authored players, 12 roster ownership conflicts
-and 0 unresolved authored players (2026-08-13).
-```
-
-The 3,242 accepted source records contain 3,106 nationalities, 3,072 dates of birth, 2,370 heights, 2,028 weights and 3,242 direct player-profile links. They contain zero headshot/appearance fields.
-
-The deterministic live audit set `Math.random` to mulberry32 seed `20260813` before creating the career:
-
-| division | live | sourced | nationality | DOB | height | weight |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| PL | 461 | 461 | 453 | 453 | 448 | 435 |
-| CH | 457 | 457 | 445 | 444 | 389 | 342 |
-| L1 | 456 | 456 | 425 | 420 | 331 | 266 |
-| L2 | 456 | 456 | 430 | 406 | 291 | 238 |
-| NL | 456 | 456 | 418 | 402 | 195 | 144 |
-| **total** | **2,286** | **2,286** | **2,171** | **2,125** | **1,654** | **1,425** |
-
-The live total can move by a few generated Premier League depth slots, so the regression accepts 2,280–2,290. Every live slot in this seeded audit has a source. Grouping all five English divisions found **zero duplicate ESPN IDs** and **zero duplicate same-club canonical identities**. Specific regressions prove:
-
-- Liverpool has exactly one normalized Jeremy/Jérémy Jacquet, ESPN `355980`.
-- Coventry has exactly one Frank/Ogochukwu Onyeka identity, ESPN `258491`.
-- ESPN `130877` occurs once, at Manchester United; the stale Leeds-authored Karl Darlow is recorded in `misplacedPremierLeague` and replaced.
-- A deliberately corrupted save containing a cross-club repeated ID and an Onyeka alias is repaired on load.
-- A separate unique Manchester United-to-Liverpool transfer survives that same save/load, proving load no longer refreshes the whole Premier League roster.
-- Every `<script src>` required by the game occurs in the versioned service-worker install cache.
-
-Focused verification:
-
-```text
-node --test --test-reporter=spec tests/game.integration.test.cjs tests/pwa.test.cjs
-tests 6; pass 6; fail 0; duration 51.043 s
-```
-
-Full verification:
+Final check, run only after code and documentation were settled:
 
 ```text
 npm run check
-lint clean; tests 81; pass 81; fail 0; duration 417.207 s
+lint clean
+tests 87; pass 87; fail 0; cancelled 0; skipped 0; duration 601.961 s
 ```
+
+`git diff --cached --check` also returned no output before the implementation commit.
 
 ## Found but not fixed
 
-- No new reproducible Codex-scope defect remains from this cycle. The three prior identity findings are fixed and protected by regressions.
-- Agent One's remaining goal-bonus acceptance finding below the Championship remains owned and documented in `AGENT-ONE.md`; I did not alter that path.
-- `CODEX.md` has not yet been advanced beyond its cycle 3 wording. Claude should replace it when assigning the next Codex cycle.
+- The engine does not publish a timed spatial event log. The renderer reacts to authoritative commentary and recorded stat deltas, but exact on-pitch coordinates still come from the established `advancePlay()` / `pitchTargets()` choreography. A literal replay of every engine action needs a separate event contract from the match engine; I did not add one inside Agent One's tactics/attributes work or the legacy core.
+- The repeated legacy Dugout implementations remain in the 56,000-line HTML and serve as the new module's exception fallback. I did not mechanically delete or reorder those layers; that remains a later compaction job after the extracted renderer has real-device mileage.
+- There is no browser executable installed for Playwright screenshot automation. Native Canvas verified actual draw calls and pixels, but not browser compositor behavior.
 
 ## Blocked
 
-### Headshot-derived appearance
-
-- No photo was downloaded, processed or committed. The separate approval required by `CODEX.md` was not given.
-- The accepted ESPN records expose profile links but no direct headshot field. A user approval alone would not establish redistribution/derivative rights for a game asset or appearance dataset.
-- Required before continuing: an expressly licensed source covering the intended players, a measured reachability/cost sample, and then explicit user approval. Store only licensed derived descriptors and audit metadata, not source photos, unless the licence also permits redistribution.
-
-### Real-device neural voices
-
-There is still no physical Android phone or iPhone in this environment. First-use bytes/progress, mid-range Android latency, second-visit offline behavior, iOS first-touch audio unlock, memory survival and crowd/voice mix remain real-device checks. Do not mark them complete from JSDOM or desktop emulation.
+- Physical-phone frame time, battery use, touch behavior, orientation changes and low-end GPU rendering cannot be signed off in this environment. Unblock with one mid-range Android and one iPhone run. In particular, measure the cached crowd plus jointed figures during rain and substitutions before claiming 60 fps.
 
 ## Data provenance
 
-Player facts and ownership decisions were read on 13 August 2026. Every team/player retains its exact roster or detail URL and the snapshot read date in `src/lower-league-data.js`; conflict entries also retain every competing club roster URL.
-
-| division | team listing |
-| --- | --- |
-| Premier League | [ESPN eng.1](https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/teams?limit=100) |
-| Championship | [ESPN eng.2](https://site.api.espn.com/apis/site/v2/sports/soccer/eng.2/teams?limit=100) |
-| League One | [ESPN eng.3](https://site.api.espn.com/apis/site/v2/sports/soccer/eng.3/teams?limit=100) |
-| League Two | [ESPN eng.4](https://site.api.espn.com/apis/site/v2/sports/soccer/eng.4/teams?limit=100) |
-| National League | [ESPN eng.5](https://site.api.espn.com/apis/site/v2/sports/soccer/eng.5/teams?limit=100) |
-
-Roster conflicts use `https://site.web.api.espn.com/apis/common/v3/sports/soccer/{competition}/athletes/{id}`. For example, the snapshot resolved [Gustavo Hamer, athlete 236912](https://site.web.api.espn.com/apis/common/v3/sports/soccer/eng.1/athletes/236912) to Coventry rather than Sheffield United and retains both roster URLs in the conflict record. Historical authored fallbacks use ESPN search followed by the same athlete-detail endpoint; only a detail team matching the authored club is accepted as an extra source record.
-
-Ratings, attributes, positions, potential, contracts, wages, values and all Agent One economy/gameplay systems remain game-authored.
+- The bug report and desired presentation came from the user's own cross-league career through December on 13 August 2026. Before/after award and rating numbers above come from the repository's deterministic match engine, not an external dataset.
+- As a sanity check only, I read the Premier League's 2025/26 [Player of the Matchweek winners through MW22](https://www.premierleague.com/en/news/4555571), its [Matchweek 12 nominee report](https://www.premierleague.com/en/news/4473919/vote-who-was-the-best-player-of-matchweek-12-in-2025-26-season) describing Areola's exceptional ten-save match, and Liverpool's [2024/25 Alisson Player of the Match record](https://www.liverpoolfc.com/news/revealed-liverpools-carlsberg-player-match-v-west-ham), all read 13 August 2026. They support the qualitative target—goalkeeper awards should be possible but exceptional—not the precise 7.1% threshold.
