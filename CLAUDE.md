@@ -2,61 +2,54 @@
 
 ## Current as of
 
-- I worked from `d3a2ef9` (`Report completed Codex identity cycle`) on `origin/main`.
-- The user explicitly authorized the Dugout rebuild and goalkeeper Man of the Match fix on 13 August 2026. That activates backlog item 1 in `CODEX.md` and authorizes the game-feel change for this cycle.
-- I read `CODEX.md` and all 2,096 lines of `AGENT-ONE.md` first. I did not edit either file or any module Agent One owns. His goalkeeper attributes in `src/attributes.js` remain the inputs to the save model; this fix is in the later rating-reward path.
+- Worked from remote `main` at `6e065b87e4944980c7f477c5b110ba78f327cd93` on 13 August 2026.
+- The user explicitly rejected the extracted 2D Dugout as below the required standard, supplied a low-angle 3D stadium reference, and authorized this game-feel change. He then required the pictures to use the existing match analytics while fitting the accelerated clock.
+- I read `CODEX.md` and all 2,096 lines of `AGENT-ONE.md` before starting. Neither was edited. Agent One's economy, tactics, attributes and underlying rules were not changed.
 
 ## Done
 
-Implementation: `fdd1b761d35ed9995c37acb0fbc0833b7e71af6d` on GitHub, equivalent to local logical commit `1bcf2593d5e3da1aef1e71c0c45df7c7d5d61137` (`Rebuild Dugout broadcast and balance keeper ratings`). GitHub's Git Data API supplied the published commit identity.
+Implementation: GitHub commit `0f95d81d37e8c665462b725b86078051a6847a4d`, equivalent to local logical commit `6415eaee184c64581bf7144c93cd8bffe7d5f1e6` (`Build analytics-driven 3D Dugout`). GitHub's Git Data API supplied the published identity.
 
-- Reproduced the reported rating fault over 1,296 detailed matches through 31 December, using seed `0x5eed1234` across the Premier League, Championship, League One, League Two and National League. Goalkeepers took 963 Man of the Match awards (74.3%); every division was between 71.7% and 77.8%. Mean ratings were GK 7.57, DEF 6.14, MID 6.22 and ATT 6.31.
-- Isolated the cause: every ordinary save added about `+0.22` and a goal-calibration save `+0.24`, indefinitely, while interceptions and defensive stops added `+0.05`/`+0.06`. Ten to fifteen combined saves were common.
-- Added `src/match-ratings.js`. Save ratings now use diminishing marginal rewards (`+0.10`, `+0.07`, `+0.045`, then `+0.025` by volume); a penalty save remains exceptional at `+0.42`. The wrapper preserves save probability, goalkeeper attributes, saves, goals and match results.
-- The same 1,296-match audit now gives goalkeepers 92 awards (7.1%): PL 6.1%, CH 6.9%, L1 9.1%, L2 6.4%, NL 6.7%. Mean goalkeeper rating is 6.63 versus 6.21 outfield.
-- Added `src/dugout-renderer.js`, which takes ownership of the final Dugout frame while retaining the old renderer as a failure fallback. It adds a tracking broadcast camera, depth/perspective, a mown pitch, goalmouth wear, three-dimensional goal frames and nets, cached multi-tier crowd, floodlights, boards, weather, officials, jointed player figures, kit-clash handling, distinct goalkeeper kits, ball height/shadow, pass trails and a compact score bug.
-- The view consumes the existing match engine rather than simulating a second result. Commentary and recorded-stat changes surface passes, tackles, interceptions, dribbles, shots and saves, with the named player's live PAS/TAC/DRB/SAV numbers. Existing substitutions, dismissals, celebrations, cards, camera shake and visual movement remain connected.
-- Added pure camera/kit/event tests, a live JSDOM match-render regression and a deterministic five-division goalkeeper-award guardrail. Added both modules to the harness and versioned offline cache (`results-business-v10`), and updated README/changelog.
+- Added `src/dugout-3d.js`, a real Three.js match scene with a regulation striped pitch and corrected markings, solid goals and lattice nets, corner flags, tiered stadium/seats/crowd, roofs, boards, floodlights, stadium screen, officials, articulated 22-player models, club/GK kits, real height/build scaling, ball flight, rain, contact shadows, a lower touchline camera and compact broadcast HUD.
+- The renderer observes the authoritative match; it does not simulate another result. Per-tick deltas for completed/missed/key passes, tackle and dribble attempts plus outcomes, interceptions, shots/on-target shots, saves, cards and goals produce deterministic staged actions with the responsible player's live PAS/TAC/DRB/SAV numbers. Saves stage shooter-to-keeper rather than keeper-to-goal.
+- The visual editor uses the current engine clock, not the obsolete 1x/3x/8x table: a 3,200 ms minute at 1x shows most of the move; 1,600 ms at 2x shows representative actions; 800 ms at 4x shows one transition; Highlights skips routine minutes and retains decisive events under the engine's existing hold. Skip and pause enqueue nothing.
+- Added phone-specific rendering: instanced stands, seats and boards, bounded crowd/rain, compact articulated models, Lambert lighting, fake contact shadows instead of phone shadow maps, DPR limits, runtime quality adaptation and WebGL-context failure recovery. Desktop retains the detailed skeleton/PBR/shadow path. The tested 2D renderer remains the no-WebGL/load-failure fallback.
+- Fixed the match-tab selected state while entering/leaving Dugout and reduced the legacy stacked commentary to one compact callout over the 3D canvas.
+- Added six pure analytics/camera/quality tests and extended live integration to prove the 3D hook receives engine events, tab state is correct and JSDOM takes the 2D fallback. Updated the offline cache to `results-business-v11`, README and changelog.
 
-The only two edits to `red-devil-manager.html` are these final loader tags; no legacy function or style was changed there:
+The only edit to `red-devil-manager.html` is this final loader; no legacy function or style was edited there:
 
 ```html
-<script src="src/match-ratings.js"></script>
-<script src="src/dugout-renderer.js"></script>
+<script src="src/dugout-3d.js"></script>
 ```
 
 ## Checked, and how
 
-Dependencies, using a writable cache because `/root/.npm` is not writable:
-
-```text
-npm --cache /tmp/manchester-manager-npm-cache --userconfig /tmp/manchester-manager-empty-npmrc ci --no-audit --no-fund
-added 124 packages
-```
-
-Native-canvas visual QA rendered the live game at a 390 CSS-pixel phone width / 780×577 backing store. I inspected midfield and penalty-area frames: camera framing, pitch perspective, goal depth/net, player layering and kit separation were intact; `RBSDugoutRenderer.scene.lastError` and the browser harness error list were both empty. No screenshot or temporary canvas dependency is committed.
-
-Final check, run only after code and documentation were settled:
+Final repository check, after implementation and documentation:
 
 ```text
 npm run check
 lint clean
-tests 87; pass 87; fail 0; cancelled 0; skipped 0; duration 601.961 s
+tests 93; pass 93; fail 0; cancelled 0; skipped 0
+duration 421,755.919 ms
 ```
 
-`git diff --cached --check` also returned no output before the implementation commit.
+Real WebGL QA used headless Chromium/SwiftShader through Playwright at an 844x390 coarse-pointer phone viewport. I started a career, entered a live fixture through the real UI and inspected wide, penalty-area and injected-goal frames. The final sample had `threeReady=true`, 22 players, no renderer error, 130 draw calls and 34,100 triangles; it rendered at 16.5 FPS while the same browser's blank RAF ran at 58.5 FPS. At 4x it moved minute 1 to minute 4 around a held goal, peaked at one queued action and ended with zero queued, proving the pictures caught up. The two console 404s were the documented optional `crowd_base.mp3`/`goal_home.mp3` probes; synthesis remained active. No QA browser, package or screenshot is committed.
+
+`git diff --check`, module syntax and focused Dugout/PWA tests also passed before the full run.
 
 ## Found but not fixed
 
-- The engine does not publish a timed spatial event log. The renderer reacts to authoritative commentary and recorded stat deltas, but exact on-pitch coordinates still come from the established `advancePlay()` / `pitchTargets()` choreography. A literal replay of every engine action needs a separate event contract from the match engine; I did not add one inside Agent One's tactics/attributes work or the legacy core.
-- The repeated legacy Dugout implementations remain in the 56,000-line HTML and serve as the new module's exception fallback. I did not mechanically delete or reorder those layers; that remains a later compaction job after the extracted renderer has real-device mileage.
-- There is no browser executable installed for Playwright screenshot automation. Native Canvas verified actual draw calls and pixels, but not browser compositor behavior.
+- `MatchSim` still has no timed spatial event log. Action type, actor, count and outcome are authoritative analytics; exact support runs and coordinates use the established `advancePlay()` / `pitchTargets()` state plus deterministic receiver/opponent staging. A literal replay of every engine touch needs a new engine event contract.
+- The 56,000-line legacy file still contains repeated historical Dugout implementations. They are intentionally untouched and remain behind `src/dugout-renderer.js` as the last failure path; deleting/reordering them mechanically is still unsafe.
+- SwiftShader is useful for regression rendering, not a physical-phone GPU benchmark. The mobile path is much cheaper than the first draft (about 130 versus 349 draw calls), but 60 FPS has not been claimed.
 
 ## Blocked
 
-- Physical-phone frame time, battery use, touch behavior, orientation changes and low-end GPU rendering cannot be signed off in this environment. Unblock with one mid-range Android and one iPhone run. In particular, measure the cached crowd plus jointed figures during rain and substitutions before claiming 60 fps.
+- Physical-phone sign-off remains blocked on access to one mid-range Android and one iPhone. Check frame time, heat/battery, rain, substitutions, rotation and WebGL context recovery on both before tightening the quality profile further.
 
 ## Data provenance
 
-- The bug report and desired presentation came from the user's own cross-league career through December on 13 August 2026. Before/after award and rating numbers above come from the repository's deterministic match engine, not an external dataset.
-- As a sanity check only, I read the Premier League's 2025/26 [Player of the Matchweek winners through MW22](https://www.premierleague.com/en/news/4555571), its [Matchweek 12 nominee report](https://www.premierleague.com/en/news/4473919/vote-who-was-the-best-player-of-matchweek-12-in-2025-26-season) describing Areola's exceptional ten-save match, and Liverpool's [2024/25 Alisson Player of the Match record](https://www.liverpoolfc.com/news/revealed-liverpools-carlsberg-player-match-v-west-ham), all read 13 August 2026. They support the qualitative target—goalkeeper awards should be possible but exceptional—not the precise 7.1% threshold.
+- Visual target: the user's uploaded `13614.jpg`, read 13 August 2026. It was used only as a composition/quality reference and is not copied into the repository.
+- Match actions, statistics, timing and before/after QA values come from this repository's engine. No external football data or generated visual asset was added in this cycle.
+- `vendor/three.min.js` was already present and carries its Three.js Authors MIT/SPDX licence header; the new renderer loads that local copy so installed phones remain offline-capable.
