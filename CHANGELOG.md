@@ -4,13 +4,22 @@
 
 ### Added
 
-- **Dugout mode now looks and moves like a televised football match.** The old flat
-  figures and scattered pitch have been replaced by a tracked broadcast camera,
-  perspective pitch, proper goal frames and nets, layered stadium and crowd,
-  jointed players with distinguishable kits and goalkeepers, officials, weather,
-  ball height and passing trails. The view reads the match engine's real passes,
-  tackles, interceptions, dribbles, shots and saves, and briefly shows the relevant
-  player's live statistics without changing the result underneath it.
+- **Dugout mode is now a true 3D stadium broadcast.** A vendored Three.js scene
+  supplies a regulation striped pitch, solid markings, goal frames and lattice
+  nets, tiered stands and seating, crowd, roofs, floodlights, stadium scoreboard,
+  officials, weather, an articulated 22-player match and a tracked touchline camera.
+  Heights, builds, club kits, goalkeepers, the ball and contact shadows remain
+  readable on a phone, with a lighter mobile profile and the tested perspective 2D
+  renderer retained for browsers without WebGL.
+
+  What appears on the pitch is edited from the match engine rather than invented.
+  Completed and missed passes, key passes, tackle and dribble attempts and outcomes,
+  interceptions, shots on target, saves, cards and goals become staged animations
+  with the responsible player's live statistics. The edit fits the actual accelerated
+  clock: most of a minute at 1×, representative actions at 2×, one transition at 4×,
+  and decisive moments only in Highlights. Goals and cards use the engine's existing
+  hold time, so the animation never changes a result or leaves the pictures minutes
+  behind the score.
 
 - **Player names in the mail are tappable.** A letter saying a player wants a word, a
   scout report, a suggested transfer target — tap the name and his full card opens, so you
