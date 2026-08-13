@@ -27,6 +27,8 @@ The automated suite covers:
 - sourced 2026/27 English fixture dates, pairings and season-two handoff;
 - sourced English squad identities, nationality, birth date and physical facts;
 - press-conference, fullscreen, SVG-ID and transfer-pagination regressions;
+- Dugout camera, kit contrast, event display and live-render integration;
+- goalkeeper Man of the Match frequency across all five English divisions;
 - full-season statistical bands for both match simulators.
 
 GitHub Actions runs the same checks on every pull request.
@@ -41,6 +43,8 @@ GitHub Actions runs the same checks on every pull request.
 - `src/authentic-fixture-data.js` — generated snapshot of published 2026/27 fixture lists.
 - `src/authentic-fixtures.js` — applies sourced dates to season one without moving them for cups.
 - `src/runtime-enhancements.js` — save integration, diagnostics, accessibility and PWA wiring.
+- `src/match-ratings.js` — diminishing goalkeeper save rewards and rating-distribution guardrails.
+- `src/dugout-renderer.js` — the broadcast-camera Dugout scene, players, goals and live action overlays.
 - `service-worker.js` and `manifest.webmanifest` — installable offline shell.
 - `tests/` — unit and browser-style integration tests.
 

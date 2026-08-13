@@ -34,6 +34,8 @@ function gameHtml() {
     'src/player-links.js',
     'src/lineup.js',
     'src/boardroom.js',
+    'src/match-ratings.js',
+    'src/dugout-renderer.js',
   ]) {
     html = inlineScript(html, fs.readFileSync(path.join(root, filename), 'utf8'), filename);
   }

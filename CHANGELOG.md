@@ -4,6 +4,14 @@
 
 ### Added
 
+- **Dugout mode now looks and moves like a televised football match.** The old flat
+  figures and scattered pitch have been replaced by a tracked broadcast camera,
+  perspective pitch, proper goal frames and nets, layered stadium and crowd,
+  jointed players with distinguishable kits and goalkeepers, officials, weather,
+  ball height and passing trails. The view reads the match engine's real passes,
+  tackles, interceptions, dribbles, shots and saves, and briefly shows the relevant
+  player's live statistics without changing the result underneath it.
+
 - **Player names in the mail are tappable.** A letter saying a player wants a word, a
   scout report, a suggested transfer target — tap the name and his full card opens, so you
   can look at the man before deciding what to do about him. Nothing new was built for it:
@@ -122,6 +130,13 @@
   a hundred million in Europe reported the same revenue as one that never qualified.
 
 ### Fixed
+
+- **Busy goalkeepers no longer monopolise Man of the Match.** Every routine save used
+  to add a full linear rating bonus, so an ordinary high-shot match could leave both
+  keepers permanently "on fire". Save rewards now diminish with volume while a
+  penalty save remains a meaningful exceptional event. In the same deterministic
+  1,296-match five-division audit, goalkeeper awards fell from 963 (74.3%) to 92
+  (7.1%) without changing saves, goals, results or goalkeeper attributes.
 
 - **One footballer can no longer occupy two English clubs.** ESPN's roster feeds can
   briefly list the same athlete under an old and a new club; the previous global
