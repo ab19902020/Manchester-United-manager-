@@ -123,6 +123,25 @@
 
 ### Fixed
 
+- **One footballer can no longer occupy two English clubs.** ESPN's roster feeds can
+  briefly list the same athlete under an old and a new club; the previous global
+  name fallback then spread that identity further when the summer-transfer layer
+  ran. The repeatable updater now resolves every duplicate roster ID against the
+  athlete-detail team, records the competing roster URLs and refuses an ambiguous
+  answer. Runtime matching is club-local, and old saves get a conflict-only repair
+  that leaves unique in-career transfers where the manager put them. In the 13
+  August snapshot this resolved 12 provider conflicts plus stale authored slots:
+  Karl Darlow now exists only at Manchester United, Liverpool has one Jacquet, and
+  Coventry has one Frank Onyeka identity. Every live English slot in the verified
+  new-career run is sourced, with no duplicate ESPN ID or normalized same-club
+  identity.
+
+- **Installed phones cache every game module.** Nine newer scripts were loaded by
+  the page but absent from the service worker's install list. They are now part of
+  the versioned core cache, with a regression that compares the HTML's script list
+  against the offline bundle so a first offline launch cannot silently omit a
+  gameplay system.
+
 - **You can swap a starter with anybody in the squad.** Three separate faults on one
   screen. Tapping a replacement did not swap anybody — it opened the bench-naming sheet,
   because a later feature had defined `ACTIONS.benchPick` a second time and replaced the

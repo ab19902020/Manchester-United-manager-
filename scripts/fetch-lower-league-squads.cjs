@@ -37,6 +37,7 @@ const GAME_NAME_ALIASES = Object.freeze({
   'Harry Clarke': 'Harrison Clarke',
   'Will Dennis': 'William Dennis',
   'Daniel Ballard': 'Danny Ballard',
+  'Ogochukwu Onyeka': 'Frank Onyeka',
 });
 
 async function fetchJson(url, attempts = 3) {
@@ -189,10 +190,110 @@ function rosterIndex(divisions) {
 function matchRosterPlayer(index, target) {
   const candidates = index.get(nameKey(GAME_NAME_ALIASES[target.name] || target.name)) || [];
   const sameClub = candidates.filter((candidate) => nameKey(candidate.team.name) === nameKey(target.club));
-  const premierLeague = candidates.filter((candidate) => candidate.division.espnCompetition === 'eng.1');
-  if (sameClub.length === 1) return sameClub[0];
-  if (premierLeague.length === 1) return premierLeague[0];
-  return candidates.length === 1 ? candidates[0] : null;
+  return sameClub.length === 1 ? sameClub[0] : null;
+}
+
+function athleteDetailUrl(competition, id) {
+  return `https://site.web.api.espn.com/apis/common/v3/sports/soccer/${competition}/athletes/${id}`;
+}
+
+function rosterEntries(divisions) {
+  return Object.entries(divisions).flatMap(([divisionKey, division]) =>
+    Object.values(division.teams).flatMap((team) =>
+      team.players.map((player) => ({ divisionKey, division, team, player }))));
+}
+
+function validateSourcePlayers(divisions, extraPlayers = []) {
+  const owners = new Map();
+  for (const [divisionKey, division] of Object.entries(divisions)) {
+    for (const team of Object.values(division.teams)) {
+      if (team.players.length < 19) {
+        throw new Error(`${team.name}: only ${team.players.length} sourced players after ownership reconciliation`);
+      }
+      const groups = team.players.reduce((counts, player) => {
+        counts[player.group] = (counts[player.group] || 0) + 1;
+        return counts;
+      }, {});
+      if (!groups.G || !groups.D || !groups.M || !groups.F) {
+        throw new Error(`${team.name}: incomplete positional coverage after ownership reconciliation ${JSON.stringify(groups)}`);
+      }
+      for (const player of team.players) {
+        if (owners.has(player.id)) {
+          const prior = owners.get(player.id);
+          throw new Error(`Athlete ${player.id} belongs to both ${prior.team} and ${team.name}`);
+        }
+        owners.set(player.id, { divisionKey, team: team.name });
+      }
+    }
+  }
+  for (const player of extraPlayers) {
+    if (owners.has(player.id)) {
+      const prior = owners.get(player.id);
+      throw new Error(`Historical athlete ${player.id} duplicates ${prior.team}`);
+    }
+    owners.set(player.id, { divisionKey: 'PL-extra', team: player.gameClub });
+  }
+}
+
+async function resolveRosterConflicts(divisions) {
+  const byId = new Map();
+  for (const entry of rosterEntries(divisions)) {
+    if (!byId.has(entry.player.id)) byId.set(entry.player.id, []);
+    byId.get(entry.player.id).push(entry);
+  }
+  const duplicateGroups = [...byId.entries()]
+    .filter(([, entries]) => new Set(entries.map((entry) => entry.team.id)).size > 1)
+    .sort(([left], [right]) => Number(left) - Number(right));
+
+  return mapLimit(duplicateGroups, 6, async ([id, entries]) => {
+    const detailUrl = athleteDetailUrl(entries[0].division.espnCompetition, id);
+    const detail = await fetchJson(detailUrl);
+    const athlete = detail.athlete || detail;
+    const currentTeamId = athlete.team && String(athlete.team.id);
+    const candidateTeams = [...new Map(entries.map((entry) => [entry.team.id, entry])).values()];
+    const owners = candidateTeams.filter((entry) => entry.team.id === currentTeamId);
+    if (owners.length !== 1) {
+      throw new Error(`Athlete ${id}: detail team ${currentTeamId || 'missing'} does not identify one of `
+        + candidateTeams.map((entry) => `${entry.team.name} (${entry.team.id})`).join(', '));
+    }
+
+    const owner = owners[0];
+    const detailedPlayer = playerRecord(athlete);
+    const retained = owner.team.players.find((player) => player.id === id);
+    if (detailedPlayer && retained) {
+      retained.aliases = [...new Set([
+        ...(retained.aliases || [retained.name]),
+        ...(detailedPlayer.aliases || [detailedPlayer.name]),
+      ])];
+      for (const key of [
+        'name', 'group', 'age', 'dateOfBirth', 'nationality', 'nat', 'heightCm', 'weightKg',
+        'displayHeight', 'displayWeight', 'shirt', 'profile',
+      ]) {
+        if (detailedPlayer[key] !== null && detailedPlayer[key] !== undefined) retained[key] = detailedPlayer[key];
+      }
+    }
+
+    for (const entry of candidateTeams) {
+      const matches = entry.team.players.filter((player) => player.id === id);
+      entry.team.players = entry.team.players.filter((player) => player.id !== id);
+      if (entry.team === owner.team && matches.length) entry.team.players.push(retained || matches[0]);
+    }
+
+    return {
+      id,
+      name: (detailedPlayer && detailedPlayer.name) || entries[0].player.name,
+      listedClubs: candidateTeams.map((entry) => ({
+        club: entry.team.name,
+        teamId: entry.team.id,
+        division: entry.divisionKey,
+        source: entry.team.source,
+      })),
+      authoritativeClub: owner.team.name,
+      authoritativeTeamId: owner.team.id,
+      source: detailUrl,
+      readDate,
+    };
+  });
 }
 
 async function fetchExtraPlayer(target) {
@@ -212,9 +313,10 @@ async function fetchExtraPlayer(target) {
   const idMatch = String(result.uid || '').match(/a:(\d+)/);
   if (!idMatch) return null;
   const league = result.defaultLeagueSlug || 'eng.1';
-  const detailUrl = `https://site.web.api.espn.com/apis/common/v3/sports/soccer/${league}/athletes/${idMatch[1]}`;
+  const detailUrl = athleteDetailUrl(league, idMatch[1]);
   const detail = await fetchJson(detailUrl);
-  const player = playerRecord(detail.athlete || detail);
+  const athlete = detail.athlete || detail;
+  const player = playerRecord(athlete);
   if (!player) return null;
   if (!player.aliases.includes(target.name)) player.aliases.push(target.name);
   return {
@@ -223,6 +325,8 @@ async function fetchExtraPlayer(target) {
     gameClub: target.club,
     searchSource: searchUrl,
     source: detailUrl,
+    currentTeamId: athlete.team && athlete.team.id ? String(athlete.team.id) : null,
+    currentTeam: athlete.team && (athlete.team.displayName || athlete.team.name) || null,
   };
 }
 
@@ -294,6 +398,9 @@ async function main() {
     divisions[config.key] = await fetchDivision(config, config.key === 'PL' ? authored : null);
   }
 
+  const rosterConflicts = await resolveRosterConflicts(divisions);
+  validateSourcePlayers(divisions);
+
   const index = rosterIndex(divisions);
   const targets = authored.flatMap((team) => team.players.map((name) => ({ name, club: team.club })));
   const missing = targets.filter((target) => {
@@ -302,17 +409,54 @@ async function main() {
     return !match;
   });
   const lookedUp = await mapLimit(missing, 6, fetchExtraPlayer);
-  const extraPlayers = lookedUp.filter(Boolean);
-  const resolved = new Set(extraPlayers.map((player) => `${player.gameClub}\0${player.gameName}`));
-  const unresolvedPremierLeague = missing.filter((target) => !resolved.has(`${target.club}\0${target.name}`));
+  const premierTeams = new Map(Object.values(divisions.PL.teams).map((team) => [nameKey(team.name), team]));
+  const rosterOwners = new Map(rosterEntries(divisions).map((entry) => [entry.player.id, entry]));
+  const extraPlayers = [];
+  const misplacedPremierLeague = [];
+  const unresolvedPremierLeague = [];
+  for (let indexPosition = 0; indexPosition < missing.length; indexPosition += 1) {
+    const target = missing[indexPosition];
+    const player = lookedUp[indexPosition];
+    if (!player) {
+      unresolvedPremierLeague.push(target);
+      continue;
+    }
+    const targetTeam = premierTeams.get(nameKey(target.club));
+    if (!targetTeam) throw new Error(`No sourced Premier League team matches ${target.club}`);
+    if (player.currentTeamId !== targetTeam.id) {
+      misplacedPremierLeague.push({
+        name: target.name,
+        club: target.club,
+        id: player.id,
+        matchedName: player.name,
+        currentClub: player.currentTeam,
+        currentTeamId: player.currentTeamId,
+        source: player.source,
+        searchSource: player.searchSource,
+      });
+      continue;
+    }
+    const rosterOwner = rosterOwners.get(player.id);
+    if (rosterOwner) {
+      if (rosterOwner.team.id !== targetTeam.id) {
+        throw new Error(`Athlete ${player.id} resolves to ${targetTeam.name} but is listed only by ${rosterOwner.team.name}`);
+      }
+      if (!rosterOwner.player.aliases.includes(target.name)) rosterOwner.player.aliases.push(target.name);
+      continue;
+    }
+    extraPlayers.push(player);
+  }
+  validateSourcePlayers(divisions, extraPlayers);
 
   const data = {
-    schema: 2,
+    schema: 3,
     readDate,
     sourceName: 'ESPN public soccer roster and athlete APIs',
     divisions,
     extraPlayers,
     unresolvedPremierLeague,
+    misplacedPremierLeague,
+    rosterConflicts,
   };
   fs.writeFileSync(output, moduleSource(data), 'utf8');
   const teams = Object.values(divisions).reduce((sum, division) => sum + Object.keys(division.teams).length, 0);
@@ -321,7 +465,8 @@ async function main() {
     0,
   );
   process.stdout.write(`Wrote ${path.relative(root, output)} with ${teams} teams, ${players} roster players, `
-    + `${extraPlayers.length} historical lookups and ${unresolvedPremierLeague.length} unresolved authored players (${readDate}).\n`);
+    + `${extraPlayers.length} historical lookups, ${misplacedPremierLeague.length} moved authored players, `
+    + `${rosterConflicts.length} roster ownership conflicts and ${unresolvedPremierLeague.length} unresolved authored players (${readDate}).\n`);
   if (unresolvedPremierLeague.length) {
     process.stdout.write(`Unresolved: ${unresolvedPremierLeague.map((player) => `${player.club}: ${player.name}`).join('; ')}\n`);
   }

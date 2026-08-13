@@ -4,6 +4,15 @@ const { createGame, startCareer, waitFor } = require('./game-harness.cjs');
 const lowerLeagueData = require('../src/lower-league-data.js');
 const authenticFixtureData = require('../src/authentic-fixture-data.js');
 
+function playerNameKey(value) {
+  const aliases = { 'Ogochukwu Onyeka': 'Frank Onyeka' };
+  return String(aliases[value] || value || '')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+}
+
 function checkLowerLeagueSquads(game) {
   const pickerNames = JSON.parse(game.eval(`JSON.stringify(buildRoster()
     .filter(club=>['L1','L2','NL'].includes(club.league)).map(club=>club.name))`));
@@ -60,7 +69,7 @@ function checkEnglishPlayerFacts(game) {
       readDate:player.playerFactsReadDate
     })))))`));
 
-  assert.equal(lowerLeagueData.schema, 2);
+  assert.equal(lowerLeagueData.schema, 3);
   assert.equal(Object.keys(lowerLeagueData.divisions.PL.teams).length, 20);
   for (const division of ['CH', 'L1', 'L2', 'NL']) {
     assert.equal(Object.keys(lowerLeagueData.divisions[division].teams).length, 24);
@@ -71,12 +80,42 @@ function checkEnglishPlayerFacts(game) {
   assert.ok(sourced.every((player) => player.espnId));
   assert.ok(sourced.every((player) => /^https:\/\/site\.(?:api|web\.api)\.espn\.com\//.test(player.source)));
   assert.ok(sourced.every((player) => player.readDate === lowerLeagueData.readDate));
-  assert.ok(live.filter((player) => player.nat).length > 2200);
+  assert.ok(live.filter((player) => player.nat).length > 2100);
   assert.ok(live.filter((player) => player.dob).length > 2000);
   assert.ok(live.filter((player) => player.heightCm).length > 1500);
   assert.ok(live.filter((player) => player.weightKg).length > 1300);
   assert.ok(live.every((player) => !player.heightCm || (player.heightCm >= 140 && player.heightCm <= 220)));
   assert.ok(live.every((player) => !player.weightKg || (player.weightKg >= 40 && player.weightKg <= 150)));
+
+  const sourcePlayers = Object.values(lowerLeagueData.divisions)
+    .flatMap((division) => Object.values(division.teams))
+    .flatMap((team) => team.players.map((player) => ({ club: team.name, player })));
+  const sourceIds = new Map();
+  for (const entry of [...sourcePlayers, ...lowerLeagueData.extraPlayers.map((player) => ({
+    club: player.gameClub, player,
+  }))]) {
+    assert.ok(!sourceIds.has(entry.player.id), `source ID ${entry.player.id} belongs to two clubs`);
+    sourceIds.set(entry.player.id, entry.club);
+  }
+  assert.ok(lowerLeagueData.rosterConflicts.length > 0);
+  for (const conflict of lowerLeagueData.rosterConflicts) {
+    assert.ok(conflict.listedClubs.length > 1);
+    assert.ok(conflict.listedClubs.some((club) => club.club === conflict.authoritativeClub));
+    assert.match(conflict.source, /^https:\/\/site\.web\.api\.espn\.com\//);
+    assert.equal(conflict.readDate, lowerLeagueData.readDate);
+  }
+
+  const liveIds = new Map();
+  const liveNames = new Map();
+  for (const player of live) {
+    if (player.espnId) {
+      assert.ok(!liveIds.has(String(player.espnId)), `live ESPN ID ${player.espnId} is duplicated`);
+      liveIds.set(String(player.espnId), player);
+    }
+    const key = `${player.club}\0${playerNameKey(player.name)}`;
+    assert.ok(!liveNames.has(key), `${player.club} contains duplicate identity ${player.name}`);
+    liveNames.set(key, player);
+  }
 
   const darlow = live.find((player) => player.club === 'Manchester United' && player.name === 'Karl Darlow');
   assert.deepEqual(
@@ -85,8 +124,23 @@ function checkEnglishPlayerFacts(game) {
   );
   const mazraoui = live.find((player) => player.club === 'Manchester United' && player.name === 'Noussair Mazraoui');
   assert.equal(mazraoui.nat, 'MAR', 'ESPN provider code MOR was not canonicalised for the game');
-  assert.equal(lowerLeagueData.unresolvedPremierLeague.length, 1);
-  assert.equal(lowerLeagueData.unresolvedPremierLeague[0].name, 'Ogochukwu Onyeka');
+  assert.deepEqual(
+    live.filter((player) => player.club === 'Liverpool' && playerNameKey(player.name) === 'jeremyjacquet')
+      .map((player) => player.espnId),
+    ['355980'],
+  );
+  assert.deepEqual(
+    live.filter((player) => player.club === 'Coventry City' && playerNameKey(player.name) === 'frankonyeka')
+      .map((player) => player.espnId),
+    ['258491'],
+  );
+  assert.deepEqual(
+    live.filter((player) => player.espnId === '130877').map((player) => player.club),
+    ['Manchester United'],
+  );
+  assert.ok(lowerLeagueData.misplacedPremierLeague.some((player) =>
+    player.name === 'Karl Darlow' && player.club === 'Leeds United' && player.currentClub === 'Manchester United'));
+  assert.equal(lowerLeagueData.unresolvedPremierLeague.length, 0);
   assert.doesNotMatch(JSON.stringify(lowerLeagueData), /"(?:headshot|skin|hairStyle)"/);
 }
 
@@ -202,6 +256,52 @@ test('new careers save the complete world and manual slots never evict one anoth
     game.eval('G.day=19');
     assert.equal(await game.window.RBSSaves.load('1'), true);
     assert.equal(game.eval('G.day'), 8);
+
+    const migration = game.eval(`(()=>{
+      const sourceClub=G.clubs.find(club=>club.name==='Manchester United');
+      const destination=G.clubs.find(club=>club.name==='Liverpool');
+      const moved=sourceClub.players.find(player=>player.espnId&&player.pos!=='GK'&&
+        !destination.players.some(candidate=>candidate.name===player.name));
+      sourceClub.players=sourceClub.players.filter(player=>player!==moved);
+      moved.club=destination.i;
+      destination.players.push(moved);
+
+      const duplicateOwner=sourceClub.players.find(player=>player.espnId);
+      const staleClub=G.clubs.find(club=>club.name==='Leeds United');
+      const maxId=Math.max(...G.clubs.flatMap(club=>club.players.map(player=>Number(player.id)||0)));
+      const staleCopy={...duplicateOwner,id:maxId+1,club:staleClub.i};
+      staleClub.players.push(staleCopy);
+
+      const coventry=G.clubs.find(club=>club.name==='Coventry City');
+      const onyeka=coventry.players.find(player=>String(player.espnId)==='258491');
+      const aliasCopy={...onyeka,id:maxId+2,name:'Ogochukwu Onyeka'};
+      for(const key of ['espnId','nat','nationality','dob','heightCm','weightKg','displayHeight',
+        'displayWeight','playerProfile','playerFactsSource','playerFactsReadDate'])delete aliasCopy[key];
+      coventry.players.push(aliasCopy);
+      return {movedId:String(moved.espnId),duplicateId:String(duplicateOwner.espnId)};
+    })()`);
+    await game.window.RBSSaves.save('2', true);
+    assert.equal(await game.window.RBSSaves.load('2'), true);
+    const migrated = JSON.parse(game.eval(`JSON.stringify((()=>{
+      const live=['PL','CH','L1','L2','NL'].flatMap(division=>G.clubs
+        .filter(club=>club.league===division)
+        .flatMap(club=>club.players.map(player=>({club:club.name,name:player.name,espnId:String(player.espnId||'')}))));
+      const counts={};live.filter(player=>player.espnId).forEach(player=>{
+        counts[player.espnId]=(counts[player.espnId]||0)+1});
+      return {
+        moved:live.filter(player=>player.espnId==='${migration.movedId}').map(player=>player.club),
+        duplicate:live.filter(player=>player.espnId==='${migration.duplicateId}').map(player=>player.club),
+        duplicateIds:Object.entries(counts).filter(([,count])=>count>1),
+        onyeka:live.filter(player=>player.club==='Coventry City'&&
+          ['frankonyeka','ogochukwuonyeka'].includes(player.name.normalize('NFKD')
+            .replace(/[\\u0300-\\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'')))
+      };
+    })())`));
+    assert.deepEqual(migrated.moved, ['Liverpool'], 'loading reset a unique in-career transfer');
+    assert.deepEqual(migrated.duplicate, ['Manchester United']);
+    assert.deepEqual(migrated.duplicateIds, []);
+    assert.equal(migrated.onyeka.length, 1);
+    assert.equal(await game.window.RBSSaves.load('1'), true);
 
     assert.doesNotThrow(() => game.eval("ACTIONS.offerAccept({dataset:{arg:'missing-offer'}})"));
     assert.equal(game.window.RBSDiagnostics.list().filter((item) => /offerAccept/.test(item.context)).length, 0);

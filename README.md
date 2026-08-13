@@ -44,11 +44,11 @@ GitHub Actions runs the same checks on every pull request.
 - `service-worker.js` and `manifest.webmanifest` — installable offline shell.
 - `tests/` — unit and browser-style integration tests.
 
-Two agents work on this repository and coordinate through two files, each with a
-single writer so they never conflict. `CODEX.md` is Claude's brief to Codex — what
-to do next and why. `CLAUDE.md` is Codex's report back — what was done, what was
-checked and how, and what was found but not fixed. Codex owns real-world data,
-tests and audits; Claude owns the game code, the feel and the priority.
+Three agents work on this repository with separate handoffs and ownership. Claude
+directs the work through `CODEX.md`; Codex reports data, test and audit work in
+`CLAUDE.md`; Agent One reports the economy, contracts, morale, transfer-market,
+inbox and underlying-rules work in `AGENT-ONE.md`. Read all three handoffs before
+changing an owned system so one agent does not overwrite another's work.
 
 New systems should be added to `src/` rather than appended as another anonymous wrapper in the legacy file. `runtime-enhancements.js` provides one named action-patching helper and a bounded diagnostic log through `window.RBSDiagnostics`.
 
@@ -76,16 +76,20 @@ generated calendar because no future list has been published. Generated cup ties
 move around a sourced league date, never the other way round.
 
 All 116 modeled English clubs use an ESPN roster and player-biography snapshot
-read on 10 August 2026: [Premier League](https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/teams?limit=100), [Championship](https://site.api.espn.com/apis/site/v2/sports/soccer/eng.2/teams?limit=100), [League One](https://site.api.espn.com/apis/site/v2/sports/soccer/eng.3/teams?limit=100), [League Two](https://site.api.espn.com/apis/site/v2/sports/soccer/eng.4/teams?limit=100) and [National League](https://site.api.espn.com/apis/site/v2/sports/soccer/eng.5/teams?limit=100).
-The snapshot records 3,251 roster players with the nationality, date of birth,
-height and weight ESPN publishes, plus each team roster URL, source timestamp and
-direct player profile where available. Run `npm run data:player-facts` to validate
-and refresh it.
+read on 13 August 2026: [Premier League](https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/teams?limit=100), [Championship](https://site.api.espn.com/apis/site/v2/sports/soccer/eng.2/teams?limit=100), [League One](https://site.api.espn.com/apis/site/v2/sports/soccer/eng.3/teams?limit=100), [League Two](https://site.api.espn.com/apis/site/v2/sports/soccer/eng.4/teams?limit=100) and [National League](https://site.api.espn.com/apis/site/v2/sports/soccer/eng.5/teams?limit=100).
+The schema 3 snapshot records 3,238 unique roster players and four verified
+same-club detail records with the nationality, date of birth, height and weight
+ESPN publishes. Twelve IDs returned on more than one team roster are resolved by
+the athlete-detail team before the data is accepted; an ambiguous owner now fails
+the updater instead of entering the game twice. Each decision retains its roster
+and detail URLs and read date. Run `npm run data:player-facts` to validate and
+refresh it.
 
 The integration keeps positions, ratings, potential, contracts and the economy
 game-balanced. Lower-division slots retain their shape while sourced identities and
-facts replace generated ones; generated Premier League depth names are replaced by
-unused players from the published club roster. A missing source field is retained as
-missing rather than guessed.
+facts replace generated ones; stale or generated Premier League names are replaced
+by unused players from that club's published roster. Matching never borrows an
+identity from another club, and a missing source field remains missing rather than
+being inherited from the player who previously occupied the slot or being guessed.
 
 British neural voices are optional. Their first use requires a 36–326 MB download; coarse-pointer and lower-memory devices default to the 36 MB model. Device voices remain the zero-download fallback.

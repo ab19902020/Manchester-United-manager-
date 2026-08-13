@@ -15,7 +15,14 @@
     NL: { rep: [2050, 2600], budget: [0.2e6, 0.9e6] },
   };
   const NAME_ALIASES = { 'Milton Keynes Dons': 'MK Dons' };
-  const PLAYER_NAME_ALIASES = { 'Modou Kéba Cissé': 'Modou Cissé' };
+  const PLAYER_NAME_ALIASES = {
+    'Modou Kéba Cissé': 'Modou Cissé',
+    'Ogochukwu Onyeka': 'Frank Onyeka',
+  };
+  const PLAYER_FACT_FIELDS = [
+    'espnId', 'nat', 'nationality', 'dob', 'heightCm', 'weightKg', 'displayHeight',
+    'displayWeight', 'playerProfile', 'playerFactsSource', 'playerFactsReadDate',
+  ];
   const NEW_CLUB_VENUES = {
     'Birmingham City': {
       name: 'St Andrew\'s @ Knighthead Park', capacity: 29409,
@@ -70,6 +77,10 @@
       .replace(/[^a-z0-9]/g, '');
   }
 
+  function canonicalPlayerKey(value) {
+    return nameKey(PLAYER_NAME_ALIASES[value] || value);
+  }
+
   function ageOnSeasonStart(dateOfBirth) {
     const match = String(dateOfBirth || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
     if (!match) return null;
@@ -81,7 +92,8 @@
   }
 
   function validate() {
-    if (!data || data.schema !== 2 || !data.divisions) throw new Error('English player source data is unavailable.');
+    if (!data || data.schema !== 3 || !data.divisions) throw new Error('English player source data is unavailable.');
+    const sourceIds = new Map();
     for (const division of FACT_DIVISION_ORDER) {
       const entry = data.divisions[division];
       const expected = division === 'PL' ? 20 : 24;
@@ -94,6 +106,10 @@
         }
         for (const player of team.players) {
           if (!player.id || !player.name) throw new Error(`${team.name} contains an invalid player record.`);
+          if (sourceIds.has(player.id)) {
+            throw new Error(`Sourced athlete ${player.id} belongs to both ${sourceIds.get(player.id)} and ${team.name}.`);
+          }
+          sourceIds.set(player.id, team.name);
           if (player.heightCm && (player.heightCm < 140 || player.heightCm > 220)) {
             throw new Error(`${player.name} has an invalid sourced height.`);
           }
@@ -102,6 +118,13 @@
           }
         }
       }
+    }
+    for (const player of data.extraPlayers || []) {
+      if (!player.id || !player.name || !player.gameClub) throw new Error('An extra player source record is invalid.');
+      if (sourceIds.has(player.id)) {
+        throw new Error(`Extra athlete ${player.id} duplicates the source record at ${sourceIds.get(player.id)}.`);
+      }
+      sourceIds.set(player.id, player.gameClub);
     }
     return true;
   }
@@ -117,9 +140,11 @@
     return key;
   }
 
-  function choosePlayer(candidates, used, group, targetAge) {
-    let pool = candidates.filter((player) => !used.has(player.id) && player.group === group);
-    if (!pool.length) pool = candidates.filter((player) => !used.has(player.id));
+  function choosePlayer(candidates, used, group, targetAge, blockedNames) {
+    const available = (player) => !used.has(player.id)
+      && (!blockedNames || !blockedNames.has(canonicalPlayerKey(player.name)));
+    let pool = candidates.filter((player) => available(player) && player.group === group);
+    if (!pool.length) pool = candidates.filter(available);
     pool.sort((a, b) => {
       const aScore = Math.abs((a.age || targetAge) - targetAge) + (a.shirt ? 0 : 1.5);
       const bScore = Math.abs((b.age || targetAge) - targetAge) + (b.shirt ? 0 : 1.5);
@@ -128,7 +153,12 @@
     return pool[0] || null;
   }
 
+  function clearFacts(player) {
+    for (const field of PLAYER_FACT_FIELDS) delete player[field];
+  }
+
   function applyFacts(player, source, provenance) {
+    clearFacts(player);
     player.espnId = source.id;
     if (source.nat) player.nat = source.nat;
     if (source.nationality) player.nationality = source.nationality;
@@ -169,14 +199,19 @@
   }
 
   function matchFacts(index, player, club, division, used) {
+    void division;
     const sourceName = PLAYER_NAME_ALIASES[player.name] || player.name;
     const available = (index.get(nameKey(sourceName)) || [])
       .filter((candidate) => !used.has(candidate.source.id));
     const sameClub = available.filter((candidate) => nameKey(candidate.gameClub) === nameKey(club.name));
-    const sameDivision = available.filter((candidate) => candidate.division === division);
-    if (sameClub.length === 1) return sameClub[0];
-    if (sameDivision.length === 1) return sameDivision[0];
-    return available.length === 1 ? available[0] : null;
+    return sameClub.length === 1 ? sameClub[0] : null;
+  }
+
+  function assignIdentity(player, source, provenance) {
+    player.name = source.name;
+    if (source.shirt) player.shirt = source.shirt;
+    else delete player.shirt;
+    applyFacts(player, source, provenance);
   }
 
   function applyRoster(club, team) {
@@ -186,10 +221,7 @@
       const source = choosePlayer(team.players, used, positionGroup(player.pos), player.age);
       if (!source) continue;
       used.add(source.id);
-      player.name = source.name;
-      if (source.shirt) player.shirt = source.shirt;
-      else delete player.shirt;
-      applyFacts(player, source, team.source);
+      assignIdentity(player, source, team.source);
       assigned += 1;
     }
     delete club._shirts;
@@ -200,11 +232,14 @@
 
   function refreshPremierLeague(clubs) {
     const index = buildFactsIndex();
-    const report = { clubs: 0, players: 0, replacedGenerated: 0, unresolvedAuthored: [] };
+    const unresolved = new Set((data.unresolvedPremierLeague || [])
+      .map((player) => `${nameKey(player.club)}\0${canonicalPlayerKey(player.name)}`));
+    const report = {
+      clubs: 0, players: 0, replacedGenerated: 0, unresolvedAuthored: [], unfilled: [], identity: null,
+    };
     for (const team of Object.values(data.divisions.PL.teams)) {
       const club = clubs.find((candidate) => candidate.league === 'PL' && candidate.name === team.name);
       if (!club) throw new Error(`The live world is missing ${team.name} from PL.`);
-      const authored = new Set((team.authoredPlayers || []).map(nameKey));
       const used = new Set();
       const unmatched = [];
       for (const player of club.players || []) {
@@ -214,21 +249,23 @@
           continue;
         }
         used.add(match.source.id);
+        if (PLAYER_NAME_ALIASES[player.name]) player.name = match.source.name;
         applyFacts(player, match.source, match.provenance);
         report.players += 1;
       }
       for (const player of unmatched) {
-        if (authored.has(nameKey(player.name))) {
+        const unresolvedKey = `${nameKey(club.name)}\0${canonicalPlayerKey(player.name)}`;
+        if (unresolved.has(unresolvedKey)) {
           report.unresolvedAuthored.push(`${club.name}: ${player.name}`);
           continue;
         }
         const source = choosePlayer(team.players, used, positionGroup(player.pos), player.age);
-        if (!source) continue;
+        if (!source) {
+          report.unfilled.push(`${club.name}: ${player.name}`);
+          continue;
+        }
         used.add(source.id);
-        player.name = source.name;
-        if (source.shirt) player.shirt = source.shirt;
-        else delete player.shirt;
-        applyFacts(player, source, team.source);
+        assignIdentity(player, source, team.source);
         report.players += 1;
         report.replacedGenerated += 1;
       }
@@ -237,6 +274,96 @@
       club.playerFactsReadDate = data.readDate;
       report.clubs += 1;
     }
+    report.identity = reconcileEnglishIdentities(clubs);
+    return report;
+  }
+
+  function sourceOwnership() {
+    const byId = new Map();
+    const teamsByName = new Map();
+    for (const division of FACT_DIVISION_ORDER) {
+      for (const team of Object.values(data.divisions[division].teams)) {
+        teamsByName.set(nameKey(team.name), team);
+        for (const source of team.players) byId.set(source.id, { team, source, provenance: team.source });
+      }
+    }
+    for (const source of data.extraPlayers || []) {
+      byId.set(source.id, { team: null, source, provenance: source.source, gameClub: source.gameClub });
+    }
+    return { byId, teamsByName };
+  }
+
+  function reconcileEnglishIdentities(clubs) {
+    validate();
+    if (!Array.isArray(clubs)) throw new TypeError('Expected the game club array.');
+    const englishClubs = clubs.filter((club) => FACT_DIVISION_ORDER.includes(club.league));
+    const ownership = sourceOwnership();
+    const entries = englishClubs.flatMap((club) => (club.players || []).map((player) => ({ club, player })));
+    const losers = new Set();
+    const report = { duplicateIdGroups: 0, aliasGroups: 0, replaced: 0, removed: 0 };
+
+    const byId = new Map();
+    for (const entry of entries) {
+      if (!entry.player.espnId) continue;
+      const id = String(entry.player.espnId);
+      if (!byId.has(id)) byId.set(id, []);
+      byId.get(id).push(entry);
+    }
+    for (const [id, group] of byId) {
+      if (group.length < 2) continue;
+      const expected = ownership.byId.get(id);
+      const ownerName = expected && (expected.team ? expected.team.name : expected.gameClub);
+      const atOwner = group.filter((entry) => ownerName && nameKey(entry.club.name) === nameKey(ownerName));
+      const pool = atOwner.length ? atOwner : group;
+      pool.sort((left, right) => (Number(right.player.ovr) || 0) - (Number(left.player.ovr) || 0));
+      const keeper = pool[0];
+      for (const entry of group) if (entry !== keeper) losers.add(entry);
+      report.duplicateIdGroups += 1;
+    }
+
+    for (const club of englishClubs) {
+      const byName = new Map();
+      for (const entry of entries.filter((candidate) => candidate.club === club)) {
+        const key = canonicalPlayerKey(entry.player.name);
+        if (!byName.has(key)) byName.set(key, []);
+        byName.get(key).push(entry);
+      }
+      for (const group of byName.values()) {
+        if (group.length < 2) continue;
+        const ids = new Set(group.map((entry) => entry.player.espnId).filter(Boolean).map(String));
+        if (ids.size > 1) continue;
+        const active = group.filter((entry) => !losers.has(entry));
+        const pool = active.length ? active : group;
+        pool.sort((left, right) => {
+          const sourced = Number(Boolean(right.player.espnId)) - Number(Boolean(left.player.espnId));
+          return sourced || (Number(right.player.ovr) || 0) - (Number(left.player.ovr) || 0);
+        });
+        const keeper = pool[0];
+        for (const entry of group) if (entry !== keeper) losers.add(entry);
+        report.aliasGroups += 1;
+      }
+    }
+
+    const usedIds = new Set(entries.map((entry) => entry.player.espnId).filter(Boolean).map(String));
+    for (const entry of losers) {
+      const team = ownership.teamsByName.get(nameKey(entry.club.name));
+      const blockedNames = new Set((entry.club.players || [])
+        .filter((player) => player !== entry.player)
+        .map((player) => canonicalPlayerKey(player.name)));
+      const source = team && choosePlayer(
+        team.players, usedIds, positionGroup(entry.player.pos), entry.player.age, blockedNames,
+      );
+      if (source) {
+        usedIds.add(source.id);
+        assignIdentity(entry.player, source, team.source);
+        report.replaced += 1;
+      } else {
+        entry.club.players = (entry.club.players || []).filter((player) => player !== entry.player);
+        report.removed += 1;
+      }
+      delete entry.club._shirts;
+    }
+
     return report;
   }
 
@@ -324,5 +451,7 @@
     return report;
   }
 
-  return Object.freeze({ apply, refreshRosters, refreshPremierLeague, validate, positionGroup, data });
+  return Object.freeze({
+    apply, refreshRosters, refreshPremierLeague, reconcileEnglishIdentities, validate, positionGroup, data,
+  });
 });
