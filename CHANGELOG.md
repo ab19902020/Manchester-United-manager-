@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+### Fixed
+
+- **A goal bonus now helps close a deal at every level of the pyramid.** When a
+  contract offer is borderline, the game scores it — the wage against what he is
+  asking, the sign-on against what he is asking, and then the goal bonus against a
+  flat £8,000. That last figure is a Premier League number and it broke the lever at
+  both ends. A National League sheet opens at £50 a goal, which scored 0.02 of the
+  four points it is worth, so no bonus a club at that level could afford ever moved
+  the decision. A Premier League sheet opens at £7,500, which already scored 3.75 of
+  4, so there was nothing to gain by offering more. The bonus is now measured against
+  what the sheet itself opens with: that offer is worth half marks and double it is
+  worth full marks, at every wage in the game. The player is paid exactly what you
+  typed.
+
 ### Added
 
 - **Dugout mode is now a true 3D stadium broadcast.** A vendored Three.js scene

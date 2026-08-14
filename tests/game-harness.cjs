@@ -37,6 +37,7 @@ function gameHtml() {
     'src/match-ratings.js',
     'src/dugout-renderer.js',
     'src/dugout-3d.js',
+    'src/contract-score.js',
   ]) {
     html = inlineScript(html, fs.readFileSync(path.join(root, filename), 'utf8'), filename);
   }
