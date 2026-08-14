@@ -125,10 +125,33 @@ async function main() {
             if (drift > 4) off += 1; else on += 1;
             if (current.actorId === dot.pl.p.id) scorerRun = drift;
           });
+          /* the other side: are they reacting, or standing there */
+          let dejected = 0;
+          (MU.dots || []).forEach((dot) => {
+            if (!dot || !dot.pl || !dot.pl.p || dot.pl.off) return;
+            const model = state.players.get(dot.pl.p.id);
+            const data = model && model.userData;
+            if (!data) return;
+            const theirs = match.sides[current.defendingSide]
+              && match.sides[current.defendingSide].onfield.indexOf(dot.pl) >= 0;
+            if (!theirs) return;
+            const armUp = data.leftArm ? Math.abs(data.leftArm.rotation.x) : 0;
+            const stooped = data.hips ? (0.92 - data.hips.position.y) : 0;
+            if (armUp > 0.5 || stooped > 0.06) dejected += 1;
+          });
+
+          /* did the ball actually cross the line and end up in the net */
+          const line = current.attackingSide === 1 ? 0 : 105;
+          const past = current.attackingSide === 1 ? (MU.ball.x < line) : (MU.ball.x > line);
           const best = window.__obs.goal;
           if (!best || off > best.awayFromDots) {
-            window.__obs.goal = { awayFromDots: off, holdingShape: on, scorerDrift: +scorerRun.toFixed(2) };
+            window.__obs.goal = {
+              awayFromDots: off, holdingShape: on, scorerDrift: +scorerRun.toFixed(2),
+              dejected, ballX: +MU.ball.x.toFixed(1), crossedLine: past,
+              clockStopped: MU.speed === 0,
+            };
           }
+          if (past) window.__obs.ballInNet = (window.__obs.ballInNet || 0) + 1;
         } catch (error) { /* skip the frame */ }
       }
 
@@ -187,6 +210,7 @@ async function main() {
   console.log('ball on the man  ', near + '/' + (near + far),
     (near + far) ? ((100 * near / (near + far)).toFixed(1) + '%') : 'n/a');
   console.log('goal celebration ', obs.goal ? JSON.stringify(obs.goal) : 'NEVER SAW A GOAL');
+  console.log('ball in the net  ', obs.ballInNet || 0, 'frames past the goal line');
   console.log('keeper save      ', obs.save ? JSON.stringify(obs.save) : 'NEVER SAW A SAVE');
   console.log('page errors      ', errors.length ? errors.slice(0, 3) : 'none');
 

@@ -1520,8 +1520,26 @@
       };
     }
     if (next.type === 'shot' || next.type === 'goal' || next.type === 'save' || next.type === 'penalty') {
-      next.to.x = attackingSide === 1 ? 0.4 : 104.6;
-      next.to.y = limit(34 + (seeded(seedFrom(`${next.id}|goal`))() * 6.4 - 3.2), 30.7, 37.3);
+      const aim = seeded(seedFrom(`${next.id}|goal`));
+      next.to.y = limit(34 + (aim() * 6.4 - 3.2), 30.7, 37.3);
+      if (next.type === 'goal') {
+        /* THE BALL HAS TO GO IN. It was aimed at x = 0.4 or 104.6,
+           which is ON the goal line — so every goal in the game ended
+           with the ball stopping dead on the line and never entering
+           the net. You cannot see a goal that does not cross the line.
+
+           It is sent a clear two metres past it now, into the netting,
+           and it finishes at a height inside the frame rather than back
+           on the floor: the arc used to return to ground level at the
+           end, so even the ones that got close hit the deck at the
+           line. Roughly a third go in along the floor, the rest lift,
+           and the crossbar is at 2.44m so nothing is aimed above it. */
+        next.to.x = attackingSide === 1 ? -1.6 : 106.6;
+        const low = aim() < 0.34;
+        next.netHeight = low ? 0.24 + aim() * 0.35 : 0.7 + aim() * 1.45;
+      } else {
+        next.to.x = attackingSide === 1 ? 0.4 : 104.6;
+      }
     }
     state.timeline.current = next;
     return next;
@@ -1672,6 +1690,31 @@
       }
     }
 
+    /* ---- THE SIDE THAT CONCEDED ----
+       They carried on exactly as before, which made a goal look like
+       nothing had happened at either end. A conceding team stops: hands
+       on hips or head, shoulders down, and the keeper picks it out of
+       the net. Held for the first two-thirds of the celebration and
+       then released, because they do have to restart the game. */
+    if (action && action.type === 'goal' && dot.pl && !dot.pl.off) {
+      const conceded = playerSideIndex(match, dot.pl);
+      if (conceded != null && conceded === action.defendingSide) {
+        const progress = actionProgress(action, now);
+        const sink = Math.sin(limit(progress / 0.66, 0, 1) * Math.PI) * 0.9;
+        const own = seeded(seedFrom('deject|' + dot.pl.p.id))();
+        if (own < 0.45) {
+          /* hands on head */
+          pose = { ...pose, armA: -2.0 * sink, armB: -1.9 * sink, down: 0.10 * sink, rot: number(pose.rot, 0) * 0.4 };
+        } else if (own < 0.8) {
+          /* hands on hips, head down */
+          pose = { ...pose, armA: -0.62 * sink, armB: 0.58 * sink, down: 0.20 * sink, rot: number(pose.rot, 0) * 0.4 };
+        } else {
+          /* crouched, hands on knees */
+          pose = { ...pose, armA: -0.3 * sink, armB: 0.28 * sink, down: 0.46 * sink, legA: 0.34 * sink, legB: 0.30 * sink };
+        }
+      }
+    }
+
     if (action && action.secondaryId === dot.pl.p.id) {
       const progress = actionProgress(action, now);
       if (action.type === 'save') {
@@ -1793,6 +1836,11 @@
       const distance = Math.hypot(to.x - from.x, to.y - from.y);
       const loft = action.type === 'pass' ? Math.min(1.8, distance * 0.045) : Math.min(2.2, distance * 0.032);
       height = 0.22 + Math.sin(Math.PI * progress) * loft;
+      if (action.type === 'goal' && action.netHeight != null) {
+        /* finish in the net at the height it was struck to reach,
+           rather than dropping back to the turf as it crosses */
+        height = mix(0.22 + Math.sin(Math.PI * Math.min(progress, 0.5)) * loft, action.netHeight, eased);
+      }
       if (action.type === 'save' && progress > 0.72) {
         x += (action.defendingSide === 1 ? -1 : 1) * (progress - 0.72) * 8;
         height += (progress - 0.72) * 1.2;
