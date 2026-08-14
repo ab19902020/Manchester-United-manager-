@@ -226,27 +226,42 @@
     const fieldZ = limit(number(ball && ball.y, FIELD_WIDTH / 2), 0, FIELD_WIDTH) - FIELD_WIDTH / 2;
     const direction = sideIndex === 1 ? -1 : 1;
     const type = action && action.type;
-    if (type === 'goal' || type === 'shot' || type === 'save' || type === 'penalty') {
+    /* Lower and closer than it was. The camera sat at nearly eleven
+       metres and forty-three back with a 44 degree field of view, which
+       is a tactics board: you could see the shape of the team and not a
+       single face. A television camera is about six metres up, level
+       with the halfway line, and long enough to compress the far side
+       of the pitch. These are that. */
+    if (type === 'goal') {
+      /* stay in tight and let the celebration happen in frame */
       return {
         mode: 'cinematic',
-        position: [limit(fieldX - direction * 13, -42, 42), 5.35, -38.6],
-        target: [limit(fieldX + direction * 7.5, -50, 50), 1.12, limit(fieldZ * 0.9, -25, 25)],
-        fov: 39,
+        position: [limit(fieldX - direction * 9, -40, 40), 3.9, -29.5],
+        target: [limit(fieldX + direction * 5, -50, 50), 1.25, limit(fieldZ * 0.9, -25, 25)],
+        fov: 30,
+      };
+    }
+    if (type === 'shot' || type === 'save' || type === 'penalty') {
+      return {
+        mode: 'cinematic',
+        position: [limit(fieldX - direction * 11, -42, 42), 4.5, -31.5],
+        target: [limit(fieldX + direction * 7.5, -50, 50), 1.15, limit(fieldZ * 0.9, -25, 25)],
+        fov: 32,
       };
     }
     if (wide) {
       return {
         mode: 'wide',
-        position: [limit(fieldX * 0.32, -25, 25), 10.9, -42.6],
-        target: [fieldX, 0.92, limit(fieldZ * 0.52, -17, 17)],
-        fov: 44,
+        position: [limit(fieldX * 0.32, -25, 25), 8.4, -36.2],
+        target: [fieldX, 0.95, limit(fieldZ * 0.52, -17, 17)],
+        fov: 37,
       };
     }
     return {
       mode: 'broadcast',
-      position: [limit(fieldX - direction * 7, -42, 42), 7.6, -40.8],
+      position: [limit(fieldX - direction * 7, -42, 42), 6.1, -33.4],
       target: [limit(fieldX + direction * 8, -49, 49), 1.05, limit(fieldZ * 0.78, -24, 24)],
-      fov: 41,
+      fov: 34,
     };
   }
 
@@ -991,11 +1006,36 @@
 
   function kitSet(home, away) {
     const base = root.RBSDugoutRenderer;
-    if (base && typeof base.resolveKits === 'function') return base.resolveKits(home, away);
-    return [
-      { primary: (home && home.c1) || '#c8102e', trim: (home && home.c2) || '#ffffff', goalkeeper: '#f6d21f', goalkeeperTrim: '#171b20' },
-      { primary: (away && away.c1) || '#2474bf', trim: (away && away.c2) || '#ffffff', goalkeeper: '#38bdf8', goalkeeperTrim: '#071c2a' },
-    ];
+    const kits = (base && typeof base.resolveKits === 'function')
+      ? base.resolveKits(home, away)
+      : [
+        { primary: (home && home.c1) || '#c8102e', trim: (home && home.c2) || '#ffffff', goalkeeper: '#f6d21f', goalkeeperTrim: '#171b20' },
+        { primary: (away && away.c1) || '#2474bf', trim: (away && away.c2) || '#ffffff', goalkeeper: '#38bdf8', goalkeeperTrim: '#071c2a' },
+      ];
+    /* The keeper strips were fixed — yellow at home, sky away — which
+       fails for the same reason the officials did: a yellow keeper in
+       front of a yellow team is not a goalkeeper, he is a defender who
+       is allowed to use his hands. Each keeper takes the first strip
+       that separates him from both outfield sides and from the other
+       keeper. */
+    try {
+      const outfield = [kits[0].primary, kits[1].primary];
+      const taken = outfield.slice();
+      kits.forEach((kit) => {
+        let choice = kit.goalkeeper;
+        let bestGap = Math.min(...taken.map((c) => colourGap(choice, c)));
+        if (bestGap < 110) {
+          OFFICIAL_STRIPS.concat(['#7c3aed', '#f97316']).forEach((strip) => {
+            const gap = Math.min(...taken.map((c) => colourGap(strip, c)));
+            if (gap > bestGap) { bestGap = gap; choice = strip; }
+          });
+        }
+        kit.goalkeeper = choice;
+        kit.goalkeeperTrim = colourGap(choice, '#ffffff') > 160 ? '#f4f6f4' : '#101418';
+        taken.push(choice);
+      });
+    } catch (error) { /* the supplied kits still work */ }
+    return kits;
   }
 
   function skinColour(player) {
@@ -1204,12 +1244,65 @@
     return group;
   }
 
-  function createOfficialModel(assistant) {
+  /* ---------------------------------------------------------------
+     WHO IS WHO ON THE PITCH
+     ---------------------------------------------------------------
+     The referee was cyan and the two assistants were yellow. That is
+     wrong twice over. In football all three officials wear the same
+     colour — a referee in one strip and his assistants in another
+     reads as a fourth and fifth team — and the colour has to be one
+     that neither side is wearing, which is the entire reason referees
+     change strip.
+
+     Against Hull, who play in amber, the yellow assistants disappeared
+     into the home side and the cyan referee looked like a third team.
+     You could not tell who was who, which is the one thing a kit has
+     to do.
+
+     So the officials pick their strip the way a real fourth official
+     does: run down the list and take the first one that is clearly
+     different from both teams and from both goalkeepers. Black first,
+     because that is the tradition, then the loud ones.
+     --------------------------------------------------------------- */
+  function rgbOf(colour) {
+    const hex = String(colour || '#000').replace('#', '');
+    const full = hex.length === 3 ? hex.split('').map((c) => c + c).join('') : hex;
+    return [
+      parseInt(full.slice(0, 2), 16) || 0,
+      parseInt(full.slice(2, 4), 16) || 0,
+      parseInt(full.slice(4, 6), 16) || 0,
+    ];
+  }
+
+  function colourGap(a, b) {
+    const x = rgbOf(a); const y = rgbOf(b);
+    /* weighted toward how the eye actually separates colours */
+    return Math.sqrt(((x[0] - y[0]) * 0.9) ** 2 + ((x[1] - y[1]) * 1.2) ** 2 + ((x[2] - y[2]) * 0.7) ** 2);
+  }
+
+  const OFFICIAL_STRIPS = ['#14181d', '#f6d32b', '#e0447c', '#28c76f', '#41c4e8', '#f97316'];
+
+  function officialKit(kits) {
+    const worn = [];
+    (kits || []).forEach((kit) => {
+      if (!kit) return;
+      if (kit.primary) worn.push(kit.primary);
+      if (kit.goalkeeper) worn.push(kit.goalkeeper);
+    });
+    let choice = OFFICIAL_STRIPS[0];
+    let bestGap = -1;
+    OFFICIAL_STRIPS.forEach((strip) => {
+      const gap = worn.length ? Math.min(...worn.map((c) => colourGap(strip, c))) : 999;
+      if (gap > bestGap) { bestGap = gap; choice = strip; }
+    });
+    const trim = colourGap(choice, '#ffffff') > 160 ? '#f4f6f4' : '#101418';
+    return { primary: choice, trim, goalkeeper: choice, goalkeeperTrim: trim };
+  }
+
+  function createOfficialModel(assistant, kit) {
     const fakePlayer = { p: { id: assistant ? 91002 : 91001, heightCm: 180, weightKg: 73 }, slot: 'MC' };
-    const kit = assistant
-      ? { primary: '#f6d32b', trim: '#111827', goalkeeper: '#f6d32b', goalkeeperTrim: '#111827' }
-      : { primary: '#41c4e8', trim: '#101820', goalkeeper: '#41c4e8', goalkeeperTrim: '#101820' };
-    return createPlayerModel(fakePlayer, { name: assistant ? 'Assistant' : 'Referee' }, kit);
+    const strip = kit || { primary: '#14181d', trim: '#f4f6f4', goalkeeper: '#14181d', goalkeeperTrim: '#f4f6f4' };
+    return createPlayerModel(fakePlayer, { name: assistant ? 'Assistant' : 'Referee' }, strip);
   }
 
   function buildPlayers(parent, match, home, away) {
@@ -1228,13 +1321,15 @@
       state.players.set(player.p.id, model);
     }));
 
-    const referee = createOfficialModel(false);
+    /* one strip for all three of them, chosen against both teams */
+    const strip = officialKit(kits);
+    const referee = createOfficialModel(false, strip);
     referee.position.set(0, 0, 4);
     parent.add(referee);
-    const assistantA = createOfficialModel(true);
+    const assistantA = createOfficialModel(true, strip);
     assistantA.position.set(-16, 0, -35.3);
     parent.add(assistantA);
-    const assistantB = createOfficialModel(true);
+    const assistantB = createOfficialModel(true, strip);
     assistantB.position.set(16, 0, 35.3);
     parent.add(assistantB);
     state.officials = [referee, assistantA, assistantB];
@@ -1335,7 +1430,15 @@
     next.secondary = other;
     if (other && other.p) next.secondaryId = other.p.id;
     next.startedAt = now;
-    next.endsAt = now + number(next.duration, 800);
+    /* A goal was over in the time it took to hit the net, so the camera
+       cut away before anybody had finished celebrating and the one
+       thing you actually wanted to watch was the one thing you missed.
+       It runs long enough for the ball to go in, the scorer to wheel
+       away and his team to reach him — and the clock is already held at
+       normal speed for seven seconds when a goal goes in, so the two
+       agree rather than fighting each other. */
+    const dwell = next.type === 'goal' ? Math.max(number(next.duration, 800), 5200) : number(next.duration, 800);
+    next.endsAt = now + dwell;
     next.from = next.type === 'save' && otherDot
       ? { x: otherDot.x, y: otherDot.y }
       : actorDot ? { x: actorDot.x, y: actorDot.y }
