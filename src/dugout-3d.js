@@ -1176,10 +1176,33 @@
     shorts.position.y = 0.01;
     hips.add(shorts);
 
+    /* ---- a body with shoulders ----
+       The torso was one capsule of even thickness top to bottom, which
+       is a pill, and no amount of animation stops a pill reading as a
+       pill. A human silhouette is mostly the shoulder line: wide at the
+       top, narrower at the waist, with a chest that has depth front to
+       back rather than being round.
+
+       So the capsule is tapered — squeezed at the waist and flattened
+       slightly through the middle, because a chest is deeper than it is
+       wide is wrong; it is WIDER than it is deep — and a shoulder yoke
+       sits across the top of it. That yoke is the single thing that
+       makes the figure read as a person at this camera distance. */
     const torso = mesh(capsuleGeometry(0.29 * widthScale, 0.94, 12), shirtMaterial, true);
     torso.position.y = 0.48 * scale;
-    torso.scale.y = scale;
+    torso.scale.set(1.06, scale, 0.86);
     hips.add(torso);
+
+    const waist = mesh(capsuleGeometry(0.245 * widthScale, 0.34, 10), shirtMaterial, true);
+    waist.position.y = 0.16 * scale;
+    waist.scale.set(1.0, scale, 0.84);
+    hips.add(waist);
+
+    const shoulders = mesh(capsuleGeometry(0.146 * widthScale, 0.60 * widthScale, 10), shirtMaterial, true);
+    shoulders.position.y = 0.86 * scale;
+    shoulders.rotation.z = Math.PI / 2;
+    shoulders.scale.set(1, 1, 0.82);
+    hips.add(shoulders);
 
     /* ---- the number on his back, and a collar ----
        A broadcast camera sits behind and above the play, so the back of
