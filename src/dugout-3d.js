@@ -1516,8 +1516,43 @@
   function updatePlayer(model, dot, now, dt, action, match) {
     if (!model || !dot || !dot.pl || !model.userData) return;
     const data = model.userData;
-    const targetX = number(dot.x, FIELD_LENGTH / 2) - FIELD_LENGTH / 2;
-    const targetZ = number(dot.y, FIELD_WIDTH / 2) - FIELD_WIDTH / 2;
+    let targetX = number(dot.x, FIELD_LENGTH / 2) - FIELD_LENGTH / 2;
+    let targetZ = number(dot.y, FIELD_WIDTH / 2) - FIELD_WIDTH / 2;
+
+    /* ---- A GOAL IS THE ONLY TIME THE SHAPE BREAKS ----
+       Until now a goal changed one man's arms and nothing else: the
+       other ten carried on holding their positions as though a corner
+       had been cleared, which is why it never read as a goal. The dot
+       model does not know about celebrating and should not — it is
+       modelling a football match, and the ten seconds after a goal are
+       not football. So for the length of the celebration only, the
+       scoring side stops taking its positions from the dots.
+
+       The scorer wheels away toward the nearest corner and the rest of
+       them chase him down. Everybody else — the side that conceded, and
+       the officials — keeps standing where the model says, because that
+       is exactly what conceding looks like. */
+    if (action && action.type === 'goal' && dot.pl && !dot.pl.off && dot.pl.slot !== 'GK') {
+      const side = playerSideIndex(match, dot.pl);
+      if (side != null && side === action.attackingSide) {
+        const progress = actionProgress(action, now);
+        const scorer = modelFor(action.actor);
+        if (scorer && progress > 0.2) {
+          const run = limit((progress - 0.2) / 0.34, 0, 1);
+          const away = action.attackingSide === 1 ? -1 : 1;
+          const corner = scorer.position.z >= 0 ? 25.5 : -25.5;
+          if (action.actorId === dot.pl.p.id) {
+            targetX = mix(targetX, limit(scorer.position.x + away * 11, -47, 47), run);
+            targetZ = mix(targetZ, corner, run);
+          } else {
+            /* fan in behind him rather than stack on the same spot */
+            const spread = seeded(seedFrom('celebrate|' + dot.pl.p.id));
+            targetX = mix(targetX, limit(scorer.position.x + away * 11 + (spread() * 8 - 4), -48, 48), run * 0.86);
+            targetZ = mix(targetZ, limit(corner + (spread() * 9 - 4.5), -30, 30), run * 0.86);
+          }
+        }
+      }
+    }
     const oldX = data.currentX;
     const oldZ = data.currentZ;
     const easing = dot.pl.off ? 2.0 : 7.2;
