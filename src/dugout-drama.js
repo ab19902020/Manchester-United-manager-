@@ -81,11 +81,26 @@
 
   const state = { match: null, seen: 0, from: null, until: 0, kind: null, manual: false };
 
-  function normalSpeed() {
-    /* 1 is the game's normal speed. Not literal real time — a football
-       minute in one minute would be sixty seconds a minute and nobody
-       is watching that — but the speed the match is designed to read at. */
-    try { return (typeof MSPEED === 'object' && MSPEED && MSPEED[1]) ? 1 : 1; } catch (error) { return 1; }
+  /* WHAT "REAL TIME" HAS TO MEAN.
+     The first version of this dropped to speed 1 and called it real
+     time. It is not: speed 1 is 3,200ms of wall clock per MATCH minute,
+     so a goal still went past in a third of a second. You could not
+     watch it, which was the whole complaint.
+
+     For a goal, the clock stops instead. The match does not advance at
+     all while the ball is going in and the celebration is running, so
+     one second on your screen is one second of animation — the
+     renderer is on requestAnimationFrame and keeps drawing whether the
+     engine ticks or not. Then the clock starts again at whatever speed
+     you had it on.
+
+     The lesser moments — a booking, a VAR check — drop to speed 1
+     rather than stopping, because stopping the match dead for every
+     yellow card would be worse than missing one. */
+  const FULL_STOP = { goal: true, red: true, pen: true };
+
+  function holdSpeed(kind) {
+    return FULL_STOP[kind] ? 0 : 1;
   }
 
   function banner(kind) {
@@ -127,8 +142,9 @@
       if (MU.speed !== 0 && MU.speed !== 9) state.from = MU.speed;
       state.kind = kind;
       state.until = now + ms;
-      if (MU.speed !== 0 && MU.speed !== 9 && MU.speed !== normalSpeed()) {
-        MU.speed = normalSpeed();
+      const want = holdSpeed(kind);
+      if (MU.speed !== 9 && MU.speed !== want) {
+        MU.speed = want;
         MU.acc = 0;
         try { renderMCtl(); } catch (error) { /* controls repaint next tick */ }
       }
@@ -141,9 +157,10 @@
       if (!state.until) return;
       if (performance.now() < state.until) return;
       const back = state.from;
+      const held = holdSpeed(state.kind);
       state.until = 0; state.kind = null; state.from = null;
       clearBanner();
-      if (back != null && MU && MU.m && !MU.m.done && MU.speed === normalSpeed()) {
+      if (back != null && MU && MU.m && !MU.m.done && MU.speed === held) {
         MU.speed = back;
         MU.acc = 0;
         try { renderMCtl(); } catch (error) { /* controls repaint next tick */ }

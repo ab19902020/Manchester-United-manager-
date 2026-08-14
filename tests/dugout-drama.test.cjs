@@ -66,7 +66,14 @@ test('a goal drops the match to normal speed and then hands it back', async () =
     }())`);
 
     assert.equal(result.chosen, 4, 'the match should have started fast');
-    assert.equal(result.during, 1, 'a goal should drop it to normal speed');
+    /* A goal STOPS the clock rather than slowing it. Speed 1 is still
+       3,200ms of wall clock per match minute, so at speed 1 a goal went
+       past in about a third of a second — which was the original
+       complaint, not the fix for it. At 0 the engine does not advance
+       while the ball is going in and the celebration runs, and the
+       renderer keeps drawing on animation frames, so one second on
+       screen is one second of animation. */
+    assert.equal(result.during, 0, 'a goal should stop the clock, not merely slow it');
     assert.equal(result.kind, 'goal', 'and say why it slowed down');
     assert.equal(result.after, 4, 'and the chosen speed should come back afterwards');
   } finally {
@@ -91,7 +98,7 @@ test('choosing a speed yourself beats the automatic slow-down', async () => {
       return { during, after: MU.speed, held: window.RBSDrama.state.until };
     }())`);
 
-    assert.equal(result.during, 1, 'a penalty should have slowed it');
+    assert.equal(result.during, 0, 'a penalty should have stopped the clock');
     assert.equal(result.after, 4, 'the manual choice should win');
     assert.equal(result.held, 0, 'and the automatic window should be dropped');
   } finally {
