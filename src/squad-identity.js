@@ -83,15 +83,16 @@
           node.players.forEach((p) => {
             if (!p || !p.id) return;
             const names = Array.isArray(p.aliases) && p.aliases.length ? p.aliases : [p.name];
+            const club = node.name || null;
             names.forEach((alias) => {
               const key = fold(alias);
               /* An alias shared by two different ids is not an identity,
                  it is a coincidence — two real men called Adam Smith.
                  Those are dropped rather than merged. */
               if (!key) return;
-              if (index.has(key) && index.get(key).id !== p.id) { index.set(key, null); return; }
+              if (index.has(key) && index.get(key) && index.get(key).id !== String(p.id)) { index.set(key, null); return; }
               if (index.has(key) && index.get(key) === null) return;
-              index.set(key, { id: String(p.id), name: p.name });
+              index.set(key, { id: String(p.id), name: p.name, club: club });
             });
           });
         }
@@ -152,14 +153,38 @@
 
       const dropped = new Set();
 
-      /* ---- pass one: identified players, across the whole world ---- */
+      /* ---- pass one: identified players, across the whole world ----
+         WHICH COPY SURVIVES IS DECIDED BY THE SOURCE, NOT BY RATING.
+         Keeping the better-rated record looks reasonable and is wrong:
+         it took a man off Fleetwood Town because his other copy sat at
+         a bigger club with a higher number beside it, and a sourced
+         roster is supposed to be exactly what the source says. The test
+         that caught it — "Fleetwood Town squad depth changed, 18 where
+         19 was expected" — is guarding that on purpose.
+
+         The source already records which club he plays for. So that
+         club keeps him and the other one loses him, and every sourced
+         squad comes out the depth it is supposed to be. Rating only
+         breaks a tie the source cannot. */
+      if (!aliasIndex) aliasIndex = buildAliasIndex();
+      const homeClub = (player) => {
+        const known = aliasIndex.get(fold(player && player.name));
+        return known && known.club ? fold(known.club) : null;
+      };
+
       const best = new Map();
       G.clubs.forEach((club) => {
         (club.players || []).forEach((p) => {
           const id = identityOf(p);
           if (!id || id.indexOf('espn:') !== 0) return;
           const held = best.get(id);
-          if (!held || (p.ovr || 0) > (held.player.ovr || 0)) best.set(id, { player: p, club });
+          if (!held) { best.set(id, { player: p, club }); return; }
+          const home = homeClub(p);
+          const hereIsHome = home && fold(club.name) === home;
+          const heldIsHome = home && fold(held.club.name) === home;
+          if (hereIsHome && !heldIsHome) { best.set(id, { player: p, club }); return; }
+          if (heldIsHome && !hereIsHome) return;
+          if ((p.ovr || 0) > (held.player.ovr || 0)) best.set(id, { player: p, club });
         });
       });
 
