@@ -1,4 +1,4 @@
-/* global MatchSim, MU, G, ACTIONS, drawDugout:writable, advancePlay, pitchTargets, playState,
+/* global shirtNo, MatchSim, MU, G, ACTIONS, drawDugout:writable, advancePlay, pitchTargets, playState,
           dotOf, dugWatch, dugPose, subScan, subStep, sentOffScan, sentOffStep,
           surname, shirtNo */
 (function initDugout3D(root) {
@@ -1153,6 +1153,53 @@
     torso.position.y = 0.48 * scale;
     torso.scale.y = scale;
     hips.add(torso);
+
+    /* ---- the number on his back, and a collar ----
+       A broadcast camera sits behind and above the play, so the back of
+       a shirt is the part of a player you look at most, and it was
+       blank. A number is the difference between "a red player" and
+       "seven". It is a small canvas mapped onto a plane just behind the
+       torso rather than onto the capsule itself, because a capsule's UVs
+       wrap the seam straight through the middle of the digit.
+
+       Numbers and collar are skipped on the compact mobile models,
+       which already drop the separate limbs — a phone is not going to
+       resolve a shirt number at that distance anyway. */
+    if (!(state.quality && state.quality.compactPlayers)) {
+      /* shirtNo() assigns a number on first ask and caches it on the
+         player; reading p.shirt directly only works for the ones
+         something else has already asked about, which was 14 of the 22
+         on the pitch. */
+      let shirtNumber = 0;
+      try {
+        shirtNumber = (typeof shirtNo === 'function')
+          ? number(shirtNo(player.p, club), 0)
+          : number(player && player.p && player.p.shirt, 0);
+      } catch (error) { shirtNumber = number(player && player.p && player.p.shirt, 0); }
+      if (shirtNumber > 0) {
+        const plate = document.createElement('canvas');
+        plate.width = 64; plate.height = 64;
+        const ink = plate.getContext('2d');
+        ink.clearRect(0, 0, 64, 64);
+        ink.fillStyle = kitTrim;
+        ink.font = '900 46px Inter, Arial, sans-serif';
+        ink.textAlign = 'center';
+        ink.textBaseline = 'middle';
+        ink.fillText(String(shirtNumber), 32, 34);
+        const numberTexture = new THREE.CanvasTexture(plate);
+        numberTexture.needsUpdate = true;
+        const patch = mesh(new THREE.PlaneGeometry(0.34, 0.34),
+          new THREE.MeshBasicMaterial({ map: numberTexture, transparent: true, depthWrite: false }), false);
+        patch.position.set(0, 0.62 * scale, -0.29 * widthScale - 0.006);
+        patch.rotation.y = Math.PI;
+        hips.add(patch);
+      }
+      const collar = mesh(new THREE.TorusGeometry(0.115, 0.028, 6, 14),
+        surfaceMaterial({ color: kitTrim, roughness: 0.7 }), false);
+      collar.position.y = 0.96 * scale;
+      collar.rotation.x = Math.PI / 2;
+      hips.add(collar);
+    }
 
     const head = mesh(new THREE.SphereGeometry(0.145, 14, 12), skinMaterial, true);
     head.position.y = 1.13 * scale;
