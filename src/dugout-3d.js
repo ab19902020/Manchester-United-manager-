@@ -259,9 +259,12 @@
     }
     return {
       mode: 'broadcast',
-      position: [limit(fieldX - direction * 7, -42, 42), 6.1, -33.4],
-      target: [limit(fieldX + direction * 8, -49, 49), 1.05, limit(fieldZ * 0.78, -24, 24)],
-      fov: 34,
+      /* a touch higher and further back than the first attempt, which
+         framed a lot of empty grass in the foreground: the camera was
+         low enough that the near half of the picture was turf */
+      position: [limit(fieldX - direction * 6, -42, 42), 7.4, -36.0],
+      target: [limit(fieldX + direction * 6, -49, 49), 1.45, limit(fieldZ * 0.7, -22, 22)],
+      fov: 33,
     };
   }
 
@@ -1917,7 +1920,9 @@
       const boxWidth = Math.min(width - 28 * scale, Math.max(220 * scale, (name.length * 10 + 165) * scale));
       const boxHeight = 50 * scale;
       const boxX = (width - boxWidth) / 2;
-      const boxY = height - boxHeight - 20 * scale;
+      /* clear of the commentary ticker, which now runs along the very
+         bottom of the view — the two were printing over each other */
+      const boxY = height - boxHeight - 92 * scale;
       roundedRect(context, boxX, boxY, boxWidth, boxHeight, 7 * scale);
       context.fillStyle = 'rgba(5,9,14,.88)';
       context.fill();
