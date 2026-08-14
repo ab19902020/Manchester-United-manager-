@@ -56029,244 +56029,7 @@ function calRepair(){
 
 
 
-/*#wE2_landscape.js#*/
 
-/* =====================================================================
-   wE2_landscape — a landscape phone is a different shape, not a wide one
-   ---------------------------------------------------------------------
-   Turned sideways, the game was letterboxed into the middle of the
-   screen and everything important was stacked on top of everything else.
-   Measured at 896x414:
-
-     #app capped at 720px          176px of screen thrown away
-     #hdr 88px tall                21% of the height spent on a header
-     #view only 326px tall         with 787px of content in it
-     .nav 63px at the bottom       plus a ~70px Continue dock over it
-
-   So the two bars ate a third of the height, the toast landed on the
-   Continue button, and the card you were meant to read was behind all
-   three. Portrait has the height to spend on a bottom bar. Landscape
-   does not, and it has width going spare instead.
-
-   The fix is the arrangement every sideways football game uses, and the
-   one in the reference shots: the navigation stands up as a rail down
-   the left, the header runs across the top, and Continue sits at the end
-   of the header where your thumb already is. Nothing overlaps, because
-   nothing is floating any more.
-
-   ---------------------------------------------------------------------
-   NO DOM SURGERY. #hdr, #view, .continue-dock and .nav are already four
-   siblings inside #app, which is all a grid needs:
-
-       grid-areas:  "rail  hdr   dock"
-                    "rail  view  view"
-
-   They are placed, not moved. The game re-renders all four constantly
-   and never has to know this happened. Portrait is untouched, and so is
-   #matchScreen, which lives outside #app and has its own wide layout.
-   ===================================================================== */
-
-(function landscapeCSS(){
- const old=document.getElementById('wE2');if(old)old.remove();
- const st=document.createElement('style');st.id='wE2';
- st.textContent=[
- /* 660px keeps small phones held sideways on the portrait layout, where
-    a 76px rail would cost more than the bottom bar it replaces */
- '@media (orientation:landscape) and (min-width:660px){',
-
-  ':root{--rail:76px}',
-
-  /* ---- the shell -------------------------------------------------- */
-  '#app{display:grid;max-width:none;width:100%;height:100dvh;min-height:0;',
-  ' grid-template-columns:var(--rail) minmax(0,1fr) auto;',
-  ' grid-template-rows:auto minmax(0,1fr);',
-  ' grid-template-areas:"rail hdr dock" "rail view view";',
-  ' margin:0;overflow:hidden}',
-
-  /* ---- the navigation stands up ----------------------------------- */
-  '#app>.nav{grid-area:rail;position:relative;left:auto;right:auto;bottom:auto;top:auto;',
-  ' width:var(--rail);max-width:none;height:100%;min-height:0;',
-  ' border-top:0;border-right:1px solid var(--chalk);',
-  ' padding:0;margin:0;overflow:hidden}',
-  '#app>.nav .nav-inner{flex-direction:column;height:100%;width:100%;',
-  ' justify-content:flex-start;align-items:stretch;gap:2px;padding:6px 4px;',
-  ' overflow-y:auto;overflow-x:hidden;max-width:none}',
-  '#app>.nav .nav-inner>*{flex:0 0 auto;width:100%;min-width:0;',
-  ' padding:9px 2px;border-radius:10px;gap:3px;',
-  /* the active tab is drawn raised above the bar in portrait; in a
-     column that just lifts it out through the top of the rail */
-  ' transform:none;margin-top:0;margin-bottom:0}',
-  /* These icons carry a viewBox and no width or height, so they size
-     themselves from the row they sit in. Stood up in a column there is
-     no row to measure and every button collapsed to ten pixels tall —
-     six labels stacked at the top of an empty rail with no icons at
-     all. They need an explicit size here. */
-  '#app>.nav .nav-inner>button svg{width:21px;height:21px;flex:0 0 auto;display:block}',
-  '#app>.nav .nav-inner>button{font-size:10px;line-height:1.15;min-height:46px;',
-  ' justify-content:center;align-items:center}',
-
-  /* ---- the header, at landscape height ---------------------------- */
-  '#app>#hdr{grid-area:hdr;padding-top:4px;padding-bottom:4px;min-width:0}',
-  '#app>#hdr .statusbar{margin-top:4px}',
-  '#app>#hdr .sb{padding-top:4px;padding-bottom:4px}',
-  '#app>#hdr .hclub .d{font-size:11px}',
-  /* the fullscreen button is bottom-right of the header in portrait and
-     collides with the status pills once the header is this short */
-  '#app>#hdr .fsbtn{display:none}',
-
-  /* ---- Continue, at the end of the header -------------------------- */
-  /* The class is repeated to out-specify `#app>.continue-dock` from the
-     max-width:1023px layer, which sets bottom from --nav-h. That variable
-     is redefined further down the tree and resolves to the height of the
-     nav — which this layout has just made the whole screen, so the dock
-     was being pushed 418px above the viewport. Zeroing --nav-h here as
-     well means anything else keying off a bottom bar that no longer
-     exists gets the right answer too. */
-  '#app{--nav-h:0px}',
-  '#app>.continue-dock.continue-dock{grid-area:dock;position:relative;inset:auto;',
-  ' width:auto;max-width:min(320px,34vw);margin:0;align-self:center;',
-  ' background:none;backdrop-filter:none;-webkit-backdrop-filter:none;',
-  ' padding:4px 10px 4px 0;pointer-events:auto;z-index:auto}',
-  '#app>.continue-dock:empty{padding:0}',
-  '#app>.continue-dock>.btn{min-width:0;flex:1 1 auto}',
-  '#app>.continue-dock>.btn:only-child{min-width:0}',
-  '#app>.continue-dock .cd-sub{font-size:10px;opacity:.85}',
-
-  /* ---- and the space that frees up -------------------------------- */
-  /* Two columns, because one column of cards 830px wide is a worse read
-     than two of 410 — and because the whole point of turning the phone
-     is that the width is there. align-items:start stops a short card
-     being stretched to the height of whatever landed beside it. */
-  '#app>#view{grid-area:view;overflow-y:auto;-webkit-overflow-scrolling:touch;',
-  ' min-height:0;padding-bottom:16px;max-width:none;margin:0;',
-  ' display:grid;grid-template-columns:repeat(2,minmax(0,1fr));',
-  ' gap:10px;align-content:start;align-items:start}',
-  '#app>#view>*{min-width:0;max-width:none;margin:0}',
-  /* anything that is really a full-width band keeps the whole row */
-  '#app>#view>table,#app>#view>.secnav,#app>#view>.chips,#app>#view>.subtabs,',
-  '#app>#view>h1,#app>#view>h2,#app>#view>h3,#app>#view>.sec,#app>#view>.xscroll,',
-  '#app>#view>.tbl,#app>#view>.table,#app>#view>.ltable,#app>#view>.plist',
-  ' {grid-column:1/-1;overflow:visible}',
-  /* A scroll container has an automatic minimum size of zero, so the
-     grid track measured the tab row at 24px while it laid out at 52 and
-     the cards underneath rode up over it. Spanning the full width, these
-     rows have the room and do not need to scroll at all. */
-
-  /* the back-to-top button sat above a dock that is no longer there */
-  '.totop{bottom:14px;right:14px}',
-
-  /* a toast in the middle of a short screen covers the thing it is
-     talking about; on its own line at the bottom it does not */
-  '#toast{bottom:12px}',
- '}',
-
- /* very short landscape — a small phone on its side. Give back every
-    pixel the header can spare rather than scrolling the chrome. */
- '@media (orientation:landscape) and (min-width:660px) and (max-height:430px){',
-  ':root{--rail:66px}',
-  '#app>#hdr .statusbar{display:none}',
-  '#app>#hdr{padding-top:2px;padding-bottom:2px}',
-  '#app>.nav .nav-inner>*{padding:6px 2px;min-height:40px}',
-  '#app>.nav .nav-inner>button svg{width:19px;height:19px}',
-  '#app>.nav .nav-inner>button{font-size:9px}',
- '}'
- ].join('');
- document.head.appendChild(st)})();
-
-/* ---------------------------------------------------------------------
-   THE STATUS PILLS ARE THE HEADER'S SECOND ROW, AND IN LANDSCAPE THEY
-   ARE ALSO THE ONLY THING THAT KNOWS THE DATE
-   ---------------------------------------------------------------------
-   Hiding the pills on a short screen loses the date and the next-match
-   countdown, which are the two things you actually steer by. They go
-   into the club line instead, where there is room going spare once the
-   budget block moves up.
-   --------------------------------------------------------------------- */
-function lsWide(){
- try{return window.innerWidth>window.innerHeight&&window.innerWidth>=660}
- catch(e){return false}}
-function lsShort(){
- try{return lsWide()&&window.innerHeight<=430}catch(e){return false}}
-
-const _hdrLS=renderHdr;
-renderHdr=function(){
- const r=_hdrLS.apply(this,arguments);
- try{
-  if(!lsShort())return r;
-  const line=document.querySelector('#hdr .hclub .d');
-  if(!line||!G||!G.clubs)return r;
-  const nf=(typeof nextUserMatch==='function')?nextUserMatch():null;
-  const days=nf?nf.day-(G.day||0):null;
-  const bits=[line.textContent.trim()];
-  if(days!=null)bits.push(days<=0?'match today':days===1?'match tomorrow':'next match '+days+'d');
-  const pos=(typeof leaguePos==='function')?leaguePos(G.my):null;
-  if(pos)bits.push((typeof ordinal==='function'?ordinal(pos):pos)+' in the league');
-  line.textContent=bits.join('  ·  ');
- }catch(e){}
- return r};
-
-/* ---------------------------------------------------------------------
-   AND THE ONE THING CSS COULD NOT WIN
-   ---------------------------------------------------------------------
-   pinDock() keeps the Continue bar clear of the bottom navigation by
-   measuring how much of the window the nav occupies from the bottom
-   edge, and writing that onto the dock as an inline style. An inline
-   style beats every rule in this file, which is why the dock kept
-   ending up 418px above the viewport no matter how the selector was
-   sharpened: the rail starts at y=0, so "how far up the screen does the
-   nav reach" is now the whole screen.
-
-   It already declines to do this for the desktop sidebar layout, where
-   there is no bottom navigation either. This is the same case. */
-const _pinDockLS=pinDock;
-pinDock=function(){
- try{
-  if(lsWide()){lsUnpin();return}
- }catch(e){}
- return _pinDockLS.apply(this,arguments)};
-
-/* Wrapping the binding is not enough. Six of pinDock's call sites hand
-   the function itself to addEventListener, setTimeout and fonts.ready,
-   and those captured the original before this layer existed — so every
-   resize and every scroll still writes the old value straight past the
-   wrapper.
-
-   Rather than chase the callers, watch the one thing they all end up
-   touching. Clearing the attribute produces another mutation, but by
-   then there is nothing left to clear, so it settles immediately. */
-function lsUnpin(){
- try{
-  if(!lsWide())return;
-  const d=document.getElementById('continueDock');
-  if(d&&d.style.bottom)d.style.bottom='';
- }catch(e){}}
-
-(function lsWatchDock(){
- const start=()=>{
-  const d=document.getElementById('continueDock');
-  if(!d){setTimeout(start,200);return}
-  try{new MutationObserver(lsUnpin).observe(d,{attributes:true,attributeFilter:['style']})}
-  catch(e){}
-  lsUnpin()};
- if(document.readyState==='loading')
-  document.addEventListener('DOMContentLoaded',start,{once:true});
- else start()})();
-
-/* the grid changes shape when the phone turns, and a canvas sized for
-   the old shape stays sized for it until something asks again */
-(function lsTurn(){
- const kick=()=>{try{
-  render();
-  if(typeof fitMatchCanvas==='function'){
-   fitMatchCanvas('#pitchCanvas',0.66);fitMatchCanvas('#dugCanvas',0.74)}
-  if(typeof xsScan==='function')xsScan();
- }catch(e){}};
- let t=0;
- const on=()=>{clearTimeout(t);t=setTimeout(kick,180)};
- window.addEventListener('orientationchange',on);
- window.addEventListener('resize',on)})();
-
-/*#wE2_landscape.js#*/
 
 /*#wE3_budget.js#*/
 
@@ -56366,117 +56129,7 @@ vTransferBudget=function(){
 
 
 
-/*#wE6_lscols.js#*/
 
-/* =====================================================================
-   wE6_lscols — the landscape column that nothing was using
-   ---------------------------------------------------------------------
-   The landscape shell puts #view in two columns, which is the whole
-   point of turning the phone. Measured at 896x414, with the view 830
-   wide and the columns 396 each:
-
-     home        396 x80   396 x486   396 x80   396 x486   ... alternating
-     league      396 x80   396 x486                        ... alternating
-     squad       396 x80  h2078       396 x486 h14
-     transfers   396 x80  h3202       396 x80  h224
-
-   Home and league are exactly right — cards land in both columns and
-   the screen is full. Squad and transfers are not: one item is two to
-   three thousand pixels tall, it sits in the left column, and the only
-   thing that follows it is a fourteen-pixel caption. So for the entire
-   length of the scroll the right-hand half of a landscape phone is
-   empty, which is worse than the portrait layout it replaced.
-
-   ---------------------------------------------------------------------
-   The rule that separates the two cases is "is this item much taller
-   than the screen", and CSS cannot ask that — there is no container
-   query for an element's own height, and no selector for it. Nor is a
-   hard-coded list of class names right: it would be guessing at which
-   screens have a long list today and would be wrong the first time one
-   is added.
-
-   So it is measured after each render. Anything substantially taller
-   than the viewport takes the full width, and the list inside it runs
-   two-up — which is what the width was for. Anything else keeps the
-   two-column behaviour that already works.
-   ===================================================================== */
-
-(function lsColCSS(){
- const old=document.getElementById('wE6');if(old)old.remove();
- const st=document.createElement('style');st.id='wE6';
- st.textContent=[
- '@media (orientation:landscape) and (min-width:660px){',
-  /* a very tall block takes the whole width rather than half of it */
-  '#app>#view>.ls-tall{grid-column:1/-1}',
-  /* and the run of players inside it goes two-up. The group headings
-     are siblings of the list rather than children, so GOALKEEPERS still
-     spans the width and the keepers pair off underneath it. */
-  '#app>#view>.ls-tall .plist{display:grid;',
-  ' grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 10px;align-items:start}',
-  '#app>#view>.ls-tall .plist>*{min-width:0}',
-  /* the separator that reads as a list on one column reads as a grid
-     line on two, so it goes and the gap does the work */
-  '#app>#view>.ls-tall .plist>.prow{border-bottom:0}',
-  /* a half-width card with nothing beside it leaves half a screen empty,
-     so it takes the width instead */
-  '#app>#view>.ls-solo{grid-column:1/-1}',
- '}'
- ].join('');
- document.head.appendChild(st)})();
-
-function lsCols(){
- try{
-  const view=document.getElementById('view');
-  if(!view)return;
-  const wide=(typeof lsWide==='function')&&lsWide();
-  const kids=[...view.children];
-  if(!wide){kids.forEach(el=>el.classList.remove('ls-tall','ls-solo'));return}
-  const h=view.clientHeight||window.innerHeight||414;
-
-  /* pass one — the long scrolling lists take the width */
-  kids.forEach(el=>{
-   let tall=false;
-   try{tall=el.getBoundingClientRect().height>h*1.3}catch(e){}
-   el.classList.toggle('ls-tall',tall);
-   el.classList.remove('ls-solo')});
-
-  /* pass two — which items are still sharing a row. Reading a width here
-     settles the layout the classes above just changed, so these are the
-     widths after pass one rather than before it. Anything close to the
-     full width is already spanning, whether from this layer or from the
-     landscape shell's own list of full-width elements — measuring it
-     avoids keeping a second copy of that list in step with the first. */
-  const vw=view.clientWidth||1;
-  let run=[];
-  const flush=()=>{
-   /* an odd run leaves its last item alone on a row */
-   if(run.length%2===1)run[run.length-1].classList.add('ls-solo');
-   run=[]};
-  kids.forEach(el=>{
-   let w=0;
-   try{w=el.getBoundingClientRect().width}catch(e){}
-   if(w>vw*0.75)flush(); else run.push(el)});
-  flush();
- }catch(e){}}
-
-/* after the paint, so the heights being measured are the ones on screen */
-function lsColsSoon(){
- try{
-  if(typeof requestAnimationFrame==='function')requestAnimationFrame(lsCols);
-  else lsCols();
- }catch(e){lsCols()}}
-
-const _renderLSC=render;
-render=function(){
- const r=_renderLSC.apply(this,arguments);
- lsColsSoon();
- return r};
-
-window.addEventListener('resize',lsColsSoon);
-window.addEventListener('orientationchange',lsColsSoon);
-lsColsSoon();
-
-/*#wE6_lscols.js#*/
 
 
 /*#wE5_face.js#*/
@@ -56945,6 +56598,362 @@ faceSpec=function(p){
  return s};
 
 /*#wE4_nations.js#*/
+/*#wE2_landscape.js#*/
+
+/* =====================================================================
+   wE2_landscape — a landscape phone is a different shape, not a wide one
+   ---------------------------------------------------------------------
+   Turned sideways, the game was letterboxed into the middle of the
+   screen and everything important was stacked on top of everything else.
+   Measured at 896x414:
+
+     #app capped at 720px          176px of screen thrown away
+     #hdr 88px tall                21% of the height spent on a header
+     #view only 326px tall         with 787px of content in it
+     .nav 63px at the bottom       plus a ~70px Continue dock over it
+
+   So the two bars ate a third of the height, the toast landed on the
+   Continue button, and the card you were meant to read was behind all
+   three. Portrait has the height to spend on a bottom bar. Landscape
+   does not, and it has width going spare instead.
+
+   The fix is the arrangement every sideways football game uses, and the
+   one in the reference shots: the navigation stands up as a rail down
+   the left, the header runs across the top, and Continue sits at the end
+   of the header where your thumb already is. Nothing overlaps, because
+   nothing is floating any more.
+
+   ---------------------------------------------------------------------
+   NO DOM SURGERY. #hdr, #view, .continue-dock and .nav are already four
+   siblings inside #app, which is all a grid needs:
+
+       grid-areas:  "rail  hdr   dock"
+                    "rail  view  view"
+
+   They are placed, not moved. The game re-renders all four constantly
+   and never has to know this happened. Portrait is untouched, and so is
+   #matchScreen, which lives outside #app and has its own wide layout.
+   ===================================================================== */
+
+(function landscapeCSS(){
+ const old=document.getElementById('wE2');if(old)old.remove();
+ const st=document.createElement('style');st.id='wE2';
+ st.textContent=[
+ /* 660px keeps small phones held sideways on the portrait layout, where
+    a 76px rail would cost more than the bottom bar it replaces */
+ '@media (orientation:landscape) and (min-width:660px) and (max-width:1023px){',
+
+  ':root{--rail:76px}',
+
+  /* ---- the shell -------------------------------------------------- */
+  '#app{display:grid;max-width:none;width:100%;height:100dvh;min-height:0;',
+  ' grid-template-columns:var(--rail) minmax(0,1fr) auto;',
+  ' grid-template-rows:auto minmax(0,1fr);',
+  ' grid-template-areas:"rail hdr dock" "rail view view";',
+  ' margin:0;overflow:hidden}',
+
+  /* ---- the navigation stands up ----------------------------------- */
+  '#app>.nav{grid-area:rail;position:relative;left:auto;right:auto;bottom:auto;top:auto;',
+  ' width:var(--rail);max-width:none;height:100%;min-height:0;',
+  ' border-top:0;border-right:1px solid var(--chalk);',
+  ' padding:0;margin:0;overflow:hidden}',
+  '#app>.nav .nav-inner{flex-direction:column;height:100%;width:100%;',
+  ' justify-content:flex-start;align-items:stretch;gap:2px;padding:6px 4px;',
+  ' overflow-y:auto;overflow-x:hidden;max-width:none}',
+  '#app>.nav .nav-inner>*{flex:0 0 auto;width:100%;min-width:0;',
+  ' padding:9px 2px;border-radius:10px;gap:3px;',
+  /* the active tab is drawn raised above the bar in portrait; in a
+     column that just lifts it out through the top of the rail */
+  ' transform:none;margin-top:0;margin-bottom:0}',
+  /* These icons carry a viewBox and no width or height, so they size
+     themselves from the row they sit in. Stood up in a column there is
+     no row to measure and every button collapsed to ten pixels tall —
+     six labels stacked at the top of an empty rail with no icons at
+     all. They need an explicit size here. */
+  '#app>.nav .nav-inner>button svg{width:21px;height:21px;flex:0 0 auto;display:block}',
+  '#app>.nav .nav-inner>button{font-size:10px;line-height:1.15;min-height:46px;',
+  ' justify-content:center;align-items:center}',
+
+  /* ---- the header, at landscape height ---------------------------- */
+  '#app>#hdr{grid-area:hdr;padding-top:4px;padding-bottom:4px;min-width:0}',
+  '#app>#hdr .statusbar{margin-top:4px}',
+  '#app>#hdr .sb{padding-top:4px;padding-bottom:4px}',
+  '#app>#hdr .hclub .d{font-size:11px}',
+  /* the fullscreen button is bottom-right of the header in portrait and
+     collides with the status pills once the header is this short */
+  '#app>#hdr .fsbtn{display:none}',
+
+  /* ---- Continue, at the end of the header -------------------------- */
+  /* The class is repeated to out-specify `#app>.continue-dock` from the
+     max-width:1023px layer, which sets bottom from --nav-h. That variable
+     is redefined further down the tree and resolves to the height of the
+     nav — which this layout has just made the whole screen, so the dock
+     was being pushed 418px above the viewport. Zeroing --nav-h here as
+     well means anything else keying off a bottom bar that no longer
+     exists gets the right answer too. */
+  '#app{--nav-h:0px}',
+  '#app>.continue-dock.continue-dock{grid-area:dock;position:relative;inset:auto;',
+  ' width:auto;max-width:min(320px,34vw);margin:0;align-self:center;',
+  ' background:none;backdrop-filter:none;-webkit-backdrop-filter:none;',
+  ' padding:4px 10px 4px 0;pointer-events:auto;z-index:auto}',
+  '#app>.continue-dock:empty{padding:0}',
+  '#app>.continue-dock>.btn{min-width:0;flex:1 1 auto}',
+  '#app>.continue-dock>.btn:only-child{min-width:0}',
+  '#app>.continue-dock .cd-sub{font-size:10px;opacity:.85}',
+
+  /* ---- and the space that frees up -------------------------------- */
+  /* Two columns, because one column of cards 830px wide is a worse read
+     than two of 410 — and because the whole point of turning the phone
+     is that the width is there. align-items:start stops a short card
+     being stretched to the height of whatever landed beside it. */
+  '#app>#view{grid-area:view;overflow-y:auto;-webkit-overflow-scrolling:touch;',
+  ' min-height:0;padding-bottom:16px;max-width:none;margin:0;',
+  ' display:grid;grid-template-columns:repeat(2,minmax(0,1fr));',
+  ' gap:10px;align-content:start;align-items:start}',
+  '#app>#view>*{min-width:0;max-width:none;margin:0}',
+  /* anything that is really a full-width band keeps the whole row */
+  '#app>#view>table,#app>#view>.secnav,#app>#view>.chips,#app>#view>.subtabs,',
+  '#app>#view>h1,#app>#view>h2,#app>#view>h3,#app>#view>.sec,#app>#view>.xscroll,',
+  '#app>#view>.tbl,#app>#view>.table,#app>#view>.ltable,#app>#view>.plist',
+  ' {grid-column:1/-1;overflow:visible}',
+  /* A scroll container has an automatic minimum size of zero, so the
+     grid track measured the tab row at 24px while it laid out at 52 and
+     the cards underneath rode up over it. Spanning the full width, these
+     rows have the room and do not need to scroll at all. */
+
+  /* the back-to-top button sat above a dock that is no longer there */
+  '.totop{bottom:14px;right:14px}',
+
+  /* a toast in the middle of a short screen covers the thing it is
+     talking about; on its own line at the bottom it does not */
+  '#toast{bottom:12px}',
+ '}',
+
+ /* very short landscape — a small phone on its side. Give back every
+    pixel the header can spare rather than scrolling the chrome. */
+ '@media (orientation:landscape) and (min-width:660px) and (max-width:1023px) and (max-height:430px){',
+  ':root{--rail:66px}',
+  '#app>#hdr .statusbar{display:none}',
+  '#app>#hdr{padding-top:2px;padding-bottom:2px}',
+  '#app>.nav .nav-inner>*{padding:6px 2px;min-height:40px}',
+  '#app>.nav .nav-inner>button svg{width:19px;height:19px}',
+  '#app>.nav .nav-inner>button{font-size:9px}',
+ '}'
+ ].join('');
+ document.head.appendChild(st)})();
+
+/* ---------------------------------------------------------------------
+   THE STATUS PILLS ARE THE HEADER'S SECOND ROW, AND IN LANDSCAPE THEY
+   ARE ALSO THE ONLY THING THAT KNOWS THE DATE
+   ---------------------------------------------------------------------
+   Hiding the pills on a short screen loses the date and the next-match
+   countdown, which are the two things you actually steer by. They go
+   into the club line instead, where there is room going spare once the
+   budget block moves up.
+   --------------------------------------------------------------------- */
+/* The upper bound is the part that was missing, and it cost the desktop
+   its own layout. "Landscape and at least 660 wide" is also true of a
+   1440x900 monitor, so every desktop has been getting the phone's 76px
+   icon rail instead of the 270px sidebar the desktop layer already
+   builds — the labels sat under the icons and the club name in the
+   brand block truncated to "M...". Caught by screenshotting at 1440
+   rather than only at 896x414, which is the only size I had checked. */
+function lsWide(){
+ try{return window.innerWidth>window.innerHeight&&
+   window.innerWidth>=660&&window.innerWidth<=1023}
+ catch(e){return false}}
+function lsShort(){
+ try{return lsWide()&&window.innerHeight<=430}catch(e){return false}}
+
+const _hdrLS=renderHdr;
+renderHdr=function(){
+ const r=_hdrLS.apply(this,arguments);
+ try{
+  if(!lsShort())return r;
+  const line=document.querySelector('#hdr .hclub .d');
+  if(!line||!G||!G.clubs)return r;
+  const nf=(typeof nextUserMatch==='function')?nextUserMatch():null;
+  const days=nf?nf.day-(G.day||0):null;
+  const bits=[line.textContent.trim()];
+  if(days!=null)bits.push(days<=0?'match today':days===1?'match tomorrow':'next match '+days+'d');
+  const pos=(typeof leaguePos==='function')?leaguePos(G.my):null;
+  if(pos)bits.push((typeof ordinal==='function'?ordinal(pos):pos)+' in the league');
+  line.textContent=bits.join('  ·  ');
+ }catch(e){}
+ return r};
+
+/* ---------------------------------------------------------------------
+   AND THE ONE THING CSS COULD NOT WIN
+   ---------------------------------------------------------------------
+   pinDock() keeps the Continue bar clear of the bottom navigation by
+   measuring how much of the window the nav occupies from the bottom
+   edge, and writing that onto the dock as an inline style. An inline
+   style beats every rule in this file, which is why the dock kept
+   ending up 418px above the viewport no matter how the selector was
+   sharpened: the rail starts at y=0, so "how far up the screen does the
+   nav reach" is now the whole screen.
+
+   It already declines to do this for the desktop sidebar layout, where
+   there is no bottom navigation either. This is the same case. */
+const _pinDockLS=pinDock;
+pinDock=function(){
+ try{
+  if(lsWide()){lsUnpin();return}
+ }catch(e){}
+ return _pinDockLS.apply(this,arguments)};
+
+/* Wrapping the binding is not enough. Six of pinDock's call sites hand
+   the function itself to addEventListener, setTimeout and fonts.ready,
+   and those captured the original before this layer existed — so every
+   resize and every scroll still writes the old value straight past the
+   wrapper.
+
+   Rather than chase the callers, watch the one thing they all end up
+   touching. Clearing the attribute produces another mutation, but by
+   then there is nothing left to clear, so it settles immediately. */
+function lsUnpin(){
+ try{
+  if(!lsWide())return;
+  const d=document.getElementById('continueDock');
+  if(d&&d.style.bottom)d.style.bottom='';
+ }catch(e){}}
+
+(function lsWatchDock(){
+ const start=()=>{
+  const d=document.getElementById('continueDock');
+  if(!d){setTimeout(start,200);return}
+  try{new MutationObserver(lsUnpin).observe(d,{attributes:true,attributeFilter:['style']})}
+  catch(e){}
+  lsUnpin()};
+ if(document.readyState==='loading')
+  document.addEventListener('DOMContentLoaded',start,{once:true});
+ else start()})();
+
+/* the grid changes shape when the phone turns, and a canvas sized for
+   the old shape stays sized for it until something asks again */
+(function lsTurn(){
+ const kick=()=>{try{
+  render();
+  if(typeof fitMatchCanvas==='function'){
+   fitMatchCanvas('#pitchCanvas',0.66);fitMatchCanvas('#dugCanvas',0.74)}
+  if(typeof xsScan==='function')xsScan();
+ }catch(e){}};
+ let t=0;
+ const on=()=>{clearTimeout(t);t=setTimeout(kick,180)};
+ window.addEventListener('orientationchange',on);
+ window.addEventListener('resize',on)})();
+
+/*#wE2_landscape.js#*//*#wE6_lscols.js#*/
+
+/* =====================================================================
+   wE6_lscols — the landscape column that nothing was using
+   ---------------------------------------------------------------------
+   The landscape shell puts #view in two columns, which is the whole
+   point of turning the phone. Measured at 896x414, with the view 830
+   wide and the columns 396 each:
+
+     home        396 x80   396 x486   396 x80   396 x486   ... alternating
+     league      396 x80   396 x486                        ... alternating
+     squad       396 x80  h2078       396 x486 h14
+     transfers   396 x80  h3202       396 x80  h224
+
+   Home and league are exactly right — cards land in both columns and
+   the screen is full. Squad and transfers are not: one item is two to
+   three thousand pixels tall, it sits in the left column, and the only
+   thing that follows it is a fourteen-pixel caption. So for the entire
+   length of the scroll the right-hand half of a landscape phone is
+   empty, which is worse than the portrait layout it replaced.
+
+   ---------------------------------------------------------------------
+   The rule that separates the two cases is "is this item much taller
+   than the screen", and CSS cannot ask that — there is no container
+   query for an element's own height, and no selector for it. Nor is a
+   hard-coded list of class names right: it would be guessing at which
+   screens have a long list today and would be wrong the first time one
+   is added.
+
+   So it is measured after each render. Anything substantially taller
+   than the viewport takes the full width, and the list inside it runs
+   two-up — which is what the width was for. Anything else keeps the
+   two-column behaviour that already works.
+   ===================================================================== */
+
+(function lsColCSS(){
+ const old=document.getElementById('wE6');if(old)old.remove();
+ const st=document.createElement('style');st.id='wE6';
+ st.textContent=[
+ '@media (orientation:landscape) and (min-width:660px) and (max-width:1023px){',
+  /* a very tall block takes the whole width rather than half of it */
+  '#app>#view>.ls-tall{grid-column:1/-1}',
+  /* and the run of players inside it goes two-up. The group headings
+     are siblings of the list rather than children, so GOALKEEPERS still
+     spans the width and the keepers pair off underneath it. */
+  '#app>#view>.ls-tall .plist{display:grid;',
+  ' grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 10px;align-items:start}',
+  '#app>#view>.ls-tall .plist>*{min-width:0}',
+  /* the separator that reads as a list on one column reads as a grid
+     line on two, so it goes and the gap does the work */
+  '#app>#view>.ls-tall .plist>.prow{border-bottom:0}',
+  /* a half-width card with nothing beside it leaves half a screen empty,
+     so it takes the width instead */
+  '#app>#view>.ls-solo{grid-column:1/-1}',
+ '}'
+ ].join('');
+ document.head.appendChild(st)})();
+
+function lsCols(){
+ try{
+  const view=document.getElementById('view');
+  if(!view)return;
+  const wide=(typeof lsWide==='function')&&lsWide();
+  const kids=[...view.children];
+  if(!wide){kids.forEach(el=>el.classList.remove('ls-tall','ls-solo'));return}
+  const h=view.clientHeight||window.innerHeight||414;
+
+  /* pass one — the long scrolling lists take the width */
+  kids.forEach(el=>{
+   let tall=false;
+   try{tall=el.getBoundingClientRect().height>h*1.3}catch(e){}
+   el.classList.toggle('ls-tall',tall);
+   el.classList.remove('ls-solo')});
+
+  /* pass two — which items are still sharing a row. Reading a width here
+     settles the layout the classes above just changed, so these are the
+     widths after pass one rather than before it. Anything close to the
+     full width is already spanning, whether from this layer or from the
+     landscape shell's own list of full-width elements — measuring it
+     avoids keeping a second copy of that list in step with the first. */
+  const vw=view.clientWidth||1;
+  let run=[];
+  const flush=()=>{
+   /* an odd run leaves its last item alone on a row */
+   if(run.length%2===1)run[run.length-1].classList.add('ls-solo');
+   run=[]};
+  kids.forEach(el=>{
+   let w=0;
+   try{w=el.getBoundingClientRect().width}catch(e){}
+   if(w>vw*0.75)flush(); else run.push(el)});
+  flush();
+ }catch(e){}}
+
+/* after the paint, so the heights being measured are the ones on screen */
+function lsColsSoon(){
+ try{
+  if(typeof requestAnimationFrame==='function')requestAnimationFrame(lsCols);
+  else lsCols();
+ }catch(e){lsCols()}}
+
+const _renderLSC=render;
+render=function(){
+ const r=_renderLSC.apply(this,arguments);
+ lsColsSoon();
+ return r};
+
+window.addEventListener('resize',lsColsSoon);
+window.addEventListener('orientationchange',lsColsSoon);
+lsColsSoon();
+
+/*#wE6_lscols.js#*/
 showStart();
 </script>
 <script src="src/career-store.js"></script>
@@ -56967,5 +56976,6 @@ showStart();
 <script src="src/dugout-renderer.js"></script>
 <script src="src/dugout-3d.js"></script>
 <script src="src/contract-score.js"></script>
+<script src="src/ui-shell.js"></script>
 </body>
 </html>

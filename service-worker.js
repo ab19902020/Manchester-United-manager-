@@ -29,6 +29,7 @@ const CORE_ASSETS = [
   './src/dugout-renderer.js',
   './src/dugout-3d.js',
   './src/contract-score.js',
+  './src/ui-shell.js',
   './vendor/three.min.js',
   './assets/results-business-icon.svg',
   './assets/results-business-icon-192.png',

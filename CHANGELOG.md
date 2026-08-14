@@ -2,7 +2,29 @@
 
 ## Unreleased
 
+### Changed
+
+- **The interface is lit by the club you manage.** The shell, the panels, the
+  active tab and the pitch tokens all take their colour from your club's own
+  primary at render time, so the same design serves all 484 of them and a club you
+  built yourself — red is what Manchester United happens to produce, not what the
+  game is painted. Panels share one treatment now (a quiet uppercase heading, a
+  hairline rule, one radius) instead of the four different greens they had picked up
+  from four different layers.
+
+- **The dashboard opens with your eleven on a pitch.** Team Overview draws the XI
+  from the formation the tactics screen already uses, with shirt numbers, names and
+  a team chemistry read-out. It is added to the home screen rather than replacing it,
+  so everything the season will not move on without — the board asking to see you, a
+  bid that needs an answer — is still exactly where it was.
+
 ### Fixed
+
+- **The desktop was being given the phone's layout.** The landscape rule said
+  "landscape and at least 660 wide", which is also true of a 1440x900 monitor, so
+  every desktop got the 76px icon rail instead of the 270px sidebar built for it —
+  labels stacked under icons and the club name truncated to "M...". Bounded to phone
+  widths, and the desktop sidebar it was hiding is back.
 
 - **A goal bonus now helps close a deal at every level of the pyramid.** When a
   contract offer is borderline, the game scores it — the wage against what he is
