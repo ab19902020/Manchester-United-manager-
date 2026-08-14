@@ -56361,169 +56361,7 @@ vTransferBudget=function(){
 
 /*#wE3_budget.js#*/
 
-/*#wE4_nations.js#*/
 
-/* =====================================================================
-   wE4_nations — the sixteen per cent of the game with no nationality
-   ---------------------------------------------------------------------
-   Measured in a live world before touching anything: 9,906 players,
-   8,271 with a nationality and 1,635 without. Seventeen per cent of the
-   game, spread almost perfectly evenly at about seven men per club, in
-   every division including the biggest — City, Liverpool, Chelsea,
-   Bayern, Milan, Ajax. They are the players who pad an authored squad
-   out to a full twenty-two.
-
-   That matters more than it sounds, because nationality is what drives a
-   face. NAT_LOOK holds a skin and hair distribution for seventy-seven
-   countries and natLook() falls back to the player's confederation.
-   With no nationality at all there is nothing to fall back FROM, so all
-   1,635 came out of CONF_LOOK.UEFA — one generic European distribution,
-   seven men per squad, every squad in the world. That is a large part of
-   why the portraits read as samey.
-
-   ---------------------------------------------------------------------
-   AND THE MACHINERY TO FIX IT WAS ALREADY WRITTEN.
-
-   assignNations() walks every player and fills in anything missing, and
-   natGuess() behind it already checks a name table, then a surname
-   regex, then the club's country pool. Calling it in a live world takes
-   the count from 1,635 to nought with no error.
-
-   It is simply never reached for these men. newGame() calls it at the
-   layer that introduced international football — and the squads are
-   padded out after that, by a later layer. The work is done, then more
-   players arrive, and nothing runs it again.
-
-   This is the same shape as the calendar bug: a pass that repairs the
-   world correctly, followed by a pass that rebuilds part of the world,
-   with no repair after it. The fix is the same too — run it last.
-   ===================================================================== */
-
-const _ngNations=newGame;
-newGame=function(){
- const r=_ngNations.apply(this,arguments);
- try{assignNations()}catch(e){}
- return r};
-
-/* A career does not only gain players at kick-off — there are academy
-   intakes, regens and free agents every season, and each one is born
-   through genPlayer. Giving him a nationality at birth means no later
-   sweep has to exist. natGuess draws from its own seeded stream, so
-   this does not disturb the world's random sequence. */
-const _gpNat=genPlayer;
-genPlayer=function(raw,clubIdx,idOverride){
- const p=_gpNat.apply(this,arguments);
- try{
-  if(p&&!p.nat)p.nat=natGuess(p,(typeof G!=='undefined'&&G.clubs)?G.clubs[clubIdx]:null);
- }catch(e){}
- return p};
-
-/* ---------------------------------------------------------------------
-   FOUR COUNTRIES THAT WERE FALLING TO THE GENERIC EUROPEAN DEFAULT
-   ---------------------------------------------------------------------
-   Of the fourteen nation codes in the squads that NAT_LOOK does not
-   name, ten resolve correctly through their confederation — Cape Verde
-   and Mozambique to CAF, Suriname to CONMEBOL, Uzbekistan and Iraq to
-   AFC, Panama to CONCACAF. Those are already right.
-
-   The remaining four are UEFA, so the fallback is not WRONG, only
-   unspecific: seventy-nine players drawn from an all-Europe average
-   rather than their own part of it. The Balkans and the Caucasus are
-   cheap to describe and they are the difference between a Montenegrin
-   centre-half and a generic European one.
-   --------------------------------------------------------------------- */
-try{
- if(typeof NAT_LOOK!=='undefined'&&NAT_LOOK){
-  if(!NAT_LOOK.MNE)NAT_LOOK.MNE={
-   sk:[['fair',2],['light',5],['olive',3],['pale',1]],
-   hr:[['darkbrown',5],['black',3],['midbrown',2]]};
-  if(!NAT_LOOK.MKD)NAT_LOOK.MKD={
-   sk:[['light',4],['olive',5],['fair',1],['tan',1]],
-   hr:[['black',4],['darkbrown',5],['midbrown',1]]};
-  if(!NAT_LOOK.GEO)NAT_LOOK.GEO={
-   sk:[['light',4],['olive',4],['fair',2]],
-   hr:[['black',5],['darkbrown',4],['midbrown',1]]};
-  if(!NAT_LOOK.ARM)NAT_LOOK.ARM={
-   sk:[['light',3],['olive',5],['tan',1]],
-   hr:[['black',6],['darkbrown',3]]};
- }
-}catch(e){}
-
-/* =====================================================================
-   AND A BUILD, SO A CENTRE-HALF IS NOT SHAPED LIKE A WINGER
-   ---------------------------------------------------------------------
-   faceSpec picks the jaw at random from five, which is the last part of
-   the portrait with no reason behind it. The game has never stored a
-   height — nought players out of 9,906 carry one — and I am not going to
-   invent one, because a made-up number displayed next to a real player's
-   name is a claim about a real person.
-
-   What the game DOES hold is what he is like: strength, heading, agility
-   and acceleration, all of them real in-game values that already decide
-   how he plays. A powerful, aerially dominant player and a light quick
-   one are different shapes, and that is a drawing decision rather than a
-   measurement, so deriving it is honest.
-
-   The build BIASES the jaw rather than dictating it — a target position
-   along an ordered list, with the existing per-player hash jittering it
-   either way. Same principle as nationality: widen the distribution,
-   never pick the value. Two big centre-halves still look like two men.
-   --------------------------------------------------------------------- */
-
-/* 0 is light and quick, 1 is tall and powerful.
-
-   The divisor is the part worth explaining. Sixteen looks arbitrary and
-   nine looked more natural, but nine was measured and it saturated: nine
-   centre-halves in ten clamped to exactly 1.0 and nine wide forwards in
-   ten to exactly 0.0, because the attribute gap between those roles is
-   already most of the scale before the position term is added. Every
-   centre-half in the game came out the same shape, which is the fault
-   this was meant to cure. Sixteen leaves the roles clearly apart and
-   still leaves room to differ inside one. */
-function buildOf(p){
- try{
-  const a=p.attrs||{};
-  const at=k=>(typeof a[k]==='number'?a[k]:10);
-  const pos=p.pos||'MC';
-  const power=(at('strength')*1.15+at('heading'))/2.15;
-  /* a keeper's agility is diving, not being lightly built, so it says
-     nothing about his shape — only his acceleration does */
-  const quick=pos==='GK'?at('acceleration'):(at('agility')+at('acceleration'))/2;
-  let t=0.5+(power-quick)/16;
-  /* position carries what the attributes do not: a keeper is among the
-     tallest men at the club almost by selection, a wide forward rarely */
-  if(pos==='GK')t+=0.14;
-  else if(pos==='DC')t+=0.08;
-  else if(pos==='ST')t+=0.02;
-  else if(pos==='AML'||pos==='AMR'||pos==='ML'||pos==='MR')t-=0.08;
-  else if(pos==='AMC')t-=0.05;
-  else if(pos==='DL'||pos==='DR'||pos==='WBL'||pos==='WBR')t-=0.03;
-  return clamp(t,0,1);
- }catch(e){return 0.5}}
-
-const JAW_ORDER=['long','oval','round','square','wide'];
-
-const _specBuild=faceSpec;
-faceSpec=function(p){
- const s=_specBuild.apply(this,arguments);
- try{
-  if(!p)return s;
-  /* a hand-drawn United face keeps every choice it was given */
-  if(typeof MUN_FACES!=='undefined'&&MUN_FACES&&MUN_FACES[p.name])return s;
-  const t=buildOf(p);
-  const r=mulberry(hashStr('bld|'+(p.id||0)+'|'+(p.name||'')));
-  /* the build sets where on the list to aim; the hash moves it one
-     either way, so the shape is a tendency and not a rule */
-  const aim=t*(JAW_ORDER.length-1);
-  const jitter=(r()<.5?-1:1)*(r()<.55?1:0);
-  s.jaw=JAW_ORDER[clamp(Math.round(aim)+jitter,0,JAW_ORDER.length-1)];
-  /* a heavier man carries a heavier brow rather more often than not */
-  if(t>.68&&r()<.55)s.brow='thick';
-  else if(t<.3&&r()<.45)s.brow='straight';
- }catch(e){}
- return s};
-
-/*#wE4_nations.js#*/
 
 
 
@@ -56639,6 +56477,7 @@ window.addEventListener('orientationchange',lsColsSoon);
 lsColsSoon();
 
 /*#wE6_lscols.js#*/
+
 
 /*#wE5_face.js#*/
 
@@ -56856,9 +56695,17 @@ face=function(p,sz){
      Down toward the eyes, and thinner. The live pair is drawn at 12.25
      and 12.15 with the eyes at 15.3; six tenths lower closes most of the
      gap without touching the shapes themselves. */
-  svg=svg.replace(
-   /<path d="M13\.6 12\.25c1\.35-\.95 3\.2-\.95 4\.6-\.1M21\.8 12\.15c1\.4-\.85 3\.25-\.85 4\.6 \.1" stroke="([^"]+)" stroke-width="([\d.]+)"/,
-   (m,col,w)=>'<path d="M13.6 12.95c1.35-.9 3.2-.9 4.6-.1M21.8 12.85c1.4-.8 3.25-.8 4.6 .1" '+
+  /* Matched on the opening coordinates and the attributes rather than on
+     the whole path. The first version spelled the tail of it out in full
+     and got one character wrong — it expected "4.6 .1" where the drawing
+     emits "4.6.1" — so the brows never moved at all, in any build, and
+     the improvement up to here came from the eyes and the mouth alone.
+     Nothing threw and no test could see it. Hence the count check below:
+     a patch that silently stops matching is the failure mode this file
+     is most prone to. */
+  const browRe=/<path d="M13\.6 12\.25[^"]*"\s+stroke="([^"]+)"\s+stroke-width="([\d.]+)"/;
+  svg=svg.replace(browRe,
+   (m,col,w)=>'<path d="M13.6 12.95c1.35-.9 3.2-.9 4.6-.1M21.8 12.85c1.4-.8 3.25-.8 4.6.1" '+
     'stroke="'+col+'" stroke-width="'+Math.max(.85,(+w)-0.22).toFixed(2)+'"');
 
   /* ---- 4. AND SOME EVIDENCE OF AGE ---------------------------------
@@ -56890,6 +56737,214 @@ face=function(p,sz){
  return svg};
 
 /*#wE5_face.js#*/
+/*#wE4_nations.js#*/
+
+/* =====================================================================
+   wE4_nations — the sixteen per cent of the game with no nationality
+   ---------------------------------------------------------------------
+   Measured in a live world before touching anything: 9,906 players,
+   8,271 with a nationality and 1,635 without. Seventeen per cent of the
+   game, spread almost perfectly evenly at about seven men per club, in
+   every division including the biggest — City, Liverpool, Chelsea,
+   Bayern, Milan, Ajax. They are the players who pad an authored squad
+   out to a full twenty-two.
+
+   That matters more than it sounds, because nationality is what drives a
+   face. NAT_LOOK holds a skin and hair distribution for seventy-seven
+   countries and natLook() falls back to the player's confederation.
+   With no nationality at all there is nothing to fall back FROM, so all
+   1,635 came out of CONF_LOOK.UEFA — one generic European distribution,
+   seven men per squad, every squad in the world. That is a large part of
+   why the portraits read as samey.
+
+   ---------------------------------------------------------------------
+   AND THE MACHINERY TO FIX IT WAS ALREADY WRITTEN.
+
+   assignNations() walks every player and fills in anything missing, and
+   natGuess() behind it already checks a name table, then a surname
+   regex, then the club's country pool. Calling it in a live world takes
+   the count from 1,635 to nought with no error.
+
+   It is simply never reached for these men. newGame() calls it at the
+   layer that introduced international football — and the squads are
+   padded out after that, by a later layer. The work is done, then more
+   players arrive, and nothing runs it again.
+
+   This is the same shape as the calendar bug: a pass that repairs the
+   world correctly, followed by a pass that rebuilds part of the world,
+   with no repair after it. The fix is the same too — run it last.
+   ===================================================================== */
+
+const _ngNations=newGame;
+newGame=function(){
+ const r=_ngNations.apply(this,arguments);
+ try{assignNations()}catch(e){}
+ return r};
+
+/* A career does not only gain players at kick-off — there are academy
+   intakes, regens and free agents every season, and each one is born
+   through genPlayer. Giving him a nationality at birth means no later
+   sweep has to exist. natGuess draws from its own seeded stream, so
+   this does not disturb the world's random sequence. */
+const _gpNat=genPlayer;
+genPlayer=function(raw,clubIdx,idOverride){
+ const p=_gpNat.apply(this,arguments);
+ try{
+  if(p&&!p.nat)p.nat=natGuess(p,(typeof G!=='undefined'&&G.clubs)?G.clubs[clubIdx]:null);
+ }catch(e){}
+ return p};
+
+/* ---------------------------------------------------------------------
+   FOUR COUNTRIES THAT WERE FALLING TO THE GENERIC EUROPEAN DEFAULT
+   ---------------------------------------------------------------------
+   Of the fourteen nation codes in the squads that NAT_LOOK does not
+   name, ten resolve correctly through their confederation — Cape Verde
+   and Mozambique to CAF, Suriname to CONMEBOL, Uzbekistan and Iraq to
+   AFC, Panama to CONCACAF. Those are already right.
+
+   The remaining four are UEFA, so the fallback is not WRONG, only
+   unspecific: seventy-nine players drawn from an all-Europe average
+   rather than their own part of it. The Balkans and the Caucasus are
+   cheap to describe and they are the difference between a Montenegrin
+   centre-half and a generic European one.
+   --------------------------------------------------------------------- */
+try{
+ if(typeof NAT_LOOK!=='undefined'&&NAT_LOOK){
+  if(!NAT_LOOK.MNE)NAT_LOOK.MNE={
+   sk:[['fair',2],['light',5],['olive',3],['pale',1]],
+   hr:[['darkbrown',5],['black',3],['midbrown',2]]};
+  if(!NAT_LOOK.MKD)NAT_LOOK.MKD={
+   sk:[['light',4],['olive',5],['fair',1],['tan',1]],
+   hr:[['black',4],['darkbrown',5],['midbrown',1]]};
+  if(!NAT_LOOK.GEO)NAT_LOOK.GEO={
+   sk:[['light',4],['olive',4],['fair',2]],
+   hr:[['black',5],['darkbrown',4],['midbrown',1]]};
+  if(!NAT_LOOK.ARM)NAT_LOOK.ARM={
+   sk:[['light',3],['olive',5],['tan',1]],
+   hr:[['black',6],['darkbrown',3]]};
+
+  /* ---------------------------------------------------------------
+     And the ones Codex's identity reconciliation brought in. Squads
+     now carry the nation a player is actually eligible for rather
+     than the one he was born in, which is right and which added
+     fourteen codes the table had never seen — thirty-three players,
+     all of them back on the all-Europe average.
+
+     Most are Caribbean: England produces a lot of players who
+     represent Grenada, St Lucia, St Kitts, Antigua, Montserrat,
+     Guadeloupe or Martinique, and CONCACAF is the closest existing
+     row but these are not Mexico or the United States. The rest are
+     Nordic, Baltic, Mediterranean and South Asian.
+     --------------------------------------------------------------- */
+  const carib={sk:[['brown',5],['deep',5],['dark',2],['tan',2],['light',1]],
+               hr:[['black',9],['darkbrown',2]]};
+  const nordic={sk:[['pale',6],['fair',5],['light',2]],
+                hr:[['blond',4],['midbrown',3],['lightbrown',2],['darkbrown',1]]};
+  const medit={sk:[['light',4],['olive',5],['fair',1],['tan',1]],
+               hr:[['darkbrown',5],['black',4],['midbrown',1]]};
+  const add={GRN:carib,LCA:carib,MSR:carib,SKN:carib,ATG:carib,GLP:carib,MTQ:carib,
+             FRO:nordic,LTU:nordic,
+             CYP:medit,MLT:medit,GIB:medit,
+             BDI:{sk:[['deep',5],['dark',4],['brown',3]],hr:[['black',10]]},
+             PAK:{sk:[['olive',3],['tan',5],['brown',3]],hr:[['black',9],['darkbrown',1]]}};
+  for(const k in add)if(!NAT_LOOK[k])NAT_LOOK[k]=add[k];
+ }
+}catch(e){}
+
+/* =====================================================================
+   AND A BUILD, SO A CENTRE-HALF IS NOT SHAPED LIKE A WINGER
+   ---------------------------------------------------------------------
+   faceSpec picks the jaw at random from five, which is the last part of
+   the portrait with no reason behind it. The game has never stored a
+   height — nought players out of 9,906 carry one — and I am not going to
+   invent one, because a made-up number displayed next to a real player's
+   name is a claim about a real person.
+
+   What the game DOES hold is what he is like: strength, heading, agility
+   and acceleration, all of them real in-game values that already decide
+   how he plays. A powerful, aerially dominant player and a light quick
+   one are different shapes, and that is a drawing decision rather than a
+   measurement, so deriving it is honest.
+
+   The build BIASES the jaw rather than dictating it — a target position
+   along an ordered list, with the existing per-player hash jittering it
+   either way. Same principle as nationality: widen the distribution,
+   never pick the value. Two big centre-halves still look like two men.
+   --------------------------------------------------------------------- */
+
+/* 0 is light and quick, 1 is tall and powerful.
+
+   The divisor is the part worth explaining. Sixteen looks arbitrary and
+   nine looked more natural, but nine was measured and it saturated: nine
+   centre-halves in ten clamped to exactly 1.0 and nine wide forwards in
+   ten to exactly 0.0, because the attribute gap between those roles is
+   already most of the scale before the position term is added. Every
+   centre-half in the game came out the same shape, which is the fault
+   this was meant to cure. Sixteen leaves the roles clearly apart and
+   still leaves room to differ inside one. */
+function buildOf(p){
+ try{
+  const a=p.attrs||{};
+  const at=k=>(typeof a[k]==='number'?a[k]:10);
+  const pos=p.pos||'MC';
+  /* A REAL HEIGHT BEATS THE PROXY, AND SOME PLAYERS NOW HAVE ONE.
+     When this was written no player in the game carried a height, so
+     the build was inferred entirely from strength, heading, agility and
+     acceleration. Codex has since sourced published biographies, so
+     part of the game has the actual figure — and where there is a
+     measurement there is no reason to keep guessing from a proxy.
+
+     It is a blend rather than a replacement. Height alone does not
+     settle how a man is built: a tall, light winger and a tall, heavy
+     centre-half are the same number of centimetres, and the attributes
+     are what separate them. Height leads because it is real. */
+  const cm=(typeof p.heightCm==='number'&&p.heightCm>140&&p.heightCm<230)?p.heightCm:null;
+  const power=(at('strength')*1.15+at('heading'))/2.15;
+  /* a keeper's agility is diving, not being lightly built, so it says
+     nothing about his shape — only his acceleration does */
+  const quick=pos==='GK'?at('acceleration'):(at('agility')+at('acceleration'))/2;
+  let t=0.5+(power-quick)/16;
+  /* position carries what the attributes do not: a keeper is among the
+     tallest men at the club almost by selection, a wide forward rarely */
+  if(pos==='GK')t+=0.14;
+  else if(pos==='DC')t+=0.08;
+  else if(pos==='ST')t+=0.02;
+  else if(pos==='AML'||pos==='AMR'||pos==='ML'||pos==='MR')t-=0.08;
+  else if(pos==='AMC')t-=0.05;
+  else if(pos==='DL'||pos==='DR'||pos==='WBL'||pos==='WBR')t-=0.03;
+  t=clamp(t,0,1);
+  if(cm!=null){
+   /* 172cm to 196cm spans a squad from the smallest wide player to the
+      tallest keeper; outside that it simply pins */
+   const hN=clamp((cm-172)/24,0,1);
+   t=clamp(hN*0.6+t*0.4,0,1);
+  }
+  return t;
+ }catch(e){return 0.5}}
+
+const JAW_ORDER=['long','oval','round','square','wide'];
+
+const _specBuild=faceSpec;
+faceSpec=function(p){
+ const s=_specBuild.apply(this,arguments);
+ try{
+  if(!p)return s;
+  /* a hand-drawn United face keeps every choice it was given */
+  if(typeof MUN_FACES!=='undefined'&&MUN_FACES&&MUN_FACES[p.name])return s;
+  const t=buildOf(p);
+  const r=mulberry(hashStr('bld|'+(p.id||0)+'|'+(p.name||'')));
+  /* the build sets where on the list to aim; the hash moves it one
+     either way, so the shape is a tendency and not a rule */
+  const aim=t*(JAW_ORDER.length-1);
+  const jitter=(r()<.5?-1:1)*(r()<.55?1:0);
+  s.jaw=JAW_ORDER[clamp(Math.round(aim)+jitter,0,JAW_ORDER.length-1)];
+  /* a heavier man carries a heavier brow rather more often than not */
+  if(t>.68&&r()<.55)s.brow='thick';
+  else if(t<.3&&r()<.45)s.brow='straight';
+ }catch(e){}
+ return s};
+
+/*#wE4_nations.js#*/
 showStart();
 </script>
 <script src="src/career-store.js"></script>
