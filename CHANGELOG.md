@@ -4,6 +4,27 @@
 
 ### Changed
 
+- **The dugout runs like a broadcast: fast through the football, normal speed for
+  the moments that decide it.** Whatever speed you have chosen, the match now drops
+  to normal speed when something matters — a goal, a red card, a penalty, a VAR
+  check, one off the woodwork, a booking — stays there long enough to watch it, and
+  then hands your speed back. You never have to reach for the controls to see the
+  goal you just scored. Consecutive moments run together as one passage rather than
+  restarting, so a penalty that becomes a goal that becomes a VAR check reads as one
+  thing. Substitutions deliberately do not qualify: stopping for every one would make
+  the last twenty minutes of every match crawl. Touch the speed controls yourself and
+  your choice wins immediately.
+
+- **One man, one squad.** Two spellings of a player were two players: Liverpool
+  carried both "Jeremy Jacquet" and "Jérémy Jacquet", because the signing list looks
+  a man up by exact name and so does the sweep meant to catch exactly that. Frank
+  Onyeka and Ogochukwu Onyeka are the same person under two different names, which no
+  string comparison would ever join. Identity now comes from the aliases in the
+  sourced biographies, so eighteen genuine duplicates are gone and twenty-five players
+  carry the spelling the source uses. Two different men who happen to share a name —
+  and there are two real Adam Smiths and two Ben Davieses in there — are both still
+  playing.
+
 - **The interface is lit by the club you manage.** The shell, the panels, the
   active tab and the pitch tokens all take their colour from your club's own
   primary at render time, so the same design serves all 484 of them and a club you

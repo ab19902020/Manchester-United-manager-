@@ -226,27 +226,45 @@
     const fieldZ = limit(number(ball && ball.y, FIELD_WIDTH / 2), 0, FIELD_WIDTH) - FIELD_WIDTH / 2;
     const direction = sideIndex === 1 ? -1 : 1;
     const type = action && action.type;
-    if (type === 'goal' || type === 'shot' || type === 'save' || type === 'penalty') {
+    /* Lower and closer than it was. The camera sat at nearly eleven
+       metres and forty-three back with a 44 degree field of view, which
+       is a tactics board: you could see the shape of the team and not a
+       single face. A television camera is about six metres up, level
+       with the halfway line, and long enough to compress the far side
+       of the pitch. These are that. */
+    if (type === 'goal') {
+      /* stay in tight and let the celebration happen in frame */
       return {
         mode: 'cinematic',
-        position: [limit(fieldX - direction * 13, -42, 42), 5.35, -38.6],
-        target: [limit(fieldX + direction * 7.5, -50, 50), 1.12, limit(fieldZ * 0.9, -25, 25)],
-        fov: 39,
+        position: [limit(fieldX - direction * 9, -40, 40), 3.9, -29.5],
+        target: [limit(fieldX + direction * 5, -50, 50), 1.25, limit(fieldZ * 0.9, -25, 25)],
+        fov: 30,
+      };
+    }
+    if (type === 'shot' || type === 'save' || type === 'penalty') {
+      return {
+        mode: 'cinematic',
+        position: [limit(fieldX - direction * 11, -42, 42), 4.5, -31.5],
+        target: [limit(fieldX + direction * 7.5, -50, 50), 1.15, limit(fieldZ * 0.9, -25, 25)],
+        fov: 32,
       };
     }
     if (wide) {
       return {
         mode: 'wide',
-        position: [limit(fieldX * 0.32, -25, 25), 10.9, -42.6],
-        target: [fieldX, 0.92, limit(fieldZ * 0.52, -17, 17)],
-        fov: 44,
+        position: [limit(fieldX * 0.32, -25, 25), 8.4, -36.2],
+        target: [fieldX, 0.95, limit(fieldZ * 0.52, -17, 17)],
+        fov: 37,
       };
     }
     return {
       mode: 'broadcast',
-      position: [limit(fieldX - direction * 7, -42, 42), 7.6, -40.8],
-      target: [limit(fieldX + direction * 8, -49, 49), 1.05, limit(fieldZ * 0.78, -24, 24)],
-      fov: 41,
+      /* a touch higher and further back than the first attempt, which
+         framed a lot of empty grass in the foreground: the camera was
+         low enough that the near half of the picture was turf */
+      position: [limit(fieldX - direction * 6, -42, 42), 7.4, -36.0],
+      target: [limit(fieldX + direction * 6, -49, 49), 1.45, limit(fieldZ * 0.7, -22, 22)],
+      fov: 33,
     };
   }
 
@@ -634,8 +652,19 @@
       addPitchLine(parent, 5.5, 0.09, goalLine - side * 2.75, -9.16, 0);
       addPitchLine(parent, 5.5, 0.09, goalLine - side * 2.75, 9.16, 0);
       addPitchLine(parent, 18.32, 0.09, goalLine - side * 5.5, 0, Math.PI / 2);
-      curveLine(parent, 9.15, side > 0 ? Math.PI * 0.63 : -Math.PI * 0.37, Math.PI * 0.74,
-        goalLine - side * 11, 0, 1);
+      /* THE D. It is the part of a 9.15m circle centred on the penalty
+         spot that falls OUTSIDE the penalty area, and nothing else —
+         the rest of that circle is inside the box and is not marked.
+
+         The spot is 11m from the goal line and the box edge is 16.5m,
+         so the box is 5.5m from the spot and the arc leaves the line at
+         acos(5.5 / 9.15) = 53.05 degrees either side of straight out.
+         That is a span of 1.8519 radians, not the 2.325 that was here,
+         which is why the arc curled back inside the eighteen-yard box
+         instead of sitting in front of it. */
+      const arcHalf = Math.acos(5.5 / 9.15);
+      const arcFrom = side > 0 ? Math.PI - arcHalf : -arcHalf;
+      curveLine(parent, 9.15, arcFrom, arcHalf * 2, goalLine - side * 11, 0, 1);
       addMesh(parent, new THREE.CylinderGeometry(0.11, 0.11, 0.035, 12), lineMaterial(), [goalLine - side * 11, 0.055, 0], null, false);
     });
 
@@ -991,11 +1020,36 @@
 
   function kitSet(home, away) {
     const base = root.RBSDugoutRenderer;
-    if (base && typeof base.resolveKits === 'function') return base.resolveKits(home, away);
-    return [
-      { primary: (home && home.c1) || '#c8102e', trim: (home && home.c2) || '#ffffff', goalkeeper: '#f6d21f', goalkeeperTrim: '#171b20' },
-      { primary: (away && away.c1) || '#2474bf', trim: (away && away.c2) || '#ffffff', goalkeeper: '#38bdf8', goalkeeperTrim: '#071c2a' },
-    ];
+    const kits = (base && typeof base.resolveKits === 'function')
+      ? base.resolveKits(home, away)
+      : [
+        { primary: (home && home.c1) || '#c8102e', trim: (home && home.c2) || '#ffffff', goalkeeper: '#f6d21f', goalkeeperTrim: '#171b20' },
+        { primary: (away && away.c1) || '#2474bf', trim: (away && away.c2) || '#ffffff', goalkeeper: '#38bdf8', goalkeeperTrim: '#071c2a' },
+      ];
+    /* The keeper strips were fixed — yellow at home, sky away — which
+       fails for the same reason the officials did: a yellow keeper in
+       front of a yellow team is not a goalkeeper, he is a defender who
+       is allowed to use his hands. Each keeper takes the first strip
+       that separates him from both outfield sides and from the other
+       keeper. */
+    try {
+      const outfield = [kits[0].primary, kits[1].primary];
+      const taken = outfield.slice();
+      kits.forEach((kit) => {
+        let choice = kit.goalkeeper;
+        let bestGap = Math.min(...taken.map((c) => colourGap(choice, c)));
+        if (bestGap < 110) {
+          OFFICIAL_STRIPS.concat(['#7c3aed', '#f97316']).forEach((strip) => {
+            const gap = Math.min(...taken.map((c) => colourGap(strip, c)));
+            if (gap > bestGap) { bestGap = gap; choice = strip; }
+          });
+        }
+        kit.goalkeeper = choice;
+        kit.goalkeeperTrim = colourGap(choice, '#ffffff') > 160 ? '#f4f6f4' : '#101418';
+        taken.push(choice);
+      });
+    } catch (error) { /* the supplied kits still work */ }
+    return kits;
   }
 
   function skinColour(player) {
@@ -1077,8 +1131,13 @@
     const kitTrim = goalkeeper ? kit.goalkeeperTrim : kit.trim;
     const shirtMap = shirtTexture(player, club, kit, goalkeeper);
     const shirtMaterial = surfaceMaterial({ map: shirtMap, color: 0xffffff, roughness: 0.66, metalness: 0.01 });
+    /* Shirt, shorts and socks were shirt-colour, trim, trim — so a
+       player read as one flat colour with a band in it. A real kit is
+       three bands and that is most of how you pick a man out at
+       distance, so the socks go back to the shirt colour and the shorts
+       stay the contrast between them. */
     const shortsMaterial = surfaceMaterial({ color: kitTrim, roughness: 0.72 });
-    const sockMaterial = surfaceMaterial({ color: kitTrim, roughness: 0.82 });
+    const sockMaterial = surfaceMaterial({ color: kitPrimary, roughness: 0.82 });
     const skinMaterial = surfaceMaterial({ color: skin, roughness: 0.76 });
     const hairMaterial = surfaceMaterial({ color: hair, roughness: 0.9 });
     const bootMaterial = surfaceMaterial({ color: 0x101419, roughness: 0.54 });
@@ -1204,12 +1263,65 @@
     return group;
   }
 
-  function createOfficialModel(assistant) {
+  /* ---------------------------------------------------------------
+     WHO IS WHO ON THE PITCH
+     ---------------------------------------------------------------
+     The referee was cyan and the two assistants were yellow. That is
+     wrong twice over. In football all three officials wear the same
+     colour — a referee in one strip and his assistants in another
+     reads as a fourth and fifth team — and the colour has to be one
+     that neither side is wearing, which is the entire reason referees
+     change strip.
+
+     Against Hull, who play in amber, the yellow assistants disappeared
+     into the home side and the cyan referee looked like a third team.
+     You could not tell who was who, which is the one thing a kit has
+     to do.
+
+     So the officials pick their strip the way a real fourth official
+     does: run down the list and take the first one that is clearly
+     different from both teams and from both goalkeepers. Black first,
+     because that is the tradition, then the loud ones.
+     --------------------------------------------------------------- */
+  function rgbOf(colour) {
+    const hex = String(colour || '#000').replace('#', '');
+    const full = hex.length === 3 ? hex.split('').map((c) => c + c).join('') : hex;
+    return [
+      parseInt(full.slice(0, 2), 16) || 0,
+      parseInt(full.slice(2, 4), 16) || 0,
+      parseInt(full.slice(4, 6), 16) || 0,
+    ];
+  }
+
+  function colourGap(a, b) {
+    const x = rgbOf(a); const y = rgbOf(b);
+    /* weighted toward how the eye actually separates colours */
+    return Math.sqrt(((x[0] - y[0]) * 0.9) ** 2 + ((x[1] - y[1]) * 1.2) ** 2 + ((x[2] - y[2]) * 0.7) ** 2);
+  }
+
+  const OFFICIAL_STRIPS = ['#14181d', '#f6d32b', '#e0447c', '#28c76f', '#41c4e8', '#f97316'];
+
+  function officialKit(kits) {
+    const worn = [];
+    (kits || []).forEach((kit) => {
+      if (!kit) return;
+      if (kit.primary) worn.push(kit.primary);
+      if (kit.goalkeeper) worn.push(kit.goalkeeper);
+    });
+    let choice = OFFICIAL_STRIPS[0];
+    let bestGap = -1;
+    OFFICIAL_STRIPS.forEach((strip) => {
+      const gap = worn.length ? Math.min(...worn.map((c) => colourGap(strip, c))) : 999;
+      if (gap > bestGap) { bestGap = gap; choice = strip; }
+    });
+    const trim = colourGap(choice, '#ffffff') > 160 ? '#f4f6f4' : '#101418';
+    return { primary: choice, trim, goalkeeper: choice, goalkeeperTrim: trim };
+  }
+
+  function createOfficialModel(assistant, kit) {
     const fakePlayer = { p: { id: assistant ? 91002 : 91001, heightCm: 180, weightKg: 73 }, slot: 'MC' };
-    const kit = assistant
-      ? { primary: '#f6d32b', trim: '#111827', goalkeeper: '#f6d32b', goalkeeperTrim: '#111827' }
-      : { primary: '#41c4e8', trim: '#101820', goalkeeper: '#41c4e8', goalkeeperTrim: '#101820' };
-    return createPlayerModel(fakePlayer, { name: assistant ? 'Assistant' : 'Referee' }, kit);
+    const strip = kit || { primary: '#14181d', trim: '#f4f6f4', goalkeeper: '#14181d', goalkeeperTrim: '#f4f6f4' };
+    return createPlayerModel(fakePlayer, { name: assistant ? 'Assistant' : 'Referee' }, strip);
   }
 
   function buildPlayers(parent, match, home, away) {
@@ -1228,13 +1340,15 @@
       state.players.set(player.p.id, model);
     }));
 
-    const referee = createOfficialModel(false);
+    /* one strip for all three of them, chosen against both teams */
+    const strip = officialKit(kits);
+    const referee = createOfficialModel(false, strip);
     referee.position.set(0, 0, 4);
     parent.add(referee);
-    const assistantA = createOfficialModel(true);
+    const assistantA = createOfficialModel(true, strip);
     assistantA.position.set(-16, 0, -35.3);
     parent.add(assistantA);
-    const assistantB = createOfficialModel(true);
+    const assistantB = createOfficialModel(true, strip);
     assistantB.position.set(16, 0, 35.3);
     parent.add(assistantB);
     state.officials = [referee, assistantA, assistantB];
@@ -1335,7 +1449,15 @@
     next.secondary = other;
     if (other && other.p) next.secondaryId = other.p.id;
     next.startedAt = now;
-    next.endsAt = now + number(next.duration, 800);
+    /* A goal was over in the time it took to hit the net, so the camera
+       cut away before anybody had finished celebrating and the one
+       thing you actually wanted to watch was the one thing you missed.
+       It runs long enough for the ball to go in, the scorer to wheel
+       away and his team to reach him — and the clock is already held at
+       normal speed for seven seconds when a goal goes in, so the two
+       agree rather than fighting each other. */
+    const dwell = next.type === 'goal' ? Math.max(number(next.duration, 800), 5200) : number(next.duration, 800);
+    next.endsAt = now + dwell;
     next.from = next.type === 'save' && otherDot
       ? { x: otherDot.x, y: otherDot.y }
       : actorDot ? { x: actorDot.x, y: actorDot.y }
@@ -1405,9 +1527,30 @@
     data.velocityX = mix(data.velocityX, (data.currentX - oldX) / Math.max(dt, 0.016), 0.24);
     data.velocityZ = mix(data.velocityZ, (data.currentZ - oldZ) / Math.max(dt, 0.016), 0.24);
     const speed = limit(Math.hypot(data.velocityX, data.velocityZ) / 7.5, 0, 1);
-    data.phase += dt * (2.7 + speed * 8.4);
-    const swing = Math.sin(data.phase) * (0.10 + speed * 0.85);
-    const bob = Math.abs(Math.cos(data.phase)) * speed * 0.035;
+
+    /* ---- how this particular man runs ----
+       Everybody shared one gait, so twenty-two players moved like one
+       player copied twenty-two times, which is most of why a crowded
+       midfield read as a diagram. These are seeded from the player's
+       own id, so they are his for the life of the save and the same
+       every time you watch him: a short quick stride, a long loping
+       one, arms high or low, a slight lean. The numbers stay narrow —
+       this is meant to be recognisable, not comic. */
+    if (data.gait == null) {
+      const rng = seeded(seedFrom('gait|' + dot.pl.p.id));
+      data.gait = {
+        cadence: 0.82 + rng() * 0.42,
+        stride: 0.80 + rng() * 0.45,
+        arms: 0.68 + rng() * 0.72,
+        bounce: 0.72 + rng() * 0.62,
+        lean: (rng() - 0.5) * 0.13,
+        offset: rng() * Math.PI * 2,
+      };
+    }
+    const gait = data.gait;
+    data.phase += dt * (2.7 + speed * 8.4) * gait.cadence;
+    const swing = Math.sin(data.phase + gait.offset) * (0.10 + speed * 0.85) * gait.stride;
+    const bob = Math.abs(Math.cos(data.phase + gait.offset)) * speed * 0.035 * gait.bounce;
     let facing = Math.abs(data.velocityX) + Math.abs(data.velocityZ) > 0.04 ? Math.atan2(data.velocityX, data.velocityZ) : model.rotation.y;
     if (action && action.to && (action.actorId === dot.pl.p.id || action.secondaryId === dot.pl.p.id)) {
       const destinationX = action.to.x - FIELD_LENGTH / 2;
@@ -1416,6 +1559,14 @@
     }
     model.rotation.y = mix(model.rotation.y, facing, smoothAmount(dt, 6));
     let pose = safePose(dot.pl.p.id, speed, swing, bob, data.velocityX >= 0 ? 1 : -1);
+    /* the arms and the lean are his too, and only while he is moving —
+       a man standing still should not be leaning into a sprint */
+    pose = {
+      ...pose,
+      armA: number(pose.armA, 0) * gait.arms,
+      armB: number(pose.armB, 0) * gait.arms,
+      rot: number(pose.rot, 0) + gait.lean * speed,
+    };
 
     if (action && action.actorId === dot.pl.p.id) {
       const progress = actionProgress(action, now);
@@ -1496,23 +1647,84 @@
     });
   }
 
+  /* ---------------------------------------------------------------
+     THE BALL BELONGS TO A PLAYER
+     ---------------------------------------------------------------
+     This is the reason the dugout did not look like football, and it
+     was one cause rather than several. Two systems were placing things
+     and they never agreed:
+
+       the player models eased toward their 2D dot positions, with
+       their own smoothing and their own lag
+
+       the ball either followed a separately-eased 2D ball position, or
+       — during a staged action — flew between `from` and `to`
+       coordinates that were SNAPSHOTTED ONCE when the action began
+
+     So by the time a pass landed, the receiver had moved on and the
+     ball arrived where he used to be. Nothing was ever at anybody's
+     feet, and because nothing was at anybody's feet, none of the
+     animation the file already had — the slide tackles, the kick
+     swings, the keeper's dive, the goal celebration — read as
+     connected to an object. It looked like men running near a ball.
+
+     Both ends are taken from the live model instead. In possession the
+     ball is planted at the carrier's feet, a little in front of him in
+     the direction he is facing, and it inherits its smoothness from
+     him rather than easing separately. In flight it is recomputed
+     every frame from where the passer and the receiver actually are,
+     so the ball follows the man it was played to.
+     --------------------------------------------------------------- */
+  function modelFor(pl) {
+    try { return pl && pl.p ? state.players.get(pl.p.id) : null; } catch (error) { return null; }
+  }
+
+  /* just ahead of the boot, in the direction he is running */
+  function footPoint(model, reach) {
+    if (!model) return null;
+    const out = number(reach, 0.62);
+    return {
+      x: model.position.x + FIELD_LENGTH / 2 + Math.sin(model.rotation.y) * out,
+      y: model.position.z + FIELD_WIDTH / 2 + Math.cos(model.rotation.y) * out,
+    };
+  }
+
   function updateBall(now, action) {
     if (!state.ball || !MU || !MU.ball) return;
+    const play = typeof playState === 'function' ? playState() : null;
+    const carrier = play && play.holder;
+    const carrierModel = modelFor(carrier);
     let x = number(MU.ball.x, FIELD_LENGTH / 2);
     let z = number(MU.ball.y, FIELD_WIDTH / 2);
     let height = Math.max(0.22, number(MU.ballH, 0) + 0.22);
+    let inFlight = false;
+
     if (action && ['pass', 'shot', 'goal', 'save', 'penalty'].includes(action.type)) {
       const progress = actionProgress(action, now);
       const eased = progress < 0.5 ? 2 * progress * progress : 1 - ((-2 * progress + 2) ** 2) / 2;
-      x = mix(action.from.x, action.to.x, eased);
-      z = mix(action.from.y, action.to.y, eased);
-      const distance = Math.hypot(action.to.x - action.from.x, action.to.y - action.from.y);
+      /* live where a man is involved, the staged point where one is not
+         — a shot at goal is aimed at the goal, not at a player */
+      const from = footPoint(modelFor(action.actor), 0.5) || action.from;
+      const to = (action.type === 'pass' ? footPoint(modelFor(action.secondary), 0.35) : null) || action.to;
+      x = mix(from.x, to.x, eased);
+      z = mix(from.y, to.y, eased);
+      const distance = Math.hypot(to.x - from.x, to.y - from.y);
       const loft = action.type === 'pass' ? Math.min(1.8, distance * 0.045) : Math.min(2.2, distance * 0.032);
       height = 0.22 + Math.sin(Math.PI * progress) * loft;
       if (action.type === 'save' && progress > 0.72) {
         x += (action.defendingSide === 1 ? -1 : 1) * (progress - 0.72) * 8;
         height += (progress - 0.72) * 1.2;
       }
+      MU.ball.x = x;
+      MU.ball.y = z;
+      inFlight = true;
+    }
+
+    if (!inFlight && carrierModel) {
+      const foot = footPoint(carrierModel, 0.62);
+      x = foot.x;
+      z = foot.y;
+      height = 0.22;
       MU.ball.x = x;
       MU.ball.y = z;
     }
@@ -1522,9 +1734,7 @@
     state.ballShadow.position.set(x - FIELD_LENGTH / 2, 0.017, z - FIELD_WIDTH / 2);
     const shadowScale = limit(1.15 - height * 0.10, 0.55, 1.05);
     state.ballShadow.scale.set(shadowScale, shadowScale, shadowScale);
-    const play = typeof playState === 'function' ? playState() : null;
-    const holder = play && play.holder;
-    const holderModel = holder && holder.p ? state.players.get(holder.p.id) : null;
+    const holderModel = carrierModel;
     state.indicator.visible = !!holderModel;
     if (holderModel) {
       state.indicator.position.set(holderModel.position.x, 0.027, holderModel.position.z);
@@ -1726,7 +1936,9 @@
       const boxWidth = Math.min(width - 28 * scale, Math.max(220 * scale, (name.length * 10 + 165) * scale));
       const boxHeight = 50 * scale;
       const boxX = (width - boxWidth) / 2;
-      const boxY = height - boxHeight - 20 * scale;
+      /* clear of the commentary ticker, which now runs along the very
+         bottom of the view — the two were printing over each other */
+      const boxY = height - boxHeight - 92 * scale;
       roundedRect(context, boxX, boxY, boxWidth, boxHeight, 7 * scale);
       context.fillStyle = 'rgba(5,9,14,.88)';
       context.fill();

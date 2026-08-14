@@ -83,15 +83,16 @@
           node.players.forEach((p) => {
             if (!p || !p.id) return;
             const names = Array.isArray(p.aliases) && p.aliases.length ? p.aliases : [p.name];
+            const club = node.name || null;
             names.forEach((alias) => {
               const key = fold(alias);
               /* An alias shared by two different ids is not an identity,
                  it is a coincidence — two real men called Adam Smith.
                  Those are dropped rather than merged. */
               if (!key) return;
-              if (index.has(key) && index.get(key).id !== p.id) { index.set(key, null); return; }
+              if (index.has(key) && index.get(key) && index.get(key).id !== String(p.id)) { index.set(key, null); return; }
               if (index.has(key) && index.get(key) === null) return;
-              index.set(key, { id: String(p.id), name: p.name });
+              index.set(key, { id: String(p.id), name: p.name, club: club });
             });
           });
         }
@@ -121,37 +122,83 @@
   /* ---------------------------------------------------------------
      THE SWEEP
      --------------------------------------------------------------- */
+  /* -----------------------------------------------------------------
+     AN ID IS AN IDENTITY. A NAME IS NOT.
+     -----------------------------------------------------------------
+     The first version of this swept the whole world on the folded name
+     and removed 1,884 players across 354 clubs, taking the game from
+     9,908 to 8,023. It "fixed" Jacquet and Onyeka and gutted nineteen
+     per cent of the squads doing it, because the generated name pool
+     collides: Sebastian Wagner at Bayern and Sebastian Wagner at
+     Schalke are two different made-up men, and real football is full of
+     this too — two Adam Smiths, two Ben Davieses, both in the sourced
+     data.
+
+     So the two cases are treated differently, and the distinction is
+     the whole fix:
+
+       a player the source can identify  ->  one man, one squad,
+                                             swept across the world
+       everybody else                    ->  swept within his own club
+                                             only, never across
+
+     The same name twice in one squad is always a bug — nobody plays
+     against himself. The same name at two clubs is only a bug when we
+     have an id saying it is one man.
+     ----------------------------------------------------------------- */
   function dedupeWorld() {
-    const report = { duplicates: 0, renamed: 0, clubs: 0, examples: [] };
+    const report = { duplicates: 0, sameSquad: 0, renamed: 0, clubs: 0, examples: [] };
     try {
       if (!G || !Array.isArray(G.clubs)) return report;
 
+      const dropped = new Set();
+
+      /* ---- pass one: identified players, across the whole world ----
+         WHICH COPY SURVIVES IS DECIDED BY THE SOURCE, NOT BY RATING.
+         Keeping the better-rated record looks reasonable and is wrong:
+         it took a man off Fleetwood Town because his other copy sat at
+         a bigger club with a higher number beside it, and a sourced
+         roster is supposed to be exactly what the source says. The test
+         that caught it — "Fleetwood Town squad depth changed, 18 where
+         19 was expected" — is guarding that on purpose.
+
+         The source already records which club he plays for. So that
+         club keeps him and the other one loses him, and every sourced
+         squad comes out the depth it is supposed to be. Rating only
+         breaks a tie the source cannot. */
+      if (!aliasIndex) aliasIndex = buildAliasIndex();
+      const homeClub = (player) => {
+        const known = aliasIndex.get(fold(player && player.name));
+        return known && known.club ? fold(known.club) : null;
+      };
+
       const best = new Map();
-      /* first pass: pick which record of each man to keep. The better
-         rating wins, and on a tie the one already at the club the
-         sourced data puts him at — but rating alone settles almost all
-         of them, so this stays simple. */
       G.clubs.forEach((club) => {
         (club.players || []).forEach((p) => {
           const id = identityOf(p);
-          if (!id) return;
+          if (!id || id.indexOf('espn:') !== 0) return;
           const held = best.get(id);
-          if (!held || (p.ovr || 0) > (held.player.ovr || 0)) best.set(id, { player: p, club });
+          if (!held) { best.set(id, { player: p, club }); return; }
+          const home = homeClub(p);
+          const hereIsHome = home && fold(club.name) === home;
+          const heldIsHome = home && fold(held.club.name) === home;
+          if (hereIsHome && !heldIsHome) { best.set(id, { player: p, club }); return; }
+          if (heldIsHome && !hereIsHome) return;
+          if ((p.ovr || 0) > (held.player.ovr || 0)) best.set(id, { player: p, club });
         });
       });
 
-      /* second pass: drop every other copy of a man we have already kept */
-      const dropped = new Set();
       G.clubs.forEach((club) => {
         const before = (club.players || []).length;
         club.players = (club.players || []).filter((p) => {
           const id = identityOf(p);
-          if (!id) return true;
+          if (!id || id.indexOf('espn:') !== 0) return true;
           const keep = best.get(id);
           if (keep && keep.player !== p) {
             dropped.add(p.id);
             if (report.examples.length < 8) {
-              report.examples.push(p.name + ' at ' + club.name + ' (kept ' + keep.player.name + ' at ' + keep.club.name + ')');
+              report.examples.push(p.name + ' at ' + club.name
+                + ' (kept ' + keep.player.name + ' at ' + keep.club.name + ')');
             }
             return false;
           }
@@ -159,6 +206,30 @@
         });
         const lost = before - club.players.length;
         if (lost) { report.duplicates += lost; report.clubs += 1; }
+      });
+
+      /* ---- pass two: everybody else, inside his own squad only ---- */
+      G.clubs.forEach((club) => {
+        const keptHere = new Map();
+        const before = (club.players || []).length;
+        club.players = (club.players || []).filter((p) => {
+          const id = identityOf(p);
+          if (!id) return true;
+          const held = keptHere.get(id);
+          if (!held) { keptHere.set(id, p); return true; }
+          /* keep the better of the two, drop the other */
+          if ((p.ovr || 0) > (held.ovr || 0)) {
+            dropped.add(held.id);
+            keptHere.set(id, p);
+            const at = club.players.indexOf(held);
+            if (at >= 0) club.players[at] = null;
+            return true;
+          }
+          dropped.add(p.id);
+          return false;
+        });
+        club.players = club.players.filter(Boolean);
+        report.sameSquad += before - club.players.length;
       });
 
       /* and give the survivor the spelling the source uses, so the two
