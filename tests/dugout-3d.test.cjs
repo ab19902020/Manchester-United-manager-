@@ -75,7 +75,15 @@ test('the touchline broadcast camera moves into the attack without losing stadiu
   const attack = renderer.cameraSpec({ x: 91, y: 28 }, { type: 'shot' }, 0, false);
 
   assert.equal(centre.mode, 'wide');
-  assert.ok(centre.position[1] >= 10 && centre.position[1] <= 12);
+  /* The band used to be 10-12, which pinned the old wide camera at 10.9m.
+     That height was deliberately dropped: at nearly eleven metres and
+     forty-three back the picture was a tactics board — you could read the
+     shape of the team and not a single face. A television camera sits
+     around six to eight metres up. The band is moved rather than widened,
+     and the assertions that carry the actual intent — the cinematic
+     camera drops below the wide one and pushes further up the pitch —
+     are unchanged below. */
+  assert.ok(centre.position[1] >= 7.5 && centre.position[1] <= 10);
   assert.equal(attack.mode, 'cinematic');
   assert.ok(attack.position[1] < centre.position[1]);
   assert.ok(attack.target[0] > centre.target[0]);
