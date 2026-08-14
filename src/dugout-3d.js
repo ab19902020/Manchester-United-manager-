@@ -1405,9 +1405,30 @@
     data.velocityX = mix(data.velocityX, (data.currentX - oldX) / Math.max(dt, 0.016), 0.24);
     data.velocityZ = mix(data.velocityZ, (data.currentZ - oldZ) / Math.max(dt, 0.016), 0.24);
     const speed = limit(Math.hypot(data.velocityX, data.velocityZ) / 7.5, 0, 1);
-    data.phase += dt * (2.7 + speed * 8.4);
-    const swing = Math.sin(data.phase) * (0.10 + speed * 0.85);
-    const bob = Math.abs(Math.cos(data.phase)) * speed * 0.035;
+
+    /* ---- how this particular man runs ----
+       Everybody shared one gait, so twenty-two players moved like one
+       player copied twenty-two times, which is most of why a crowded
+       midfield read as a diagram. These are seeded from the player's
+       own id, so they are his for the life of the save and the same
+       every time you watch him: a short quick stride, a long loping
+       one, arms high or low, a slight lean. The numbers stay narrow —
+       this is meant to be recognisable, not comic. */
+    if (data.gait == null) {
+      const rng = seeded(seedFrom('gait|' + dot.pl.p.id));
+      data.gait = {
+        cadence: 0.82 + rng() * 0.42,
+        stride: 0.80 + rng() * 0.45,
+        arms: 0.68 + rng() * 0.72,
+        bounce: 0.72 + rng() * 0.62,
+        lean: (rng() - 0.5) * 0.13,
+        offset: rng() * Math.PI * 2,
+      };
+    }
+    const gait = data.gait;
+    data.phase += dt * (2.7 + speed * 8.4) * gait.cadence;
+    const swing = Math.sin(data.phase + gait.offset) * (0.10 + speed * 0.85) * gait.stride;
+    const bob = Math.abs(Math.cos(data.phase + gait.offset)) * speed * 0.035 * gait.bounce;
     let facing = Math.abs(data.velocityX) + Math.abs(data.velocityZ) > 0.04 ? Math.atan2(data.velocityX, data.velocityZ) : model.rotation.y;
     if (action && action.to && (action.actorId === dot.pl.p.id || action.secondaryId === dot.pl.p.id)) {
       const destinationX = action.to.x - FIELD_LENGTH / 2;
@@ -1416,6 +1437,14 @@
     }
     model.rotation.y = mix(model.rotation.y, facing, smoothAmount(dt, 6));
     let pose = safePose(dot.pl.p.id, speed, swing, bob, data.velocityX >= 0 ? 1 : -1);
+    /* the arms and the lean are his too, and only while he is moving —
+       a man standing still should not be leaning into a sprint */
+    pose = {
+      ...pose,
+      armA: number(pose.armA, 0) * gait.arms,
+      armB: number(pose.armB, 0) * gait.arms,
+      rot: number(pose.rot, 0) + gait.lean * speed,
+    };
 
     if (action && action.actorId === dot.pl.p.id) {
       const progress = actionProgress(action, now);
@@ -1496,23 +1525,84 @@
     });
   }
 
+  /* ---------------------------------------------------------------
+     THE BALL BELONGS TO A PLAYER
+     ---------------------------------------------------------------
+     This is the reason the dugout did not look like football, and it
+     was one cause rather than several. Two systems were placing things
+     and they never agreed:
+
+       the player models eased toward their 2D dot positions, with
+       their own smoothing and their own lag
+
+       the ball either followed a separately-eased 2D ball position, or
+       — during a staged action — flew between `from` and `to`
+       coordinates that were SNAPSHOTTED ONCE when the action began
+
+     So by the time a pass landed, the receiver had moved on and the
+     ball arrived where he used to be. Nothing was ever at anybody's
+     feet, and because nothing was at anybody's feet, none of the
+     animation the file already had — the slide tackles, the kick
+     swings, the keeper's dive, the goal celebration — read as
+     connected to an object. It looked like men running near a ball.
+
+     Both ends are taken from the live model instead. In possession the
+     ball is planted at the carrier's feet, a little in front of him in
+     the direction he is facing, and it inherits its smoothness from
+     him rather than easing separately. In flight it is recomputed
+     every frame from where the passer and the receiver actually are,
+     so the ball follows the man it was played to.
+     --------------------------------------------------------------- */
+  function modelFor(pl) {
+    try { return pl && pl.p ? state.players.get(pl.p.id) : null; } catch (error) { return null; }
+  }
+
+  /* just ahead of the boot, in the direction he is running */
+  function footPoint(model, reach) {
+    if (!model) return null;
+    const out = number(reach, 0.62);
+    return {
+      x: model.position.x + FIELD_LENGTH / 2 + Math.sin(model.rotation.y) * out,
+      y: model.position.z + FIELD_WIDTH / 2 + Math.cos(model.rotation.y) * out,
+    };
+  }
+
   function updateBall(now, action) {
     if (!state.ball || !MU || !MU.ball) return;
+    const play = typeof playState === 'function' ? playState() : null;
+    const carrier = play && play.holder;
+    const carrierModel = modelFor(carrier);
     let x = number(MU.ball.x, FIELD_LENGTH / 2);
     let z = number(MU.ball.y, FIELD_WIDTH / 2);
     let height = Math.max(0.22, number(MU.ballH, 0) + 0.22);
+    let inFlight = false;
+
     if (action && ['pass', 'shot', 'goal', 'save', 'penalty'].includes(action.type)) {
       const progress = actionProgress(action, now);
       const eased = progress < 0.5 ? 2 * progress * progress : 1 - ((-2 * progress + 2) ** 2) / 2;
-      x = mix(action.from.x, action.to.x, eased);
-      z = mix(action.from.y, action.to.y, eased);
-      const distance = Math.hypot(action.to.x - action.from.x, action.to.y - action.from.y);
+      /* live where a man is involved, the staged point where one is not
+         — a shot at goal is aimed at the goal, not at a player */
+      const from = footPoint(modelFor(action.actor), 0.5) || action.from;
+      const to = (action.type === 'pass' ? footPoint(modelFor(action.secondary), 0.35) : null) || action.to;
+      x = mix(from.x, to.x, eased);
+      z = mix(from.y, to.y, eased);
+      const distance = Math.hypot(to.x - from.x, to.y - from.y);
       const loft = action.type === 'pass' ? Math.min(1.8, distance * 0.045) : Math.min(2.2, distance * 0.032);
       height = 0.22 + Math.sin(Math.PI * progress) * loft;
       if (action.type === 'save' && progress > 0.72) {
         x += (action.defendingSide === 1 ? -1 : 1) * (progress - 0.72) * 8;
         height += (progress - 0.72) * 1.2;
       }
+      MU.ball.x = x;
+      MU.ball.y = z;
+      inFlight = true;
+    }
+
+    if (!inFlight && carrierModel) {
+      const foot = footPoint(carrierModel, 0.62);
+      x = foot.x;
+      z = foot.y;
+      height = 0.22;
       MU.ball.x = x;
       MU.ball.y = z;
     }
@@ -1522,9 +1612,7 @@
     state.ballShadow.position.set(x - FIELD_LENGTH / 2, 0.017, z - FIELD_WIDTH / 2);
     const shadowScale = limit(1.15 - height * 0.10, 0.55, 1.05);
     state.ballShadow.scale.set(shadowScale, shadowScale, shadowScale);
-    const play = typeof playState === 'function' ? playState() : null;
-    const holder = play && play.holder;
-    const holderModel = holder && holder.p ? state.players.get(holder.p.id) : null;
+    const holderModel = carrierModel;
     state.indicator.visible = !!holderModel;
     if (holderModel) {
       state.indicator.position.set(holderModel.position.x, 0.027, holderModel.position.z);

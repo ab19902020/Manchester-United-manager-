@@ -40,6 +40,7 @@ function gameHtml() {
     'src/contract-score.js',
     'src/squad-identity.js',
     'src/dugout-drama.js',
+    'src/dugout-commentary.js',
     'src/ui-shell.js',
   ]) {
     html = inlineScript(html, fs.readFileSync(path.join(root, filename), 'utf8'), filename);
