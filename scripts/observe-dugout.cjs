@@ -91,6 +91,10 @@ async function main() {
       const current = state.timeline && state.timeline.current;
       const type = current && current.type;
       if (type) obs.seen[type] = (obs.seen[type] || 0) + 1;
+      if (type && current.technique) {
+        obs.tech = obs.tech || {};
+        obs.tech[current.technique] = (obs.tech[current.technique] || 0) + 1;
+      }
 
       /* is the ball on the man who has it, when nothing is in flight */
       try {
@@ -211,6 +215,7 @@ async function main() {
     (near + far) ? ((100 * near / (near + far)).toFixed(1) + '%') : 'n/a');
   console.log('goal celebration ', obs.goal ? JSON.stringify(obs.goal) : 'NEVER SAW A GOAL');
   console.log('ball in the net  ', obs.ballInNet || 0, 'frames past the goal line');
+  console.log('techniques seen  ', obs.tech ? JSON.stringify(obs.tech) : 'NONE — classifier never matched');
   console.log('keeper save      ', obs.save ? JSON.stringify(obs.save) : 'NEVER SAW A SAVE');
   console.log('page errors      ', errors.length ? errors.slice(0, 3) : 'none');
 

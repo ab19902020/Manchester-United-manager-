@@ -221,6 +221,33 @@
     }));
   }
 
+  /* ---------------------------------------------------------------
+     HOW IT WAS DONE, FROM WHAT THE MATCH SAID
+     ---------------------------------------------------------------
+     Every chance was drawn the same way: a leg swings, the ball
+     travels. So a header, a curling free kick, a cross to the far post
+     and a twenty-five yard drive were the same animation with
+     different captions underneath.
+
+     The engine already knows the difference and says so out loud — its
+     commentary carries 73 headers, 30 curls, 26 crosses, 7 volleys and
+     4 overhead kicks. Nothing new has to be invented and nothing has to
+     be scripted at random: the technique is read from the line the
+     engine wrote about the event it just simulated, so the picture and
+     the words cannot disagree.
+     --------------------------------------------------------------- */
+  function techniqueOf(text) {
+    const line = String(text || '').replace(/<[^>]*>/g, '');
+    if (/overhead|bicycle|scissor/i.test(line)) return 'overhead';
+    if (/\bhead(s|ed|er)?\b|nods? it|glances it/i.test(line)) return 'header';
+    if (/half-volley|volley/i.test(line)) return 'volley';
+    if (/curls?|bends? it|whips? it (round|in)/i.test(line)) return 'curl';
+    if (/cross(es)?\b|whips a cross|to the (near|far) post/i.test(line)) return 'cross';
+    if (/chips?|lobs?|dinks?/i.test(line)) return 'chip';
+    if (/lets fly|rifles|thunder|drills?|from (twenty|twenty-five|thirty|distance)/i.test(line)) return 'drive';
+    return null;
+  }
+
   function cameraSpec(ball, action, sideIndex, wide) {
     const fieldX = limit(number(ball && ball.x, FIELD_LENGTH / 2), 0, FIELD_LENGTH) - FIELD_LENGTH / 2;
     const fieldZ = limit(number(ball && ball.y, FIELD_WIDTH / 2), 0, FIELD_WIDTH) - FIELD_WIDTH / 2;
@@ -1541,6 +1568,8 @@
         next.to.x = attackingSide === 1 ? 0.4 : 104.6;
       }
     }
+    /* the technique comes from the engine's own words about this event */
+    next.technique = techniqueOf(next.text) || techniqueOf(next.commentary) || null;
     state.timeline.current = next;
     return next;
   }
@@ -1670,9 +1699,29 @@
 
     if (action && action.actorId === dot.pl.p.id) {
       const progress = actionProgress(action, now);
-      if (action.type === 'shot' || action.type === 'pass' || action.type === 'penalty') {
+      if (action.type === 'shot' || action.type === 'pass' || action.type === 'penalty' || action.type === 'goal') {
         const kick = Math.sin(limit(progress * 1.5, 0, 1) * Math.PI);
-        pose = { ...pose, legA: 1.15 * kick - 0.2, legB: -0.18, armA: -0.7 * kick, armB: 0.52 * kick, rot: -0.10 * kick };
+        const tech = action.technique;
+        if (tech === 'header') {
+          /* off the ground, chest up, arms out for balance — no leg swing */
+          pose = { ...pose, lift: 0.52 * kick, legA: -0.30 * kick, legB: 0.34 * kick,
+            armA: -1.15 * kick, armB: -1.05 * kick, rot: -0.16 * kick };
+        } else if (tech === 'overhead') {
+          pose = { ...pose, lift: 0.72 * kick, legA: 1.9 * kick, legB: -0.9 * kick,
+            armA: 1.2 * kick, armB: 1.1 * kick, rot: -1.15 * kick, down: 0.2 * kick };
+        } else if (tech === 'volley') {
+          pose = { ...pose, legA: 1.55 * kick - 0.2, legB: -0.30, armA: -1.0 * kick, armB: 0.8 * kick,
+            rot: -0.30 * kick, lift: 0.16 * kick };
+        } else if (tech === 'curl') {
+          /* struck across the ball, so he opens up and follows through */
+          pose = { ...pose, legA: 1.05 * kick - 0.2, legB: -0.24, armA: -0.95 * kick, armB: 0.7 * kick,
+            rot: -0.34 * kick };
+        } else if (tech === 'cross') {
+          pose = { ...pose, legA: 1.25 * kick - 0.2, legB: -0.2, armA: -0.85 * kick, armB: 0.66 * kick,
+            rot: -0.22 * kick };
+        } else {
+          pose = { ...pose, legA: 1.15 * kick - 0.2, legB: -0.18, armA: -0.7 * kick, armB: 0.52 * kick, rot: -0.10 * kick };
+        }
       } else if (action.type === 'goal') {
         if (progress < 0.34) {
           const kick = Math.sin(limit(progress / 0.34, 0, 1) * Math.PI);
@@ -1834,8 +1883,22 @@
       x = mix(from.x, to.x, eased);
       z = mix(from.y, to.y, eased);
       const distance = Math.hypot(to.x - from.x, to.y - from.y);
-      const loft = action.type === 'pass' ? Math.min(1.8, distance * 0.045) : Math.min(2.2, distance * 0.032);
+      let loft = action.type === 'pass' ? Math.min(1.8, distance * 0.045) : Math.min(2.2, distance * 0.032);
+      /* the flight follows the technique the commentary described */
+      const tech = action.technique;
+      if (tech === 'cross') loft = Math.max(loft, 3.4);
+      else if (tech === 'chip') loft = Math.max(loft, 4.2);
+      else if (tech === 'header') loft = Math.max(loft * 0.5, 1.1);
+      else if (tech === 'drive') loft = Math.min(loft, 0.75);
+      else if (tech === 'volley') loft = Math.min(loft, 1.4);
       height = 0.22 + Math.sin(Math.PI * progress) * loft;
+      if (tech === 'curl') {
+        /* a curled ball leaves straight and bends late, so the sideways
+           offset is weighted toward the end of the flight rather than
+           spread evenly along it */
+        const bend = Math.sin(Math.PI * progress) * (progress * 3.1);
+        z += bend * (action.attackingSide === 1 ? -1 : 1);
+      }
       if (action.type === 'goal' && action.netHeight != null) {
         /* finish in the net at the height it was struck to reach,
            rather than dropping back to the turf as it crosses */
