@@ -56598,6 +56598,117 @@ faceSpec=function(p){
  return s};
 
 /*#wE4_nations.js#*/
+/*#wE6_lscols.js#*/
+
+/* =====================================================================
+   wE6_lscols — the landscape column that nothing was using
+   ---------------------------------------------------------------------
+   The landscape shell puts #view in two columns, which is the whole
+   point of turning the phone. Measured at 896x414, with the view 830
+   wide and the columns 396 each:
+
+     home        396 x80   396 x486   396 x80   396 x486   ... alternating
+     league      396 x80   396 x486                        ... alternating
+     squad       396 x80  h2078       396 x486 h14
+     transfers   396 x80  h3202       396 x80  h224
+
+   Home and league are exactly right — cards land in both columns and
+   the screen is full. Squad and transfers are not: one item is two to
+   three thousand pixels tall, it sits in the left column, and the only
+   thing that follows it is a fourteen-pixel caption. So for the entire
+   length of the scroll the right-hand half of a landscape phone is
+   empty, which is worse than the portrait layout it replaced.
+
+   ---------------------------------------------------------------------
+   The rule that separates the two cases is "is this item much taller
+   than the screen", and CSS cannot ask that — there is no container
+   query for an element's own height, and no selector for it. Nor is a
+   hard-coded list of class names right: it would be guessing at which
+   screens have a long list today and would be wrong the first time one
+   is added.
+
+   So it is measured after each render. Anything substantially taller
+   than the viewport takes the full width, and the list inside it runs
+   two-up — which is what the width was for. Anything else keeps the
+   two-column behaviour that already works.
+   ===================================================================== */
+
+(function lsColCSS(){
+ const old=document.getElementById('wE6');if(old)old.remove();
+ const st=document.createElement('style');st.id='wE6';
+ st.textContent=[
+ '@media (orientation:landscape) and (min-width:660px) and (max-width:1023px){',
+  /* a very tall block takes the whole width rather than half of it */
+  '#app>#view>.ls-tall{grid-column:1/-1}',
+  /* and the run of players inside it goes two-up. The group headings
+     are siblings of the list rather than children, so GOALKEEPERS still
+     spans the width and the keepers pair off underneath it. */
+  '#app>#view>.ls-tall .plist{display:grid;',
+  ' grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 10px;align-items:start}',
+  '#app>#view>.ls-tall .plist>*{min-width:0}',
+  /* the separator that reads as a list on one column reads as a grid
+     line on two, so it goes and the gap does the work */
+  '#app>#view>.ls-tall .plist>.prow{border-bottom:0}',
+  /* a half-width card with nothing beside it leaves half a screen empty,
+     so it takes the width instead */
+  '#app>#view>.ls-solo{grid-column:1/-1}',
+ '}'
+ ].join('');
+ document.head.appendChild(st)})();
+
+function lsCols(){
+ try{
+  const view=document.getElementById('view');
+  if(!view)return;
+  const wide=(typeof lsWide==='function')&&lsWide();
+  const kids=[...view.children];
+  if(!wide){kids.forEach(el=>el.classList.remove('ls-tall','ls-solo'));return}
+  const h=view.clientHeight||window.innerHeight||414;
+
+  /* pass one — the long scrolling lists take the width */
+  kids.forEach(el=>{
+   let tall=false;
+   try{tall=el.getBoundingClientRect().height>h*1.3}catch(e){}
+   el.classList.toggle('ls-tall',tall);
+   el.classList.remove('ls-solo')});
+
+  /* pass two — which items are still sharing a row. Reading a width here
+     settles the layout the classes above just changed, so these are the
+     widths after pass one rather than before it. Anything close to the
+     full width is already spanning, whether from this layer or from the
+     landscape shell's own list of full-width elements — measuring it
+     avoids keeping a second copy of that list in step with the first. */
+  const vw=view.clientWidth||1;
+  let run=[];
+  const flush=()=>{
+   /* an odd run leaves its last item alone on a row */
+   if(run.length%2===1)run[run.length-1].classList.add('ls-solo');
+   run=[]};
+  kids.forEach(el=>{
+   let w=0;
+   try{w=el.getBoundingClientRect().width}catch(e){}
+   if(w>vw*0.75)flush(); else run.push(el)});
+  flush();
+ }catch(e){}}
+
+/* after the paint, so the heights being measured are the ones on screen */
+function lsColsSoon(){
+ try{
+  if(typeof requestAnimationFrame==='function')requestAnimationFrame(lsCols);
+  else lsCols();
+ }catch(e){lsCols()}}
+
+const _renderLSC=render;
+render=function(){
+ const r=_renderLSC.apply(this,arguments);
+ lsColsSoon();
+ return r};
+
+window.addEventListener('resize',lsColsSoon);
+window.addEventListener('orientationchange',lsColsSoon);
+lsColsSoon();
+
+/*#wE6_lscols.js#*/
 /*#wE2_landscape.js#*/
 
 /* =====================================================================
@@ -56831,11 +56942,31 @@ function lsUnpin(){
 
 /* the grid changes shape when the phone turns, and a canvas sized for
    the old shape stays sized for it until something asks again */
+/* Reported from a real phone: turning it sideways jumped you into the
+   last match you played. This was why. The handler called render()
+   unconditionally on every rotation, and render() rebuilds whatever the
+   game currently thinks it is showing — which, if MU.m is still holding
+   a finished match, is the match screen. Rotating the phone was
+   effectively pressing "resume match".
+
+   Nothing here needs a re-render anyway. The landscape layout is CSS
+   and reflows on its own when the viewport changes; the only things
+   that genuinely need telling are the canvases, which have a pixel size
+   rather than a CSS one, and the edge-fade scanner.
+
+   So: inside a match, refit the canvases and touch nothing else.
+   Outside one, repaint the header — which is the only part that reads
+   the orientation — and leave the view alone. */
 (function lsTurn(){
+ const inMatch=()=>{try{
+  const ms=document.getElementById('matchScreen');
+  return !!(ms&&ms.offsetParent!==null);
+ }catch(e){return false}};
  const kick=()=>{try{
-  render();
-  if(typeof fitMatchCanvas==='function'){
-   fitMatchCanvas('#pitchCanvas',0.66);fitMatchCanvas('#dugCanvas',0.74)}
+  if(inMatch()){
+   if(typeof fitMatchCanvas==='function'){
+    fitMatchCanvas('#pitchCanvas',0.66);fitMatchCanvas('#dugCanvas',0.74)}
+  }else if(typeof renderHdr==='function'){renderHdr()}
   if(typeof xsScan==='function')xsScan();
  }catch(e){}};
  let t=0;
@@ -56843,117 +56974,7 @@ function lsUnpin(){
  window.addEventListener('orientationchange',on);
  window.addEventListener('resize',on)})();
 
-/*#wE2_landscape.js#*//*#wE6_lscols.js#*/
-
-/* =====================================================================
-   wE6_lscols — the landscape column that nothing was using
-   ---------------------------------------------------------------------
-   The landscape shell puts #view in two columns, which is the whole
-   point of turning the phone. Measured at 896x414, with the view 830
-   wide and the columns 396 each:
-
-     home        396 x80   396 x486   396 x80   396 x486   ... alternating
-     league      396 x80   396 x486                        ... alternating
-     squad       396 x80  h2078       396 x486 h14
-     transfers   396 x80  h3202       396 x80  h224
-
-   Home and league are exactly right — cards land in both columns and
-   the screen is full. Squad and transfers are not: one item is two to
-   three thousand pixels tall, it sits in the left column, and the only
-   thing that follows it is a fourteen-pixel caption. So for the entire
-   length of the scroll the right-hand half of a landscape phone is
-   empty, which is worse than the portrait layout it replaced.
-
-   ---------------------------------------------------------------------
-   The rule that separates the two cases is "is this item much taller
-   than the screen", and CSS cannot ask that — there is no container
-   query for an element's own height, and no selector for it. Nor is a
-   hard-coded list of class names right: it would be guessing at which
-   screens have a long list today and would be wrong the first time one
-   is added.
-
-   So it is measured after each render. Anything substantially taller
-   than the viewport takes the full width, and the list inside it runs
-   two-up — which is what the width was for. Anything else keeps the
-   two-column behaviour that already works.
-   ===================================================================== */
-
-(function lsColCSS(){
- const old=document.getElementById('wE6');if(old)old.remove();
- const st=document.createElement('style');st.id='wE6';
- st.textContent=[
- '@media (orientation:landscape) and (min-width:660px) and (max-width:1023px){',
-  /* a very tall block takes the whole width rather than half of it */
-  '#app>#view>.ls-tall{grid-column:1/-1}',
-  /* and the run of players inside it goes two-up. The group headings
-     are siblings of the list rather than children, so GOALKEEPERS still
-     spans the width and the keepers pair off underneath it. */
-  '#app>#view>.ls-tall .plist{display:grid;',
-  ' grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 10px;align-items:start}',
-  '#app>#view>.ls-tall .plist>*{min-width:0}',
-  /* the separator that reads as a list on one column reads as a grid
-     line on two, so it goes and the gap does the work */
-  '#app>#view>.ls-tall .plist>.prow{border-bottom:0}',
-  /* a half-width card with nothing beside it leaves half a screen empty,
-     so it takes the width instead */
-  '#app>#view>.ls-solo{grid-column:1/-1}',
- '}'
- ].join('');
- document.head.appendChild(st)})();
-
-function lsCols(){
- try{
-  const view=document.getElementById('view');
-  if(!view)return;
-  const wide=(typeof lsWide==='function')&&lsWide();
-  const kids=[...view.children];
-  if(!wide){kids.forEach(el=>el.classList.remove('ls-tall','ls-solo'));return}
-  const h=view.clientHeight||window.innerHeight||414;
-
-  /* pass one — the long scrolling lists take the width */
-  kids.forEach(el=>{
-   let tall=false;
-   try{tall=el.getBoundingClientRect().height>h*1.3}catch(e){}
-   el.classList.toggle('ls-tall',tall);
-   el.classList.remove('ls-solo')});
-
-  /* pass two — which items are still sharing a row. Reading a width here
-     settles the layout the classes above just changed, so these are the
-     widths after pass one rather than before it. Anything close to the
-     full width is already spanning, whether from this layer or from the
-     landscape shell's own list of full-width elements — measuring it
-     avoids keeping a second copy of that list in step with the first. */
-  const vw=view.clientWidth||1;
-  let run=[];
-  const flush=()=>{
-   /* an odd run leaves its last item alone on a row */
-   if(run.length%2===1)run[run.length-1].classList.add('ls-solo');
-   run=[]};
-  kids.forEach(el=>{
-   let w=0;
-   try{w=el.getBoundingClientRect().width}catch(e){}
-   if(w>vw*0.75)flush(); else run.push(el)});
-  flush();
- }catch(e){}}
-
-/* after the paint, so the heights being measured are the ones on screen */
-function lsColsSoon(){
- try{
-  if(typeof requestAnimationFrame==='function')requestAnimationFrame(lsCols);
-  else lsCols();
- }catch(e){lsCols()}}
-
-const _renderLSC=render;
-render=function(){
- const r=_renderLSC.apply(this,arguments);
- lsColsSoon();
- return r};
-
-window.addEventListener('resize',lsColsSoon);
-window.addEventListener('orientationchange',lsColsSoon);
-lsColsSoon();
-
-/*#wE6_lscols.js#*/
+/*#wE2_landscape.js#*/
 showStart();
 </script>
 <script src="src/career-store.js"></script>
