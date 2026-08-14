@@ -652,8 +652,19 @@
       addPitchLine(parent, 5.5, 0.09, goalLine - side * 2.75, -9.16, 0);
       addPitchLine(parent, 5.5, 0.09, goalLine - side * 2.75, 9.16, 0);
       addPitchLine(parent, 18.32, 0.09, goalLine - side * 5.5, 0, Math.PI / 2);
-      curveLine(parent, 9.15, side > 0 ? Math.PI * 0.63 : -Math.PI * 0.37, Math.PI * 0.74,
-        goalLine - side * 11, 0, 1);
+      /* THE D. It is the part of a 9.15m circle centred on the penalty
+         spot that falls OUTSIDE the penalty area, and nothing else —
+         the rest of that circle is inside the box and is not marked.
+
+         The spot is 11m from the goal line and the box edge is 16.5m,
+         so the box is 5.5m from the spot and the arc leaves the line at
+         acos(5.5 / 9.15) = 53.05 degrees either side of straight out.
+         That is a span of 1.8519 radians, not the 2.325 that was here,
+         which is why the arc curled back inside the eighteen-yard box
+         instead of sitting in front of it. */
+      const arcHalf = Math.acos(5.5 / 9.15);
+      const arcFrom = side > 0 ? Math.PI - arcHalf : -arcHalf;
+      curveLine(parent, 9.15, arcFrom, arcHalf * 2, goalLine - side * 11, 0, 1);
       addMesh(parent, new THREE.CylinderGeometry(0.11, 0.11, 0.035, 12), lineMaterial(), [goalLine - side * 11, 0.055, 0], null, false);
     });
 
@@ -1120,8 +1131,13 @@
     const kitTrim = goalkeeper ? kit.goalkeeperTrim : kit.trim;
     const shirtMap = shirtTexture(player, club, kit, goalkeeper);
     const shirtMaterial = surfaceMaterial({ map: shirtMap, color: 0xffffff, roughness: 0.66, metalness: 0.01 });
+    /* Shirt, shorts and socks were shirt-colour, trim, trim — so a
+       player read as one flat colour with a band in it. A real kit is
+       three bands and that is most of how you pick a man out at
+       distance, so the socks go back to the shirt colour and the shorts
+       stay the contrast between them. */
     const shortsMaterial = surfaceMaterial({ color: kitTrim, roughness: 0.72 });
-    const sockMaterial = surfaceMaterial({ color: kitTrim, roughness: 0.82 });
+    const sockMaterial = surfaceMaterial({ color: kitPrimary, roughness: 0.82 });
     const skinMaterial = surfaceMaterial({ color: skin, roughness: 0.76 });
     const hairMaterial = surfaceMaterial({ color: hair, roughness: 0.9 });
     const bootMaterial = surfaceMaterial({ color: 0x101419, roughness: 0.54 });
