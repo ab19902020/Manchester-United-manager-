@@ -1,7 +1,7 @@
 # Work order for Codex — The Results Business
 
-**Written by:** Claude Opus (directing) · **Current as of commit:** `878f70a`
-**Last updated:** 10 August 2026 (cycle 3)
+**Written by:** Claude Opus (directing) · **Current as of commit:** `6b2b436`
+**Last updated:** 10 August 2026 (cycle 4)
 
 ---
 
@@ -96,24 +96,52 @@ All six audit findings are fixed in `64a67bc`.
 
 ## Do these now
 
-### 1. Per-player appearance facts, so the faces stop being random
+### 0. Correcting what I told you last cycle — please read this first
 
-The avatars are the next thing to lift. The generator is seeded from
-`hashStr('face'+p.id+p.name)` and nothing else — so nationality and age, which the
-game already stores, have no effect on any face. A 22-year-old Senegalese winger and
-a 34-year-old Norwegian centre-half are drawn from the same uniform distribution.
-That is why they read as generic.
+**I was wrong about the face generator, and the brief below has been rewritten.**
+I wrote that it is seeded from `hashStr('face'+p.id+p.name)` "and nothing else", so
+nationality and age have no effect. That is the base definition at line 3437 of a
+file where `faceSpec` is overridden seven times and `face` six. The live one already
+does most of what I asked for: `NAT_LOOK` carries a skin and hair distribution for
+77 nations with a confederation fallback, `PLAYER_LOOK` names 346 individuals,
+`MUN_FACES` 40, and age already drives greying and balding. I described the first
+layer as if it were the last. Apologies — if you had started from that brief you
+would have rebuilt something that already existed.
 
-**I am rewriting the generator** to be driven by attributes rather than a hash.
-What I need from you is the attributes, because they are facts and facts are yours.
+I found it by measuring a live world instead of reading the source, which is what I
+should have done before writing the brief. **The real gaps were coverage, not
+design, and I have now closed the ones that were mine:**
 
-Per player, for the Premier League and Championship first (the two divisions with
-authored squads), then the rest of England:
+- 1,635 players of 9,906 (17%) had no nationality at all — the filler that pads an
+  authored squad to twenty-two, about seven per club in every division. They all
+  fell back to one generic European distribution, which is a large part of why the
+  portraits read as samey. `assignNations()` already existed and was simply never
+  reached after the squads were padded. Fixed in `c6e64a6`, and every player now
+  gets one at birth in `genPlayer`.
+- Four nation codes fell to the generic default (MNE, MKD, GEO, ARM — 79 players).
+  Added. The other ten unknown codes already resolved correctly by confederation.
+- The portraits themselves, and three real drawing defects, in `6b2b436`.
 
-- **nationality** — the game has a `nat` field and I do not trust its coverage.
-  Report how many players have one, how many are wrong, and fix them from source.
-- **date of birth or age**
-- **height** and, where published, **weight or build**
+**So do not do a nationality sweep — it is done.** What is still genuinely missing
+is below.
+
+### 1. Height, which no player in the game has
+
+Measured: **0 of 9,906 players carry a height.** Not sparse — absent. It is the one
+appearance fact the game has no version of, and the only one I cannot derive
+honestly, because a made-up centimetre figure displayed next to a real player's name
+is a claim about a real person rather than a drawing decision.
+
+What I did instead is derive a *build* from strength, heading, agility and
+acceleration, which the game already stores, and let it bias the jaw. That is
+defensible because it is a drawing, not a measurement, and I am not displaying a
+number. But it is a substitute for the real thing.
+
+So: **published heights, for the Premier League and Championship first**, then the
+rest of England. Source and read date per player as usual. If you get them, I will
+show them on the profile and feed them into the build instead of the proxy.
+
+Weight is lower value and worse sourced — take it only where it comes free.
 
 **And the harder one, which is a decision rather than a task.** What actually makes
 a face recognisable is skin tone and hair, and neither is published as text
