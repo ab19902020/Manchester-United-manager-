@@ -56,6 +56,7 @@ function gameHtml() {
     'src/cup-calendar.js',
     'src/trophy-room.js',
     'src/world-seed.js',
+    'src/transfer-search.js',
   ]) {
     html = inlineScript(html, fs.readFileSync(path.join(root, filename), 'utf8'), filename);
   }

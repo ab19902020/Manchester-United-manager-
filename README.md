@@ -62,6 +62,8 @@ GitHub Actions runs the same checks on every pull request.
 - `src/press-questions.js` — twenty-six more press topics, weighted toward the ordinary week.
 - `src/press-voice.js` — British male voice selection, and a pool that cannot fall back to a woman.
 - `src/transfer-structure.js` — the manager's choice of how a fee is paid, and what a selling club charges to wait.
+- `src/transfer-search.js` — free agents in the market search, a contract filter, and the
+  search above the money rather than below it.
 - `src/tactics-token.js` — fitness as the ring on the shirt and form as a pill on it,
   so the name and position under it are a fixed two lines that cannot overlap the next row.
 - `src/name-clash.js` — stops a generated player being given a real player's name.
