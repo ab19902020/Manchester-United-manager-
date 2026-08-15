@@ -139,6 +139,28 @@
 
 ### Added
 
+- **A story that runs alongside, and cannot touch the football.** A local
+  journalist — one man for the career, with a name, a paper and one of four
+  temperaments, generated once and stored — writes a column at the turn of every
+  month, assembled entirely from what actually happened: the record, the goals for
+  and against, the movement in the table, the high point and the low one, who is
+  scoring and who is making them. He also notices the things the save already knew
+  and never said: the academy boy who made his debut, the captain at thirty-four in
+  the last year of his contract, a fiftieth goal, a hundredth appearance, the man
+  you sold who is scoring somewhere else. His opinion follows your results instead
+  of leading them.
+
+  **The rule is the design: it reads game state and never writes anything the
+  engine reads back.** No morale nudge, no reputation bump, nothing that shifts a
+  fee, a rating or a scoreline — a player who never opens one of these letters
+  plays exactly the same game as one who reads every one. That is not a promise
+  but a test: the suite snapshots every club, player, fixture and competition,
+  drives the whole layer hard, and asserts nothing changed but the layer's own
+  drawer. The columns are also filed rather than only posted, because the inbox
+  caps at ninety and ordinary post pushes them out — measured across two 300-day
+  careers, one ended with seven still in the tray and the other with one. They are
+  kept, and readable from the Media centre.
+
 - **A statistics centre, built on numbers the game was already keeping.** Every
   match, for every player in the world, the engine has been banking passes
   attempted and completed, key passes, tackles and tackles won, interceptions,

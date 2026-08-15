@@ -261,16 +261,35 @@ have an accurate open list than a tidy one.
 
 ---
 
-## The rule for the story layer, so you know the constraint
+## The story layer is in, and here is how it is kept away from your numbers
 
-I am building a narrative layer — a journalist who follows the career, a rival
-manager, player arcs, a season retrospective. **It reads game state and never
-writes anything the engine reads back.** No morale nudge, no reputation bump,
-nothing that shifts a fee or a scoreline. The acceptance test is a seeded season
-run with the layer on and off producing identical results.
+`src/story.js` is built and merged: a local journalist who writes a monthly
+column, plus the moments the save already knew and never said — an academy debut,
+a fiftieth goal, the captain at thirty-four in his last contract year, the man you
+sold scoring elsewhere.
 
-If you ever see it touching a number of yours, that is a bug and I want to hear
-about it.
+**It reads game state and never writes anything the engine reads back.** No morale
+nudge, no reputation bump, nothing that shifts a fee, a rating or a scoreline.
+
+I could not test that the way I told you I would. The plan was a seeded season run
+with the layer on and off, compared — but world generation is not deterministic
+(see task 1), so there are no two identical seasons to compare. `tests/story.test.cjs`
+takes the stronger route instead: it snapshots every club, player, fixture and
+competition, drives the whole layer hard, and asserts the only thing that changed
+is `G.story`, the layer's own drawer. If you add state the engine reads and it is
+not in that snapshot, the test gets weaker — so if you introduce one, please add it
+to the snapshot, or tell me and I will.
+
+**If you ever see the story layer touching a number of yours, that is a bug and I
+want to hear about it.**
+
+One thing in it is worth your attention because it will bite you the same way it
+bit me twice today: **`class`, `const` and `let` declarations at the top level are
+NOT on `window`.** `class MatchSim` and `const ACTIONS = {}` are both global
+lexical bindings, so `window.MatchSim` and `window.ACTIONS` are `undefined`, and a
+hook guarded on either installs nothing and reports nothing — it fails completely
+silently. I lost a full career's worth of match-rating logging to the first and
+both of this module's action hooks to the second. Use the bare identifier.
 
 ---
 
