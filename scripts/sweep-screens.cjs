@@ -23,6 +23,7 @@
  *   spill      does anything stick out past the side of the view
  *   through    do two boxes intersect
  *   squashed   is a box shorter than the content inside it
+ *   tokens     do two tactics tokens, or their pills, overlap
  *
  * The third is the one that would have caught it: measured after the
  * report, `.pitchbox` on the tactics screen came back clientHeight=0
@@ -119,6 +120,47 @@ async function walk(page, orientation) {
           }
         }
 
+        /* 3b. THE TACTICS TOKENS, WHICH THIS SWEEP COULD NOT SEE.
+              `.tslot` is absolutely positioned inside the pitch, so it is
+              not a `:scope > *` child and not a `.card` or `.sec` — the
+              overlap pass at 2 never looked at one. A screenshot four
+              months into a season showed names and fitness lines running
+              through the row below while this reported 0 faults.
+
+              The pills also hang outside the token on purpose
+              (`left:-7px`), and an overflowing child does not extend its
+              parent's rect, so measuring `.tslot` alone still misses
+              them. Every visible piece is measured. */
+        const pieces = [];
+        root.querySelectorAll('.tslot').forEach((el) => {
+          const nm = el.querySelector('.nm');
+          const who = (nm ? nm.textContent.trim() : '') || String(el.dataset.v || '?');
+          [['token', el], ['form', el.querySelector('.tvit')],
+            ['ovr', el.querySelector('.jov')], ['name', nm],
+            ['pos', el.querySelector('.ps')]].forEach((pair) => {
+            const node = pair[1];
+            if (!node) return;
+            const cs = getComputedStyle(node);
+            if (cs.display === 'none' || cs.visibility === 'hidden') return;
+            const b = node.getBoundingClientRect();
+            if (b.width < 1 || b.height < 1) return;
+            pieces.push({ who, kind: pair[0], b });
+          });
+        });
+        const tokens = [];
+        for (let i = 0; i < pieces.length; i += 1) {
+          for (let j = i + 1; j < pieces.length; j += 1) {
+            const a = pieces[i]; const b = pieces[j];
+            if (a.who === b.who) continue;
+            const ox = Math.min(a.b.right, b.b.right) - Math.max(a.b.left, b.b.left);
+            const oy = Math.min(a.b.bottom, b.b.bottom) - Math.max(a.b.top, b.b.top);
+            if (ox > 1 && oy > 1) {
+              tokens.push(a.who + '.' + a.kind + ' x ' + b.who + '.' + b.kind
+                + ' (' + Math.round(ox) + 'x' + Math.round(oy) + ')');
+            }
+          }
+        }
+
         /* 3. a box that cannot hold what is inside it. THE ONE THE FIRST
               VERSION OF THIS SWEEP DID NOT ASK. */
         const squashed = [];
@@ -145,6 +187,8 @@ async function walk(page, orientation) {
           through: through.slice(0, 4),
           squashedN: squashed.length,
           squashed: squashed.slice(0, 4),
+          tokenN: tokens.length,
+          tokens: tokens.slice(0, 4),
           empty: (root.innerText || '').trim().length < 12,
         });
       } catch (error) {
@@ -158,7 +202,11 @@ async function walk(page, orientation) {
 async function main() {
   const { chromium } = require(PLAYWRIGHT);
   const club = arg('club', 'MUN');
-  const days = Number(arg('days', 60));
+  /* FAR ENOUGH IN THAT PLAYERS HAVE FORM. The tactics token fault only
+     appears once a form average exists — before that the fitness tag
+     reads `100%` and fits. Sixty days was a day-one screen with a
+     day-one bug surface. */
+  const days = Number(arg('days', 200));
 
   const browser = await chromium.launch({
     executablePath: CHROME,
@@ -205,7 +253,8 @@ async function main() {
 
   const all = [...portrait, ...landscape];
   const bad = all.filter((row) => row.error || row.empty
-    || row.spillN || row.throughN || row.squashedN || row.bodyOverflow > 1);
+    || row.spillN || row.throughN || row.squashedN || row.tokenN
+    || row.bodyOverflow > 1);
 
   console.log('screens checked', all.length, ' faults', bad.length);
   bad.forEach((row) => console.log(JSON.stringify(row)));

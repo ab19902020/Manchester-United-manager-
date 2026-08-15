@@ -99,15 +99,25 @@
       '#tacPitch .tslot{width:62px}',
       '#tacPitch .tslot .jersey{width:30px;height:30px;font-size:11px}',
       '#tacPitch .tslot .nm{margin-top:2px;font:700 9px/1.15 var(--body)}',
-      /* position and vitals share a line: both inline, and the vitals
-         tag stops being absolutely positioned so it flows after it */
-      '#tacPitch .tslot .ps{display:inline;vertical-align:middle}',
-      '#tacPitch .tslot .tvit{position:static;transform:none;display:inline-flex;',
-      ' vertical-align:middle;margin-left:3px;font-size:8px;line-height:1.1}',
-      '#tacPitch .tslot .ps{font-size:8px;line-height:1.1}',
-      /* the name is the one thing allowed to be clipped, and only after
-         it has had the full width of the token */
-      '#tacPitch .tslot .nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+      /* THE VITALS RULES THAT WERE HERE ARE GONE, AND THEY WERE MINE.
+         They put the position label and the vitals tag on one line:
+
+             '#tacPitch .tslot .ps{display:inline;vertical-align:middle}'
+             '#tacPitch .tslot .tvit{position:static;display:inline-flex}'
+
+         That measured clean because I measured it on day one of a career,
+         when the tag reads `100%`. Once a player has a form average it
+         reads `● 99% · 6.2`, which will not sit beside `AML` in a 62px
+         token — so it wrapped to a third line, the token grew about
+         fifteen pixels, and it ran into the row below. A screenshot four
+         months into a season shows it plainly.
+
+         `src/tactics-token.js` owns the token now and fixes it by needing
+         fewer lines rather than more: condition became the ring around
+         the shirt and form a pill on it, leaving the name and position as
+         a fixed two-line block. Nothing here should style `.tvit` or
+         `.ps` again — one owner, or the next person gets to work out
+         which of two files won. */
 
       /* ---------------------------------------------------------------
          3. WHAT IS NOT HERE, AND WHY

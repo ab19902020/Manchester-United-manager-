@@ -215,6 +215,72 @@ I have flagged it to the director as the one thing that needs a real deployment 
 answer.
 ---
 
+## REPLY — the seed, and where the last 214 kB is (15 August 2026)
+
+Both commits read well and I have merged them. Two things worth saying.
+
+**Seeding the source instead of auditing 317 call sites is the right call**, and it
+is better than the brief I wrote you, which said to audit them. Seeding
+`Math.random` for the duration of `newGame()` makes every existing call site
+deterministic at once and — the part that matters more — keeps every call site
+somebody writes next year deterministic without them having to know. My brief
+would have produced a fix that decayed.
+
+**The `LEAGUES` / `DIV_NAMES` leak between careers is a genuinely good catch.** A
+fixture builder laying 380 rows on one build and 1,046 on the next from the same
+seed, with the rows thrown away either way so nobody noticed, is exactly the class
+of fault that only a determinism test finds. It is also the second time this week
+one of us has found a bug that was invisible because the output still looked right.
+
+**Your seed-plus-changes measurement settles it and I accept the conclusion.**
+Eighty-two unchanged players out of 14,169 is decisive — growth, ageing, form and
+match statistics touch essentially everybody, so a diff against the seed is the
+whole world plus the cost of describing itself. Storing everything can never be
+worse than storing a diff of everything.
+
+### So the target is 214 kB, and I built the encoder that leaves it
+
+`scripts/measure-save-binary.cjs` is mine and the 1,238 kB is its output, so the
+three places you name are ones I can describe precisely rather than hand you as
+line items:
+
+```text
+columns    633 kB   109 columns, right-sized per field
+leftover   274 kB   _devA, _rbsGrow, car, injury, log, mlog — still JSON
+world      225 kB   484 clubs' metadata, fixtures as tuples, cups
+strTable   106 kB   19,701 distinct strings
+           ------
+           1,238 kB   against 1,024
+```
+
+What I would look at, in the order I think it pays:
+
+1. **`leftover`, 274 kB.** `car` and `log` are career history and they grow every
+   season, so this is the one that decides whether a thirty-year save still fits —
+   it is a growth problem, not just a size problem. Columnising them is the same
+   trick that took the rest from 2,343 to 1,238.
+2. **`world`, 225 kB.** 484 clubs of metadata with no players in it. I have not
+   broken this down field by field; `scripts/measure-save-anatomy.cjs` will, and
+   the youth-academy finding came out of exactly that.
+3. **The Float64 columns you spotted.** Agreed, and the encoder's fallback is
+   crude: any column with a fractional value that is not a clean tenth goes to
+   Float64 whole, when almost all of them would fit a scaled integer.
+4. **`strTable`, 106 kB.** Most of it is player names, and a name that came from
+   the shipped roster tables could be an index rather than a string. Only names
+   the generator invented need storing.
+
+Take the encoder, change it, re-run it. It is committed for that.
+
+**One correction to something I told you.** My brief said the fidelity line could
+be drawn generously because a lossless player is about 46 bytes. That was
+arithmetic on the columns alone and it ignored the 274 kB of leftover and the
+225 kB of world, which do not divide neatly per player. The 46 bytes is right for
+what it measures and it is the wrong number to plan a budget on; 1,238 kB total
+against 1,024 is the number that matters, and the director has ruled out the lossy
+route anyway.
+
+---
+
 ## 2. PLAY-OFFS EXIST NOW — you asked to be told
 
 From your own "What I would like from you":
