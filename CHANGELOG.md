@@ -89,6 +89,19 @@
 
 ### Added
 
+- **Twenty-six more press conference topics, and a hundred and four new questions.**
+  The variety machinery was never the problem: the game already remembers the last
+  220 lines you were asked and filters them out, and dresses a repeat differently
+  when one is unavoidable. The shortage was the bank. Every question carries a
+  predicate saying when it applies, and on an ordinary Wednesday before an ordinary
+  league game most of them do not — the post-match ones, the cup-final ones, the
+  relegation ones are all out — so what was left drained in a fortnight. The new
+  ones are weighted toward the ordinary week, which is the week that repeated: the
+  opposition manager, the referee, the pitch, the schedule, rotation, agents, the
+  academy, a player's dip in form, your own future, ticket money, the international
+  break, what the pundits have been saying. Four ways of asking and four ways of
+  answering each.
+
 - **You choose how a transfer fee is paid.** The bid sheet now carries a *How you
   pay* row: in full now, or spread over two, three or four years — four years being
   a quarter on signing and a quarter in each of the next three summers. Spreading it
@@ -106,6 +119,17 @@
   years — and you were told about it afterwards in the post.
 
 ### Changed
+
+- **Every voice in the game is a British man.** The press room already asked for a
+  gender and already filtered the browser's voices by it, so the code looks like it
+  should have worked. Two things defeated it. Half the press pack were women, so
+  half the questions were correctly asked in a woman's voice. And the filter's
+  fallback was `return g.length ? g : base` — where `g` is voices whose NAME
+  contains a male word. Android names its English voices "English United Kingdom 1"
+  through 4, so on a great many phones the filter matched nothing and the pool
+  silently became every voice on the device, very often defaulting to a woman. The
+  fallback is now "everyone not identified as female", en-GB is ranked decisively
+  above other Englishes, and the press pack is male so the byline matches the voice.
 
 - **The eleven on the dashboard are people, not counters.** The Team Overview pitch
   drew coloured discs with shirt numbers, which at a club whose primary is white came
