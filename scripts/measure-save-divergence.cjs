@@ -182,94 +182,135 @@ const DAYS_PER_SEASON = 340;
       return strings.get(k);
     };
 
-    /* one column per field, narrowest type that holds its real range —
-       the same encoder the full-save measurement used */
+    /* One column per field, narrowest type that holds its real range.
+     *
+     * The first version of this encoder made the measurement worthless and
+     * it is worth saying why, because it looked right. A fractional field
+     * fell back to Float64 — eight bytes of mantissa a player, which gzip
+     * cannot compress at all — and condition, sharpness, morale and every
+     * rating are fractional. That alone put 1,600 kB on the total and had
+     * me report that a diff was worse than storing the whole world. It is
+     * not; my encoder was worse than the one I was comparing against.
+     *
+     * So: scale to whatever integer grid the values actually sit on
+     * (whole numbers, tenths, hundredths), THEN right-size. Float64 is a
+     * last resort and the report says when it was used, so a column that
+     * silently costs eight bytes cannot hide again. */
+    let float64Columns = 0;
     const column = (n, read) => {
       const raw = new Float64Array(n);
-      let lo = Infinity; let hi = -Infinity; let fractional = false;
+      let lo = Infinity; let hi = -Infinity;
       for (let i = 0; i < n; i += 1) {
         const v = read(i);
-        raw[i] = v;
-        if (v < lo) lo = v;
-        if (v > hi) hi = v;
-        if (!Number.isInteger(v)) fractional = true;
+        raw[i] = Number.isFinite(v) ? v : 0;
+        if (raw[i] < lo) lo = raw[i];
+        if (raw[i] > hi) hi = raw[i];
       }
-      if (fractional) {
-        let tenths = true;
+      let scale = 0;
+      for (const s of [1, 10, 100]) {
+        let ok = true;
         for (let i = 0; i < n; i += 1) {
-          if (Math.abs(raw[i] * 10 - Math.round(raw[i] * 10)) > 1e-6) { tenths = false; break; }
+          if (Math.abs(raw[i] * s - Math.round(raw[i] * s)) > 1e-6) { ok = false; break; }
         }
-        if (tenths) {
-          const t = new Int32Array(n);
-          for (let i = 0; i < n; i += 1) t[i] = Math.round(raw[i] * 10);
-          return new Uint8Array(t.buffer);
-        }
+        if (ok) { scale = s; break; }
+      }
+      if (!scale) {
+        float64Columns += 1;
         return new Uint8Array(new Float64Array(raw).buffer);
       }
-      if (lo >= 0 && hi <= 255) {
+      const slo = Math.round(lo * scale);
+      const shi = Math.round(hi * scale);
+      if (slo >= 0 && shi <= 255) {
         const a = new Uint8Array(n);
-        for (let i = 0; i < n; i += 1) a[i] = raw[i];
+        for (let i = 0; i < n; i += 1) a[i] = Math.round(raw[i] * scale);
         return a;
       }
-      if (lo >= 0 && hi <= 65535) {
+      if (slo >= -128 && shi <= 127) {
+        const a = new Int8Array(n);
+        for (let i = 0; i < n; i += 1) a[i] = Math.round(raw[i] * scale);
+        return new Uint8Array(a.buffer);
+      }
+      if (slo >= 0 && shi <= 65535) {
         const a = new Uint16Array(n);
-        for (let i = 0; i < n; i += 1) a[i] = raw[i];
+        for (let i = 0; i < n; i += 1) a[i] = Math.round(raw[i] * scale);
+        return new Uint8Array(a.buffer);
+      }
+      if (slo >= -32768 && shi <= 32767) {
+        const a = new Int16Array(n);
+        for (let i = 0; i < n; i += 1) a[i] = Math.round(raw[i] * scale);
         return new Uint8Array(a.buffer);
       }
       const a = new Int32Array(n);
-      for (let i = 0; i < n; i += 1) a[i] = raw[i];
+      for (let i = 0; i < n; i += 1) a[i] = Math.round(raw[i] * scale);
       return new Uint8Array(a.buffer);
     };
 
-    const isNumeric = (k) => {
-      for (let i = 0; i < carried.length; i += 1) {
-        const v = carried[i].now[k];
-        if (v == null) continue;
-        return typeof v === 'number';
-      }
-      return false;
-    };
-
-    const chunks = [];
-    const bigFields = [];   // long JSON blobs that do not belong in a column
-    moved.forEach((k) => {
-      if (!isNumeric(k)) {
-        /* strings and serialised objects: short ones go through the
-           string table, long ones are their own gzipped blob so a career
-           log does not poison a column of positions */
+    /* Encode a set of flat records over a set of fields. Numeric fields
+       become columns; short strings go through a shared table; anything
+       with a long value (career logs, match logs) is set aside as its own
+       blob so it cannot poison a column of positions. */
+    const encodeSet = (rows, fields) => {
+      const n = rows.length;
+      const chunks = [];
+      const big = [];
+      fields.forEach((k) => {
+        let numeric = false;
         let long = false;
-        for (let i = 0; i < carried.length; i += 1) {
-          const v = carried[i].now[k];
+        for (let i = 0; i < n; i += 1) {
+          const v = rows[i][k];
+          if (v == null) continue;
+          if (typeof v === 'number') { numeric = true; break; }
           if (typeof v === 'string' && v.length > 40) { long = true; break; }
         }
-        if (long) { bigFields.push(k); return; }
-        chunks.push(column(carried.length, (i) => sIdx(carried[i].now[k])));
-        return;
-      }
-      chunks.push(column(carried.length, (i) => +carried[i].now[k] || 0));
-    });
-    /* the ids the columns are in the order of */
-    chunks.push(column(carried.length, (i) => carried[i].id));
+        if (numeric) { chunks.push(column(n, (i) => +rows[i][k] || 0)); return; }
+        if (long) { big.push(k); return; }
+        chunks.push(column(n, (i) => sIdx(rows[i][k])));
+      });
+      let size = 0;
+      chunks.forEach((c) => { size += c.length; });
+      const body = new Uint8Array(size);
+      let at = 0;
+      chunks.forEach((c) => { body.set(c, at); at += c.length; });
+      return {
+        body,
+        big,
+        blob: JSON.stringify(big.map((k) => rows.map((rw) => rw[k]))),
+        columns: chunks.length,
+      };
+    };
 
-    let size = 0;
-    chunks.forEach((c) => { size += c.length; });
-    const body = new Uint8Array(size);
-    let at = 0;
-    chunks.forEach((c) => { body.set(c, at); at += c.length; });
+    const allFields = [...allKeys].sort();
+    const carriedRows = carried.map(({ id, now }) => Object.assign({ id }, now));
+    const bornRows = born.map(({ id, now }) => Object.assign({ id }, now));
 
-    const bigBlob = JSON.stringify(bigFields.map((k) => carried.map(({ now }) => now[k])));
-    const bornBlob = JSON.stringify(born.map(({ now }) => now));
-    const buriedBuf = column(buried.length || 1, (i) => buried[i] || 0);
-
-    const parts = {
-      changedColumns: await gz(body),
-      strTable: await gz(enc.encode([...strings.keys()].join(' '))),
-      bigFields: await gz(enc.encode(bigBlob)),
-      newPlayers: await gz(enc.encode(bornBlob)),
-      goneIds: await gz(buriedBuf),
+    /* (A) THE WHOLE WORLD, every field, this encoder. The thing to beat,
+       measured here rather than quoted from the other script so that both
+       numbers below come from one encoder on one career. */
+    const full = encodeSet(carriedRows.concat(bornRows), allFields);
+    const fullParts = {
+      columns: await gz(full.body),
+      strTable: await gz(enc.encode([...strings.keys()].join(' '))),
+      bigFields: await gz(enc.encode(full.blob)),
       world: await gz(enc.encode(playedWorld)),
     };
-    const total = Object.values(parts).reduce((s, v) => s + v, 0);
+
+    /* (B) SEED PLUS WHAT MOVED. Only the fields the seed does not already
+       get right, for the players the seed produces; the men born since
+       generation whole, because no seed makes them. */
+    strings.clear();
+    const diff = encodeSet(carriedRows, moved.concat(['id']));
+    const bornOnly = encodeSet(bornRows, allFields);
+    const diffParts = {
+      changedColumns: await gz(diff.body),
+      changedBig: await gz(enc.encode(diff.blob)),
+      newPlayers: await gz(bornOnly.body),
+      newPlayersBig: await gz(enc.encode(bornOnly.blob)),
+      strTable: await gz(enc.encode([...strings.keys()].join(' '))),
+      goneIds: await gz(column(buried.length || 1, (i) => buried[i] || 0)),
+      world: await gz(enc.encode(playedWorld)),
+    };
+
+    const sum = (o) => Object.values(o).reduce((s, v) => s + v, 0);
 
     return {
       seed, season: playedSeason, day: playedDay,
@@ -278,33 +319,47 @@ const DAYS_PER_SEASON = 340;
         buried: buried.length, untouched,
       },
       fields: { moved: moved.length, still: still.length, movedList: moved, stillList: still },
-      bigFields, bodyRaw: size, parts, total, fullSaveRaw,
+      float64Columns,
+      full: { parts: fullParts, total: sum(fullParts), columns: full.columns, big: full.big },
+      diff: { parts: diffParts, total: sum(diffParts), columns: diff.columns, big: diff.big },
+      fullSaveRaw,
     };
   }, { seasons: SEASONS, daysPerSeason: DAYS_PER_SEASON });
 
   if (r.fatal) { console.error(r.fatal); await browser.close(); process.exit(1); }
 
   const kb = (n) => (n / 1024).toFixed(0) + ' kB';
+  const LIMIT = 1024 * 1024;
+  const verdict = (n) => (n <= LIMIT ? 'FITS, ' + kb(LIMIT - n) + ' spare' : 'OVER by ' + kb(n - LIMIT));
+
   console.log(`seed ${r.seed} | season ${r.season}, day ${r.day} | ${SEASONS} season(s) played`);
   console.log('');
   console.log('players now                ', r.counts.played);
   console.log('  the seed also produces   ', r.counts.fromSeed,
     `(${r.counts.untouched} of them completely unchanged)`);
-  console.log('  born since generation    ', r.counts.born, '(stored in full)');
+  console.log('  born since generation    ', r.counts.born, '(no seed makes these)');
   console.log('  the seed makes, gone now ', r.counts.buried, '(ids only)');
   console.log('');
-  console.log('fields the seed gets right for everyone:', r.fields.still, '(free)');
+  console.log('fields the seed gets right for everyone:', r.fields.still, '(free under B)');
+  console.log('  ' + r.fields.stillList.join(' '));
   console.log('fields that moved for somebody:         ', r.fields.moved);
-  console.log('  ' + r.fields.movedList.join(' '));
   console.log('');
-  console.log('column body before gzip:', kb(r.bodyRaw));
-  Object.entries(r.parts).forEach(([k, v]) => console.log('   ' + k.padEnd(16), kb(v)));
-  console.log('   ' + 'TOTAL'.padEnd(16), kb(r.total));
+  console.log('columns that had to fall back to Float64:', r.float64Columns);
   console.log('');
+
+  const table = (label, m) => {
+    console.log(label);
+    Object.entries(m.parts).forEach(([k, v]) => console.log('   ' + k.padEnd(16), kb(v)));
+    console.log('   ' + 'TOTAL'.padEnd(16), kb(m.total), ' ', verdict(m.total));
+    if (m.big && m.big.length) console.log('   set aside as blobs:', m.big.join(' '));
+    console.log('');
+  };
+  table('A. THE WHOLE WORLD, every field  (' + r.full.columns + ' columns)', r.full);
+  table('B. SEED PLUS WHAT MOVED          (' + r.diff.columns + ' columns)', r.diff);
+
+  const better = r.diff.total < r.full.total;
+  console.log((better ? 'B beats A by ' : 'A beats B by ') + kb(Math.abs(r.full.total - r.diff.total)));
   console.log('full save as JSON, uncompressed, for scale:', kb(r.fullSaveRaw));
-  console.log('1 MB limit (1024 kB):',
-    r.total <= 1048576 ? 'FITS, ' + kb(1048576 - r.total) + ' spare'
-      : 'OVER by ' + kb(r.total - 1048576));
   console.log('errors:', errors.length ? errors.slice(0, 3) : 'none');
   await browser.close();
 })();
