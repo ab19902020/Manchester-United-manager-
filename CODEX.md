@@ -154,6 +154,130 @@ lane while you are away from it.
 
 ---
 
+## FOR AGENT ONE — the club you build, and the story around it (15 August 2026)
+
+**The director's words, so nothing gets lost in my paraphrase:**
+
+> "give them, like, a story to go with. Obviously, you can't story it if they're
+> signing their own players and depends on results, but add a bit of a story with
+> the way it runs, but it doesn't affect results. It's just a story."
+
+> "start a really small stadium. Um, obviously, they pick an easy route with more
+> money. They have, like, an easy... like, just make it really good. Everything
+> just makes sense, fun to play. Lots of information you can get from the game."
+
+Two jobs then: **the climb has to be legible**, and **there has to be a story
+around it that never touches a result**.
+
+### THE ONE RULE THAT MAKES THE STORY SAFE
+
+The narrative layer **reads game state and never writes anything the engine reads
+back**. No morale nudge, no reputation bump, no hidden modifier, nothing that
+changes a fee or a scoreline. If a beat cannot be derived from something that has
+already happened, it does not get written. A player who reads none of it must play
+exactly the same game as a player who reads all of it — that is the acceptance
+test, and it should be an actual test: run the same seeded season with the story
+layer on and off and assert the results are identical.
+
+This is what makes it possible at all. We cannot script a story around signings we
+do not control, but we can narrate the one the player is already making.
+
+---
+
+### A1. The ground as a ladder you climb (yours — economics and rules)
+
+Right now `CC_CAPS` starts at 1,200 and `pr.type==='rebuild'` multiplies capacity
+by 1.28 in one step. Between those two there is nothing. A club that starts on a
+bank of grass and reaches the Premier League should pass through recognisable
+stages, and each one should change the money.
+
+What I would like from you:
+
+- **A tier ladder** — something like: a roped-off pitch and a portakabin; one
+  covered terrace; a small seated stand; floodlights; a second stand; all-seater;
+  a modern bowl. Each with a build cost, a build *duration* (a ground is not
+  rebuilt over a weekend), a capacity, and a matchday revenue per head that rises
+  with comfort as well as with numbers.
+- **Costs and revenue that make the choice real.** Building should hurt. The
+  interesting decision is a stand or a striker, and it is only interesting if the
+  stand is genuinely tempting.
+- **Gates that are not just money.** Floodlights before you can be televised.
+  A minimum capacity and seating for each division — the real pyramid has ground
+  grading rules and they are a wonderful natural obstacle for a climbing club.
+- **What happens when you are promoted into a ground that is too small**, which
+  is the most interesting version of this problem.
+
+Start lower than we do now. The hardest route should begin at a few hundred.
+
+### A2. The chairman choice IS the difficulty, so say so (yours)
+
+`CC_CHAIRS` already varies budget, bank, wage ceiling, patience and target — that
+is a difficulty setting and the screen never admits it. Please make it a coherent
+system rather than three sets of numbers:
+
+- Name the routes for what they are, and make the spread wider than it is. The
+  generous route should be a genuinely easier game; the hard route should be
+  close to unfair.
+- Have the choice keep mattering. An owner is not a one-off number at creation —
+  it should be a relationship that runs for years: what he does after promotion,
+  after relegation, when a bigger club comes for you, when he loses interest.
+- **Tell the player the trade honestly on the button.** "More money now, and the
+  board expects promotion in year one" is a difficulty setting a player can
+  understand without a wiki.
+
+### A3. A club with no past should be given one (yours — data model)
+
+A built club has no history and the game has nowhere to look. Generate at
+creation, once, and store it: founded year, the club's nickname, an old best
+finish, a former player who is now on the television, and — the good one — **a
+local rival chosen from the clubs nearest it**, which gives us a derby from the
+first season. None of it affects a result. All of it gives every other screen
+something true to say.
+
+Note the save budget: this is a few dozen bytes on one club, not a field on ten
+thousand players. Please keep it that way — see the 1 MB brief above.
+
+---
+
+### B. The story layer (mine, unless you want it)
+
+I will build these. They are listed here so you know what is coming and can tell
+me if any of it collides with your systems.
+
+1. **A journalist who follows your career.** One named local reporter who writes a
+   column at the turn of each month, assembled from what actually happened — form,
+   the fixtures coming, who is scoring, who is not. Not a summary in a box: a
+   voice, and one that changes as results change.
+2. **A rival manager.** Appointed near you, promoted and sacked by the engine like
+   anyone else, who reacts to your results and yours to his. The rivalry is
+   narrated; the league table decides it.
+3. **Player arcs from events the engine already produces.** The academy boy who
+   debuts. The captain's last season. The man you sold scoring against you. Each
+   of those is already in the data and none of it is told.
+4. **The season film.** At the end of a campaign, a written retrospective with the
+   real numbers in it — the turning point by points swing, the best month, the man
+   who played the most minutes.
+5. **The ground growing in the Dugout.** The single biggest visual win here. A
+   1,200-capacity non-league ground should *look* like one — one small stand, open
+   sides, a hedge behind the goal — and 60,000 should look like 60,000. The 3D
+   stadium is currently one build at every level, so a club that climbs from the
+   National League never sees that it climbed. This wants A1's tiers to exist
+   first, which is why A1 is the first ask.
+
+### C. What I would like from you first, in order
+
+1. **The 1 MB save format** (the section above). Still the only thing that blocks
+   the release, and everything else is decoration until it is solved.
+2. **A1, the ground ladder.** The tiers, the costs, the durations, the revenue,
+   the grading gates.
+3. **A2, the difficulty routes.**
+4. **A3, the generated club history.**
+
+If you disagree with any of the design above, say so in `AGENT-ONE.md` and I will
+change the brief. I would rather be told the ladder is wrong now than build a
+stadium renderer against it.
+---
+
 ## Note for Agent One — I have been in the rules lane (15 August 2026)
 
 Codex is off the project and you are the only other agent working, so I have been
