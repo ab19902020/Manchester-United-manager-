@@ -1995,6 +1995,143 @@
     };
   }
 
+  /* -------------------------------------------------------------------
+     THE BALL MUST NOT TELEPORT.
+     -------------------------------------------------------------------
+     "I know it's all in fast forward but you just can't tell what's
+     going on the pitch."
+
+     Measured, at every speed, not just fast forward. Sampling the
+     rendered ball on each animation frame through real matches:
+
+       speed 1x   ball moved >15m in a single frame 2.07 times a minute,
+                  twelve of those over 40m, worst 94.3m
+       speed 2x   1.64 a minute, worst 87.9m
+       speed 4x   1.04 a minute, worst 96.6m
+
+     A 94m step in one frame is the whole pitch. The cause is in the two
+     branches below: both set the ball absolutely, and between one staged
+     action and the next the carrier changes — so the ball snaps from one
+     man's boot to another's, and those two men can be at opposite ends.
+     Nothing was wrong with the action being shown. What was missing was
+     everything between them, and a ball that vanishes and reappears
+     reads as a broken picture rather than as football.
+
+     So the rendered ball chases its target at a finite speed instead of
+     being placed at it. The gap it is closing is real — the engine did
+     move play from one end to the other — and covering it as a ball
+     travelling with an arc on it is what that actually looked like: a
+     clearance, a switch, a ball hooked forward. It homes on a moving
+     target, so when the next action is itself a flight the two blend
+     into one continuous move rather than fighting each other.
+
+     It closes fast enough not to lag the action it is catching: the
+     speed scales with the distance, so a long cut is a long ball rather
+     than a slow drift, and the whole thing runs quicker at 2x and 4x
+     where a match minute is a fraction of a second.
+     ------------------------------------------------------------------- */
+  /* ---------------------------------------------------------------
+     AND IT MUST ONLY COVER THE CUT. The first version of this chased
+     the ball toward its target on EVERY frame, which is a low-pass
+     filter on the whole match rather than a fix for the jump, and it
+     broke two things the observer measures:
+
+       ball sitting on the man who has it   100%  ->    0%
+       frames with the ball past the line     11  ->     0
+
+     Because the target moves with the carrier every frame, a bounded
+     step never converges — the ball trailed a few metres behind the
+     man for the entire match and never reached the net on a goal.
+
+     So a transit is an event, not a state. Ordinary play is placed
+     exactly where it always was. Only a real discontinuity — the ball
+     in one place and the next staged action starting somewhere else
+     entirely — opens a transit, and that transit is driven by ELAPSED
+     TIME rather than by step size, so it completes on schedule even at
+     the handful of frames a second SwiftShader manages. When it is
+     done the ball is placed exactly again.
+     --------------------------------------------------------------- */
+  /* the live match speed, tolerating a module loaded without a match
+     around it — the pure tests drive ballChase directly */
+  function matchSpeed() {
+    try { return Number(MU && MU.speed) || 1; } catch (error) { return 1; }
+  }
+
+  const BALL_CUT = 12;            /* metres: below this, nothing happened */
+  const BALL_MIN_MS = 240;
+  const BALL_MAX_MS = 820;
+
+  function ballChase(now, targetX, targetZ, targetHeight, action) {
+    const carry = state.ballCarry
+      || (state.ballCarry = { x: targetX, z: targetZ, transit: null });
+
+    const place = () => {
+      carry.x = targetX;
+      carry.z = targetZ;
+      carry.transit = null;
+      return { x: targetX, z: targetZ, height: targetHeight };
+    };
+
+    let move = carry.transit;
+
+    /* THE TARGET CAN JUMP WHILE A TRANSIT IS RUNNING, and if it does the
+       mix drags the ball with it — measured at a 50.2m step across two
+       frames 20ms apart, with progress moving only 0.65 to 0.68. Homing
+       on a moving target is right for a target that MOVES; it is wrong
+       for one that cuts. So a discontinuity during a transit re-anchors
+       it: a fresh transit from wherever the ball actually is now, aimed
+       at the new place, rather than a lerp whose endpoint teleported. */
+    if (move && move.lastX != null
+      && Math.hypot(targetX - move.lastX, targetZ - move.lastZ) > BALL_CUT) {
+      move = null;
+      carry.transit = null;
+    }
+
+    if (!move) {
+      const gap = Math.hypot(targetX - carry.x, targetZ - carry.z);
+      if (!(gap > BALL_CUT)) { carry.transit = null; return place(); }
+
+      /* a bigger gap is covered faster, because a ball hit sixty yards
+         is hit hard — and quicker again when the match is running at
+         2x or 4x, where a minute is a fraction of a second */
+      let ms = limit((gap / 70) * 1000, BALL_MIN_MS, BALL_MAX_MS);
+      const rate = matchSpeed();
+      if (rate >= 4) ms *= 0.45;
+      else if (rate >= 2) ms *= 0.7;
+      /* NO CLAMP AGAINST THE ACTION'S REMAINING TIME. That was the first
+         attempt at keeping a shot from still being in transit when the
+         ball is meant to be in the net, and it put the teleport back:
+         squeezed to its 90ms floor near the end of an action, a transit
+         completes inside a single frame on a slow renderer and the ball
+         crosses sixty metres in one step — measured at 62.5m with the
+         clamp in. It is unnecessary as well as harmful. The transit
+         re-reads the target every frame, so it homes on wherever the
+         action has moved the ball to and lands exactly there; and the
+         longest one, 820ms, fits inside a goal action's 1900ms floor
+         with room to spare.
+      */
+      move = {
+        fromX: carry.x, fromZ: carry.z, startedAt: now, ms,
+        loft: Math.min(5.2, gap * 0.055), lastX: targetX, lastZ: targetZ,
+      };
+      carry.transit = move;
+    }
+    move.lastX = targetX;
+    move.lastZ = targetZ;
+
+    const progress = limit((now - move.startedAt) / Math.max(1, move.ms), 0, 1);
+    if (progress >= 1) return place();
+
+    const eased = progress < 0.5 ? 2 * progress * progress : 1 - ((-2 * progress + 2) ** 2) / 2;
+    carry.x = mix(move.fromX, targetX, eased);
+    carry.z = mix(move.fromZ, targetZ, eased);
+    return {
+      x: carry.x,
+      z: carry.z,
+      height: Math.max(targetHeight, 0.22 + Math.sin(Math.PI * progress) * move.loft),
+    };
+  }
+
   function updateBall(now, action) {
     if (!state.ball || !MU || !MU.ball) return;
     const play = typeof playState === 'function' ? playState() : null;
@@ -2040,8 +2177,8 @@
         x += (action.defendingSide === 1 ? -1 : 1) * (progress - 0.72) * 8;
         height += (progress - 0.72) * 1.2;
       }
-      MU.ball.x = x;
-      MU.ball.y = z;
+      /* the engine ball is written once, after the chase below, so there
+         are not two writers disagreeing about where it is */
       inFlight = true;
     }
 
@@ -2050,9 +2187,16 @@
       x = foot.x;
       z = foot.y;
       height = 0.22;
-      MU.ball.x = x;
-      MU.ball.y = z;
     }
+
+    /* whatever the two branches above decided, the ball gets there by
+       travelling rather than by cutting */
+    const chased = ballChase(now, x, z, height, action);
+    x = chased.x;
+    z = chased.z;
+    height = chased.height;
+    MU.ball.x = x;
+    MU.ball.y = z;
     state.ball.position.set(x - FIELD_LENGTH / 2, height, z - FIELD_WIDTH / 2);
     state.ball.rotation.x += 0.08;
     state.ball.rotation.z += 0.11;
@@ -2614,6 +2758,8 @@
     cameraSpec,
     classifyEvent,
     compactAnalytics,
+    ballChase,
+    BALL_CUT,
     install,
     installed: false,
     qualityProfile,

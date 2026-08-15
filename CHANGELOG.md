@@ -4,6 +4,20 @@
 
 ### Fixed
 
+- **The ball teleported, and that is why you could not follow the match.** The
+  complaint was about fast forward — "I know it's all in fast forward but you just
+  can't tell what's going on the pitch" — but sampling the rendered ball on every
+  animation frame through real matches found it at every speed: it moved more than
+  15m in a single frame about twice a match minute, worst step 96.6m, which is the
+  length of the pitch. Nothing was wrong with the actions being shown. What was
+  missing was everything between them: each staged action plants the ball at the
+  carrier's boot, and consecutive carriers can be at opposite ends, so the ball
+  vanished and reappeared. It now travels — a real discontinuity opens a short,
+  arced transit from where the ball actually is to where play has moved, which is
+  what that transition was: a clearance, a switch, a ball hooked forward.
+  Measured after: zero steps over 15m at 1x, 2x or 4x, worst 11.8m, and the ball
+  reaches the net on a goal in 79 frames against 11 before.
+
 - **The mailbox was unusable in landscape.** Measured at 844x390: the sheet came
   back 520 wide and 343 tall with 598px of content in it — using the portrait sheet,
   wasting 324px either side, and starved on the one axis it could not grow on. And

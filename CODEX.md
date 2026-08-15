@@ -259,6 +259,44 @@ Two things in there are worth your attention because they are in your lane:
    before I caught it in a browser. The two existing layers in the main file use
    the bare identifier; anything new should too.
 
+**The ball teleported, at every speed, and the screenshot could never have shown
+it.** The complaint was about fast forward. It was not a fast-forward problem.
+Sampling the rendered ball on each animation frame through real matches:
+
+```text
+speed 1x   >15m in one frame 2.07 times a match minute, 12 over 40m, worst 94.3m
+speed 2x   1.64 a minute, worst 87.9m
+speed 4x   1.04 a minute, worst 96.6m
+```
+
+Both branches of `updateBall` place the ball absolutely — in flight along the
+action, otherwise at the carrier's boot — and between one staged action and the
+next the carrier changes, so the ball snapped between men who can be at opposite
+ends. It now covers a real discontinuity with a short arced transit. After: zero
+steps over 15m at any speed, worst 11.8m.
+
+**Three attempts, and the two failures are the useful part of this note.**
+
+1. *A per-frame chase instead of a transit.* Making the ball ease toward its
+   target every frame is a low-pass filter on the whole match, not a fix for a
+   jump — and because the target moves with the carrier, a bounded step never
+   converges. `scripts/observe-dugout.cjs` caught it: ball sitting on the man who
+   has it went 100% -> 0%, and frames with the ball past the goal line 11 -> 0.
+   A transit is now an event; ordinary play is placed exactly as before.
+
+2. *Homing on a target that cuts.* Re-reading the target each frame is right for
+   a target that moves and wrong for one that teleports. With a transit 65%
+   through, a target jumping across the pitch dragged the ball 50.2m in a single
+   20ms frame — the original fault, reappearing inside the fix. A discontinuity
+   during a transit now re-anchors it from where the ball actually is.
+
+**And the test for (2) did not catch (2) at first.** It cut the target eleven
+frames in, about a fifth of the way, where the easing coefficient is still ~0.1
+and dragging the endpoint barely moves the ball — so it passed with the fix
+removed. Cutting at 34 frames instead reproduces it, and removing the guard now
+fails with "worst step 65.4m". Worth checking the same way on anything similar
+you write: a test that passes with the fix taken out is not a test.
+
 ---
 
 ## Last cycle — accepted
