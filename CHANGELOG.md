@@ -4,6 +4,35 @@
 
 ### Fixed
 
+- **You could not search for a free agent, because no free agent was in the search.**
+  The market search walked `G.clubs[].players`, and a free agent is not at a club —
+  he lives in `G.freeAgents`. So one had never appeared in a result. The only way to
+  see them was a list at the bottom of the transfers screen, sorted by ability, with
+  no name search, no position filter and no age filter: finding a left-back on a
+  free transfer meant reading a hundred and ninety-eight rows.
+
+  A **contract filter** sits above the sort row: *At a club*, *Free agents* and
+  *Expiring*. Free agents get their own searchable list — name, position, age,
+  overall, potential, wage and every sort reach them. Expiring is a man in the last
+  year of his deal: cheaper now, free in the summer, and the most useful filter in
+  the game for a club with no money. A free agent's row says what he is, asks no
+  fee, and opens wage talks rather than a bid to a club that does not exist.
+  `askPrice` is guarded too — it reads `G.clubs[p.club].players` and would have
+  thrown on the first free agent ever to reach a market row.
+
+  The club market itself is untouched, and that is deliberate. The first attempt
+  rebuilt the search, copying the version that is easy to find in the file — and
+  the live one is four thousand lines further down, carrying filters for overall,
+  potential, fee, wage, contract length, morale, fitness, role, attribute and
+  nationality, budget awareness and pagination. Replacing it threw all of that
+  away silently. The suite caught it on a pagination assertion.
+
+  **And the search comes first now.** Measured on a phone: the name box sat 768px
+  down a 5,359px page, behind the loan market, the transfer budget, a rebalance
+  slider and three scouts. It sits at 203px. The standalone free-agent list is
+  replaced by a card that switches the filter, because the search does that job
+  properly and the list was most of the page.
+
 - **The tactics pitch overlapped names and fitness, and that was my fault.** When
   the pitch was unsquashed I put the position label and the fitness tag on one line
   and made the tag flow inline rather than float. It measured clean — because I
