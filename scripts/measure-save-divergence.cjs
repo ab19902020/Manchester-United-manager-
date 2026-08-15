@@ -197,7 +197,7 @@ const DAYS_PER_SEASON = 340;
      * last resort and the report says when it was used, so a column that
      * silently costs eight bytes cannot hide again. */
     let float64Columns = 0;
-    const column = (n, read) => {
+    const column = (n, read, quant) => {
       const raw = new Float64Array(n);
       let lo = Infinity; let hi = -Infinity;
       for (let i = 0; i < n; i += 1) {
@@ -207,7 +207,23 @@ const DAYS_PER_SEASON = 340;
         if (raw[i] > hi) hi = raw[i];
       }
       let scale = 0;
-      for (const s of [1, 10, 100]) {
+      /* quantise: the value is pinned to a hundredth and the tail is
+         dropped on purpose. Used only for the measurement that asks what
+         a save costs if the game does not carry seventeen significant
+         digits of an attribute nobody can see. */
+      if (quant) {
+        for (const s of [1, 10, 100]) {
+          let ok = true;
+          for (let i = 0; i < n; i += 1) {
+            const q = Math.round(raw[i] * 100) / 100;
+            if (Math.abs(q * s - Math.round(q * s)) > 1e-6) { ok = false; break; }
+          }
+          if (ok) { scale = s; break; }
+        }
+        if (!scale) scale = 100;
+        for (let i = 0; i < n; i += 1) raw[i] = Math.round(raw[i] * 100) / 100;
+      }
+      if (!scale) for (const s of [1, 10, 100]) {
         let ok = true;
         for (let i = 0; i < n; i += 1) {
           if (Math.abs(raw[i] * s - Math.round(raw[i] * s)) > 1e-6) { ok = false; break; }
@@ -249,7 +265,7 @@ const DAYS_PER_SEASON = 340;
        become columns; short strings go through a shared table; anything
        with a long value (career logs, match logs) is set aside as its own
        blob so it cannot poison a column of positions. */
-    const encodeSet = (rows, fields) => {
+    const encodeSet = (rows, fields, quant) => {
       const n = rows.length;
       const chunks = [];
       const big = [];
@@ -262,7 +278,7 @@ const DAYS_PER_SEASON = 340;
           if (typeof v === 'number') { numeric = true; break; }
           if (typeof v === 'string' && v.length > 40) { long = true; break; }
         }
-        if (numeric) { chunks.push(column(n, (i) => +rows[i][k] || 0)); return; }
+        if (numeric) { chunks.push(column(n, (i) => +rows[i][k] || 0, quant)); return; }
         if (long) { big.push(k); return; }
         chunks.push(column(n, (i) => sIdx(rows[i][k])));
       });
@@ -310,6 +326,36 @@ const DAYS_PER_SEASON = 340;
       world: await gz(enc.encode(playedWorld)),
     };
 
+    /* (C) THE WHOLE WORLD, pinned to a hundredth. Every attribute in this
+       game is a full-precision float — a.aggression is 12.292376410679863
+       — because growth adds fractional increments and nothing ever rounds
+       them. The screen shows 12. Seventeen significant digits of a rating
+       nobody can see cost eight incompressible bytes a player a field,
+       which is the entire reason a byte-exact save does not fit. This
+       measures the same save with those tails dropped at a hundredth. */
+    strings.clear();
+    const quant = encodeSet(carriedRows.concat(bornRows), allFields, true);
+    const quantParts = {
+      columns: await gz(quant.body),
+      strTable: await gz(enc.encode([...strings.keys()].join(' '))),
+      bigFields: await gz(enc.encode(quant.blob)),
+      world: await gz(enc.encode(playedWorld)),
+    };
+
+    /* (D) and the same again, with the seed carrying what has not moved */
+    strings.clear();
+    const qdiff = encodeSet(carriedRows, moved.concat(['id']), true);
+    const qborn = encodeSet(bornRows, allFields, true);
+    const qdiffParts = {
+      changedColumns: await gz(qdiff.body),
+      changedBig: await gz(enc.encode(qdiff.blob)),
+      newPlayers: await gz(qborn.body),
+      newPlayersBig: await gz(enc.encode(qborn.blob)),
+      strTable: await gz(enc.encode([...strings.keys()].join(' '))),
+      goneIds: await gz(column(buried.length || 1, (i) => buried[i] || 0)),
+      world: await gz(enc.encode(playedWorld)),
+    };
+
     const sum = (o) => Object.values(o).reduce((s, v) => s + v, 0);
 
     return {
@@ -322,6 +368,8 @@ const DAYS_PER_SEASON = 340;
       float64Columns,
       full: { parts: fullParts, total: sum(fullParts), columns: full.columns, big: full.big },
       diff: { parts: diffParts, total: sum(diffParts), columns: diff.columns, big: diff.big },
+      quant: { parts: quantParts, total: sum(quantParts), columns: quant.columns, big: quant.big },
+      qdiff: { parts: qdiffParts, total: sum(qdiffParts), columns: qdiff.columns, big: qdiff.big },
       fullSaveRaw,
     };
   }, { seasons: SEASONS, daysPerSeason: DAYS_PER_SEASON });
@@ -354,11 +402,14 @@ const DAYS_PER_SEASON = 340;
     if (m.big && m.big.length) console.log('   set aside as blobs:', m.big.join(' '));
     console.log('');
   };
-  table('A. THE WHOLE WORLD, every field  (' + r.full.columns + ' columns)', r.full);
-  table('B. SEED PLUS WHAT MOVED          (' + r.diff.columns + ' columns)', r.diff);
+  table('A. THE WHOLE WORLD, exact           (' + r.full.columns + ' columns)', r.full);
+  table('B. SEED PLUS WHAT MOVED, exact       (' + r.diff.columns + ' columns)', r.diff);
+  table('C. THE WHOLE WORLD, to a hundredth   (' + r.quant.columns + ' columns)', r.quant);
+  table('D. SEED PLUS WHAT MOVED, hundredth   (' + r.qdiff.columns + ' columns)', r.qdiff);
 
-  const better = r.diff.total < r.full.total;
-  console.log((better ? 'B beats A by ' : 'A beats B by ') + kb(Math.abs(r.full.total - r.diff.total)));
+  const best = [['A', r.full.total], ['B', r.diff.total], ['C', r.quant.total], ['D', r.qdiff.total]]
+    .sort((x, y) => x[1] - y[1])[0];
+  console.log('smallest:', best[0], kb(best[1]), verdict(best[1]));
   console.log('full save as JSON, uncompressed, for scale:', kb(r.fullSaveRaw));
   console.log('errors:', errors.length ? errors.slice(0, 3) : 'none');
   await browser.close();
