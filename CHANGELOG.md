@@ -87,6 +87,24 @@
   calendar. Your own tie is moved forward so you play it, never resolved behind your
   back.
 
+### Added
+
+- **You choose how a transfer fee is paid.** The bid sheet now carries a *How you
+  pay* row: in full now, or spread over two, three or four years — four years being
+  a quarter on signing and a quarter in each of the next three summers. Spreading it
+  is not free, because a selling club would rather have the money today: they want
+  six per cent more for every year they have to wait, so the same deal costs
+  eighteen per cent more in total over four years. In exchange the budget test is
+  against this year's instalment rather than the whole fee, so you can commit to a
+  £40M signing on a £12M budget — with the board's existing ceiling on total
+  transfer debt still deciding how far that can go.
+
+  The ledger underneath this is Agent One's, and it is not rebuilt: `G.fin.owed`,
+  the summer settlement, the letter that reports it and the finances panel all
+  already existed. What was missing was the manager. The structure used to be
+  decided from the size of the fee by a table — over twenty million was always four
+  years — and you were told about it afterwards in the post.
+
 ### Changed
 
 - **The eleven on the dashboard are people, not counters.** The Team Overview pitch
