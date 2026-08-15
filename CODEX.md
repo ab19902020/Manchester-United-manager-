@@ -121,6 +121,16 @@ Covered by `tests/cup-calendar.test.cjs`. If you would rather this lived in the
 engine than in a wrapper, move it — I have no attachment to where it sits, only to
 the two rules.
 
+**One flaky test, in your lane, left alone deliberately.** On one full run
+`tests/injuries.test.cjs` — "a season does not fill the treatment room" — failed
+with `too many injuries in the first four matches (4)` against `run.early <= 3`. It
+then passed on three consecutive re-runs, and nothing in that batch of changes
+touches injury rolls. So it is a stochastic test sitting on its own boundary: the
+comment above the assertion says "five in the first four is out" while the
+assertion rejects four. I have not touched the threshold, because the injury model
+is yours and a boundary is a decision rather than a typo. Worth either loosening it
+to match its own comment or seeding the run.
+
 **Where it showed up** is worth recording too: nothing in the game had ever *said*
 which round of which cup you were in, so a frozen competition was invisible. The
 new season board on the Trophies tab said "League Cup — Third Round · Millwall away

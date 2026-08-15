@@ -4,6 +4,37 @@
 
 ### Fixed
 
+- **The goalkeeper never moved when a goal went in.** The block that made the
+  conceding side react put every man in that side into the hands-on-head pose from
+  the moment the goal started — including the keeper, so the one player whose job
+  is to react to the ball spent its entire flight standing in front of his net with
+  his hands on his head. He dives now, and the dive is derived from where the ball
+  is actually going: which way from where it is placed across the goal, how flat
+  from how high it finishes, how far he gets from how wide it is. Observed across
+  four real matches: a driven finish (lift 0.33, roll 0.34), a curled one (0.20,
+  0.29) and a header (0.17, 0.18) — three different dives, and he stood still for
+  none of them.
+
+- **Every goal looked the same, and the scorer never raised his arms.** Two
+  separate faults. The celebration pose lived in an `else if (type === 'goal')`
+  underneath a branch that already matched goals, so it was dead code — the scorer
+  ran to the corner with the posture of a man taking a throw-in. And the strike
+  technique was only known when the commentary happened to describe it, which it
+  usually does not, so nearly every goal fell through to one generic kick. An
+  unclassified strike now gets one seeded from the event, weighted the way goals
+  are actually scored, and the commentary still wins when it says something. There
+  are three celebrations rather than one.
+
+- **Faces had a light sitting on them, and the chinstrap was a strap.** The rim
+  light was a white oval six units wide lying across the cheek of a nine-unit-wide
+  face — at small sizes it read as a bloom in the middle of the face rather than
+  light down the side of a head. And the chinstrap was drawn as a band whose outer
+  half fell outside the head, so the clip kept the inner edge: a stripe across the
+  cheeks with skin on both sides. A chinstrap is what is left of a full beard when
+  the middle is shaved out, so it is drawn that way now — the beard mass with the
+  head's own outline scaled down and painted back in the face's gradient, leaving a
+  rim that follows the real silhouette.
+
 - **Turning the phone sideways showed a black screen.** The match screen is hidden
   until a match starts (`#matchScreen{display:none}`), and the landscape layout added
   `#matchScreen.mvwide{display:grid}` — one class more specific, so the moment the

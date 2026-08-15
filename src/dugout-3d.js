@@ -1593,6 +1593,37 @@
     }
     /* the technique comes from the engine's own words about this event */
     next.technique = techniqueOf(next.text) || techniqueOf(next.commentary) || null;
+    /* EVERY GOAL LOOKED THE SAME, and the reason is that most of them
+       had no technique at all. The classifier only fires when the
+       commentary happens to describe how the ball was struck, and most
+       lines do not — "GOAL! Rashford makes it 2-1" says nothing — so
+       almost every goal fell through to the one generic kick.
+
+       An unclassified strike now gets one, seeded from the event id so
+       it is the same every time you watch that goal back. The weights
+       are roughly how goals are actually scored: mostly driven or
+       side-footed, a fair number bent, and headers, volleys and chips
+       as the exceptions they are. It never overrides the commentary —
+       if the engine said "header", it is a header. */
+    if (!next.technique && (next.type === 'goal' || next.type === 'shot' || next.type === 'save')) {
+      const pick = seeded(seedFrom(`${next.id}|strike`))();
+      next.technique = pick < 0.34 ? 'drive'
+        : pick < 0.60 ? 'curl'
+          : pick < 0.74 ? 'volley'
+            : pick < 0.86 ? 'header'
+              : pick < 0.94 ? 'chip' : 'cross';
+    }
+    /* THE KEEPER HAS TO GO. On a goal he did nothing at all: the
+       conceding-side block put him in the dejection pose while the ball
+       was still in flight, so he stood in front of his net with his
+       hands on his head and watched it go past him. Naming him on the
+       action lets the renderer find him in one lookup a frame instead of
+       searching the side every time. */
+    if (['goal', 'shot', 'penalty'].includes(next.type) && defendingSide != null) {
+      const side = match && match.sides && match.sides[defendingSide];
+      const keeper = side && (side.onfield || []).filter((pl) => pl && pl.slot === 'GK' && !pl.off)[0];
+      if (keeper && keeper.p) next.keeperId = keeper.p.id;
+    }
     state.timeline.current = next;
     return next;
   }
@@ -1745,13 +1776,29 @@
         } else {
           pose = { ...pose, legA: 1.15 * kick - 0.2, legB: -0.18, armA: -0.7 * kick, armB: 0.52 * kick, rot: -0.10 * kick };
         }
-      } else if (action.type === 'goal') {
-        if (progress < 0.34) {
-          const kick = Math.sin(limit(progress / 0.34, 0, 1) * Math.PI);
-          pose = { ...pose, legA: 1.18 * kick - 0.2, legB: -0.18, armA: -0.7 * kick, armB: 0.52 * kick, rot: -0.10 * kick };
-        } else {
+        /* AND THE ARMS GO UP. This used to live in an `else if
+           (action.type === 'goal')` beneath the branch above — which
+           already matches 'goal' in its first condition, so it was dead
+           code and no scorer in the game had ever raised his arms. He
+           ran to the corner, because that is done by moving the model,
+           and celebrated with the posture of a man taking a throw-in.
+           Folded in here, after the strike he has just played. */
+        if (action.type === 'goal' && progress >= 0.34) {
           const celebrate = Math.sin(limit((progress - 0.34) / 0.28, 0, 1) * Math.PI / 2);
-          pose = { ...pose, armA: -2.1 * celebrate, armB: -2.1 * celebrate, lift: 0.10 * Math.abs(Math.sin(progress * Math.PI * 5)) };
+          const style = seeded(seedFrom('celebstyle|' + action.id))();
+          if (style < 0.45) {
+            /* both arms up and away */
+            pose = { ...pose, armA: -2.1 * celebrate, armB: -2.1 * celebrate,
+              lift: 0.10 * Math.abs(Math.sin(progress * Math.PI * 5)) };
+          } else if (style < 0.75) {
+            /* one arm up, the other pointing back at whoever passed it */
+            pose = { ...pose, armA: -2.3 * celebrate, armB: 0.9 * celebrate,
+              rot: -0.2 * celebrate, lift: 0.08 * Math.abs(Math.sin(progress * Math.PI * 4)) };
+          } else {
+            /* arms wide, sliding on the knees */
+            pose = { ...pose, armA: -1.2 * celebrate, armB: -1.2 * celebrate,
+              down: 0.5 * celebrate, legA: 0.6 * celebrate, legB: 0.55 * celebrate };
+          }
         }
       } else if (action.type === 'tackle' || action.type === 'interception') {
         const slide = Math.sin(limit(progress * 1.25, 0, 1) * Math.PI);
@@ -1804,6 +1851,68 @@
         const progress = actionProgress(action, now);
         const dive = Math.sin(progress * Math.PI);
         pose = { ...pose, armA: -1.25 * dive, armB: -1.10 * dive, legA: 0.3 * dive, legB: -0.2 * dive, rot: dive * 0.82, lift: dive * 0.72 };
+      }
+    }
+
+    /* ---- THE KEEPER GOES FOR IT, AND IS BEATEN ----
+       "the goalie doesn't make an attempt to save it, he stood in front
+       of like his goal"
+
+       He is right, and it was not subtle: on a goal the conceding-side
+       block above put every man in that side — the keeper included —
+       into the hands-on-head pose from the moment the action started.
+       So the one player in the stadium whose job it is to react to the
+       ball spent the whole of its flight standing still with his hands
+       on his head. Nothing dived, so every goal looked identical no
+       matter where it went.
+
+       He now moves the way a beaten keeper moves, and the movement is
+       DERIVED FROM WHERE THE BALL IS ACTUALLY GOING rather than picked:
+
+         which way          `to.y` against the middle of the goal
+         how flat           `netHeight` — a low ball is a low dive
+         how far he gets    how wide of him it is placed
+
+       That is what stops goals looking the same as each other. A shot
+       into the bottom corner and a shot into the top corner now produce
+       two different dives, because the same two numbers that put the
+       ball there put him there.
+
+       It runs from the strike until just after the ball crosses the
+       line, and then it lets go — the dejection pose is what should be
+       on him once it is in, and this block sits after it so it wins
+       while it is running and yields the moment it stops. */
+    if (action && action.keeperId != null && action.keeperId === dot.pl.p.id && !dot.pl.off) {
+      const progress = actionProgress(action, now);
+      /* the flight is the first third of a goal's dwell; a shot or a
+         penalty is over sooner */
+      const flight = action.type === 'goal' ? 0.42 : 0.9;
+      if (progress < flight) {
+        const t = limit(progress / flight, 0, 1);
+        const to = action.to || { y: FIELD_WIDTH / 2 };
+        /* -1 to 1: how far off centre, and therefore which way he goes */
+        const offCentre = limit((number(to.y, FIELD_WIDTH / 2) - FIELD_WIDTH / 2) / 3.66, -1, 1);
+        const high = limit((number(action.netHeight, 1) - 0.24) / 2.0, 0, 1);
+        const way = offCentre >= 0 ? 1 : -1;
+        const reach = Math.max(0.35, Math.abs(offCentre));
+        const dive = Math.sin(limit(t * 1.12, 0, 1) * Math.PI * 0.5);
+        /* he throws himself across his line: the roll is the dive, the
+           lift is how high he had to go for it */
+        pose = {
+          ...pose,
+          rot: way * dive * (0.55 + reach * 0.85),
+          lift: dive * (0.10 + high * 0.85) * reach,
+          armA: -(0.9 + high * 1.5) * dive,
+          armB: -(0.7 + high * 1.3) * dive,
+          legA: 0.55 * dive * (1 - high),
+          legB: -0.35 * dive,
+          down: (1 - high) * dive * 0.30,
+        };
+        /* and he travels — a keeper who dives without moving is a man
+           falling over. Half a metre per unit of reach across the goal,
+           which is as far as he gets before it is past him. */
+        const across = way * reach * 2.4 * dive;
+        data.currentZ = mix(data.currentZ, limit(data.currentZ + across, -32, 32), smoothAmount(dt, 9));
       }
     }
 

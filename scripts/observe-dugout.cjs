@@ -159,6 +159,34 @@ async function main() {
         } catch (error) { /* skip the frame */ }
       }
 
+      /* A GOAL: does the keeper go for it, or stand there? This is the
+         one the complaint was about — "the goalie doesn't make an
+         attempt to save it, he stood in front of like his goal". So it
+         is measured on GOALS, not only on saves, and it records the
+         spread as well as the best: if every goal produces the same
+         dive the pictures are still identical. */
+      if (type === 'goal' && current.keeperId != null) {
+        try {
+          const model = state.players.get(current.keeperId);
+          const data = model && model.userData;
+          if (data) {
+            const lift = data.rootBody ? data.rootBody.position.y : 0;
+            const roll = data.hips ? Math.abs(data.hips.rotation.z) : 0;
+            const arm = data.leftArm ? Math.abs(data.leftArm.rotation.x) : 0;
+            const g = window.__obs;
+            g.gk = g.gk || {};
+            const key = current.id;
+            const best = g.gk[key] || { lift: 0, roll: 0, arm: 0 };
+            g.gk[key] = {
+              lift: Math.max(best.lift, +lift.toFixed(3)),
+              roll: Math.max(best.roll, +roll.toFixed(3)),
+              arm: Math.max(best.arm, +arm.toFixed(3)),
+              tech: current.technique || 'none',
+            };
+          }
+        } catch (error) { /* skip the frame */ }
+      }
+
       /* A SAVE: is the keeper actually diving — arms out, off the floor
          — rather than standing where he was. */
       if (type === 'save') {
@@ -217,6 +245,18 @@ async function main() {
   console.log('ball in the net  ', obs.ballInNet || 0, 'frames past the goal line');
   console.log('techniques seen  ', obs.tech ? JSON.stringify(obs.tech) : 'NONE — classifier never matched');
   console.log('keeper save      ', obs.save ? JSON.stringify(obs.save) : 'NEVER SAW A SAVE');
+  const gk = obs.gk ? Object.keys(obs.gk).map((k) => obs.gk[k]) : [];
+  if (!gk.length) console.log('keeper at a goal  NEVER SAW A GOAL');
+  else {
+    const still = gk.filter((g) => g.lift < 0.2 && g.roll < 0.1).length;
+    const spread = (key) => {
+      const v = gk.map((g) => g[key]);
+      return Math.min.apply(null, v).toFixed(2) + '..' + Math.max.apply(null, v).toFixed(2);
+    };
+    console.log('keeper at a goal ', gk.length, 'goals;', still, 'stood still;',
+      'lift', spread('lift'), 'roll', spread('roll'), 'arm', spread('arm'));
+    console.log('goal techniques  ', JSON.stringify(gk.map((g) => g.tech)));
+  }
   console.log('page errors      ', errors.length ? errors.slice(0, 3) : 'none');
 
   await browser.close();
