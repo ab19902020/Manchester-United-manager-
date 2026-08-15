@@ -92,14 +92,44 @@ const DAYS_PER_SEASON = 340;
        flattened in with a prefix rather than compared as objects: a save
        that stored a whole attrs block because one number in it moved
        would be measuring the wrong thing. */
+    const scalar = (v) => (typeof v === 'boolean' ? (v ? 1 : 0) : v);
+
+    /* Nested values are flattened rather than stringified wherever their
+       shape is fixed. The first version dumped every object and array to
+       JSON, which put the five-slot form array, the injury record and the
+       position families into a 279 kB blob — five numbers a player, as
+       text, with their punctuation. Only genuinely variable-length history
+       (car, log, mlog) is left as JSON now, because a column cannot hold a
+       list that is a different length for every player. */
+    const spread = (o, key, v) => {
+      if (v == null) { o[key] = null; return; }
+      if (Array.isArray(v)) {
+        const allNum = v.every((x) => x == null || typeof x === 'number');
+        if (allNum && v.length <= 8) {
+          for (let i = 0; i < 8; i += 1) o[key + '#' + i] = v[i] == null ? 0 : v[i];
+          return;
+        }
+        const allStr = v.every((x) => typeof x === 'string');
+        if (allStr && v.length <= 6) { o[key] = v.join(','); return; }
+        o[key] = JSON.stringify(v);
+        return;
+      }
+      if (typeof v === 'object') {
+        const keys = Object.keys(v);
+        const flatEnough = keys.length <= 8
+          && keys.every((k2) => v[k2] == null || typeof v[k2] !== 'object');
+        if (flatEnough) { keys.forEach((k2) => { o[key + '.' + k2] = scalar(v[k2]); }); return; }
+        o[key] = JSON.stringify(v);
+        return;
+      }
+      o[key] = scalar(v);
+    };
+
     const flat = (p, ci, youth) => {
       const o = { _club: ci, _youth: youth };
       Object.keys(p).forEach((k) => {
         if (k === 'attrs' || k === 'stats') return;
-        const v = p[k];
-        if (v == null) { o[k] = null; return; }
-        if (typeof v === 'object') { o[k] = JSON.stringify(v); return; }
-        o[k] = typeof v === 'boolean' ? (v ? 1 : 0) : v;
+        spread(o, k, p[k]);
       });
       if (p.attrs) Object.keys(p.attrs).forEach((k) => { o['a.' + k] = p.attrs[k]; });
       if (p.stats) Object.keys(p.stats).forEach((k) => { o['s.' + k] = p.stats[k]; });
@@ -291,6 +321,7 @@ const DAYS_PER_SEASON = 340;
         body,
         big,
         blob: JSON.stringify(big.map((k) => rows.map((rw) => rw[k]))),
+        perBig: big.map((k) => [k, JSON.stringify(rows.map((rw) => rw[k]))]),
         columns: chunks.length,
       };
     };
@@ -356,6 +387,22 @@ const DAYS_PER_SEASON = 340;
       world: await gz(enc.encode(playedWorld)),
     };
 
+    /* where the remaining blobs and the world blob actually go, so the
+       next thing to attack is chosen from a number and not a hunch */
+    const bigBreakdown = [];
+    for (const [k, json] of qdiff.perBig) bigBreakdown.push([k, await gz(enc.encode(json))]);
+    const worldBits = {
+      clubs: await gz(enc.encode(JSON.stringify(
+        G.clubs.map((c) => ({ ...c, players: undefined, youth: undefined }))))),
+      fixtures: await gz(enc.encode(JSON.stringify((G.fixtures || []).map((f) => [f.h, f.a, f.day,
+        f.div, f.r, f.played ? 1 : 0, f.hs, f.as, f.comp])))),
+      cups: await gz(enc.encode(JSON.stringify(G.cups || null))),
+      inbox: await gz(enc.encode(JSON.stringify(G.inbox || null))),
+      rest: await gz(enc.encode(JSON.stringify(Object.fromEntries(
+        Object.keys(G).filter((k) => !['clubs', 'fixtures', 'cups', 'inbox', 'freeAgents'].includes(k))
+          .map((k) => [k, G[k]]))))),
+    };
+
     const sum = (o) => Object.values(o).reduce((s, v) => s + v, 0);
 
     return {
@@ -370,6 +417,7 @@ const DAYS_PER_SEASON = 340;
       diff: { parts: diffParts, total: sum(diffParts), columns: diff.columns, big: diff.big },
       quant: { parts: quantParts, total: sum(quantParts), columns: quant.columns, big: quant.big },
       qdiff: { parts: qdiffParts, total: sum(qdiffParts), columns: qdiff.columns, big: qdiff.big },
+      bigBreakdown, worldBits,
       fullSaveRaw,
     };
   }, { seasons: SEASONS, daysPerSeason: DAYS_PER_SEASON });
@@ -407,6 +455,13 @@ const DAYS_PER_SEASON = 340;
   table('C. THE WHOLE WORLD, to a hundredth   (' + r.quant.columns + ' columns)', r.quant);
   table('D. SEED PLUS WHAT MOVED, hundredth   (' + r.qdiff.columns + ' columns)', r.qdiff);
 
+  console.log('what is left in D, blob by blob:');
+  r.bigBreakdown.sort((a, b) => b[1] - a[1]).forEach(([k, v]) => console.log('   ' + k.padEnd(16), kb(v)));
+  console.log('');
+  console.log('what is in the world blob:');
+  Object.entries(r.worldBits).sort((a, b) => b[1] - a[1])
+    .forEach(([k, v]) => console.log('   ' + k.padEnd(16), kb(v)));
+  console.log('');
   const best = [['A', r.full.total], ['B', r.diff.total], ['C', r.quant.total], ['D', r.qdiff.total]]
     .sort((x, y) => x[1] - y[1])[0];
   console.log('smallest:', best[0], kb(best[1]), verdict(best[1]));
