@@ -486,6 +486,60 @@ const DAYS_PER_SEASON = 340;
     const worldBits = {};
     for (const k of Object.keys(worldSrc)) worldBits[k] = await gz(enc.encode(worldSrc[k]));
 
+    /* (E) D, with the world put through the same mill as the players.
+       484 club records, 8,781 fixture rows and the cup ties are uniform
+       tables sitting in 225 kB of JSON — the last place in the save where
+       numbers are still written out as text. Parsed back from the strings
+       captured before the rebuild, so this cannot pick up the regenerated
+       world by accident the way the first breakdown did. */
+    const rowsOf = (list) => list.map((c) => {
+      const o = {};
+      Object.keys(c).forEach((k) => spread(o, k, c[k]));
+      return o;
+    });
+    const fieldsOf = (rws) => {
+      const set = new Set();
+      rws.forEach((rw) => Object.keys(rw).forEach((k) => set.add(k)));
+      return [...set].sort();
+    };
+
+    strings.clear();
+    const clubRows = rowsOf(JSON.parse(worldSrc.clubs));
+    const FIX = ['h', 'a', 'day', 'div', 'r', 'played', 'hs', 'as', 'comp'];
+    const fixRows = JSON.parse(worldSrc.fixtures)
+      .map((t) => Object.fromEntries(FIX.map((k, i) => [k, t[i]])));
+    const cupsRaw = JSON.parse(worldSrc.cups) || {};
+    const tieRows = [];
+    const cupShell = {};
+    Object.keys(cupsRaw).forEach((k) => {
+      const cup = cupsRaw[k];
+      if (!cup || typeof cup !== 'object') { cupShell[k] = cup; return; }
+      const { ties, ...rest2 } = cup;
+      cupShell[k] = rest2;
+      (ties || []).forEach((t) => {
+        const o = { _cup: sIdx(k) };
+        Object.keys(t).forEach((k2) => spread(o, k2, t[k2]));
+        tieRows.push(o);
+      });
+    });
+
+    const clubsEnc = encodeSet(clubRows, fieldsOf(clubRows), true);
+    const fixEnc = encodeSet(fixRows, FIX, true);
+    const tieEnc = tieRows.length ? encodeSet(tieRows, fieldsOf(tieRows), true) : null;
+
+    const worldPacked = {
+      clubs: await gz(clubsEnc.body),
+      clubsBig: await gz(enc.encode(clubsEnc.blob)),
+      fixtures: await gz(fixEnc.body),
+      cupTies: tieEnc ? await gz(tieEnc.body) : 0,
+      cupTiesBig: tieEnc ? await gz(enc.encode(tieEnc.blob)) : 0,
+      cupShell: await gz(enc.encode(JSON.stringify(cupShell))),
+      inbox: await gz(enc.encode(worldSrc.inbox)),
+      rest: await gz(enc.encode(worldSrc.rest)),
+      strTable: await gz(enc.encode([...strings.keys()].join(' '))),
+    };
+    const worldPackedTotal = Object.values(worldPacked).reduce((a, b) => a + b, 0);
+
     const sum = (o) => Object.values(o).reduce((s, v) => s + v, 0);
 
     return {
@@ -501,6 +555,9 @@ const DAYS_PER_SEASON = 340;
       quant: { parts: quantParts, total: sum(quantParts), columns: quant.columns, big: quant.big },
       qdiff: { parts: qdiffParts, total: sum(qdiffParts), columns: qdiff.columns, big: qdiff.big },
       bigBreakdown, worldBits, samples, sideTables,
+      worldPacked, worldPackedTotal,
+      packed: { parts: Object.assign({}, qdiffParts, { world: worldPackedTotal }),
+        total: sum(qdiffParts) - qdiffParts.world + worldPackedTotal },
       fullSaveRaw,
     };
   }, { seasons: SEASONS, daysPerSeason: DAYS_PER_SEASON });
@@ -537,6 +594,12 @@ const DAYS_PER_SEASON = 340;
   table('B. SEED PLUS WHAT MOVED, exact       (' + r.diff.columns + ' columns)', r.diff);
   table('C. THE WHOLE WORLD, to a hundredth   (' + r.quant.columns + ' columns)', r.quant);
   table('D. SEED PLUS WHAT MOVED, hundredth   (' + r.qdiff.columns + ' columns)', r.qdiff);
+  table('E. D, WITH THE WORLD IN COLUMNS TOO', r.packed);
+  console.log('the world, packed:');
+  Object.entries(r.worldPacked).sort((a, b) => b[1] - a[1])
+    .forEach(([k, v]) => console.log('   ' + k.padEnd(12), kb(v)));
+  console.log('   ' + 'TOTAL'.padEnd(12), kb(r.worldPackedTotal), ' was', kb(r.qdiff.parts.world));
+  console.log('');
 
   if (r.sideTables.length) {
     console.log('arrays turned into side tables (field, rows, columns):');
@@ -563,8 +626,8 @@ const DAYS_PER_SEASON = 340;
     console.log('        ' + v.json);
   });
   console.log('');
-  const best = [['A', r.full.total], ['B', r.diff.total], ['C', r.quant.total], ['D', r.qdiff.total]]
-    .sort((x, y) => x[1] - y[1])[0];
+  const best = [['A', r.full.total], ['B', r.diff.total], ['C', r.quant.total],
+    ['D', r.qdiff.total], ['E', r.packed.total]].sort((x, y) => x[1] - y[1])[0];
   console.log('smallest:', best[0], kb(best[1]), verdict(best[1]));
   console.log('full save as JSON, uncompressed, for scale:', kb(r.fullSaveRaw));
   console.log('errors:', errors.length ? errors.slice(0, 3) : 'none');
