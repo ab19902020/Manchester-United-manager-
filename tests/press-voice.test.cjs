@@ -194,3 +194,73 @@ test('the new questions survive a real press conference', async () => {
     game.close();
   }
 });
+
+test('the press room asks about the season you are actually in', async () => {
+  const game = await createGame();
+  try {
+    await startCareer(game, 'Presser');
+
+    const result = game.eval(`(function () {
+      const opp = G.clubs.filter((c) => c.i !== G.my)[0];
+      const api = window.RBSPressQuestions;
+
+      /* the bank, asked under a set of made-up circumstances. pqFacts is
+         wrapped so the flags come from the real computation; these
+         override only its output, which is what the questions read. */
+      const realFacts = window.pqFacts;
+      const under = (over) => {
+        window.pqFacts = function () {
+          const F = realFacts.apply(this, arguments) || {};
+          return Object.assign(F, over);
+        };
+        G.pressCtx = { oppI: opp.i, kind: 'pre', q: 0, _asked: [] };
+        const bank = pressBank();
+        const ids = {};
+        bank.forEach((line) => {
+          const id = String(line.id).split('#')[0];
+          ids[id] = (ids[id] || 0) + 1;
+        });
+        const total = bank.length;
+        window.pqFacts = realFacts;
+        return { ids, total };
+      };
+
+      const first = under({ pre: true, post: false, matchday: 1, isCup: false,
+        isFriendly: false, phase: 'opening', pos: 8, left: 37 });
+      const drop = under({ pre: true, post: false, matchday: 30, isCup: false,
+        isFriendly: false, phase: 'runin', dropFight: true, promoRace: false,
+        titleRace: false, midTable: false, pos: 18, left: 8 });
+      const promo = under({ pre: true, post: false, matchday: 22, isCup: false,
+        isFriendly: false, phase: 'midwinter', promoRace: true, dropFight: false,
+        titleRace: false, midTable: false, pos: 4, left: 24 });
+
+      const share = (r, id) => (r.ids[id] || 0) / Math.max(1, r.total);
+      return {
+        firstShare: +share(first, 'sea-first').toFixed(3),
+        dropShare: +share(drop, 'sea-drop').toFixed(3),
+        promoShare: +share(promo, 'sea-promo').toFixed(3),
+        /* and the wrong ones must not be in the bank at all */
+        dropOnFirstDay: first.ids['sea-drop'] || 0,
+        promoWhenDropping: drop.ids['sea-promo'] || 0,
+        weights: api.CONTEXT_WEIGHT,
+      };
+    }())`);
+
+    /* on the opening day the pre-season question is the loudest thing in
+       the room; in a relegation fight it is relegation */
+    assert.ok(result.firstShare > 0.06,
+      `the first game should ask about pre-season (share ${result.firstShare})`);
+    assert.ok(result.dropShare > 0.05,
+      `a relegation fight should ask about relegation (share ${result.dropShare})`);
+    assert.ok(result.promoShare > 0.05,
+      `a promotion push should ask about promotion (share ${result.promoShare})`);
+
+    /* and never the wrong season */
+    assert.equal(result.dropOnFirstDay, 0,
+      'nobody asks about relegation before a ball has been kicked');
+    assert.equal(result.promoWhenDropping, 0,
+      'nor about promotion while you are third from bottom');
+  } finally {
+    game.close();
+  }
+});

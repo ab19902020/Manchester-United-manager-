@@ -1,4 +1,4 @@
-/* global PQ, PANS, PS, PSUR, PNM, esc, fmtM */
+/* global PQ, PANS, PS, PSUR, PNM, esc, fmtM, pressBank:writable, pqFacts */
 
 /* =====================================================================
    A BIGGER PRESS ROOM
@@ -366,16 +366,166 @@
     },
   ];
 
+  /* ===================================================================
+     WHERE YOU ARE IN THE SEASON, AND WHAT IS AT STAKE
+     ===================================================================
+     "if it's the first game of the season, the question should be about
+     how did your pre-season go, are you excited, do you need more
+     signings. If it's getting up to December and you're fighting for
+     promotion it should be about promotion. If you're fighting
+     relegation, ask about relegation. If it's a mid-table battle it
+     needs to understand."
+
+     Every one of those facts is already worked out and almost none of
+     them were being used. `press-room.js` computes `F.titleRace`,
+     `F.promoRace`, `F.dropFight`, `F.midTable`, `F.phase` and
+     `F.matchday` on every conference — and then only `phase` fed a
+     question. A side sitting third from bottom in April was as likely to
+     be asked about the pitch as about going down.
+
+     These are keyed to those flags and nothing else, so the press room
+     asks about the thing that is actually happening to you. */
+  const CONTEXT = [
+    {
+      id: 'sea-first', w: (F) => F.pre && F.matchday === 1 && !F.isCup && !F.isFriendly,
+      q: (F) => [
+        'First game of the season. How has pre-season gone?',
+        'Are you happy with where the squad is after the summer?',
+        'Do you still need more signings before this window shuts?',
+        'What would make this a good season for ' + PS((F.my && F.my.short) || 'this club') + '?'],
+      a: [['💪 Ready to go', 'Excellent. Hard work, good tour, everybody back fit. We could not have asked for more from the summer.'],
+        ['🛒 We need more', 'I will be honest — this squad is not finished. The club know what I am after and we are working on it.'],
+        ['🎯 Targets set', 'We have agreed internally what a good season looks like and we will keep that between us. It is ambitious.'],
+        ['🧊 Ask me in May', 'Everybody is optimistic in August. I will tell you how the summer went when we see where we finish.']],
+    },
+    {
+      id: 'sea-promo', w: (F) => F.pre && F.promoRace && F.phase !== 'opening',
+      q: (F) => [
+        'You are ' + PS(ordinal(F.pos || 1)) + ' with ' + (F.left || 0) + ' to play. Is this a promotion side?',
+        'Do you talk about promotion inside the building, or is it banned?',
+        'What separates a side that goes up from one that falls away in March?',
+        'Would automatic promotion be a failure if it came down to the play-offs?'],
+      a: [['🎯 We are going for it', 'Of course we are. We are in the top six with games to play — pretending otherwise would insult everybody.'],
+        ['🤐 Not a word', 'We do not use the word. We talk about the next game, and if you keep winning those the table sorts itself out.'],
+        ['💪 Nerve', 'Everybody can play in August. Going up is about who can still play in April with something on it.'],
+        ['🛡️ Play-offs are not failure', 'Ask anybody who has gone up through them. You take promotion however it comes.']],
+    },
+    {
+      id: 'sea-drop', w: (F) => F.pre && F.dropFight,
+      q: (F) => [
+        'You are ' + PS(ordinal(F.pos || 20)) + ' with ' + (F.left || 0) + ' to play. Are you in a relegation fight?',
+        'How many points do you think will keep this club up?',
+        'Do the players believe they are good enough to stay in this division?',
+        'Is there a point where you have to change how you play to survive?'],
+      a: [['😐 We are in it', 'Look at the table. We are in a fight and I am not going to stand here and pretend we are not.'],
+        ['💪 We will stay up', 'I have absolutely no doubt. This squad is better than that position and it will prove it.'],
+        ['🛡️ Points, not football', 'From here it is about points, however they come. Nobody gets a prize in May for being easy on the eye.'],
+        ['❤️ Stay together', 'The only way out of this is together — players, staff, supporters. Turning on each other finishes clubs.']],
+    },
+    {
+      id: 'sea-title', w: (F) => F.pre && F.titleRace && F.phase !== 'opening',
+      q: (F) => [
+        'You are in the title race. Does the club believe it can win this?',
+        'How do you keep a group calm when the finish line is in sight?',
+        'Do you watch the teams around you, or only your own results?',
+        'Is there pressure in being expected to win it now?'],
+      a: [['🏆 We can win it', 'We are in it on merit and we intend to be in it in May. There is no reason to be coy about that.'],
+        ['🧊 One at a time', 'The moment you look at the table instead of the next opponent you drop points. We are not doing that.'],
+        ['📺 I watch everything', 'Of course I watch. Anybody who says they do not is not telling you the truth.'],
+        ['💪 Pressure is a privilege', 'Would you rather be fighting at the bottom? This is what everybody at this club works for.']],
+    },
+    {
+      id: 'sea-mid', w: (F) => F.pre && F.midTable && (F.phase === 'midwinter' || F.phase === 'early'),
+      q: (F) => [
+        'Mid-table, safe, nothing much to play for. How do you keep standards up?',
+        'Is this season drifting?',
+        'Does a run of games with nothing riding on them worry you?',
+        'What is the target for the rest of the season from here?'],
+      a: [['🎯 Push up the table', 'There are ten places above us and every one of them is worth money and momentum. That is the target.'],
+        ['📈 Build for next year', 'This is when you find out about young players. Some of them will be in my plans because of these months.'],
+        ['😠 Nothing to play for is nonsense', 'You play for the badge and for the supporters who travel. I do not accept the premise.'],
+        ['🧊 Standards do not drift', 'The standards are the standards in August and they are the standards in April. That does not move.']],
+    },
+    {
+      id: 'sea-newyear', w: (F) => F.pre && F.phase === 'midwinter',
+      q: () => [
+        'The window is open again. Do you expect business this month?',
+        'Is January a window to strengthen or a window to survive?',
+        'How much does the Christmas schedule take out of a squad?',
+        'Half a season gone — what is the honest assessment?'],
+      a: [['🛒 We will be busy', 'If the right player is available we will move. Standing still in January is a decision too.'],
+        ['🧊 Quiet window', 'January is an expensive month to shop in. I would rather work with what I have than overpay in a panic.'],
+        ['😰 It is brutal', 'Nobody outside the game understands what those two weeks do to legs. You are managing bodies, not tactics.'],
+        ['📈 Where we should be', 'Roughly where I expected. Not perfect, but the shape of the season is right.']],
+    },
+  ];
+
   /* the game's own shape: a rule with an id, a predicate and phrasings,
      and an answer function keyed by the same id */
+  function ordinal(n) {
+    const v = n % 100;
+    if (v >= 11 && v <= 13) return n + 'th';
+    return n + ['th', 'st', 'nd', 'rd'][(n % 10) < 4 ? (n % 10) : 0];
+  }
+
+  const ALL = BANK.concat(CONTEXT);
   const have = new Set(PQ.map((rule) => rule.id));
-  BANK.forEach((entry) => {
+  ALL.forEach((entry) => {
     if (have.has(entry.id)) return;
     PQ.push({ id: entry.id, w: entry.w, q: entry.q });
     if (!PANS[entry.id]) PANS[entry.id] = () => entry.a;
   });
 
+  /* -------------------------------------------------------------------
+     AND THEY HAVE TO BE ASKED, not merely available
+     -------------------------------------------------------------------
+     The bank is a multiset — a topic appears in it as many times as it
+     is worth, and `press-room.js` builds that from a `weightFor` table
+     inside its own closure, which knows nothing about these ids and so
+     would give each of them the weight of an ordinary question. A side
+     three from bottom in April would then be as likely to be asked about
+     the pitch as about going down, which is the whole complaint.
+
+     So the multiset gets another pass, outermost: when the fact behind
+     one of these is true, it goes in heavily. Twenty-two for relegation
+     is deliberate — the fight is the only thing anybody wants to talk to
+     you about — and the first game of a season is twenty-six, because on
+     that one day there is nothing else. */
+  const CONTEXT_WEIGHT = {
+    'sea-first': 26,
+    'sea-drop': 22,
+    'sea-promo': 20,
+    'sea-title': 18,
+    'sea-newyear': 12,
+    'sea-mid': 12,
+  };
+
+  if (typeof pressBank === 'function') {
+    const previous = pressBank;
+    pressBank = function pressBankInSeason() {
+      const bank = previous.apply(this, arguments) || [];
+      try {
+        if (!bank.length) return bank;
+        const F = (typeof pqFacts === 'function') ? pqFacts() : null;
+        if (!F) return bank;
+        const extra = [];
+        bank.forEach((line) => {
+          const id = String(line.id).split('#')[0];
+          const weight = CONTEXT_WEIGHT[id];
+          if (!weight) return;
+          /* already in once from the base pass; top it up to its weight */
+          for (let i = 1; i < weight; i += 1) extra.push(line);
+        });
+        return extra.length ? bank.concat(extra) : bank;
+      } catch (error) {
+        return bank;
+      }
+    };
+  }
+
   try {
-    window.RBSPressQuestions = Object.freeze({ BANK, added: BANK.length });
+    window.RBSPressQuestions = Object.freeze({
+      BANK, CONTEXT, CONTEXT_WEIGHT, ordinal, added: ALL.length,
+    });
   } catch (error) { /* no window */ }
 }());
