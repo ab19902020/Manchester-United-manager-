@@ -2,7 +2,34 @@
 
 ## Unreleased
 
+### Fixed
+
+- **The League Cup was frozen at the third round in every save.** A round is drawn
+  only once the round before it has been played, but the date came from a fixed
+  table written before the season started — so when a round ran late the next one
+  was born in the past. In a traced career the third-round draw fired on day 85 and
+  dated its sixteen ties day 78. Ties are only ever played by an exact match on
+  today's date, so those sixteen were unreachable for the rest of the season, and a
+  season-end guard then settled the whole competition in one sweep with no rounds,
+  no draws and no chance to play in it. A tie is now never dated before the day it
+  was drawn, and anything already stranded in the past is pulled back onto the
+  calendar. Your own tie is moved forward so you play it, never resolved behind your
+  back.
+
 ### Changed
+
+- **The trophy room is about the season you are playing, not only the one you
+  won.** The Trophies tab used to be dead on the day you started a career — four
+  lines, three of them saying you had not won anything, and no answer for the nine
+  months before you could. It now opens with the campaign: every competition the
+  club is actually entered in, whether you are still in it, and when the next round
+  is. "League phase 1 · Salzburg at home · 9 Sept" in September; "Knocked out ·
+  Fifth Round" in March; "Champions · 2026/27" in May. A Premier League club is
+  shown as being in the FA Cup from August with the round it enters at, because it
+  is. Walk into the room with nothing won and the trophies standing there are the
+  ones you are playing for this season rather than a catalogue of the game — a
+  League Two manager is no longer shown the Champions League as his preview. The
+  same list of trophies is no longer printed twice on one screen.
 
 - **The dugout runs like a broadcast: fast through the football, normal speed for
   the moments that decide it.** Whatever speed you have chosen, the match now drops

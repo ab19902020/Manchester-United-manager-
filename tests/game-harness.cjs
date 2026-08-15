@@ -42,6 +42,8 @@ function gameHtml() {
     'src/dugout-drama.js',
     'src/dugout-commentary.js',
     'src/ui-shell.js',
+    'src/cup-calendar.js',
+    'src/trophy-room.js',
   ]) {
     html = inlineScript(html, fs.readFileSync(path.join(root, filename), 'utf8'), filename);
   }

@@ -46,6 +46,8 @@ GitHub Actions runs the same checks on every pull request.
 - `src/match-ratings.js` — diminishing goalkeeper save rewards and rating-distribution guardrails.
 - `src/dugout-3d.js` — the Three.js stadium broadcast and accelerated analytics-to-animation timeline.
 - `src/dugout-renderer.js` — the tested perspective 2D fallback for browsers without WebGL.
+- `src/cup-calendar.js` — keeps a cup tie off a date that has already gone past, and rescues any that are.
+- `src/trophy-room.js` — the season's campaign board on the Trophies tab, and what stands in the empty room.
 - `service-worker.js` and `manifest.webmanifest` — installable offline shell.
 - `tests/` — unit and browser-style integration tests.
 

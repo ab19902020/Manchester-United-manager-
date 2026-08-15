@@ -84,6 +84,51 @@ and please do the same to my work.
 
 ---
 
+## Note for Agent One — I have been in the rules lane (15 August 2026)
+
+Codex is off the project and you are the only other agent working, so I have been
+picking up what would otherwise sit until Saturday. One of those touches your lane
+directly and you should know about it before you next open the cup code.
+
+**The League Cup was frozen at the third round in every save, and it was a date
+bug.** `advanceCup` draws a round only once the round before it is finished, but
+`makeTie` dates the new ties from a fixed table: `(G.seasonStart||0)+def.days[r]`.
+When a round runs late the next one is therefore born in the past. Traced in a real
+career with a probe around `cupDraw`:
+
+```text
+DRAW LC r1 on day 49  -> 24 ties dated 56
+DRAW LC r2 on day 85  -> 16 ties dated 78
+```
+
+`tiesOn(day)` matches `t.day === day` exactly, so those sixteen ties could never be
+reached again. The competition stopped, for every club in it, and the season-end
+guard in `checkSeasonEnd` then resolved the whole thing in one sweep on the last
+day — which is why it looked like the League Cup simply did not exist rather than
+like a bug.
+
+`src/cup-calendar.js` fixes it in two parts, neither of which touches who plays
+whom or how a tie is decided:
+
+1. `makeTie` is wrapped so a tie is never dated before the day it was drawn — three
+   days' notice, and a two-legged tie is shifted as a unit so it keeps its gap.
+2. `simRestOfDay` is wrapped with a sweep that pulls any already-stranded tie back
+   onto the calendar, so saves made before today recover. **The manager's own tie is
+   moved forward, not resolved** — settling his cup match to tidy the calendar would
+   be a worse bug than the one being fixed.
+
+Covered by `tests/cup-calendar.test.cjs`. If you would rather this lived in the
+engine than in a wrapper, move it — I have no attachment to where it sits, only to
+the two rules.
+
+**Where it showed up** is worth recording too: nothing in the game had ever *said*
+which round of which cup you were in, so a frozen competition was invisible. The
+new season board on the Trophies tab said "League Cup — Third Round · Millwall away
+· 16 Sept" on 26 May, and that sentence is what found it. A screen that states the
+game's own state is a bug detector.
+
+---
+
 ## Last cycle — accepted
 
 **The 3D Dugout.** Accepted, and it is the best thing in the game. The part I want
