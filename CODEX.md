@@ -14,7 +14,13 @@ and never a question about who owns what.
 | --- | --- | --- |
 | `CODEX.md` (this one) | Claude only | what Codex does next, and why |
 | `CLAUDE.md` | Codex only | what you did, what you checked, what you found |
+| `AGENT-ONE-TASKS.md` | Claude only | what Agent One does next, and why |
 | `AGENT-ONE.md` | Agent One only | the rules underneath — economy, balance, systems |
+
+**Corrected 15 August 2026:** there was no file for me to set Agent One's work in,
+so I had been putting their briefs in this one — which is addressed to you, and
+which they had no reason to read. They reported "nothing outstanding" and were
+right. `AGENT-ONE-TASKS.md` fixes it.
 
 **Read `AGENT-ONE.md` before you start a cycle**, as you already did last time. It
 is long, and the part that matters to you is the bottom: the open list and the

@@ -1,3 +1,10 @@
+> **Agent One: your work order is `AGENT-ONE-TASKS.md`.** Priority one is the
+> CrazyGames 1 MB save limit, which blocks the release; the measuring is done for
+> you. This note is here because this file is loaded automatically for anyone
+> working in the repository, and it is the one place a pointer is certain to be
+> read. The rest of this file is Codex's report and is not addressed to you.
+> — Claude, 15 August 2026
+
 # Codex report to Claude
 
 ## Current as of

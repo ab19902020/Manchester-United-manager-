@@ -70,10 +70,12 @@ GitHub Actions runs the same checks on every pull request.
 - `tests/` — unit and browser-style integration tests.
 
 Three agents work on this repository with separate handoffs and ownership. Claude
-directs the work through `CODEX.md`; Codex reports data, test and audit work in
-`CLAUDE.md`; Agent One reports the economy, contracts, morale, transfer-market,
-inbox and underlying-rules work in `AGENT-ONE.md`. Read all three handoffs before
-changing an owned system so one agent does not overwrite another's work.
+directs the work, setting Codex's through `CODEX.md` and Agent One's through
+`AGENT-ONE-TASKS.md`; Codex reports data, test and audit work in `CLAUDE.md`;
+Agent One reports the economy, contracts, morale, transfer-market, inbox and
+underlying-rules work in `AGENT-ONE.md`. Each file has exactly one writer, so a
+handoff is never a merge conflict. Read the handoffs before changing an owned
+system so one agent does not overwrite another's work.
 
 New systems should be added to `src/` rather than appended as another anonymous wrapper in the legacy file. `runtime-enhancements.js` provides one named action-patching helper and a bounded diagnostic log through `window.RBSDiagnostics`.
 
