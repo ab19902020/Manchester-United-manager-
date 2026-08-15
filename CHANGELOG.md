@@ -107,6 +107,30 @@
 
 ### Added
 
+- **A statistics centre, built on numbers the game was already keeping.** Every
+  match, for every player in the world, the engine has been banking passes
+  attempted and completed, key passes, tackles and tackles won, interceptions,
+  clearances, duels, aerials, dribbles, saves, fouls and minutes. None of it was
+  visible: the whole statistics screen was three top-ten lists and a history
+  table, and the only advanced figures anywhere were nine boxes on the profile of
+  a player at your own club. It is now five rooms — **Players** (every man in any
+  division, five metric groups, sortable on any column, filtered by position and
+  by appearances), **Teams** (the league table plus the squad behind it: size,
+  age, mean rating, wage bill, value), **Your squad** (full stat lines, totals or
+  per 90), **Matches** (the engine's own match reports, kept rather than
+  replaced) and **Records** (the leaders and your career history). Because it
+  reads existing bookkeeping rather than adding any, it costs nothing in save
+  size, which matters more than usual with a 1 MB limit waiting at the other end.
+
+- **Match ratings, match by match.** A season average says a player is a 7.1. It
+  does not say he was a 6.2 until Christmas and an 8 since. The engine kept
+  twenty match reports league-wide and then threw them away, so nothing
+  remembered a player's own season. Every man at your club now carries his last
+  twenty ratings and his profile draws them as a graph, with the match he scored
+  in marked and a rising/steady/falling read on the last five against the run.
+  Your club only — twenty small numbers for thirty players is free, and for ten
+  thousand players it is a megabyte the save cannot spare.
+
 - **A mailbox you can actually keep.** Every letter now carries a star and a bin,
   there is a *Clear read* sweep, an ⭐ Important folder, and an *Ignore* sheet that
   mutes a whole kind of post — a muted kind files itself straight into the archive

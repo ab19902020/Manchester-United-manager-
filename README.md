@@ -61,6 +61,9 @@ GitHub Actions runs the same checks on every pull request.
 - `src/press-questions.js` — twenty-six more press topics, weighted toward the ordinary week.
 - `src/press-voice.js` — British male voice selection, and a pool that cannot fall back to a woman.
 - `src/transfer-structure.js` — the manager's choice of how a fee is paid, and what a selling club charges to wait.
+- `src/analytics.js` — the statistics centre: every player and club in any division,
+  sortable, plus the per-match rating log and form graph for your own squad.
+- `src/delegation.js` — the jobs you hand to your assistant, and what his star rating costs you.
 - `src/face-polish.js` — the chinstrap drawn as a shaved-out beard, and the rim light pulled off the middle of the face.
 - `service-worker.js` and `manifest.webmanifest` — installable offline shell.
 - `scripts/sweep-screens.cjs` — walks every screen in both orientations looking for spill, overlap and squashed boxes.

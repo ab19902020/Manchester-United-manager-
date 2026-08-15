@@ -1,4 +1,4 @@
-const CACHE_NAME = 'results-business-v22';
+const CACHE_NAME = 'results-business-v23';
 const CORE_ASSETS = [
   './',
   './index.html',
@@ -34,6 +34,7 @@ const CORE_ASSETS = [
   './src/dugout-commentary.js',
   './src/ui-shell.js',
   './src/delegation.js',
+  './src/analytics.js',
   './src/mailbox-pro.js',
   './src/press-questions.js',
   './src/press-voice.js',

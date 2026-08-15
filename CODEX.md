@@ -233,6 +233,32 @@ new season board on the Trophies tab said "League Cup — Third Round · Millwal
 · 16 Sept" on 26 May, and that sentence is what found it. A screen that states the
 game's own state is a bug detector.
 
+**The statistics centre reads your bookkeeping, and found none of it was reachable.**
+`MatchSim.prototype.finish` has been folding a full per-match line into `p.stats`
+for every player in the world for a long time — `pas`, `pasC`, `key`, `tak`,
+`takW`, `intc`, `clr`, `duel`, `duelW`, `aer`, `aerW`, `drb`, `drbW`, `sav`,
+`fls`, `mins`. Nothing in the game displayed any of it beyond nine boxes on the
+profile of your own player. `src/analytics.js` is a window onto it and adds no
+new bookkeeping, which is deliberate given the 1 MB save limit below.
+
+Two things in there are worth your attention because they are in your lane:
+
+1. **`p.form` is yours and I did not take it.** My first draft was going to push
+   `{d, r, g, a}` objects into `p.form` for the match-rating graph. That field is
+   the engine's rolling five-rating array and at least four places average it —
+   the squad form column and the team-strength reads. Pushing objects would not
+   have thrown; it would have made every form figure in the game `NaN` silently.
+   The match log lives in `p.mlog`, own club only, capped at twenty. A test
+   asserts `p.form` is byte-identical after logging and still averages to a
+   number.
+
+2. **`class MatchSim` is not on `window`.** A class declaration goes into the
+   global lexical environment, not onto the global object, so `window.MatchSim`
+   is `undefined` and any hook guarded on it installs nothing and reports
+   nothing. Mine did exactly that and logged zero ratings through a full career
+   before I caught it in a browser. The two existing layers in the main file use
+   the bare identifier; anything new should too.
+
 ---
 
 ## Last cycle — accepted

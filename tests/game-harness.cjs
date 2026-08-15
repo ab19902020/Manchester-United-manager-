@@ -43,6 +43,7 @@ function gameHtml() {
     'src/dugout-commentary.js',
     'src/ui-shell.js',
     'src/delegation.js',
+    'src/analytics.js',
     'src/mailbox-pro.js',
     'src/press-questions.js',
     'src/press-voice.js',

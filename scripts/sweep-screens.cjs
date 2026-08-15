@@ -39,7 +39,13 @@ const SCREENS = [
   ['home', null], ['squad', 'first'], ['squad', 'academy'], ['squad', 'loans'],
   ['squad', 'treat'], ['squad', 'training'], ['tactics', null], ['transfers', null],
   ['world', 'table'], ['world', 'calendar'], ['world', 'fixtures'], ['world', 'cups'],
-  ['world', 'stats'], ['world', 'intl'],
+  /* the statistics centre is five rooms behind one tab, and four of them
+     are wide tables — which is exactly the shape that spills. Visiting
+     only the default room would check the one room with no table in it. */
+  ['world', 'stats', 'players'], ['world', 'stats', 'teams'],
+  ['world', 'stats', 'squad'], ['world', 'stats', 'matches'],
+  ['world', 'stats', 'records'],
+  ['world', 'intl'],
   ['club', 'staff'], ['club', 'stadium'], ['club', 'training'], ['club', 'finances'],
   ['club', 'trophies'], ['club', 'media'], ['club', 'save'],
 ];
@@ -55,11 +61,19 @@ async function walk(page, orientation) {
     const scrolls = (style) => /(auto|scroll)/.test(style.overflow)
       || /(auto|scroll)/.test(style.overflowY) || /(auto|scroll)/.test(style.overflowX);
 
-    for (const [view, tab] of SCREENS) {
+    for (const [view, tab, room] of SCREENS) {
       try {
         ACTIONS.nav({ dataset: { v: view } });
         if (tab && view === 'squad') ACTIONS.squadTab({ dataset: { v: tab } });
         else if (tab) ACTIONS.clubTab({ dataset: { v: tab } });
+        if (room && ACTIONS.anaRoom) {
+          ACTIONS.anaRoom({ dataset: { v: room } });
+          /* and drop the appearance filter, or early in a season the
+             players room draws its empty state and there is no table to
+             measure — a pass that means nothing */
+          try { window.RBSAnalytics.state().minApps = 0; } catch (e) { /* not loaded */ }
+          ACTIONS.anaRoom({ dataset: { v: room } });
+        }
         await new Promise((done) => setTimeout(done, 280));
 
         const root = document.getElementById('view');
@@ -122,7 +136,7 @@ async function walk(page, orientation) {
 
         out.push({
           view,
-          tab,
+          tab: room ? tab + '/' + room : tab,
           orientation,
           bodyOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
           spillN: spill.length,
