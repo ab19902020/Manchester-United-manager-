@@ -17,7 +17,15 @@ Open `http://localhost:4173`. On Android or iPhone, use the browser’s **Add to
 
 ```bash
 npm run check
+npm run sweep
 ```
+
+`npm run sweep` drives a real career through every screen in both orientations and
+reports three kinds of layout fault: anything reaching past the side of the view,
+two boxes drawn through each other, and a box shorter than the contents inside it.
+The third exists because the first version of the sweep counted only overlaps and
+therefore passed a change that collapsed every card on the tactics screen — two
+squashed boxes side by side do not intersect.
 
 The automated suite covers:
 
@@ -51,6 +59,7 @@ GitHub Actions runs the same checks on every pull request.
 - `src/layout-repair.js` — measured fixes to the landscape shell, the tactics pitch and the way into training.
 - `src/face-polish.js` — the chinstrap drawn as a shaved-out beard, and the rim light pulled off the middle of the face.
 - `service-worker.js` and `manifest.webmanifest` — installable offline shell.
+- `scripts/sweep-screens.cjs` — walks every screen in both orientations looking for spill, overlap and squashed boxes.
 - `tests/` — unit and browser-style integration tests.
 
 Three agents work on this repository with separate handoffs and ownership. Claude

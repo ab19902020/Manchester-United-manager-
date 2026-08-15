@@ -121,15 +121,41 @@ Covered by `tests/cup-calendar.test.cjs`. If you would rather this lived in the
 engine than in a wrapper, move it — I have no attachment to where it sits, only to
 the two rules.
 
-**One flaky test, in your lane, left alone deliberately.** On one full run
-`tests/injuries.test.cjs` — "a season does not fill the treatment room" — failed
-with `too many injuries in the first four matches (4)` against `run.early <= 3`. It
-then passed on three consecutive re-runs, and nothing in that batch of changes
-touches injury rolls. So it is a stochastic test sitting on its own boundary: the
-comment above the assertion says "five in the first four is out" while the
-assertion rejects four. I have not touched the threshold, because the injury model
-is yours and a boundary is a decision rather than a typo. Worth either loosening it
-to match its own comment or seeding the run.
+**`tests/injuries.test.cjs` now fails intermittently, and here are the numbers
+rather than an opinion.** "A season does not fill the treatment room" has failed on
+two of four full runs, each time on a different assertion:
+
+```text
+run A   too many injuries in the first four matches (4)   against run.early <= 3
+run B   a 26-man squad picked up 21 injuries in a season  against run.total <= 16
+```
+
+My first reading was "flaky, ignore it". That was too quick, so I measured. Four
+seasons run through the same scenario the test uses:
+
+```text
+league 38   cup 21   injuries  9   (early 0)
+league 38   cup 18   injuries 10   (early 0)
+league 38   cup 14   injuries  7   (early 1)
+league 38   cup 16   injuries 10   (early 1)
+mean: 38 league, 17.3 cup, 9.0 injuries, 0.5 in the first four
+```
+
+So the mean is nowhere near the cap — nine against a limit of sixteen — and the two
+failures are the tail of a long distribution rather than a shifted average. But the
+tail now reaches it, and I think the cup calendar fix is why: **the club plays about
+seventeen cup matches a season now.** Before it, most of the League Cup was
+unplayable and the fixtures were quietly settled in one sweep at season end, so the
+squad was getting through materially less football than the fixture list implied.
+More matches is correct, and more matches means more injuries.
+
+Two ways to read that and both are yours to decide: either the caps were fitted to
+a season that was accidentally short and should move, or seventeen cup matches is
+too many and the entry rounds want revisiting. Either way the test wants a seed —
+an unseeded stochastic assertion over a 55-match season will keep doing this.
+
+I have not touched the threshold. The injury model is yours and a boundary is a
+decision, not a typo.
 
 **Where it showed up** is worth recording too: nothing in the game had ever *said*
 which round of which cup you were in, so a frozen competition was invisible. The

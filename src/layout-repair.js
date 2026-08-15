@@ -110,26 +110,40 @@
       '#tacPitch .tslot .nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
 
       /* ---------------------------------------------------------------
-         3. AND THE PITCH IS WHY YOU OPENED THE SCREEN
+         3. WHAT IS NOT HERE, AND WHY
          ---------------------------------------------------------------
-         Measured on the same run: on a 390x844 phone the formation
-         picker and the mentality row take 535px before the pitch starts,
-         so opening Tactics shows you no team at all — you arrive at a
-         wall of chips and have to scroll to find out who is playing.
+         There WAS a rule here that put the pitch first on a phone:
 
-         The pitch goes first, and the controls sit under it. Nothing is
-         removed and nothing is rebuilt: the view becomes a flex column
-         and the pitch is given `order:-1`, which is four declarations
-         against six layers of markup that all still emit exactly what
-         they emitted before.
+             @media (max-width:659px){
+               #view[data-view="tactics"]{display:flex;flex-direction:column}
+               #view[data-view="tactics"]>#tacPitch{order:-1}
+             }
 
-         Bounded to portrait phones on purpose. At 660-1023 in landscape
-         the shell lays this view out as a two-column grid, and turning it
-         into a flex column there would throw that away. */
-      '@media (max-width:659px){',
-      ' #view[data-view="tactics"]{display:flex;flex-direction:column}',
-      ' #view[data-view="tactics"]>#tacPitch{order:-1;margin-bottom:12px}',
-      '}',
+         It wrecked the screen and it went out. Nobody asked for it — I
+         added it because the formation picker takes 535px before the
+         pitch starts — and the cost of being clever there was every card
+         on the tactics screen collapsing into a strip with its contents
+         spilling over the one below.
+
+         THE MECHANISM, because it is worth not repeating. A flex item
+         has `flex-shrink:1`. The view is a scroll container with a
+         definite height and eighty-one children whose total height is
+         several times that, so the moment it became a flex column the
+         browser did what it is supposed to do and compressed every child
+         to fit. Measured after the report: `.pitchbox` came back
+         `clientHeight=0` against `scrollHeight=30`, shrink 1. A grid does
+         not do this and a block does not do this; only flex does, and
+         only when you turn a long scrolling page into one.
+
+         `#view>*{flex:0 0 auto}` would have fixed it. It is still not
+         worth it: the reordering was my idea rather than a fault being
+         repaired, and the way to guarantee a screen is not broken by a
+         layout change is not to make the layout change. The pitch is one
+         short scroll down, as it has always been.
+
+         The sweep that passed this screen has been taught the shape of
+         this bug — see `scripts/sweep-screens.cjs` — so a squashed box
+         is a fault it reports rather than one it walks past. */
 
       /* ---------------------------------------------------------------
          5. AND IN LANDSCAPE, NEARLY EVERY SCREEN DREW THROUGH ITSELF

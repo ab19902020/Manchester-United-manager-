@@ -4,6 +4,17 @@
 
 ### Fixed
 
+- **The tactics screen was wrecked in portrait, by me.** A rule I added to put the
+  pitch above the formation picker turned the view into a flex column — and a flex
+  item shrinks by default, so a scrolling page with eighty-one children compressed
+  every card into a strip with its contents spilling over the one below. Measured
+  after the report: `.pitchbox` came back `clientHeight=0` against
+  `scrollHeight=30`. The rule is gone rather than patched: nobody asked for the
+  reordering, and the way to be sure a layout change cannot break a screen is not to
+  make it. The screen sweep has been taught to spot a box shorter than its own
+  contents — the question it was not asking when it passed this — and now lives in
+  `scripts/sweep-screens.cjs` behind `npm run sweep`.
+
 - **The goalkeeper never moved when a goal went in.** The block that made the
   conceding side react put every man in that side into the hands-on-head pose from
   the moment the goal started — including the keeper, so the one player whose job
@@ -82,10 +93,6 @@
   drew coloured discs with shirt numbers, which at a club whose primary is white came
   out as eleven identical white dots. It draws the players' own faces now — the same
   ones the tactics pitch uses — with the number kept as a corner badge.
-
-- **The tactics screen opens on the team.** The formation picker and mentality row
-  took 535px on a 390px-wide phone, so opening Tactics showed you no pitch at all.
-  The pitch goes first and the controls sit under it.
 
 - **The trophy room is about the season you are playing, not only the one you
   won.** The Trophies tab used to be dead on the day you started a career — four

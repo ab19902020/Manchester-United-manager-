@@ -10,6 +10,7 @@
     "data:fixtures": "node scripts/fetch-authentic-fixtures.cjs",
     "lint": "eslint src tests scripts service-worker.js",
     "test": "node --test --test-reporter=spec",
+    "sweep": "node scripts/sweep-screens.cjs",
     "check": "npm run lint && npm test"
   },
   "devDependencies": {
