@@ -45,6 +45,7 @@ const CORE_ASSETS = [
   './src/layout-repair.js',
   './src/cup-calendar.js',
   './src/trophy-room.js',
+  './src/world-seed.js',
   './vendor/three.min.js',
   './assets/results-business-icon.svg',
   './assets/results-business-icon-192.png',

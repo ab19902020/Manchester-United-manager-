@@ -150,6 +150,24 @@
 
 ### Added
 
+- **A world is a number now, and the same number gives back the same world.** The
+  save is 16.24 MB and the shop it ships in stores 1 MB, so the only shape that
+  fits is to keep the seed a world was built from and build it again on load —
+  which was worth nothing while the same seed gave a different world every time.
+  Two fresh careers in the same club used to differ in the *number of players*
+  they contained: 9,899 one run, 9,902 the next. Generation is now driven by a
+  seeded stream for the duration of world-building and for that duration only, so
+  a career records four bytes that reproduce it exactly, and the football after
+  kick-off is as random as it ever was. Two causes, and only one of them was the
+  obvious one: 317 unseeded random calls sat on the generation path, and the two
+  lookup tables that describe the world rather than your career (`LEAGUES`,
+  `DIV_NAMES`) are filled in by the first career of a session and left behind for
+  the next, which had the fixture list laying 380 rows on one build and 1,046 on
+  another from the same seed. Measured after: four builds from one seed — two in
+  fresh pages, two in a page that had already played twenty days of a different
+  career — identical down to the count of random numbers drawn (86,170). Nothing
+  about the save file has changed yet; existing careers are untouched.
+
 - **A story that runs alongside, and cannot touch the football.** A local
   journalist — one man for the career, with a name, a paper and one of four
   temperaments, generated once and stored — writes a column at the turn of every
