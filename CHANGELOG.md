@@ -4,6 +4,30 @@
 
 ### Fixed
 
+- **The tactics pitch overlapped names and fitness, and that was my fault.** When
+  the pitch was unsquashed I put the position label and the fitness tag on one line
+  and made the tag flow inline rather than float. It measured clean — because I
+  measured it on day one of a career, when the tag reads `100%`. Once a player has
+  a form average it reads `99% · 6.2`, which will not sit beside `AML` in a 62px
+  token, so it wrapped to a third line, grew the token about fifteen pixels and ran
+  it into the row below. Four months into a season it is unmissable.
+
+  The fix is fewer lines, not more: eleven tokens have to share a 522px pitch and
+  the tightest rows are twelve pixels apart, so a token that needs three lines
+  cannot be made to fit by adjusting the text. **Condition is now the ring around
+  the shirt** — green, amber, red, which is what fitness at a glance actually means
+  — **and form is a small pill on it**, mirroring the rating badge on the other
+  side. An injury turns the pill into a cross. What is left under the shirt is the
+  name and the position: two lines, fixed, that cannot grow whatever the season
+  does. The exact percentages are still a tap away on the player's profile.
+
+  The screen sweep could not see any of this: a tactics token is absolutely
+  positioned inside the pitch, so it is not a card, not a section and not a direct
+  child of the view — the overlap pass had never looked at one, and reported zero
+  faults on the broken screen. It measures every token and every pill now, and
+  running a career two hundred days in rather than sixty, because before that
+  nobody has a form average and the bug cannot appear.
+
 - **There were two Erling Haalands.** A 66-rated one, generated, at Bodø/Glimt, in
   the same world as the real 91-rated one at Manchester City. The name generator
   builds a player from his country's first-name and surname pools, and the

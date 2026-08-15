@@ -1,4 +1,4 @@
-const CACHE_NAME = 'results-business-v25';
+const CACHE_NAME = 'results-business-v26';
 const CORE_ASSETS = [
   './',
   './index.html',
@@ -37,6 +37,7 @@ const CORE_ASSETS = [
   './src/analytics.js',
   './src/story.js',
   './src/name-clash.js',
+  './src/tactics-token.js',
   './src/mailbox-pro.js',
   './src/press-questions.js',
   './src/press-voice.js',
