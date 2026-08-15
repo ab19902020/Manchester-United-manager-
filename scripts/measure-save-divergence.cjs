@@ -116,8 +116,11 @@ const DAYS_PER_SEASON = 340;
       }
       if (typeof v === 'object') {
         const keys = Object.keys(v);
-        const flatEnough = keys.length <= 8
-          && keys.every((k2) => v[k2] == null || typeof v[k2] !== 'object');
+        /* width is not the problem, nesting is. `car` is one flat object
+           of about twenty-five career totals and it was being dumped to
+           JSON for the sole reason that it has more than eight keys —
+           94 kB of numbers written out as text. */
+        const flatEnough = keys.every((k2) => v[k2] == null || typeof v[k2] !== 'object');
         if (flatEnough) { keys.forEach((k2) => { o[key + '.' + k2] = scalar(v[k2]); }); return; }
         o[key] = JSON.stringify(v);
         return;
@@ -324,6 +327,7 @@ const DAYS_PER_SEASON = 340;
        become columns; short strings go through a shared table; anything
        with a long value (career logs, match logs) is set aside as its own
        blob so it cannot poison a column of positions. */
+    const sideTables = [];
     const encodeSet = (rows, fields, quant) => {
       const n = rows.length;
       const chunks = [];
@@ -338,7 +342,66 @@ const DAYS_PER_SEASON = 340;
           if (typeof v === 'string' && v.length > 40) { long = true; break; }
         }
         if (numeric) { chunks.push(column(n, (i) => +rows[i][k] || 0, quant)); return; }
-        if (long) { big.push(k); return; }
+        if (long) {
+          /* An array of uniform records is a table, not a blob. `log` is
+             one row per appearance — the same fourteen fields every time,
+             and its only string is one of about forty competition names
+             repeated fifty times a player. Written as JSON that is 114 kB
+             of punctuation and repetition; written as a side table it is
+             columns like everything else, with one column naming the
+             player each row belongs to. */
+          const parsed = new Array(n);
+          let tabular = true;
+          for (let i = 0; i < n && tabular; i += 1) {
+            const raw = rows[i][k];
+            if (raw == null) { parsed[i] = null; continue; }
+            if (typeof raw !== 'string' || raw.charAt(0) !== '[') { tabular = false; break; }
+            let arr;
+            try { arr = JSON.parse(raw); } catch (e) { tabular = false; break; }
+            if (!Array.isArray(arr)) { tabular = false; break; }
+            for (let j = 0; j < arr.length; j += 1) {
+              const e = arr[j];
+              if (!e || typeof e !== 'object' || Array.isArray(e)) { tabular = false; break; }
+              const ks = Object.keys(e);
+              for (let q = 0; q < ks.length; q += 1) {
+                if (e[ks[q]] != null && typeof e[ks[q]] === 'object') { tabular = false; break; }
+              }
+            }
+            parsed[i] = arr;
+          }
+          if (!tabular) { big.push(k); return; }
+          const entries = [];
+          for (let i = 0; i < n; i += 1) {
+            const arr = parsed[i];
+            if (!arr) continue;
+            for (let j = 0; j < arr.length; j += 1) entries.push({ _row: i, e: arr[j] });
+          }
+          if (!entries.length) return;
+          const sub = new Set();
+          entries.forEach(({ e }) => Object.keys(e).forEach((k2) => sub.add(k2)));
+          const subKeys = [...sub].sort();
+          const m = entries.length;
+          chunks.push(column(m, (i) => entries[i]._row));
+          subKeys.forEach((k2) => {
+            let subNumeric = false;
+            for (let i = 0; i < m; i += 1) {
+              const v2 = entries[i].e[k2];
+              if (v2 == null) continue;
+              subNumeric = typeof v2 === 'number' || typeof v2 === 'boolean';
+              break;
+            }
+            if (subNumeric) {
+              chunks.push(column(m, (i) => {
+                const v2 = entries[i].e[k2];
+                return typeof v2 === 'boolean' ? (v2 ? 1 : 0) : (+v2 || 0);
+              }, quant));
+            } else {
+              chunks.push(column(m, (i) => sIdx(entries[i].e[k2])));
+            }
+          });
+          sideTables.push([k, entries.length, subKeys.length]);
+          return;
+        }
         chunks.push(column(n, (i) => sIdx(rows[i][k])));
       });
       let size = 0;
@@ -437,7 +500,7 @@ const DAYS_PER_SEASON = 340;
       diff: { parts: diffParts, total: sum(diffParts), columns: diff.columns, big: diff.big },
       quant: { parts: quantParts, total: sum(quantParts), columns: quant.columns, big: quant.big },
       qdiff: { parts: qdiffParts, total: sum(qdiffParts), columns: qdiff.columns, big: qdiff.big },
-      bigBreakdown, worldBits, samples,
+      bigBreakdown, worldBits, samples, sideTables,
       fullSaveRaw,
     };
   }, { seasons: SEASONS, daysPerSeason: DAYS_PER_SEASON });
@@ -475,6 +538,17 @@ const DAYS_PER_SEASON = 340;
   table('C. THE WHOLE WORLD, to a hundredth   (' + r.quant.columns + ' columns)', r.quant);
   table('D. SEED PLUS WHAT MOVED, hundredth   (' + r.qdiff.columns + ' columns)', r.qdiff);
 
+  if (r.sideTables.length) {
+    console.log('arrays turned into side tables (field, rows, columns):');
+    const seenSide = new Set();
+    r.sideTables.forEach(([k, rowsN, cols]) => {
+      const tag = k + '|' + rowsN;
+      if (seenSide.has(tag)) return;
+      seenSide.add(tag);
+      console.log('   ' + k.padEnd(8), String(rowsN).padStart(8), 'rows', String(cols).padStart(4), 'columns');
+    });
+    console.log('');
+  }
   console.log('what is left in D, blob by blob:');
   r.bigBreakdown.sort((a, b) => b[1] - a[1]).forEach(([k, v]) => console.log('   ' + k.padEnd(16), kb(v)));
   console.log('');
