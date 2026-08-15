@@ -147,6 +147,35 @@ const DAYS_PER_SEASON = 340;
     });
     const fullSaveRaw = JSON.stringify(G).length;
 
+    /* Captured HERE, before the rebuild, and not at the end with the rest
+       of the reporting. The first version measured these after
+       RBSWorldSeed.build() had already replaced the world, so it was
+       weighing a fresh season-one world with no results, no cup progress
+       and an empty inbox — the parts came to 82 kB against a 228 kB blob,
+       which is how the mistake showed itself. */
+    const worldSrc = {
+      clubs: JSON.stringify(G.clubs.map((c) => ({ ...c, players: undefined, youth: undefined }))),
+      fixtures: JSON.stringify((G.fixtures || []).map((f) => [f.h, f.a, f.day, f.div, f.r,
+        f.played ? 1 : 0, f.hs, f.as, f.comp])),
+      cups: JSON.stringify(G.cups || null),
+      inbox: JSON.stringify(G.inbox || null),
+      rest: JSON.stringify(Object.fromEntries(Object.keys(G)
+        .filter((k) => !['clubs', 'fixtures', 'cups', 'inbox', 'freeAgents'].includes(k))
+        .map((k) => [k, G[k]]))),
+    };
+    /* and what the growing history actually looks like, one example each */
+    const sampleOf = (key) => {
+      const men = G.clubs[G.my].players || [];
+      for (let i = 0; i < men.length; i += 1) {
+        const v = men[i][key];
+        if (v != null && (!Array.isArray(v) || v.length)) {
+          return { len: Array.isArray(v) ? v.length : 1, json: JSON.stringify(v).slice(0, 220) };
+        }
+      }
+      return null;
+    };
+    const samples = { log: sampleOf('log'), car: sampleOf('car'), mlog: sampleOf('mlog') };
+
     /* ---- 3. the world the seed gives back ---------------------------- */
 
     RBSWorldSeed.build(seed, my);
@@ -391,17 +420,8 @@ const DAYS_PER_SEASON = 340;
        next thing to attack is chosen from a number and not a hunch */
     const bigBreakdown = [];
     for (const [k, json] of qdiff.perBig) bigBreakdown.push([k, await gz(enc.encode(json))]);
-    const worldBits = {
-      clubs: await gz(enc.encode(JSON.stringify(
-        G.clubs.map((c) => ({ ...c, players: undefined, youth: undefined }))))),
-      fixtures: await gz(enc.encode(JSON.stringify((G.fixtures || []).map((f) => [f.h, f.a, f.day,
-        f.div, f.r, f.played ? 1 : 0, f.hs, f.as, f.comp])))),
-      cups: await gz(enc.encode(JSON.stringify(G.cups || null))),
-      inbox: await gz(enc.encode(JSON.stringify(G.inbox || null))),
-      rest: await gz(enc.encode(JSON.stringify(Object.fromEntries(
-        Object.keys(G).filter((k) => !['clubs', 'fixtures', 'cups', 'inbox', 'freeAgents'].includes(k))
-          .map((k) => [k, G[k]]))))),
-    };
+    const worldBits = {};
+    for (const k of Object.keys(worldSrc)) worldBits[k] = await gz(enc.encode(worldSrc[k]));
 
     const sum = (o) => Object.values(o).reduce((s, v) => s + v, 0);
 
@@ -417,7 +437,7 @@ const DAYS_PER_SEASON = 340;
       diff: { parts: diffParts, total: sum(diffParts), columns: diff.columns, big: diff.big },
       quant: { parts: quantParts, total: sum(quantParts), columns: quant.columns, big: quant.big },
       qdiff: { parts: qdiffParts, total: sum(qdiffParts), columns: qdiff.columns, big: qdiff.big },
-      bigBreakdown, worldBits,
+      bigBreakdown, worldBits, samples,
       fullSaveRaw,
     };
   }, { seasons: SEASONS, daysPerSeason: DAYS_PER_SEASON });
@@ -461,6 +481,13 @@ const DAYS_PER_SEASON = 340;
   console.log('what is in the world blob:');
   Object.entries(r.worldBits).sort((a, b) => b[1] - a[1])
     .forEach(([k, v]) => console.log('   ' + k.padEnd(16), kb(v)));
+  console.log('');
+  console.log('what the growing history looks like:');
+  Object.entries(r.samples).forEach(([k, v]) => {
+    if (!v) { console.log('   ' + k.padEnd(6), '(none on this squad)'); return; }
+    console.log('   ' + k.padEnd(6), 'length ' + v.len);
+    console.log('        ' + v.json);
+  });
   console.log('');
   const best = [['A', r.full.total], ['B', r.diff.total], ['C', r.quant.total], ['D', r.qdiff.total]]
     .sort((x, y) => x[1] - y[1])[0];
