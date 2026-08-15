@@ -1,4 +1,4 @@
-/* global G, UI, render, crest, FORMATIONS, playerById, shirtNo, esc, calcEff */
+/* global G, UI, render, crest, FORMATIONS, playerById, shirtNo, esc, calcEff, face */
 
 /* =====================================================================
    UI SHELL — the chrome, in the club's colours
@@ -191,12 +191,27 @@ body{
   box-shadow:inset 0 0 60px rgba(0,0,0,.55)}
 .sh-pitch .sh-mk{position:absolute;border:1.5px solid rgba(255,255,255,.16);border-radius:2px}
 .sh-tok{position:absolute;transform:translate(-50%,-50%);text-align:center;width:56px}
+/* THE MAN, NOT A DISC. The first cut drew a coloured circle with a shirt
+   number in it, which at a created club whose primary is white came out
+   as eleven identical white dots — you could not tell your side apart
+   from a diagram. The tactics pitch already draws the player's own face,
+   so the dashboard draws the same face: you recognise the eleven you
+   picked at a glance instead of reading numbers off counters. The number
+   survives as a corner badge, because a shirt number is how you refer to
+   a player, and the ring keeps the club's colour so the side still reads
+   as a side. */
 .sh-tok .sh-shirt{
-  width:27px;height:27px;margin:0 auto;border-radius:50%;
+  position:relative;width:31px;height:31px;margin:0 auto;border-radius:50%;
   display:flex;align-items:center;justify-content:center;
   font:900 11.5px/1 var(--body);color:#fff;
   border:1.5px solid rgba(255,255,255,.5);
   box-shadow:0 3px 8px rgba(0,0,0,.55)}
+.sh-tok .sh-face{position:absolute;inset:0;border-radius:50%;overflow:hidden;line-height:0}
+.sh-tok .sh-face svg,.sh-tok .sh-face img{width:100%;height:100%;border-radius:50%;display:block}
+.sh-tok .sh-no{position:absolute;right:-5px;bottom:-3px;min-width:15px;height:14px;padding:0 3px;
+  border-radius:7px;display:flex;align-items:center;justify-content:center;
+  font:900 9px/1 var(--body);border:1px solid rgba(0,0,0,.45);
+  box-shadow:0 2px 5px rgba(0,0,0,.55)}
 .sh-tok .sh-nm{margin-top:3px;font:700 9.5px/1.1 var(--body);color:rgba(255,255,255,.9);
   text-shadow:0 1px 3px rgba(0,0,0,.9);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
@@ -275,8 +290,21 @@ body{
       if (player && typeof calcEff === 'function') {
         try { rated += calcEff(player, role); counted += 1; } catch (error) { /* skip */ }
       }
+      /* the player's own face when the generator is there, the coloured
+         disc when it is not — a screen that has to work offline in a
+         browser that may have failed to build a portrait should still
+         put eleven men on the grass */
+      let portrait = '';
+      if (player && typeof face === 'function') {
+        try { portrait = face(player, 31); } catch (error) { portrait = ''; }
+      }
+      const badge = number === '' ? ''
+        : `<span class="sh-no" style="background:${fill};color:${ink}">${esc(String(number))}</span>`;
       tokens += `<div class="sh-tok" style="left:${left.toFixed(2)}%;top:${top.toFixed(2)}%">`
-        + `<div class="sh-shirt" style="background:${fill};color:${ink}">${esc(String(number))}</div>`
+        + `<div class="sh-shirt" style="background:${fill};color:${ink}">`
+        + (portrait ? `<span class="sh-face">${portrait}</span>${badge}`
+          : esc(String(number)))
+        + `</div>`
         + `<div class="sh-nm">${esc(label)}</div></div>`;
     });
 

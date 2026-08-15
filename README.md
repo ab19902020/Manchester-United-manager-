@@ -48,6 +48,7 @@ GitHub Actions runs the same checks on every pull request.
 - `src/dugout-renderer.js` — the tested perspective 2D fallback for browsers without WebGL.
 - `src/cup-calendar.js` — keeps a cup tie off a date that has already gone past, and rescues any that are.
 - `src/trophy-room.js` — the season's campaign board on the Trophies tab, and what stands in the empty room.
+- `src/layout-repair.js` — measured fixes to the landscape shell, the tactics pitch and the way into training.
 - `service-worker.js` and `manifest.webmanifest` — installable offline shell.
 - `tests/` — unit and browser-style integration tests.
 

@@ -4,6 +4,35 @@
 
 ### Fixed
 
+- **Turning the phone sideways showed a black screen.** The match screen is hidden
+  until a match starts (`#matchScreen{display:none}`), and the landscape layout added
+  `#matchScreen.mvwide{display:grid}` — one class more specific, so the moment the
+  phone was turned the empty, full-screen, near-black panel was told to display
+  itself over the whole game. Whether a panel is on screen is no longer something a
+  layout class can decide.
+
+- **In landscape, nearly every screen drew through itself.** Sweeping all
+  twenty-one screens in both orientations: portrait clean everywhere, landscape
+  broken on thirteen of them — twenty overlapping pairs through the stadium hero,
+  one 227px deep on the Stats tab. The two-column grid was sizing rows as though
+  the cards were empty (the stadium hero: 359px tall, in a 2px row), because a box
+  that clips or scrolls contributes nothing to an `auto` track. Four candidate
+  fixes were measured against the same screens; `grid-auto-rows:max-content` is the
+  one that keeps both the columns and the clipping. Zero faults now, on all
+  forty-two screen-and-orientation combinations.
+
+- **The training ground had no door on it.** When the Club and World screens were
+  split into two doors, Training was not carried across to the club side — the only
+  way in was the fifth chip on the squad screen's scrolling tab strip, off the right
+  edge of a 390px phone. It is back under The club, and there is a Training tile on
+  the home screen beside Tactics.
+
+- **The tactics pitch drew itself on top of itself.** Measured at 390x844: tokens
+  65px tall with the fitness tag hanging to 80px, in formation rows as little as
+  54px apart — five overlapping pairs, so names, positions and fitness were written
+  over the row below. The position and fitness now share one line, the token is
+  trimmed, and the pitch is closer to a real pitch's proportions. Zero overlaps.
+
 - **The League Cup was frozen at the third round in every save.** A round is drawn
   only once the round before it has been played, but the date came from a fixed
   table written before the season started — so when a round ran late the next one
@@ -17,6 +46,15 @@
   back.
 
 ### Changed
+
+- **The eleven on the dashboard are people, not counters.** The Team Overview pitch
+  drew coloured discs with shirt numbers, which at a club whose primary is white came
+  out as eleven identical white dots. It draws the players' own faces now — the same
+  ones the tactics pitch uses — with the number kept as a corner badge.
+
+- **The tactics screen opens on the team.** The formation picker and mentality row
+  took 535px on a 390px-wide phone, so opening Tactics showed you no pitch at all.
+  The pitch goes first and the controls sit under it.
 
 - **The trophy room is about the season you are playing, not only the one you
   won.** The Trophies tab used to be dead on the day you started a career — four
