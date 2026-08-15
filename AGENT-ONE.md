@@ -90,6 +90,73 @@ Nothing was lost.
 `origin/main` first — the tree may be older than the remote, not newer. And hard-sync to
 `origin/main` at the start of a session rather than trusting the checkout.
 
+## Reply to the work order — the CrazyGames save, measured
+
+Three findings on task 1, one of which closes off a route and one of which
+corrects advice I gave the director.
+
+**1. A lossless save does not fit, and no amount of packing closes the gap.**
+Claude measured the two lossy options but not this one, and the director has since
+made it explicit that a reload must restore the world exactly as it was left. So I
+measured it. A career with a full season played, then packed with every trick
+available — `attrs` as fixed-order arrays, fixtures as tuples, provenance dropped
+only where it is re-derivable from tables that already ship with the game, gzip at
+level 9, **nothing regenerated and nothing of the world dropped**:
+
+```text
+save as it stands      raw 32,310 kB    gzip 5,676 kB
+lossless packed        raw 13,153 kB    gzip 2,343 kB
+                       1 MB limit: DOES NOT FIT (2,343 of 1,024 kB)
+```
+
+2,343 kB against a 1,024 kB limit — over by 2.3x. My raw figure is larger than the
+16.24 MB in the brief because I played a season first; a day-one world is the easy
+case and flatters any format. The packed-gzip figure lands within 5% of Claude's
+option A at 2,246 kB, so the two measurements agree.
+
+**2. Keeping the real save local and ignoring the 1 MB slot is not allowed.** The
+director asked whether the save could simply live in the browser — "just be a local
+setting on the website in the cache" — and I said yes, that the game already uses
+IndexedDB and the 1 MB cap only applied to their cloud backup. **I was wrong**, and
+I have told him so. CrazyGames' own documentation, read 15 August 2026 at
+<https://docs.crazygames.com/sdk/data/>:
+
+> "You need to fully rely on the Data Module save (for both guest and logged-in
+> users on CrazyGames) and avoid relying on local saves to ensure the Data Module
+> save works correctly."
+
+> "There is a 1MB data limit. If you are approaching it, you will see warnings in
+> the browser console. The data won't be backed up anymore if it exceeds 1MB."
+
+Codex could not reach these docs — blocked by its egress proxy — and flagged its
+SDK notes as unverified. I could reach them. The block in `CODEX.md` is otherwise
+consistent with what is published; it is the "avoid relying on local saves" line
+that was missing, and it is the one that decides the design.
+
+**3. So the fidelity model is necessary, not merely preferred.** Claude asked for
+my call between storing each rival club's divergence and keeping rivals at reduced
+fidelity with promotion-on-touch. **The second**, and the measurement is why: the
+first is a lossless save by another name and lossless has just been ruled out by
+arithmetic.
+
+The line I would draw is *anything the manager could ever have noticed is stored*:
+his club and academy in full, every player he has scouted, bid for, faced or seen
+in a match or scout report, every club's identity, league position, finances,
+history and honours, every fixture and result. Reduced fidelity only for players at
+other clubs he has never touched, promoted to full detail the instant he interacts
+with one.
+
+**What this costs, stated plainly, because the director asked for the opposite.**
+It is not byte-exact. A striker three divisions down who has never been scouted may
+come back with slightly different attributes. Nothing he has seen or touched
+changes. I would hold it to a test that fails if a single attribute of a scouted
+player moves across a save and reload.
+
+**Still open, and needing a real browser rather than a document:** whether IndexedDB
+survives reliably inside the CrazyGames iframe, given third-party storage
+partitioning. That matters for the local half of any hybrid and it is measurable,
+not guessable. Codex's lane.
+
 ## Done, with SHAs
 
 ### Cycle 2 — the economy
