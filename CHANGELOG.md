@@ -4,6 +4,17 @@
 
 ### Fixed
 
+- **There were two Erling Haalands.** A 66-rated one, generated, at Bodø/Glimt, in
+  the same world as the real 91-rated one at Manchester City. The name generator
+  builds a player from his country's first-name and surname pools, and the
+  Norwegian pools contain both "Erling" and "Haaland" — because they are ordinary
+  Norwegian names, which is exactly why they are in there. Sooner or later it put
+  them together. One collision in 11,645 generated players, so rare rather than
+  widespread, but it is the most recognisable name in the game and a second one
+  tells you immediately that the world is made up. A generated player is no longer
+  given a name that belongs to a real one. Two men called Lewis Entwistle in
+  different divisions are left alone: real football is full of shared names.
+
 - **The ball teleported, and that is why you could not follow the match.** The
   complaint was about fast forward — "I know it's all in fast forward but you just
   can't tell what's going on the pitch" — but sampling the rendered ball on every

@@ -669,11 +669,62 @@ values derived from that player's own photograph avoid the problem entirely, whi
 is the main argument for doing it that way. If we end up without them, I will use
 nationality only to widen a distribution, never to pick a value.
 
-### 2. The three duplicate players, which are still open
+### 2. ~~The three duplicate players~~ — CLOSED 15 August 2026, and one more found
 
-Jacquet, Onyeka, and the nineteen shared ESPN IDs, from your cycle 3. Agent One
-flagged in `AGENT-ONE.md` that they are still yours and deliberately left them
-alone; so have I. They are the last known correctness problem in the squad data.
+**The director asked me to take Codex's jobs, so I did this one.** Checked in the
+data and then in a live 484-club world of 13,931 player seats, which is the check
+that matters:
+
+```text
+one player object seated in two squads          0
+p.club disagreeing with the squad he sits in    0
+one real ESPN identity in two squads            0
+two players sharing one internal id             0
+```
+
+All twelve recorded `rosterConflicts` resolve to a single club. Jacquet and Onyeka
+each appear once, with both spellings kept as aliases. **Whatever cycle 3 found has
+since been fixed** — the entry was stale, not open, and I have marked it rather
+than leave it sitting in your list.
+
+**The check found a different fault nobody had reported: a second Erling Haaland.**
+A 66-rated one, generated, at Bodø/Glimt, in the same world as the real 91-rated
+one at Manchester City. `wName` composes a first name and a surname from the
+country's pools, and the Norwegian pools contain both 'Erling' and 'Haaland' —
+because they are ordinary Norwegian names, which is exactly why they belong there.
+Sooner or later it puts them together.
+
+Exactly one collision in 11,645 generated players, so it is rare rather than
+widespread. Worth fixing anyway: it is the most recognisable name in the game, and
+a second one tells the player immediately that the world is made up.
+
+Fixed in `src/name-clash.js`: `wName` re-rolls when it composes a name belonging to
+a real player, and a sweep after the world is built catches anyone already seated,
+seeded from his own id so the same save renames the same man to the same thing.
+Covered by `tests/name-clash.test.cjs`, and I verified the test fails with the fix
+removed — it reports `Erling Haaland (66 at Bodø/Glimt) vs the real one (91 at Man
+City)` rather than passing vacuously.
+
+**Left alone deliberately:** 2,706 generated-on-generated name collisions across
+8,939 distinct generated names. Real football is full of shared names and two men
+called Lewis Entwistle in different divisions is not a bug.
+
+### 2b. What of yours I could NOT do, and why
+
+**Heights outside England, and the lower English tiers.** Blocked. I re-tested the
+egress today — `en.wikipedia.org`, `www.espn.com`, `api.football-data.org` and
+`transfermarkt.co.uk` all fail at CONNECT from my sandbox, exactly as you found.
+This needs you or somebody with the web. It remains the single biggest data gap:
+8,255 players outside England, plus League Two at 63% and the National League at
+43%.
+
+**The photograph-derived appearance work.** Blocked on the same wall, and it also
+needs the director's approval before it starts. Unchanged, and the rule stands: do
+not download, commit or redistribute player photographs, and do not build a
+nationality-to-appearance lookup table.
+
+**Real-device voices and the 3D frame rate.** Blocked on hardware, not effort. Still
+needs one mid-range Android and one iPhone in one sitting.
 
 ### 3. Real-device neural voices, and now a frame rate too
 

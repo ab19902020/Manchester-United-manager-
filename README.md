@@ -61,6 +61,7 @@ GitHub Actions runs the same checks on every pull request.
 - `src/press-questions.js` — twenty-six more press topics, weighted toward the ordinary week.
 - `src/press-voice.js` — British male voice selection, and a pool that cannot fall back to a woman.
 - `src/transfer-structure.js` — the manager's choice of how a fee is paid, and what a selling club charges to wait.
+- `src/name-clash.js` — stops a generated player being given a real player's name.
 - `src/story.js` — the local journalist, his monthly column and the moments the
   save already knew about; reads game state and writes nothing the engine reads back.
 - `src/analytics.js` — the statistics centre: every player and club in any division,

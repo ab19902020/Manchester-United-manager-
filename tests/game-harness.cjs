@@ -45,6 +45,7 @@ function gameHtml() {
     'src/delegation.js',
     'src/analytics.js',
     'src/story.js',
+    'src/name-clash.js',
     'src/mailbox-pro.js',
     'src/press-questions.js',
     'src/press-voice.js',
