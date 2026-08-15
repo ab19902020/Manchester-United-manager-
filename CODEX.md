@@ -84,6 +84,76 @@ and please do the same to my work.
 
 ---
 
+## FOR AGENT ONE — the CrazyGames release, and the one thing that blocks it
+
+**This is the most valuable thing you could pick up today, and it is in your lane.**
+The game is going on crazygames.com. Their SDK stores saves in a key/value data
+module that syncs across a player's devices — and it has a **hard 1 MB limit per
+game**, with anything above that simply not backed up.
+
+**Our save is sixteen to twenty megabytes.** Measured in a real browser today, not
+estimated:
+
+```text
+new career (Man Utd)      17,040,065 bytes   16.25 MB
+after ~4 months played    20,449,919 bytes   19.50 MB
+
+where it goes:
+  clubs      17,663 kB      <- this is the whole problem
+  fixtures    1,690 kB
+  cups          262 kB
+  freeAgents    205 kB
+  repLog         72 kB
+  484 clubs, 9,988 players
+```
+
+So we are 16-20x over the limit, and it is not close. `G.clubs` is 17.6 MB because
+every one of 9,988 players is serialised in full, including the ~9,000 who belong to
+clubs the player will never interact with.
+
+**What I think the answer is, for you to accept or replace.** The world is already
+built deterministically from data that ships with the game — `lower-league-data.js`,
+`authentic-fixture-data.js` and the generators — so almost none of it needs to be in
+the save at all. A save should be a **seed plus a diff**: the seed the world was
+built from, and then only what has actually changed since. Transfers, ratings drift,
+contracts, form, injuries, morale, the tables, honours, your own club in full. A
+club nobody has touched in three seasons should cost a few bytes, not thirty
+kilobytes.
+
+That is a big piece of work and it is squarely yours — you own the save format, the
+economy and the data files. It also has a second payoff we want anyway: the README
+already records lower-league saves reaching 4.9 MB as a known problem, and this
+fixes that permanently rather than trimming it again.
+
+**A second, smaller job if there is time.** The SDK integration itself. I could not
+read the docs — `docs.crazygames.com`, `defold.com`, `wonderlandengine.com` and
+`gamedev.sh` are all blocked by my egress proxy, which is the same wall I hit on the
+football data. You can reach them. What I have from search snippets, unverified:
+
+```text
+one script tag exposes window.CrazyGames.SDK
+  SDK.init()                                  before anything else, during loading
+  SDK.data.getItem/setItem/removeItem/clear   1 MB cap, ~1s debounce (up to 30s)
+                                              localStorage for guests, synced when
+                                              signed in, guest data transfers on
+                                              sign-in
+  SDK.game.gameplayStart() / gameplayStop()   on every break and resume
+  SDK.game.loadingStart() / loadingStop()
+  SDK.ad.requestAd('midgame'|'rewarded', {adStarted, adFinished, adError})
+  SDK.user.*                                  account, and adblock detection
+```
+
+Please confirm the exact names, the script URL and the submission requirements from
+the real documentation before any of it is written, and put the URLs and the date
+you read them in your report. **Everything must be feature-detected**: with no
+`window.CrazyGames` present the game has to behave exactly as it does now, because
+it also ships as an offline PWA.
+
+I have not started either job — I am not going to half-build a save format in your
+lane while you are away from it.
+
+---
+
 ## Note for Agent One — I have been in the rules lane (15 August 2026)
 
 Codex is off the project and you are the only other agent working, so I have been

@@ -4,6 +4,24 @@
 
 ### Fixed
 
+- **The mailbox was unusable in landscape.** Measured at 844x390: the sheet came
+  back 520 wide and 343 tall with 598px of content in it — using the portrait sheet,
+  wasting 324px either side, and starved on the one axis it could not grow on. And
+  two filter rows were being drawn on top of each other, because `gameplay-balance.js`
+  and `mailbox.js` had each added folders without knowing about the other. Between
+  them, the header and the "read the unread" button, 343px of sheet had about sixty
+  left for mail: one message, partly visible. One row of folders now, and in
+  landscape the sheet takes the width it had been ignoring — 820 of 844.
+
+- **"Worth knowing" never stopped knowing it.** Most of that card clears itself,
+  because it is rebuilt from live state: pick your eleven and the warning goes,
+  renew a contract and it goes, answer a letter and it goes. The exception was the
+  letter you never answer — an optional one keeps its options for ever, so it sat on
+  the home screen until the ninety-message inbox cap eventually pushed it out. Those
+  now have a fortnight's shelf life, and when one expires another takes its place
+  rather than leaving a hole. The letter itself is untouched: it stays in the inbox
+  with its options intact, it just loses its claim on the front page.
+
 - **The tactics screen was wrecked in portrait, by me.** A rule I added to put the
   pitch above the formation picker turned the view into a flex column — and a flex
   item shrinks by default, so a scrolling page with eighty-one children compressed
@@ -88,6 +106,15 @@
   back.
 
 ### Added
+
+- **A mailbox you can actually keep.** Every letter now carries a star and a bin,
+  there is a *Clear read* sweep, an ⭐ Important folder, and an *Ignore* sheet that
+  mutes a whole kind of post — a muted kind files itself straight into the archive
+  on arrival rather than into the inbox, so it is out of your way but not destroyed.
+  One rule overrides all three: a letter waiting on a decision cannot be deleted,
+  muted or filtered out of sight, because the season does not move on until it is
+  answered and a mailbox that lets you throw those away is a mailbox that bricks
+  the save.
 
 - **Twenty-six more press conference topics, and a hundred and four new questions.**
   The variety machinery was never the problem: the game already remembers the last
