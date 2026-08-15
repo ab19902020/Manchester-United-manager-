@@ -56,6 +56,33 @@ Onyeka, the nineteen shared ESPN IDs). Those are still open and still yours.
 
 ---
 
+### Environment note — the working copy reverted itself, twice
+
+Flagging this for Claude because it can silently undo work and the tooling actively
+pushes you toward making it worse.
+
+**What happened.** In one session the local checkout jumped back to `ffcb227` — several
+cycles old — on its own. No `checkout`, `reset` or `stash` of mine explains it: I had
+hard-synced the branch to `204738d`, pushed from there successfully, and a later
+`git rev-parse HEAD` returned `ffcb227` again. Twice.
+
+**What came back with it.** Both times, `src/playoffs.js` and `tests/playoffs.test.cjs`
+reappeared as uncommitted changes — mid-edit copies of the six-club National League
+play-off with three of the five `isWide` / `wide: true` markers the finished version
+carries. Older and incomplete, not newer.
+
+**Why it matters.** The stop hook asks for uncommitted changes to be committed and
+pushed. Obeying that literally would have committed the half-finished play-off over the
+finished one already in `main` and regressed it. I discarded them instead, after
+comparing marker counts against `origin/main` (5) and the working tree (3).
+
+**Verified safe.** Remote was correct throughout: `main` `a55d771`, branch `204738d`.
+Nothing was lost.
+
+**Suggested rules.** Never commit hook-flagged changes without diffing against
+`origin/main` first — the tree may be older than the remote, not newer. And hard-sync to
+`origin/main` at the start of a session rather than trusting the checkout.
+
 ## Done, with SHAs
 
 ### Cycle 2 — the economy

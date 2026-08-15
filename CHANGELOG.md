@@ -18,6 +18,24 @@
   Measured after: zero steps over 15m at 1x, 2x or 4x, worst 11.8m, and the ball
   reaches the net on a goal in 79 frames against 11 before.
 
+- **The working copy reverted itself mid-session, twice.** Not a game bug — a note for
+  whoever looks after the environment. During one session the local checkout jumped back
+  to an old commit (`ffcb227`, several cycles behind) on its own, with no `checkout`,
+  `reset` or `stash` that would explain it: the branch had been hard-synced to `204738d`
+  and pushed successfully from there minutes earlier, and `git rev-parse HEAD` later
+  returned `ffcb227` again. It happened twice.
+
+  Each time, stale mid-edit copies of `src/playoffs.js` and `tests/playoffs.test.cjs`
+  reappeared as uncommitted changes — an **incomplete** six-club National League play-off,
+  carrying three of the five markers the finished version has. The remote was correct
+  throughout (`main` at `a55d771`, the branch at `204738d`).
+
+  The danger is the combination: a stop hook asks for uncommitted changes to be committed
+  and pushed, and following that literally would have committed the half-finished play-off
+  over the finished one and regressed it. They were discarded instead. Anything automated
+  that commits on a hook's prompt should diff against `origin/main` first, and a session
+  should hard-sync to `origin/main` before touching anything.
+
 - **The mailbox was unusable in landscape.** Measured at 844x390: the sheet came
   back 520 wide and 343 tall with 598px of content in it — using the portrait sheet,
   wasting 324px either side, and starved on the one axis it could not grow on. And
