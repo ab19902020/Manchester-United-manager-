@@ -84,7 +84,10 @@ and please do the same to my work.
 
 ---
 
-## FOR AGENT ONE — the CrazyGames release, and the one thing that blocks it
+## PRIORITY ONE FOR AGENT ONE — the CrazyGames save, which blocks the release
+
+*Made the priority by the director, 15 August 2026: "make the crazy games save a
+priority". Everything in the club-and-story brief below waits behind this.*
 
 **This is the most valuable thing you could pick up today, and it is in your lane.**
 The game is going on crazygames.com. Their SDK stores saves in a key/value data
@@ -149,8 +152,111 @@ you read them in your report. **Everything must be feature-detected**: with no
 `window.CrazyGames` present the game has to behave exactly as it does now, because
 it also ships as an offline PWA.
 
-I have not started either job — I am not going to half-build a save format in your
-lane while you are away from it.
+I have not written any of the format — I am not going to half-build a save format
+in your lane. But the director has made this the priority, so I have done the
+measuring for you, and it changes the plan. It is below.
+
+### MEASURED, 15 August 2026 — the exploratory work is done, and I got one thing wrong
+
+I said above to build a "seed plus diff" format. **Check the first assumption before
+you build anything on it, because I did not and it is false.** Everything below is
+measured in a real browser today, not estimated.
+
+**1. Where the sixteen megabytes actually are.** A brand-new career, `JSON.stringify(G)`:
+
+```text
+TOTAL                        17,038,643      16.24 MB
+  clubs                      15,740,665
+    senior players           11,224,864      65.9% of the whole save
+    youth academies           4,251,000      every one of 484 clubs keeps a full
+                                             academy; only yours is ever looked at
+    club metadata               260,000
+  fixtures                      962,895      8,781 rows as objects
+  freeAgents                    247,024
+```
+
+**Players are 90% of the save.** 9,887 senior men at 1,135 bytes and 48 fields each,
+plus 484 academies at 8,784 bytes each. Nothing else is close, and no amount of
+tidying the rest of it matters.
+
+**2. Per-player, the fields that cost:**
+
+```text
+attrs                573    an object of ~19 named keys; as a fixed-order array of
+                            integers this is about 60
+playerFactsSource     98
+persNote              83
+playerProfile         78    ~293 bytes of provenance and flavour text per player,
+playerFactsReadDate   34    which is 2.9 MB across the world
+stats                 74
+```
+
+**3. Compression does not save us, and this is the number that kills the easy fix:**
+
+```text
+raw JSON                     16.24 MB
+raw + gzip                    3.67 MB   4.4x
+trimmed + gzip                3.34 MB   5.0x   (attrs as arrays, flavour text
+                                                dropped, defaults omitted)
+```
+
+`CompressionStream('gzip')` is available in the browser, it works, and it leaves us
+**3.3x over the limit**. Field-level tidying plus compression is not a solution.
+
+**4. THE ASSUMPTION I GOT WRONG. World generation is not deterministic.** Two fresh
+page loads, same club, hashing the generated world:
+
+```text
+run 1   players 57fe4fa7   clubs 8d4e521e   fixtures 0d245f82   9,890 players
+run 2   players 13dd8b1c   clubs 3ff3a931   fixtures 2d36a668   9,886 players
+```
+
+Not merely different attributes — **a different number of players**. There is a
+seeded `mulberry` PRNG and squads are built with `mulberry(hashStr(name+'|'+clubIdx))`,
+which is why I assumed it was reproducible, but there are 317 `Math.random()` calls
+in the file and enough of them are on the generation path to make the world
+irreproducible. **Any format that regenerates instead of storing needs this fixed
+first.** It is the critical path and it is the first thing to do.
+
+**5. What does fit.** Two candidates, both measured:
+
+```text
+A  academies dropped, rival senior squads slimmed      gzip 2,246 kB   over by 1,222
+B  academies AND rival senior squads regenerated       gzip   136 kB   FITS, 888 kB spare
+```
+
+**B is the only one that fits, and it fits with room to spare** — 136 kB against a
+1 MB limit, which leaves headroom for thirty seasons of accumulated history. It is
+also the only one that requires the determinism work, because a rival squad that is
+regenerated differently on load is a different squad.
+
+### So the shape of the job, in order
+
+1. **Make world generation reproducible from one stored seed.** Audit the
+   `Math.random()` calls, separate world generation from in-play randomness, and
+   put generation behind a seeded stream. Acceptance: generate twice from the same
+   seed, assert identical world hashes including the player count. This is the
+   whole thing — nothing else can be built until it holds.
+2. **Decide what a rival club is between saves.** Regenerating the season-one world
+   is not enough: after five seasons rival squads have diverged through transfers,
+   ageing and growth, and that divergence has to be stored or recomputed. Two ways,
+   your call:
+   - store the divergence per club, which grows over a career, or
+   - keep rival clubs at reduced fidelity — a squad-strength model plus a handful
+     of named men — and **promote a player to full fidelity the moment the user
+     touches him**: scouts him, bids for him, sees him in a report. A player the
+     manager has never heard of does not need to survive a reload byte-for-byte;
+     one he has scouted absolutely does.
+   I lean to the second, and it is a design decision in your lane, not mine.
+3. **Then the cheap wins**, which are worth having anyway: `attrs` as a fixed-order
+   array (~500 bytes a player), flavour and provenance text off everyone but your
+   own squad (~293 bytes a player), fixtures as tuples (940 kB -> 239 kB), gzip
+   through `CompressionStream` on the way out.
+4. **A migration path.** Existing saves are the old shape and must keep loading.
+
+The scripts I measured all this with are not committed — they are throwaway. If you
+want them rather than rewriting them, say so and I will commit them under `scripts/`.
+
 
 ---
 
@@ -266,8 +372,11 @@ me if any of it collides with your systems.
 
 ### C. What I would like from you first, in order
 
-1. **The 1 MB save format** (the section above). Still the only thing that blocks
-   the release, and everything else is decoration until it is solved.
+1. **The 1 MB save format** (the section above), which the director has now named
+   the priority. It is the only thing that blocks the release, everything else here
+   is decoration until it is solved, and the measuring is already done for you — the
+   critical path is making world generation reproducible, and the target that fits
+   is 136 kB against a 1 MB limit.
 2. **A1, the ground ladder.** The tiers, the costs, the durations, the revenue,
    the grading gates.
 3. **A2, the difficulty routes.**
