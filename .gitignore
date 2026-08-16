@@ -5,3 +5,4 @@ coverage/
 .div-e.log
 .div-5s.log
 .check.log
+dist/

@@ -65,6 +65,7 @@
     ready: false,
     playing: false,
     warned: false,
+    restored: false,
     lastWrite: null,
   };
 
@@ -156,11 +157,71 @@
     return { wrote: body.length };
   }
 
+  /* AWAITED, BECAUSE I DO NOT KNOW WHICH IT IS. Their docs are
+     unreachable, so whether `data.getItem` is synchronous is a guess.
+     The first version type-checked for a string, which would have
+     thrown a promise away and reported "no cloud career" — an empty
+     career instead of an error, which is the worst way for a wrong
+     guess to show up. Awaiting a plain string is free and costs
+     nothing if the guess was right. */
   async function pull() {
     if (!state.present) return null;
-    const body = call('data.getItem', KEY);
+    let body;
+    try { body = await call('data.getItem', KEY); } catch (error) { return null; }
     if (!body || typeof body !== 'string') return null;
     try { return await unpack(body); } catch (error) { return null; }
+  }
+
+  /* -------------------------------------------------------------------
+     AND READING IT BACK, WHICH IS THE HALF THAT MAKES IT A CLOUD SAVE
+
+     A save written to the cloud and never read is not a feature, it is
+     an upload. This restores one, and it is deliberately timid about
+     when: only on a device with no local career at all. It never
+     overwrites, never merges, never asks the player to choose between
+     two versions of their own season — because the wrong answer there
+     costs somebody a career, and a first-run restore is the case that
+     actually matters (a new phone, a cleared browser).
+
+     It writes into the `auto` slot through the game's own store, so the
+     save is validated by the same checker as any other and the CONTINUE
+     YOUR CAREER button appears by the normal path. `refreshStartResume`
+     only looks at auto/1/2/3, so a private "cloud" slot would restore a
+     career the player could never see.
+     ------------------------------------------------------------------- */
+  const SLOTS = ['auto', '1', '2', '3'];
+
+  async function restoreIfEmpty() {
+    if (!state.present) return { skipped: 'no sdk' };
+    const api = window.RBSSaves;
+    const store = window.RBSCareerStore;
+    if (!api || !api.store || !store || typeof store.validatePayload !== 'function') {
+      return { skipped: 'no save controller' };
+    }
+    try { await api.ready; } catch (error) { /* it still has a store */ }
+
+    const held = SLOTS.some((slot) => api.metas && api.metas.get(String(slot)));
+    if (held) return { skipped: 'local career already here' };
+
+    const text = await pull();
+    if (!text) return { skipped: 'nothing in the cloud' };
+
+    /* A CLOUD SAVE IS UNTRUSTED INPUT LIKE ANY OTHER. It may have been
+       written by an older build, or arrive damaged. Validate before it
+       is allowed anywhere near the store. */
+    const checked = store.validatePayload(text);
+    if (!checked.valid) return { skipped: 'cloud save rejected: ' + checked.reason };
+
+    try {
+      await api.store.put('auto', text, checked.meta);
+      /* init() reloads the metadata, repaints the save screen and puts
+         the resume button back. It is idempotent — the legacy migration
+         inside it clears each key as it moves it. */
+      if (typeof api.init === 'function') await api.init();
+    } catch (error) { return { skipped: 'could not write it locally' }; }
+
+    state.restored = true;
+    return { restored: text.length, club: checked.meta && checked.meta.club };
   }
 
   /* -------------------------------------------------------------------
@@ -224,6 +285,9 @@
     mirrorSaves();
     markGameplay();
     markLoading();
+    /* never blocks the game starting, and never reports a failure at a
+       player: a device with no cloud career simply has no cloud career */
+    try { restoreIfEmpty().catch(() => {}); } catch (error) { /* not fatal */ }
     return true;
   }
 
@@ -263,7 +327,8 @@
 
   try {
     window.RBSCrazyGames = Object.freeze({
-      SDK_URL, CAP, KEY, state, pack, unpack, push, pull, attach, call, canZip,
+      SDK_URL, CAP, KEY, state, pack, unpack, push, pull, restoreIfEmpty,
+      attach, call, canZip,
       present: () => state.present,
     });
   } catch (error) { /* no window */ }

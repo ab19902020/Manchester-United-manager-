@@ -22,6 +22,34 @@
   It also only fetches the SDK where it could plausibly exist — framed, or on
   their host — so an offline install never calls out to a CDN.
 
+  And it reads the cloud save back, which is the half that makes it a save rather
+  than an upload. A device with no career of its own — a new phone, a cleared
+  browser — pulls one down, validates it through the same checker as any local
+  save, and writes it into the `auto` slot so CONTINUE YOUR CAREER appears
+  normally. A device that already holds a career is never touched: no overwrite,
+  no merge, no asking a player to choose between two versions of their own season.
+  Verified in a real browser — a 5,578 kB career packed to 1,712 kB and restored
+  byte-for-byte, loadable by the game. `data.getItem` is awaited, so it works
+  whether the platform returns a string or a promise; the first version type-checked
+  for a string and would have reported a promised career as no career at all.
+
+- **The upload itself is now built and tested, not assembled by hand.**
+  `npm run upload` produces `dist/the-results-business.zip` — `index.html` at the
+  root, every path relative, and none of the repository's tests, handoffs or
+  `node_modules`. Its file list is read out of `service-worker.js` instead of
+  being kept separately, so the offline install and the upload cannot disagree
+  about what the game needs; anything on disk the service worker does not list is
+  reported, because that is a hole in the offline install too. It then extracts
+  the zip, serves it, loads it in an iframe and builds a world, failing on any 404
+  outside the deliberately-absent audio pack. Proven by deleting a module from the
+  list: three of the five checks went red.
+
+  `npm run framed` runs the same iframe arrangement against the working tree with
+  the SDK stubbed on an intercepted route. Until it existed, the half of the
+  adapter that only runs on their platform — the gate opening, the script tag, the
+  load, `attach()` — had never been executed anywhere: the test suite runs without
+  an SDK on purpose, and every browser probe loads the game unframed from `file://`.
+
 - **The world no longer forgets its seasons.** A save was discarding two things.
   `trimCareers()` kept 24 match-log entries for your own squad, 4 for the division
   you play in, and **none at all for the other 460 clubs** — so a rival striker's

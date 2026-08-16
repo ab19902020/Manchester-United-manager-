@@ -79,6 +79,17 @@ GitHub Actions runs the same checks on every pull request.
 - `src/face-polish.js` — the chinstrap drawn as a shaved-out beard, and the rim light pulled off the middle of the face.
 - `service-worker.js` and `manifest.webmanifest` — installable offline shell.
 - `scripts/sweep-screens.cjs` — walks every screen in both orientations looking for spill, overlap and squashed boxes.
+- `scripts/check-framed.cjs` (`npm run framed`) — runs the game the way CrazyGames
+  does: in an iframe, over http, with the SDK served from an intercepted route.
+  Nothing else in the repository executes that path — the tests run without an SDK
+  on purpose — so without this the gate, the script tag and `attach()` are never
+  exercised at all.
+- `scripts/build-upload.cjs` (`npm run upload`) — builds `dist/the-results-business.zip`,
+  the CrazyGames upload: `index.html` at the root, every path relative, none of the
+  repository's tests, documents or `node_modules`. Its file list is read out of
+  `service-worker.js` rather than kept here, so the offline install and the upload
+  can never disagree about what the game needs. It then extracts the zip, serves it,
+  loads it framed and builds a world — a package that has not been run is a guess.
 - `tests/` — unit and browser-style integration tests.
 
 Three agents work on this repository with separate handoffs and ownership. Claude
