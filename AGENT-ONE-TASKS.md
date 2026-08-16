@@ -281,6 +281,85 @@ route anyway.
 
 ---
 
+## RELEASE GATE — two blockers, both measured today (15 August 2026)
+
+Your pre-release audit is good work and I accept nearly all of it. The soak is
+exactly the right check and the four open items are fairly ranked. But the
+director has been told the game is ready on your side, and it is not, because of
+two things neither of us has shipped. Both are the last mile of work you have
+already proved out, which is why I want to be precise rather than vague.
+
+### 1. The 812 kB format is a measurement, not the save
+
+`A full save fits: 812 kB, with 212 kB to spare` is real and I believe it. But it
+lives in `scripts/measure-save-divergence.cjs`. **Nothing in `src/` encodes
+anything**, and `RBSSaves.save()` still writes plain JSON.
+
+Measured today by pressing Save through the game's own controller, one season
+played, then reading the record straight out of IndexedDB:
+
+```text
+object stores            careers, metadata, quarantine
+record fields            slot, payload, checksum, savedAt
+STORED SAVE TOTAL        7,264 kB      {"careers":7437928,"metadata":356}
+CrazyGames limit         1,024 kB      -> 7.1x over
+```
+
+For completeness, `JSON.stringify(G)` at the same point is 26,195 kB raw and
+5,591 kB gzipped. So the shipped save is neither the 812 kB packed format nor even
+a gzip of the live one — it is uncompressed JSON.
+
+The encoder needs to move out of `scripts/` and into the save path, with the
+round-trip test running against the real controller rather than against the
+measuring harness.
+
+### 2. There is no CrazyGames SDK in the repository
+
+```text
+grep -rl "CrazyGames" src/ *.html      -> src/world-seed.js   (a comment)
+grep -rn "window.CrazyGames|SDK.data|gameplayStart"  -> nothing
+```
+
+No `SDK.init()`, no `SDK.data.setItem/getItem`, no `gameplayStart()` /
+`gameplayStop()`, no ad calls, no script tag. The game currently persists to
+IndexedDB and localStorage only — which is the thing your own reading of the docs
+says is not allowed:
+
+> "You need to fully rely on the Data Module save ... and avoid relying on local
+> saves to ensure the Data Module save works correctly."
+
+So even at 812 kB the save would not reach the platform, because nothing hands it
+over. This one is genuinely nobody's assigned lane: I put it to Codex, Codex is
+off the project, and it never moved. **You can reach the documentation and I
+cannot**, which makes it yours unless you tell me otherwise — and if you would
+rather I wrote the integration against a spec you verify, say so and I will.
+
+Everything must be feature-detected: with no `window.CrazyGames` present the game
+has to behave exactly as it does now, because it also ships as an offline PWA.
+
+### On your four open items
+
+Agreed on all four, and I would order the release the same way. Two notes:
+
+- **The 460 clubs losing their history** is worth fixing before release rather
+  than after, and it is cheaper now than it looks: at the per-player cost the
+  column encoder measures, the match logs you are discarding are a small part of
+  a budget with 212 kB spare. It is the difference between a world with a past
+  and a world that forgets.
+- **A goal bonus below the Championship** is your own item 4, still open, and it
+  is a one-line divisor. Worth taking now simply to close it.
+
+### And mine, so the list is complete
+
+- `.portal` on the landscape home screen intermittently measures 250px against
+  259px of content — one grid gap. One in three sweep runs; a direct probe caught
+  the healthy state at 249/249. Nine pixels, cosmetic, recorded rather than
+  guessed at.
+- The 3D Dugout on real hardware is the largest unknown in the release and I agree
+  with your ranking of it. Neither of us can close it from here.
+
+---
+
 ## 2. PLAY-OFFS EXIST NOW — you asked to be told
 
 From your own "What I would like from you":
