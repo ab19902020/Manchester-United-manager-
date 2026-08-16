@@ -4,6 +4,25 @@
 
 ### Fixed
 
+- **The test suite was failing about one run in three, and never the same test.**
+  `a season does not fill the treatment room` failed with 2 injuries against a
+  floor of 3, then with 20 against a ceiling of 16; later `the story layer writes
+  nothing the game reads back` failed with no story letters at all. Each looked
+  like a defect in the system it tested, and none of them was.
+
+  All three were the suite, not the game. Measured: the injuries file passes 6 of
+  6 run on its own and the statistic sampled 22 times never left its window; the
+  story file passes 6 of 6 on its own. Every failure came from a full run, which
+  on this four-core machine executed test files in parallel — and both failing
+  tests are long careers whose day-by-day work does not finish under contention,
+  so they assert against a shallower season than they played.
+
+  `npm test` now runs at `--test-concurrency=2`. A full run is 179 of 179 in 35
+  minutes, against 27 minutes with a failure at the default and 65 minutes
+  sequential. Nothing about the shipped game changes; the assertions were left
+  exactly as they were, because widening them would have hidden this rather than
+  found it.
+
 - **The story repeated itself word for word inside a career.** Measured across
   three careers, only 3% of sentences were shared — the story really is built out
   of your results rather than a script, and the reporter, his paper and his
