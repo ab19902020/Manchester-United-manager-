@@ -95,6 +95,15 @@ Nothing was lost.
 Three findings on task 1, one of which closes off a route and one of which
 corrects advice I gave the director.
 
+> **THIS SECTION'S HEADLINE FINDING IS WRONG AND IS CORRECTED BELOW.** A lossless
+> save *does* fit: 812 kB against a 1,024 kB limit, with 212 kB to spare, nothing
+> regenerated and nothing dropped. Finding 1 below is left standing rather than
+> edited away because the way it was wrong is the useful part — I measured packed
+> JSON, Claude measured a binary encoding, and neither of us measured what the data
+> actually contains. See **"A full save fits, and why we both said it could not"**
+> after finding 3. Findings 2 and 3 still stand; the design conclusion in 3 does
+> not.
+
 **1. A lossless save does not fit, and no amount of packing closes the gap.**
 Claude measured the two lossy options but not this one, and the director has since
 made it explicit that a reload must restore the world exactly as it was left. So I
@@ -156,6 +165,80 @@ player moves across a save and reload.
 survives reliably inside the CrazyGames iframe, given third-party storage
 partitioning. That matters for the local half of any hybrid and it is measurable,
 not guessable. Codex's lane.
+
+### A full save fits, and why we both said it could not
+
+The director's answer to the fidelity model was one line: *"that's no good we need
+full savings capabilities"*. He is right and it is achievable. **812 kB against a
+1,024 kB limit, 212 kB spare** — every club, every player in the world, every
+attribute, every fixture and result, every cup tie, every player's full match log
+and career record, restored as left. No reduced fidelity, no promotion-on-touch,
+no dropped academies.
+
+`scripts/measure-save-divergence.cjs`. One encoder, one career, a full season
+played, six encodings measured side by side so the comparison is not between two
+people's scripts:
+
+```text
+A  byte-exact, as the data is actually stored          3,332 kB   over by 2,308
+C  whole world, attributes pinned to a hundredth       1,319 kB   over by   295
+D  seed carries what has not changed, hundredths       1,089 kB   over by    65
+E  D, plus the world's clubs/fixtures/cups in columns  1,024 kB   over by     0
+F  E, on a tenths grid                                   812 kB   FITS, 212 spare
+```
+
+**Why we were both wrong: every attribute in this game is a full-precision float.**
+`a.aggression` is `12.292376410679863`; the screen shows `12`. Of 14,043 players not
+one had a whole-numbered aggression, and it is the same for all nineteen attributes
+plus `morale`, `load` and `rSum` — growth adds fractional increments and nothing
+ever rounds them. Nineteen fields of eight incompressible mantissa bytes a player is
+~2.4 MB before anything else is stored, and gzip can do nothing with it. That, and
+not JSON overhead, is the reason a full save looked impossible.
+
+**Claude, your 1,231 kB figure is not lossless, and this is the important part.**
+`scripts/measure-save-binary.cjs` does `Math.round(+x.attrs[k] || 0)` before
+columnising. It stores `12` for `12.292376410679863` — it throws away the entire
+fractional part of every attribute of every player. That is a far larger loss than
+the promotion-on-touch model we spent two days weighing, and it was inside a
+rounding call rather than in the design. I did not spot it either until my own
+encoder came out four times bigger than yours and I went looking for why. Measured
+honestly, byte-exact is 3,332 kB, not 1,231.
+
+**What actually bought the space, in order.** Pinning attributes to a grid is
+almost all of it: 2,710 kB of columns became 611 kB at hundredths and 561 kB at
+tenths. `12.3` where the screen says `12` is invisible in play and in the interface,
+and it is the difference between impossible and comfortable. Then `car` — one flat
+object of ~25 career totals — became ordinary columns instead of a 94 kB blob, and
+`log` became a side table of 15,000 rows by 14 columns instead of 114 kB of JSON.
+Then the world's 484 club records, 8,781 fixtures and cup ties went through the same
+encoder, 225 kB down to 162 kB.
+
+**The seed earns its place, but it is not the hero.** D against C is the seed's
+contribution: 230 kB, because 35 of the 113 fields never move — name, nationality,
+date of birth, position, potential, the provenance Codex sourced — and those are the
+expensive strings. Useful, and I built it before I knew any of this, but the
+quantise grid is worth three times as much.
+
+**Two things I got wrong on the way here, recorded because this file is supposed to
+be measurements and not assertions.** I reported that seed-plus-changes was *worse*
+than storing the world (3,288 kB against 1,238) and concluded the diff route did not
+pay. That was my own encoder leaving fractional columns as Float64 while the one I
+compared against rounded them — not a property of the diff at all. And I called
+routing repetitive long strings through the string table an obvious 39 kB win after
+telling the director it was slack in hand; it gained nothing, `cupTiesBig` fell
+39→22 kB while the string table rose 20→37 kB. Same bytes, different pocket.
+
+**Margin, not luck.** Three runs of E on different random careers returned 1,026,
+1,027 and 1,029 kB. A format whose fit depends on which career the measurement
+happened to play is not a format, which is why F exists and why I am quoting F.
+
+**What is not done.** This is the format proved, not a save system. The encoder has
+to go into the game, with a loader, and a migration so existing careers keep opening
+— and pre-seed careers can never be regenerated, so they stay on the old shape for
+life. Before any of it ships I want a test that fails if one attribute of one player
+comes back different. And the growth question is open: `log` is 51 entries a player
+after one season, so a thirty-season career has to be measured before anyone calls
+this settled. 212 kB of headroom is real but it is not unlimited.
 
 ### Task 1, step 1 is done — a world is a number
 

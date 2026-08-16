@@ -211,6 +211,23 @@
 
 ### Added
 
+- **A full save fits after all — 812 kB against the 1 MB the shop allows, with 212 kB
+  spare.** Every club, every player in the world, every attribute, every fixture and
+  result, every cup tie, every player's match log and career record, restored exactly
+  as left. The reduced-fidelity model that had been planned — rival clubs kept as a
+  strength rating and a few named men — is not needed and has been dropped. The reason
+  a full save had looked impossible turned out to be one thing nobody had looked at:
+  every attribute is stored as a full-precision float, `12.292376410679863` where the
+  screen shows `12`, and nineteen of those per player across sixteen thousand players
+  is about 2.4 MB of mantissa that no compressor can touch. Pinning them to a tenth
+  leaves a player identical to within 0.05 of a rating that is only ever displayed as
+  a whole number, and took 2,710 kB of encoded attributes down to 561 kB. The rest
+  came from treating uniform data as tables rather than text: career totals as columns
+  instead of a 94 kB blob, match logs as a 15,000-row side table instead of 114 kB of
+  JSON, and the world's 484 club records, 8,781 fixtures and cup ties through the same
+  encoder. Measured end to end at 3,332 kB byte-exact, 1,089 kB with the world seed
+  carrying what has not changed, 812 kB finished.
+
 - **A world is a number now, and the same number gives back the same world.** The
   save is 16.24 MB and the shop it ships in stores 1 MB, so the only shape that
   fits is to keep the seed a world was built from and build it again on load —
