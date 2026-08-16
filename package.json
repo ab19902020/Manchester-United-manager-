@@ -9,7 +9,7 @@
     "data:player-facts": "node scripts/fetch-lower-league-squads.cjs",
     "data:fixtures": "node scripts/fetch-authentic-fixtures.cjs",
     "lint": "eslint src tests scripts service-worker.js",
-    "test": "node --test --test-reporter=spec",
+    "test": "node --test --test-reporter=spec --test-concurrency=2",
     "sweep": "node scripts/sweep-screens.cjs",
     "check": "npm run lint && npm test",
     "framed": "node scripts/check-framed.cjs",

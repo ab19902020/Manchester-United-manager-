@@ -253,6 +253,36 @@
      never said. `seen` stops a beat firing twice; it lives in the
      layer's own drawer.
      ------------------------------------------------------------------- */
+  /* ONE PHRASING PER BEAT READ LIKE A MAIL-MERGE.
+     Measured across three careers, only 3% of sentences were shared —
+     the story really is made out of your results and not out of a
+     script. But WITHIN a career it repeated itself word for word:
+
+       Lammens reaches 50 appearances — made his 50th appearance this week.
+       Mbeumo reaches 50 appearances — made his 50th appearance this week.
+
+     Same sentence, different name, a fortnight apart. And the reporter
+     was given a temperament that reached exactly one line of the whole
+     layer, the opening of the monthly column, so a sceptic and a
+     romantic filed identical notes about everything else.
+
+     `pick` chooses a phrasing from the reporter's name, his
+     temperament and the beat's own key — so it is stable for a given
+     moment (re-reading a letter never rewrites it), different for the
+     next player who hits the same milestone, and different again in
+     somebody else's career under a different byline. */
+  function pick(key, list) {
+    if (!list || !list.length) return '';
+    const man = reporter();
+    const seed = man.name + '|' + man.temper + '|' + key;
+    let n = 0;
+    try {
+      n = (typeof hashStr === 'function') ? Math.abs(hashStr(seed)) : 0;
+    } catch (error) { n = 0; }
+    if (!n) n = Math.floor(Math.random() * 9973);
+    return list[n % list.length];
+  }
+
   function once(key) {
     const d = drawer();
     if (d.seen[key]) return false;
@@ -276,13 +306,29 @@
 
       /* the academy boy who played */
       if (p._storyAcademy && apps >= 1 && once('deb' + p.id)) {
+        const key = 'deb' + p.id;
         out.push({
-          title: esc(p.name) + ' has played for the first team',
+          title: pick(key + 't', [
+            esc(p.name) + ' has played for the first team',
+            'A debut for ' + esc(p.name),
+            esc(surname(p)) + ', ' + num(p.age) + ', is in',
+          ]),
           body: '<b>' + esc(man.name) + '</b> writes:<br><br>'
-            + 'He came through the academy here, and on ' + esc(fmtDate(G.day))
-            + ' he played. ' + esc(surname(p)) + ' is ' + num(p.age)
-            + '. There is a long way between a debut and a career, and most of them '
-            + 'do not make it, but this club made this one and that is worth a line.',
+            + pick(key, [
+              'He came through the academy here, and on ' + esc(fmtDate(G.day))
+                + ' he played. ' + esc(surname(p)) + ' is ' + num(p.age)
+                + '. There is a long way between a debut and a career, and most of them '
+                + 'do not make it, but this club made this one and that is worth a line.',
+              esc(surname(p)) + ' is ' + num(p.age) + ' and he was on the pitch on '
+                + esc(fmtDate(G.day)) + '. We made him. Whatever happens next, '
+                + 'that part is already true.',
+              'One of ours played. ' + esc(p.name) + ', ' + num(p.age)
+                + ', out of the academy and into the side on ' + esc(fmtDate(G.day))
+                + '. The hard bit starts now.',
+              'They will tell you a debut means nothing until there are fifty more. '
+                + 'They are right, and it still felt like something watching '
+                + esc(surname(p)) + ' come on.',
+            ]),
         });
       }
 
@@ -301,21 +347,47 @@
       /* a round number */
       [50, 100, 200, 300].forEach((mark) => {
         if (apps === mark && once('app' + p.id + mark)) {
+          const key = 'app' + p.id + mark;
           out.push({
-            title: esc(surname(p)) + ' reaches ' + mark + ' appearances',
+            title: pick(key + 't', [
+              esc(surname(p)) + ' reaches ' + mark + ' appearances',
+              mark + ' games for ' + esc(surname(p)),
+              esc(surname(p)) + ' quietly passes ' + mark,
+            ]),
             body: '<b>' + esc(man.name) + '</b> writes:<br><br>'
-              + esc(p.name) + ' made his <b>' + mark + 'th</b> appearance this week. '
-              + 'Not a headline anywhere else. It is one here.',
+              + pick(key, [
+                esc(p.name) + ' made his <b>' + mark + 'th</b> appearance this week. '
+                  + 'Not a headline anywhere else. It is one here.',
+                'Nobody announced it, but ' + esc(p.name) + ' has now played <b>'
+                  + mark + '</b> times for this club. That is a lot of Saturdays.',
+                'That was <b>' + mark + '</b> appearances for ' + esc(p.name)
+                  + '. Players come and go here; that many games means he stayed.',
+                esc(surname(p)) + ' reached <b>' + mark + '</b> games this week, at '
+                  + num(p.age) + '. Ask him in ten years and he will remember the number.',
+              ]),
           });
         }
       });
       [25, 50, 100].forEach((mark) => {
         if (goals === mark && once('gol' + p.id + mark)) {
+          const key = 'gol' + p.id + mark;
           out.push({
-            title: esc(surname(p)) + '’s ' + mark + 'th goal',
+            title: pick(key + 't', [
+              esc(surname(p)) + '’s ' + mark + 'th goal',
+              mark + ' goals for ' + esc(surname(p)),
+              esc(surname(p)) + ' brings up ' + mark,
+            ]),
             body: '<b>' + esc(man.name) + '</b> writes:<br><br>'
-              + esc(p.name) + ' has <b>' + mark + '</b> goals for this club now, in '
-              + apps + ' appearances.',
+              + pick(key, [
+                esc(p.name) + ' has <b>' + mark + '</b> goals for this club now, in '
+                  + apps + ' appearances.',
+                'The ' + mark + 'th went in this week. ' + esc(surname(p))
+                  + ' has taken ' + apps + ' games to get there.',
+                '<b>' + mark + '</b> goals, ' + apps + ' appearances. '
+                  + esc(surname(p)) + ' is the reason a few people renewed.',
+                'That is ' + esc(p.name) + ' on <b>' + mark + '</b> for us. '
+                  + 'Strikers are judged on one number and that is the number.',
+              ]),
           });
         }
       });

@@ -4,6 +4,21 @@
 
 ### Fixed
 
+- **The story repeated itself word for word inside a career.** Measured across
+  three careers, only 3% of sentences were shared — the story really is built out
+  of your results rather than a script, and the reporter, his paper and his
+  temperament already differ per career. But *within* one career the same kind of
+  beat used one fixed phrasing, so two milestones a fortnight apart read
+  identically apart from the name, like a mail-merge. The reporter's temperament
+  also reached exactly one line of the whole layer: the opening of the monthly
+  column. A sceptic and a romantic filed the same note about everything else.
+
+  Each beat now has several phrasings, chosen from the reporter's name, his
+  temperament and the beat's own key — stable when you re-read a letter, different
+  for the next player to reach the same milestone, different again under another
+  byline. Same career now yields "Dalot reaches 50 appearances" beside "Tielemans
+  quietly passes 50"; between-career overlap stays at 2%.
+
 - **Stadium and facility prices were Premier League numbers charged to all 484
   clubs.** Rebuilding the ground cost a flat **£380,000,000** whether you were
   Manchester United or a National League side with £376,000 in the bank. A phase
