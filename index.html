@@ -11676,7 +11676,7 @@ ACTIONS.pressResume=()=>{
 ACTIONS.pressLeave=()=>{
  if(G.pressCtx){G.pressCtx.entered=true;G.pressCtx.left=true}
  closeModal();
- toast('🎙️ Step outside — tap “Back to the press room” when you are ready.')};
+ toast('🎙️ Step outside — tap “Press room” when you are ready.')};
 /* the sheet says how to get back, and stepping out is a deliberate choice */
 const _openPressResume=openPressSheet;
 openPressSheet=function(reaction){
@@ -11692,7 +11692,14 @@ renderDock=function(){
  const d=$('#continueDock');if(!d||G.sacked)return _dockResume();
  if(pressLive()){
   const c=G.pressCtx;
-  d.innerHTML='<button class="btn btn-gold" data-action="pressResume">🎙️ Back to the press room'+
+  /* WAS 'Back to the press room', WHICH RENDERED AS 'BACK TO THE PRESS R…'.
+     The dock keeps its label on one line by ellipsing it, and the caption
+     beside it takes nearly half the width, so the label was clipped mid
+     word on a 390px phone -- a gold button on the busiest screen in the
+     game reading as an unfinished sentence. The caption already says what
+     is waiting and how much of it, so the button only has to say where it
+     goes. Shorter copy beats a cleverer truncation. */
+  d.innerHTML='<button class="btn btn-gold" data-action="pressResume">🎙️ Press room'+
    '<span class="cd-sub">Question '+((c.q||0)+1)+' of '+(c.qTotal||2)+' — they are still waiting</span></button>';
   return}
  return _dockResume()};
@@ -16811,10 +16818,21 @@ const FRONT={raf:null,t0:0,cv:null};
  '.fbtn .fl{display:block;font-family:var(--disp);font-size:15px;letter-spacing:.6px}'+
  '.fbtn .fd{display:block;font-size:11px;color:var(--ink-dim);font-weight:600;margin-top:2px}'+
  '.fbtn .fi{position:absolute;right:14px;top:50%;transform:translateY(-50%);font-size:19px;opacity:.55}'+
+/* THE FOUR EMOJI ON THE FRONT DOOR WERE THE LEAST AAA THING IN THE GAME.
+   A soccer-ball, a floppy disk, a speaker and a book, drawn by whatever
+   the operating system felt like, sat under a cut-metal masthead -- and
+   the navigation bar three taps away already uses proper 24px line
+   icons. The game had the better language in it and was not using it on
+   the first screen anybody sees. Same viewBox, same stroke weight. */
+'.fbtn .fi svg{display:block;width:25px;height:25px;fill:none;stroke:currentColor;'+
+'stroke-width:1.55;stroke-linecap:round;stroke-linejoin:round}'+
+'.fbtn .fi{color:var(--ink)}'+
+'.fbtn.red .fi{color:#ff8a7a;opacity:.9}'+
+'.fbtn.prime .fi{color:var(--gold);opacity:.95}'+
  '.fbtn.prime{border-color:rgba(251,225,34,.55);background:linear-gradient(100deg,rgba(251,225,34,.16),rgba(10,16,12,.66) 55%)}'+
  '.fbtn.prime .fl{color:var(--gold)}'+
  '.fbtn.red{border-color:rgba(218,41,28,.55);background:linear-gradient(100deg,rgba(218,41,28,.22),rgba(10,16,12,.66) 55%)}'+
- '.ffoot{text-align:center;font-size:10px;color:var(--ink-faint);margin-top:16px;letter-spacing:.4px}'+
+ '.ffoot{text-align:center;font-size:10.5px;color:rgba(226,232,240,.42);margin-top:16px;letter-spacing:.5px}'+
  '.fback{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;'+
   'color:var(--ink-dim);background:none;border:0;cursor:pointer;padding:6px 0;margin-bottom:6px}'+
  '@media (prefers-reduced-motion:reduce){#frontCv{opacity:.55}}';
@@ -51236,23 +51254,23 @@ showStart=function(){
    (m?'<button class="fbtn prime" data-action="resumeCareer" data-v="'+slot+'">'+
      '<span class="fl">CONTINUE CAREER</span>'+
      '<span class="fd">'+esc(m.club)+' · Season '+m.season+' · '+esc(m.date)+'</span>'+
-     '<span class="fi">▶</span></button>':'')+
+     '<span class="fi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6.4 18.2 12 9 17.6z"/></svg></span></button>':'')+
    '<button class="fbtn red" data-action="frontNew">'+
     '<span class="fl">NEW CAREER</span>'+
-    '<span class="fd">484 clubs, 20 countries — or build your own from nothing</span>'+
-    '<span class="fi">⚽</span></button>'+
+    '<span class="fd">484 clubs, 20 countries, or build your own</span>'+
+    '<span class="fi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.3a8.7 8.7 0 1 0 0 17.4 8.7 8.7 0 0 0 0-17.4zM12 7.6l3.6 2.6-1.4 4.3H9.8l-1.4-4.3zM12 3.3v4.3M19.6 10.7l-4 2.5M15.8 20.3l-1.6-5.8M8.2 20.3l1.6-5.8M4.4 10.7l4 2.5"/></svg></span></button>'+
    '<button class="fbtn" data-action="frontLoad">'+
     '<span class="fl">LOAD A SAVE</span>'+
     '<span class="fd">Your slots, or a file from this device</span>'+
-    '<span class="fi">💾</span></button>'+
+    '<span class="fi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.6 5.6h10.6l4.2 4.2v8.6H4.6zM8.6 5.6v4.2h6V5.6M8.2 18.4v-5h7.6v5"/></svg></span></button>'+
    '<button class="fbtn" data-action="frontSound">'+
     '<span class="fl">SOUND</span>'+
     '<span class="fd" id="fSoundSub">Crowd, commentary and the reading voice</span>'+
-    '<span class="fi">🔊</span></button>'+
+    '<span class="fi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.6 9.6h3.1l4.3-3.4v11.6l-4.3-3.4H4.6zM15.9 9.5a4 4 0 0 1 0 5M18.4 7.2a7.3 7.3 0 0 1 0 9.6"/></svg></span></button>'+
    '<button class="fbtn" data-action="frontAbout">'+
     '<span class="fl">HOW IT WORKS</span>'+
     '<span class="fd">What is in the game, and how to play it</span>'+
-    '<span class="fi">📖</span></button>'+
+    '<span class="fi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 6.7C10.4 5.5 8.2 5 4.6 5.3v12.5c3.6-.3 5.8.2 7.4 1.4 1.6-1.2 3.8-1.7 7.4-1.4V5.3c-3.6-.3-5.8.2-7.4 1.4zM12 6.7v12.5"/></svg></span></button>'+
   '</div>'+
   '<div class="ffoot">'+BRAND.season+' · installable · core game works offline</div>'+
   '<div class="fspacer"></div></div>';
