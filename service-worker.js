@@ -51,6 +51,7 @@ const CORE_ASSETS = [
   './src/front-door.js',
   './src/transfer-search.js',
   './src/keep-history.js',
+  './src/stadium-costs.js',
   './src/crazygames.js',
   './vendor/three.min.js',
   './assets/results-business-icon.svg',

@@ -4,6 +4,40 @@
 
 ### Fixed
 
+- **Stadium and facility prices were Premier League numbers charged to all 484
+  clubs.** Rebuilding the ground cost a flat **£380,000,000** whether you were
+  Manchester United or a National League side with £376,000 in the bank. A phase
+  of seats was a flat £40m plus £1.15m per 1,000 seats, so the smallest ground in
+  the National League was quoted £44m — **117 times its entire bank.** The
+  training centre (£22m), academy (£18m) and redevelopment (£45m) were flat in the
+  same way. Below the Championship, none of it could ever be bought.
+
+  Prices now scale two ways. A phase of seats is proportional to the ground —
+  floor 1,500, ceiling the old 8,000 — at a price per seat that climbs with the
+  size of the bowl, with a mild reputation factor so a League Two club that
+  inherited a 16,000-seat ground is not billed like a giant. The facility
+  upgrades scale by club reputation, `(rep / 7950) ^ 2.5`, an exponent fitted to
+  the five English tiers rather than guessed; reputation is used instead of league
+  so all twenty countries are priced without a lookup table. A rebuild is priced
+  off the ground at four phases of expansion.
+
+  Measured, median club per tier, against the median bank at that level:
+
+  | tier | ground | bank | + seats | rebuild | academy |
+  |---|---|---|---|---|---|
+  | NL | 7,856 | £428k | £700k | £2.8m | £700k |
+  | L2 | 16,587 | £1.2m | £3.6m | £14.4m | £1.5m |
+  | L1 | 7,800 | £3.0m | £700k | £2.8m | £2.3m |
+  | CH | 23,404 | £14.1m | £13.3m | £53m | £5.3m |
+  | PL | 30,400 | £142m | £24m | £96m | £18m |
+  | Man Utd | 74,310 | £263m | £88m | £352m | £23m |
+
+  Growing a non-league ground from 3,500 to over 20,000 seats is now six phases
+  and **£10.4m in total** — less than a quarter of what one phase used to cost —
+  while Old Trafford still costs £352m to rebuild, near the £380m it always was.
+  A partial redevelopment is also capped below the price of a full rebuild, which
+  it exceeded at the bottom of the pyramid.
+
 - **Losing the WebGL context threw an uncaught error instead of falling back.**
   This is the one failure that is specific to phones: a handset drops the GL
   context routinely — backgrounding the tab, taking a call, memory pressure —
