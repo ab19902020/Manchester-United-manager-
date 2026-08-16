@@ -57,6 +57,7 @@ function gameHtml() {
     'src/trophy-room.js',
     'src/world-seed.js',
     'src/transfer-search.js',
+    'src/keep-history.js',
   ]) {
     html = inlineScript(html, fs.readFileSync(path.join(root, filename), 'utf8'), filename);
   }

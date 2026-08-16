@@ -4,6 +4,24 @@
 
 ### Fixed
 
+- **The world no longer forgets its seasons.** A save was discarding two things.
+  `trimCareers()` kept 24 match-log entries for your own squad, 4 for the division
+  you play in, and **none at all for the other 460 clubs** — so a rival striker's
+  record came back empty after a reload. `trimFixtures()` dropped the scorers and
+  events of every played match you were not in, about nine thousand a season, so
+  after a save nobody had scored in any of them.
+
+  Both are off. Measured through the game's own save and load, one season played:
+  2,010 players outside your division carry a match log and all 2,010 survive the
+  round trip; 15,003 log entries in the world and 15,003 come back; 8,176 matches
+  you were not in still know who scored. The written file now carries exactly what
+  the world holds, not a fraction of it.
+
+  It costs space, which was the reason the trimming existed: the stored save goes
+  from 7,264 kB to 10,073 kB. That is a deliberate trade — a career you run for
+  thirty years is a world with a past, and a game you cannot ask about its own
+  history is not one you can understand.
+
 - **You could not search for a free agent, because no free agent was in the search.**
   The market search walked `G.clubs[].players`, and a free agent is not at a club —
   he lives in `G.freeAgents`. So one had never appeared in a result. The only way to
