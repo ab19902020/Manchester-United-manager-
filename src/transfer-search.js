@@ -167,7 +167,38 @@
     const minPot = +get('trPot', 0) || 0;
     const maxWage = +get('trWage', 0) || 0;
     const nat = get('trNat', 'any');
+    const mood = get('trMood', 'any');
+    const fit = get('trFit', 'any');
+    const role = get('trRole', 'any');
+    const attr = get('trAttr', '');
+    const attrMin = +get('trAttrMin', 14) || 0;
 
+    /* THE WAGE HE WOULD WANT HERE, which is the number the rest of the
+       market filters on. This list was testing `p.wage` — what he was
+       last paid — so the wage filter meant something different on this
+       tab than on the other one, for the same slider. */
+    const wageOf = (p) => {
+      try {
+        return (typeof window.wageHere === 'function') ? window.wageHere(p) : (p.wage || 0);
+      } catch (error) { return p.wage || 0; }
+    };
+    const room = (() => {
+      try {
+        return (typeof window.myRoom === 'function') ? window.myRoom() : Infinity;
+      } catch (error) { return Infinity; }
+    })();
+    const starter = (p) => {
+      try {
+        return (typeof window.trStarter === 'function') ? window.trStarter(p) : false;
+      } catch (error) { return false; }
+    };
+    const natOf = (p) => {
+      try {
+        return (typeof window.natOf === 'function') ? window.natOf(p) : p.nat;
+      } catch (error) { return p.nat; }
+    };
+
+    let blocked = 0;
     const list = (G.freeAgents || []).filter((p) => {
       if (!p) return false;
       if (UI.trShort && sl.indexOf(p.id) < 0) return false;
@@ -176,10 +207,32 @@
       if (q && String(p.name || '').toLowerCase().indexOf(q) < 0) return false;
       if (minOvr && p.ovr < minOvr) return false;
       if (minPot && (p.pot || p.ovr) < minPot) return false;
-      if (maxWage && p.wage > maxWage) return false;
-      if (nat && nat !== 'any' && p.nat !== nat) return false;
-      /* a free agent has no club, so a transfer-listed filter is
-         meaningless rather than false — it is not applied */
+      if (nat && nat !== 'any' && natOf(p) !== nat) return false;
+
+      /* EVERY FILTER THE REST OF THE MARKET HAS, ON THE SAME TERMS.
+         This list used to apply seven of them and quietly ignore the
+         rest, so setting a mood or an attribute narrowed the market tab
+         and did nothing at all here — the panel said it had filtered
+         and it had not. */
+      if (mood !== 'any') {
+        const m = p.morale == null ? 60 : p.morale;
+        if (mood === 'unhappy' && m >= 45) return false;
+        if (mood === 'angry' && m >= 32) return false;
+      }
+      if (fit === 'fit' && p.injury) return false;
+      if (fit === 'inj' && !p.injury) return false;
+      if (role === 'bench' && starter(p)) return false;
+      if (role === 'star' && !starter(p)) return false;
+      if (attr && ((p.attrs && p.attrs[attr]) || 0) < attrMin) return false;
+
+      const w = wageOf(p);
+      if (maxWage && w > maxWage) return false;
+      /* "Within my means" costs nothing in fees here — a free agent is
+         wages only — but the wage still has to fit under the ceiling */
+      if (UI.trAfford && w > room) { blocked += 1; return false; }
+
+      /* a free agent has no club, so the transfer-listed and contract
+         filters are meaningless rather than false — they are not applied */
       return true;
     });
 
@@ -188,23 +241,41 @@
       s === 'val' ? b.value - a.value
         : s === 'age' ? a.age - b.age || b.ovr - a.ovr
           : s === 'pot' ? (b.pot || b.ovr) - (a.pot || a.ovr) || b.ovr - a.ovr
-            : s === 'wage' ? a.wage - b.wage || b.ovr - a.ovr
+            : s === 'wage' ? wageOf(a) - wageOf(b) || b.ovr - a.ovr
               : b.ovr - a.ovr));
 
-    const shown = list.slice(0, PAGE);
+    /* A PAGER, NOT A CEILING. This list used to stop at twenty and tell
+       you to tighten the filters to see further down — while the market
+       tab beside it paged through everything. So the free-agent market
+       was the one place you could not actually browse, which is the
+       opposite of what it is for. Same twenty a page, same control, same
+       `UI.trPage` the base search already keeps. */
+    const pages = Math.max(1, Math.ceil(list.length / PAGE));
+    const page = Math.max(0, Math.min(pages - 1, +UI.trPage || 0));
+    UI.trPage = page;
+    const shown = list.slice(page * PAGE, page * PAGE + PAGE);
+
     let h = '<div class="sec"><div class="t">Free agents</div><div class="ln"></div>'
       + '<div class="sub">' + list.length + ' match' + (list.length === 1 ? '' : 'es')
       + '</div></div><div class="card tight" style="padding:4px 8px">';
     if (!shown.length) {
       h += emptyBox('🆓', 'No free agent fits that',
-        'Widen the age range, change the position, or clear the name search.');
+        blocked
+          ? 'Everything that fits is above your wage ceiling. Turn off "Within my '
+            + 'means" to look anyway, or take somebody off the bill first.'
+          : 'Widen the age range, change the position, or clear the name search.');
     } else {
       h += '<div class="plist">' + shown.map(freeRow).join('') + '</div>';
     }
     h += '</div>';
-    if (list.length > PAGE) {
-      h += '<div class="xs faint" style="padding:6px 4px;text-align:center">Showing the top '
-        + PAGE + ' of ' + list.length + ' — tighten the filters to see further down.</div>';
+    if (pages > 1) {
+      h += '<div class="spread" style="gap:8px;padding:7px 2px 2px">'
+        + '<button class="btn btn-ghost btn-sm" data-action="trPage" data-v="' + (page - 1) + '"'
+        + (page <= 0 ? ' disabled' : '') + '>← Previous</button>'
+        + '<span class="xs faint">Page ' + (page + 1) + ' of ' + pages
+        + ' · ' + list.length + ' players</span>'
+        + '<button class="btn btn-ghost btn-sm" data-action="trPage" data-v="' + (page + 1) + '"'
+        + (page >= pages - 1 ? ' disabled' : '') + '>Next →</button></div>';
     }
     return h + '<div class="xs faint" style="padding:6px 4px;line-height:1.5">'
       + 'No fee and no selling club — you are only bidding wages, and rivals are '

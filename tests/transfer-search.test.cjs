@@ -238,3 +238,118 @@ test('the search comes before the money on the transfers screen', async () => {
     game.close();
   }
 });
+
+/*
+ * The two complaints, as tests.
+ *
+ *   "I wanna be able to search lower wage brackets ... for free agents"
+ *   "It only shows me the top twenty, and I can't see the rest"
+ *
+ * Both were mine. The wage rungs slid up with the club's money, which
+ * fixed the original problem — Premier League brackets are useless to a
+ * non-league club — and broke the mirror image: managing United the
+ * cheapest bracket on offer was £15,000 a week, so a rich club could not
+ * ask for anybody cheap. And the free-agent list stopped at twenty and
+ * told you to tighten the filters, while the market tab beside it paged
+ * through everything.
+ */
+
+test('a rich club can still search for cheap players', async () => {
+  const game = await createGame();
+  try {
+    await startCareer(game, 'Rungs');
+    const rungs = game.eval('wageRungs()');
+    assert.ok(Array.isArray(rungs) && rungs.length > 0, 'there are wage rungs');
+    assert.ok(rungs[0] <= 1000,
+      `the cheapest wage bracket offered is ${rungs[0]} — a big club must still be `
+      + 'able to ask for somebody on a low wage');
+    assert.ok(rungs.length >= 8, `only ${rungs.length} rungs offered`);
+    /* and the ladder still stops somewhere sensible rather than showing
+       a non-league club £600k a week */
+    const sorted = rungs.slice().sort((a, b) => a - b);
+    assert.deepEqual(rungs, sorted, 'the rungs are in order');
+  } finally {
+    game.close();
+  }
+});
+
+test('the free-agent list pages instead of stopping at twenty', async () => {
+  const game = await createGame();
+  try {
+    await startCareer(game, 'Pager');
+
+    const out = await game.eval(`(function () {
+      Object.keys(TR_DEF).forEach((k) => { UI[k] = TR_DEF[k]; });
+      UI.trPos = 'Any'; UI.trAge = '40'; UI.trQ = ''; UI.trShort = false;
+      UI.trAfford = false; UI.trPage = 0;
+      ACTIONS.trDeal({ dataset: { v: 'free' } });
+
+      const total = (G.freeAgents || []).length;
+      const page1 = trResultsHtml();
+      UI.trPage = 1;
+      const page2 = trResultsHtml();
+      UI.trPage = 0;
+
+      const pager = (h) => { const m = h.match(/Page (\\d+) of (\\d+)/); return m ? m[0] : null; };
+      return {
+        total: total,
+        pagerOnPage1: pager(page1),
+        pagerOnPage2: pager(page2),
+        differentPages: page1 !== page2,
+        saysTighten: /tighten the filters to see further down/.test(page1),
+      };
+    }())`);
+
+    assert.ok(out.total > 20, `there are ${out.total} free agents to page through`);
+    assert.ok(out.pagerOnPage1, 'page one offers a pager');
+    assert.ok(out.differentPages, 'page two is not page one');
+    assert.match(out.pagerOnPage2, /Page 2 of/, 'and it knows which page it is on');
+    assert.equal(out.saysTighten, false,
+      'it no longer tells you to tighten the filters instead of paging');
+  } finally {
+    game.close();
+  }
+});
+
+test('the filters the free-agent list used to ignore now bite', async () => {
+  const game = await createGame();
+  try {
+    await startCareer(game, 'Filters');
+
+    const out = await game.eval(`(function () {
+      const reset = () => {
+        Object.keys(TR_DEF).forEach((k) => { UI[k] = TR_DEF[k]; });
+        UI.trPos = 'Any'; UI.trAge = '40'; UI.trQ = ''; UI.trShort = false;
+        UI.trAfford = false; UI.trPage = 0;
+      };
+      const count = (h) => { const m = h.match(/(\\d+) match/); return m ? +m[1] : -1; };
+      reset();
+      ACTIONS.trDeal({ dataset: { v: 'free' } });
+      const everyone = count(trResultsHtml());
+
+      reset(); UI.trAttr = 'pace'; UI.trAttrMin = '16';
+      const quick = count(trResultsHtml());
+
+      reset(); UI.trWage = '2000';
+      const cheap = count(trResultsHtml());
+
+      reset(); UI.trFit = 'fit';
+      const fit = count(trResultsHtml());
+
+      reset();
+      return { everyone: everyone, quick: quick, cheap: cheap, fit: fit };
+    }())`);
+
+    assert.ok(out.everyone > 20, `${out.everyone} free agents unfiltered`);
+    /* the attribute filter was applied to the market tab and silently
+       dropped on this one, so the panel claimed a filter it never ran */
+    assert.ok(out.quick < out.everyone,
+      `asking for pace 16+ returned ${out.quick} of ${out.everyone} — it is being ignored`);
+    assert.ok(out.cheap < out.everyone,
+      `a £2k wage ceiling returned ${out.cheap} of ${out.everyone}`);
+    assert.ok(out.cheap > 0, 'and cheap free agents do exist to be found');
+    assert.ok(out.fit <= out.everyone, 'the fitness filter runs');
+  } finally {
+    game.close();
+  }
+});
