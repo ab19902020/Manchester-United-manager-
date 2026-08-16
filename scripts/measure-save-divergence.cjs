@@ -273,17 +273,25 @@ const DAYS_PER_SEASON = 340;
          dropped on purpose. Used only for the measurement that asks what
          a save costs if the game does not carry seventeen significant
          digits of an attribute nobody can see. */
-      if (quant) {
+      /* `quant` is the grid the value is pinned to: 100 for hundredths,
+         10 for tenths, 0 to keep every digit. An attribute on a tenths
+         grid is 12.3 where the screen says 12, and it fits in one byte
+         rather than two — nineteen attributes a player, which is the
+         difference between a save that fits and one that fits with room
+         to spare. */
+      const grid = quant === true ? 100 : quant;
+      if (grid) {
         for (const s of [1, 10, 100]) {
+          if (s > grid) break;
           let ok = true;
           for (let i = 0; i < n; i += 1) {
-            const q = Math.round(raw[i] * 100) / 100;
+            const q = Math.round(raw[i] * grid) / grid;
             if (Math.abs(q * s - Math.round(q * s)) > 1e-6) { ok = false; break; }
           }
           if (ok) { scale = s; break; }
         }
-        if (!scale) scale = 100;
-        for (let i = 0; i < n; i += 1) raw[i] = Math.round(raw[i] * 100) / 100;
+        if (!scale) scale = grid;
+        for (let i = 0; i < n; i += 1) raw[i] = Math.round(raw[i] * grid) / grid;
       }
       if (!scale) for (const s of [1, 10, 100]) {
         let ok = true;
@@ -561,6 +569,32 @@ const DAYS_PER_SEASON = 340;
     };
     const worldPackedTotal = Object.values(worldPacked).reduce((a, b) => a + b, 0);
 
+    /* (F) E again, on a tenths grid rather than hundredths. This is the
+       one that decides whether the format has margin: three runs of E on
+       different careers came back 1,026, 1,027 and 1,029 kB against a
+       1,024 kB limit, which is not a fit, it is a coin toss. */
+    strings.clear();
+    const fdiff = encodeSet(carriedRows, moved.concat(['id']), 10);
+    const fborn = encodeSet(bornRows, allFields, 10);
+    const fclubs = encodeSet(clubRows, fieldsOf(clubRows), 10);
+    const ffix = encodeSet(fixRows, FIX, 10);
+    const fties = tieRows.length ? encodeSet(tieRows, fieldsOf(tieRows), 10) : null;
+    const fParts = {
+      changedColumns: await gz(fdiff.body),
+      changedBig: await gz(enc.encode(fdiff.blob)),
+      newPlayers: await gz(fborn.body),
+      newPlayersBig: await gz(enc.encode(fborn.blob)),
+      goneIds: await gz(column(buried.length || 1, (i) => buried[i] || 0)),
+      wClubs: await gz(fclubs.body),
+      wFixtures: await gz(ffix.body),
+      wCupTies: fties ? await gz(fties.body) : 0,
+      wCupTiesBig: fties ? await gz(enc.encode(fties.blob)) : 0,
+      wCupShell: await gz(enc.encode(JSON.stringify(cupShell))),
+      wInbox: await gz(enc.encode(worldSrc.inbox)),
+      wRest: await gz(enc.encode(worldSrc.rest)),
+      strTable: await gz(enc.encode([...strings.keys()].join(' '))),
+    };
+
     const sum = (o) => Object.values(o).reduce((s, v) => s + v, 0);
 
     return {
@@ -577,6 +611,7 @@ const DAYS_PER_SEASON = 340;
       qdiff: { parts: qdiffParts, total: sum(qdiffParts), columns: qdiff.columns, big: qdiff.big },
       bigBreakdown, worldBits, samples, sideTables,
       worldPacked, worldPackedTotal,
+      tenths: { parts: fParts, total: sum(fParts) },
       worldBlobs: { cupTies: tieEnc ? tieEnc.big : [], clubs: clubsEnc.big },
       packed: { parts: Object.assign({}, qdiffParts, { world: worldPackedTotal }),
         total: sum(qdiffParts) - qdiffParts.world + worldPackedTotal },
@@ -617,6 +652,7 @@ const DAYS_PER_SEASON = 340;
   table('C. THE WHOLE WORLD, to a hundredth   (' + r.quant.columns + ' columns)', r.quant);
   table('D. SEED PLUS WHAT MOVED, hundredth   (' + r.qdiff.columns + ' columns)', r.qdiff);
   table('E. D, WITH THE WORLD IN COLUMNS TOO', r.packed);
+  table('F. E, ON A TENTHS GRID', r.tenths);
   console.log('the world, packed:');
   Object.entries(r.worldPacked).sort((a, b) => b[1] - a[1])
     .forEach(([k, v]) => console.log('   ' + k.padEnd(12), kb(v)));
@@ -651,7 +687,8 @@ const DAYS_PER_SEASON = 340;
   });
   console.log('');
   const best = [['A', r.full.total], ['B', r.diff.total], ['C', r.quant.total],
-    ['D', r.qdiff.total], ['E', r.packed.total]].sort((x, y) => x[1] - y[1])[0];
+    ['D', r.qdiff.total], ['E', r.packed.total], ['F', r.tenths.total]]
+    .sort((x, y) => x[1] - y[1])[0];
   console.log('smallest:', best[0], kb(best[1]), verdict(best[1]));
   console.log('full save as JSON, uncompressed, for scale:', kb(r.fullSaveRaw));
   console.log('errors:', errors.length ? errors.slice(0, 3) : 'none');
