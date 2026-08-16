@@ -240,6 +240,79 @@ comes back different. And the growth question is open: `log` is 51 entries a pla
 after one season, so a thirty-season career has to be measured before anyone calls
 this settled. 212 kB of headroom is real but it is not unlimited.
 
+## Pre-release audit — 16 August 2026
+
+The director is releasing tomorrow and asked for the bugs, not for reassurance.
+Everything below was run today on `13d5008`.
+
+### What passes
+
+```text
+lint                                   clean
+tests                    159 run, 159 pass, 0 fail
+modules            44, each wired in the page, the service worker and the harness
+soak            1,300 days (4 seasons)  0 exceptions, 0 console errors
+save round trip                        identical
+```
+
+The soak is the one that would have found a release bug and did not. Four seasons
+of daily ticks, season rollovers, transfer windows, cup draws and promotions:
+
+```text
+divisions        all 25 correct size (PL 20, CH/L1/L2/NL 24, foreign as defined)
+clubs            484        empty squads 0        squads with no keeper 0
+players          ages outside 15-45: 0   overalls outside 1-99: 0   no contract: 0
+clubs bust       0
+```
+
+And the save, through the real path (`RBSSaves.save` / `RBSSaves.load`, which is
+what the Load button calls — not the legacy `loadSlot`, which reads a localStorage
+slot the game no longer writes):
+
+```text
+saved    484 clubs, 8,781 fixtures, 13,997 players, 4.2 MB, checksum verified
+loaded   true
+         day 60 -> 60   bank 243,285,538 -> 243,285,538   points 3 -> 3
+         squad identical, name for name and rating for rating
+```
+
+I had reported that `loadSlot` returning false might be a release blocker. **It is
+not, and that was my error** — I called the legacy function rather than the one
+the game uses. Saving and loading are healthy.
+
+### What I would not ship without knowing about
+
+**1. Every save discards the history of 460 clubs.** `trimCareers()`,
+`KEEP_MINE=24, KEEP_DIV=4, KEEP_REST=0`. Measured: 1,160 players outside the
+manager's division had a match log and a save carries none of them. Not a crash
+and not a blocker — the career, the world and your own club all survive — but the
+game forgets most of its own past on every save, and a player who checks a rival
+striker's record after a reload will find it empty. Detail and the three things to
+establish before changing it are in the section below.
+
+**2. The 3D Dugout has never run on a phone.** Codex's item 3, still open and now
+the more important of the two hardware items. Frame time in open play and at a
+goal, thermal throttling across a full match, rain, substitutions, WebGL context
+loss and recovery — none of it measured on real hardware, only on SwiftShader in a
+headless browser. The game ships to mobile. This is the largest unknown in the
+release and it is unknowable from here.
+
+**3. Neural voices, same reason.** Blocked on hardware, not effort.
+
+**4. A goal bonus cannot help you close a deal below the Championship.** My own
+open item 4: `Math.min(4, bonus/8e3*4)` is a Premier-League-sized divisor, so in
+League Two the bonus rounds to nothing and the lever does nothing. Cosmetic in
+effect — the deal still closes or does not on the other terms — but a control that
+visibly does nothing is worse than one that is absent.
+
+### An observation rather than a defect
+
+After four seasons of pressing continue without signing anybody, the user's squad
+had fallen from 26 to 18. That is arguably correct — nobody signs for you, that is
+the job — but a player who clicks through a season will find himself thin, and 18
+is the point where injuries start forcing odd selections. Worth a look at whether
+the board should offer to fill the squad, not worth holding a release for.
+
 ### Found, not fixed: every save deletes most of the game's history
 
 The director's instruction after the save work was called off: *"make sure
