@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+### Changed
+
+- **The game is now `index.html`.** CrazyGames loads that name and nothing else,
+  and until now it was a redirect page pointing at `red-devil-manager.html` — so
+  every load on their platform would have taken a navigation hop through a holding
+  screen before the game started. The game is that file now, and the old name is a
+  one-kilobyte shim redirecting the other way so existing bookmarks, and anything
+  installed while the manifest still pointed there, keep working. `npm run serve`
+  already mapped `/` to `index.html`, so `http://localhost:4173` opens the game
+  directly instead of the redirect.
+
+  Twenty files referenced the old name, almost all a single path string; the game
+  file mentioned its own name only in a comment. The service worker's navigate
+  fallback and `CACHE_NAME` (v30) moved with it, so an installed copy replaces its
+  cache rather than serving a page that is no longer there. The handoff documents
+  still name the old file and have deliberately been left alone — they are records
+  of work done when that was the name, and `AGENT-ONE.md` belongs to another agent.
+
 ### Fixed
 
 - **A CrazyGames SDK adapter, written to be safe while its API names are

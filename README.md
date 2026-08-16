@@ -43,7 +43,7 @@ GitHub Actions runs the same checks on every pull request.
 
 ## Project layout
 
-- `red-devil-manager.html` — the legacy game core and UI.
+- `index.html` — the legacy game core and UI.
 - `src/career-store.js` — validated, checksummed IndexedDB career storage.
 - `src/simulation-model.js` — shared scoring probabilities and balance targets.
 - `src/lower-league-data.js` — generated five-division English roster and player-facts snapshot.

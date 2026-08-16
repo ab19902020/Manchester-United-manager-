@@ -11,7 +11,7 @@ function inlineScript(html, source, filename) {
 }
 
 function gameHtml() {
-  let html = fs.readFileSync(path.join(root, 'red-devil-manager.html'), 'utf8');
+  let html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
   for (const filename of [
     'src/simulation-model.js',
     'src/lower-league-data.js',
@@ -210,7 +210,7 @@ async function createGame() {
   virtualConsole.on('error', (...args) => errors.push(`console.error ${args.join(' ')}`));
 
   const dom = new JSDOM(gameHtml(), {
-    url: 'https://results-business.test/red-devil-manager.html',
+    url: 'https://results-business.test/index.html',
     runScripts: 'dangerously',
     pretendToBeVisual: true,
     virtualConsole,

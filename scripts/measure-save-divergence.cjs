@@ -47,7 +47,7 @@ const DAYS_PER_SEASON = 340;
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
   const errors = [];
   page.on('pageerror', (e) => errors.push(String(e).slice(0, 200)));
-  await page.goto('file:///home/user/Manchester-United-manager-/red-devil-manager.html');
+  await page.goto('file:///home/user/Manchester-United-manager-/index.html');
   await page.waitForTimeout(2500);
 
   const r = await page.evaluate(async ({ seasons, daysPerSeason }) => {

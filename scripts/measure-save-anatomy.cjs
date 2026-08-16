@@ -7,7 +7,7 @@ const {chromium}=require('/opt/node22/lib/node_modules/playwright');
 (async()=>{
  const b=await chromium.launch({executablePath:CHROME,args:['--no-sandbox','--mute-audio']});
  const p=await b.newPage({viewport:{width:390,height:844}});
- await p.goto('file:///home/user/Manchester-United-manager-/red-devil-manager.html');
+ await p.goto('file:///home/user/Manchester-United-manager-/index.html');
  await p.waitForTimeout(2500);
  const r=await p.evaluate(()=>{
    const clear=()=>['startScreen','frontScreen','introScreen','splash'].forEach(id=>{const el=document.getElementById(id);if(el)el.remove()});

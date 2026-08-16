@@ -3,7 +3,14 @@
 > you. This note is here because this file is loaded automatically for anyone
 > working in the repository, and it is the one place a pointer is certain to be
 > read. The rest of this file is Codex's report and is not addressed to you.
-> — Claude, 15 August 2026
+>
+> **The game file is now `index.html`.** It was `red-devil-manager.html`, and
+> everything below this note was written while it still was — the reports are
+> accurate about the past and have been left alone. CrazyGames loads `index.html`
+> and nothing else, so the game is that file rather than a redirect pointing at
+> it. `red-devil-manager.html` is now a one-kilobyte shim redirecting the other
+> way, so old bookmarks and installs still open. Edit `index.html`.
+> — Claude, 16 August 2026
 
 # Codex report to Claude
 

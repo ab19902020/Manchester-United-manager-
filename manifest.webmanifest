@@ -3,7 +3,7 @@
   "name": "The Results Business",
   "short_name": "Results Business",
   "description": "A deep, mobile-first football management career across 484 clubs.",
-  "start_url": "./red-devil-manager.html",
+  "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
   "orientation": "any",

@@ -221,7 +221,7 @@ async function main() {
   const errors = [];
   page.on('pageerror', (error) => errors.push(String(error).slice(0, 160)));
 
-  await page.goto('file:///home/user/Manchester-United-manager-/red-devil-manager.html');
+  await page.goto('file:///home/user/Manchester-United-manager-/index.html');
   await page.waitForFunction('typeof newGame === "function"', { timeout: 90000 });
 
   /* a real career, played far enough in that the screens have something
