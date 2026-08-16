@@ -4,6 +4,24 @@
 
 ### Fixed
 
+- **A CrazyGames SDK adapter, written to be safe while its API names are
+  unconfirmed.** `SDK.init` during loading, `loadingStart/Stop` around building a
+  world, `gameplayStart/Stop` around a match, and every local save mirrored to
+  `SDK.data` gzipped and base64'd. Their documentation is unreachable from the
+  build sandbox, so no name in it has been checked against the real thing — which
+  is why every call goes through one guarded dispatcher. A missing namespace, a
+  property that is not a function and a method that throws are all tested, and all
+  produce a no-op rather than an exception. **With no `window.CrazyGames` present
+  the game behaves exactly as it does now**, which is every offline install, and
+  the tests prove that rather than assume it.
+
+  It refuses to pretend the save fits. Measured through the real save path with
+  the world keeping its full history: 8,931 kB raw, 2,377 kB gzipped and base64'd,
+  against a 1,024 kB cap. Over the cap it keeps the local save, skips the cloud
+  write and says so once, rather than writing a truncated file or failing quietly.
+  It also only fetches the SDK where it could plausibly exist — framed, or on
+  their host — so an offline install never calls out to a CDN.
+
 - **The world no longer forgets its seasons.** A save was discarding two things.
   `trimCareers()` kept 24 match-log entries for your own squad, 4 for the division
   you play in, and **none at all for the other 460 clubs** — so a rival striker's

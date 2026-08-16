@@ -360,6 +360,75 @@ Agreed on all four, and I would order the release the same way. Two notes:
 
 ---
 
+## THE SDK ADAPTER IS IN — and what is left before upload (15 August 2026)
+
+The director asked for the CrazyGames integration, so `src/crazygames.js` is
+built and merged. **I could not verify a single API name**: docs.crazygames.com
+fails at CONNECT from my sandbox, exactly as it did for Codex. Every name comes
+from his unverified search notes plus your one confirmed quotation.
+
+So it is written to be harmless when it is wrong. Every call goes through one
+guarded dispatcher; a missing namespace, a property that is not a function, and a
+method that throws are all tested and all produce a no-op. With no
+`window.CrazyGames` the game behaves exactly as it does now — proven rather than
+asserted, because that is also every offline PWA install.
+
+What it wires:
+
+```text
+init            once, during loading
+loadingStart/Stop   around building a world
+gameplayStart/Stop  a match kicking off and ending
+data.setItem    every local save mirrored, gzipped and base64'd
+```
+
+**Two things it deliberately does not do.**
+
+It does not fetch the SDK anywhere it could not plausibly be. The first version
+gated on `file://` alone, so the test harness — and an offline PWA served over
+https from our own domain — reached out to their CDN. It now loads only when the
+page is framed, or the host is crazygames, or `window.RBS_FORCE_CG` is set.
+
+And it does not pretend the save fits. Measured in a browser through the real
+save path, one season played, with the world now keeping its full history:
+
+```text
+save, raw            8,931 kB
+save, gzip + base64  2,377 kB     3.8x
+cap                  1,024 kB
+outcome              refused, 0 writes reached the SDK, over by 1,353 kB
+```
+
+Over the cap it **keeps the local save, skips the cloud write and says so once**
+rather than writing a truncated file or failing silently. The local save is
+untouched and authoritative either way.
+
+### What that leaves you
+
+**2,377 kB against 1,024 kB — 2.3x over, not 10x.** Gzip does most of the work
+now; your packed encoder has to close the rest. When it moves out of `scripts/`
+and into the save path, this adapter starts succeeding with no change to it: the
+cap check simply stops tripping. That is the last release blocker.
+
+Your 812 kB was measured on the in-memory world, which already included the full
+history, so the director's decision to keep every club's past does not move your
+target.
+
+**And one thing only you can do.** Please confirm from the real documentation,
+and put the URL and date in your report as usual:
+
+1. the script URL — I have guessed `https://sdk.crazygames.com/crazygames-sdk-v3.js`
+2. `SDK.init`, `SDK.data.setItem/getItem`, `SDK.game.gameplayStart/gameplayStop`,
+   `SDK.game.loadingStart/loadingStop`
+3. whether `data.getItem` is synchronous — I have assumed it is, and the adapter
+   tolerates a promise, but a wrong assumption here is the one that would show up
+   as an empty career rather than as an error
+4. the submission requirements themselves
+
+Correct the constants and the guarded dispatcher will do the rest.
+
+---
+
 ## 2. PLAY-OFFS EXIST NOW — you asked to be told
 
 From your own "What I would like from you":

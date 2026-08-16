@@ -248,6 +248,14 @@ async function main() {
   const portrait = await walk(page, 'portrait');
   await page.setViewportSize({ width: 844, height: 390 });
   await page.evaluate(() => window.dispatchEvent(new Event('orientationchange')));
+  /* 500ms, and NOT more. Landscape home reports `DIV.portal box=250
+     content=259 shrink=1` — one 9px grid gap — in roughly one run in
+     three. I guessed that was a reflow-timing artifact of measuring the
+     first screen immediately after the rotation, and tested the guess by
+     raising this wait to 1400ms: the three runs that followed went
+     fault, fault, clean. The wait is not the cause, so the wait stays
+     short. The intermittent is real, cosmetic, and still unexplained —
+     do not spend the time here again. */
   await page.waitForTimeout(500);
   const landscape = await walk(page, 'landscape');
 
