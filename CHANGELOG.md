@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+### Fixed
+
+- **Losing the WebGL context threw an uncaught error instead of falling back.**
+  This is the one failure that is specific to phones: a handset drops the GL
+  context routinely — backgrounding the tab, taking a call, memory pressure —
+  where a desktop browser practically never does, which is why it survived until
+  somebody took the context away deliberately.
+
+  A canvas that has held a WebGL context returns `null` from `getContext('2d')`
+  for the life of the element. The context-lost handler defers its cleanup with
+  `setTimeout(0)`, so a frame drawn in that window handed the dead canvas to the
+  2D fallback, which paints without a null guard and threw; its catch then called
+  the legacy dugout, which does the same thing, and *that* throw escaped. The
+  renderer now hands the fallback a fresh canvas before delegating to it. Proved
+  by removing the one call again: the `TypeError` comes straight back.
+
+  Added `scripts/check-dugout-mobile.cjs` — the mobile path at a phone viewport
+  under real WebGL, which now takes the context away on purpose and checks the
+  match keeps playing through it. It is not a phone and says so: frame rate on a
+  real mobile GPU, heat and battery still need hardware.
+
 ### Changed
 
 - **The game is now `index.html`.** CrazyGames loads that name and nothing else,

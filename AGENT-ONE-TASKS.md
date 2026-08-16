@@ -522,6 +522,74 @@ will keep doing this whatever the bound is.
 
 ---
 
+## 00. BEFORE YOU REDESIGN THE WELCOME SCREEN — READ THIS FIRST (16 August 2026)
+
+You are rebuilding the main menu / home welcome screen. Good — it needs it. Three
+things are wired into that screen by their exact names, and a redesign that
+renames or drops them breaks each one **silently**. None of them will throw.
+
+### 1. It will take the entire test suite down with it
+
+`tests/game-harness.cjs` starts every career by driving your screen by hand:
+
+```js
+game.click('frontNew');                       // data-action="frontNew"
+game.click('startGame');                      // data-action="startGame"
+document.getElementById('mgrName').value = …  // id="mgrName"
+game.click('mgrDone');                        // data-action="mgrDone"
+```
+
+Every test that plays football goes through `startCareer()`, so **all 170 tests
+fail at once** if any of those four names moves. If the redesign needs different
+names, change the harness in the same commit — it is one function, `startCareer`
+at line 245 — and run `npm run check` before you push, not after.
+
+Ten scripts in `scripts/` also clear `startScreen`, `frontScreen`, `introScreen`
+and `splash` by id to get past the front end. Those degrade gracefully — a missing
+id is skipped — but if you rename the container the screens will not be cleared
+and the sweep, the framed check and the upload build will all photograph your
+welcome screen instead of the game.
+
+### 2. CONTINUE YOUR CAREER is injected, not authored
+
+`refreshStartResume()` in `runtime-enhancements.js:235` builds the resume button
+at runtime and inserts it into `#startScreen`, anchored like this:
+
+```js
+const screen = doc.getElementById('startScreen');
+const newButton = screen.querySelector('[data-action="frontNew"], [data-action="startGame"], .hero-cta');
+newButton.parentNode.insertBefore(button, newButton);
+```
+
+So it needs `#startScreen` to exist and to contain one of those three anchors. If
+neither is there, **the button is not rendered and nothing complains** — and that
+button is the only way back into a saved career from the front end. It is also
+where the CrazyGames cloud restore surfaces: a player on a new device gets their
+career pulled down and then cannot see it. It only looks at slots auto/1/2/3.
+
+If you are designing your own resume affordance, say so and I will retire the
+injected one rather than have two.
+
+### 3. The landscape home screen has a known intermittent
+
+`DIV.portal box=250 content=259 shrink=1` — one 9px grid gap — in roughly one
+`npm run sweep` run in three, landscape only. I could not explain it: an isolated
+probe reproduced it zero times in six attempts, and my reflow-timing theory was
+disproved by experiment (raising the post-rotation wait to 1400ms gave fault,
+fault, clean). It is cosmetic and it is written up in `sweep-screens.cjs` so
+nobody repeats the experiment.
+
+**You may well delete it by accident.** If the rebuild makes it go away, say so in
+your report and I will take the note out. If it survives, it is still not worth
+holding a release for.
+
+**And run `npm run sweep` on the result** — it walks every screen in both
+orientations for spill, overlap, squashed boxes and tactics-token collisions. It
+is the only thing that looks at layout, and the home screen is the first thing it
+measures.
+
+---
+
 ## 0. THE SAVE DECISION IS MINE AND HERE IT IS (16 August 2026)
 
 You ended the format work with *"the honest options are a coarser grid for distant
@@ -628,20 +696,34 @@ appearances every season:
 mean 8.8
 ```
 
-**A caveat I cannot explain and am not going to paper over.** All 22 isolated runs
-landed inside the window; the two values that broke it, 2 and 20, both came from
-full-suite runs. Either that is tail luck on a small number of suite runs, or
-something about running inside the suite shifts the distribution. I have not
-established which, and it is worth knowing before you tune anything — if it is the
-second, the bounds are not the problem.
+**And then I chased the gap, because it was the interesting part.** Every
+out-of-range value has come from a full-suite run. Nothing else has produced one:
+
+```text
+the test file run on its own, six times      6 passes, 0 failures
+the statistic sampled directly, 22 seasons   every one inside 3..16
+the same test inside the full suite          2 failures in about 5 runs
+```
+
+**So the model is not the problem and the bounds may not be either.** 28
+independent observations say the injury model produces a sane season — mean 8.8,
+never once outside the window — and the only place it misbehaves is inside
+`node --test tests/`, which runs test *files in parallel*. That is the difference
+I would chase first: not "is 2 a reasonable season", but "what does running under
+parallel load do to this test". A plausible shape is that the career reaches the
+first fixture in a different state when the machine is loaded, which would change
+the season it then plays. I have not proved that, and I am flagging it as the lead
+rather than the answer.
 
 **I have deliberately not touched the bounds.** Widening them to 2..20 would turn
-the suite green and hide the question, which is yours: a 26-man squad taking 20
-injuries in a season, or getting through one on 2, are both results somebody has
-to decide are acceptable. If they are, widen the assertion and say why. If they
-are not, the model wants a floor and a ceiling rather than the test having them.
-Either way it should stop being a coin toss — a test that fails two runs in three
-teaches everybody to ignore the suite, which is worse than the bug it is guarding.
+the suite green and destroy the only evidence pointing at whatever this really is.
+If it does turn out to be load, the fix is in the test's setup, not its
+assertions. If it turns out the model really can produce 2 or 20 under some state
+the suite reaches and my probe does not, then that state is worth finding — it is
+a real season somebody could play.
+
+Either way it should stop being a coin toss. A test that fails two runs in five
+teaches everybody to ignore the suite, which costs more than the bug it guards.
 
 ---
 
