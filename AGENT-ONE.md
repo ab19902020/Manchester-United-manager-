@@ -240,6 +240,60 @@ comes back different. And the growth question is open: `log` is 51 entries a pla
 after one season, so a thirty-season career has to be measured before anyone calls
 this settled. 212 kB of headroom is real but it is not unlimited.
 
+### The correction that matters most: the save already does two of these things
+
+Before writing any of the format I went to read what `saveBlob()` actually
+writes, and found two things that reframe everything above — including my own
+table and my criticism of Claude's encoder.
+
+**1. The save already rounds to a hundredth.** `saveRound`, line 36946:
+
+```js
+function saveRound(k,v){
+ return (typeof v==='number'&&isFinite(v)&&!Number.isInteger(v))
+  ? Math.round(v*100)/100 : v}
+```
+
+It is the `JSON.stringify` replacer on every save. So the game has **never**
+written `12.292376410679863` to disk; it writes `12.29`. My "byte-exact 3,332 kB"
+was measured against `G` in memory, which is not what the game saves, and I
+should have read the save path before quoting a baseline. The hundredths grid is
+existing shipped behaviour, not something I would be introducing.
+
+**2. The save already throws career history away.** `KEEP_MINE=24, KEEP_DIV=4,
+KEEP_REST=0` — your squad keeps 24 entries of `hist` and `log`, your division
+keeps 4, and the other 460 clubs keep **none**. So a save today already does not
+restore the world exactly as it was left, and has not for a long time.
+
+**What this does to the numbers.** My encodings A–F all carried full history for
+all 16,000 players, which the current save does not. So E at ~1,026 kB is
+strictly *more* than today's save keeps, at the same precision today already
+uses. That is the honest target for "full savings capability": hundredths, which
+is no regression on precision, plus the history the game currently discards.
+
+**What it does to my criticism of Claude's encoder.** It stands, but narrower
+than I put it. `measure-save-binary.cjs` rounds attributes to **integers**; the
+game already rounds to **hundredths**. So that encoder loses two decimal places
+the current save keeps — real, and worth fixing — but it is not the "far larger
+loss than promotion-on-touch" I called it, because the game was never storing
+seventeen digits in the first place. I overstated that and I am correcting it
+here rather than leaving it in the record.
+
+**And what it does to F.** F is the tenths grid at 812 kB, and I have been
+quoting it as the answer. It is not: tenths is *coarser* than the hundredths the
+game already writes, so shipping it would be a precision regression on a
+director who has asked twice for the opposite. **The target is E, at hundredths,
+and it needs roughly 50 kB more than it currently costs.** The slack is
+identified and not yet taken: `wRest` is 35 kB of plain JSON, `cupTiesBig` is
+22 kB, and the `log` side table stores a competition name per row that is
+derivable from the fixture it belongs to.
+
+**So the format is not finished and I am not going to say it is.** What is
+settled: full history for the whole world, at the precision the game already
+uses, is within about 50 kB of fitting, and the levers to close it are named
+above. What is not: the encoder in the game, the loader, the migration, the
+round-trip test, and the thirty-season growth curve.
+
 ### Task 1, step 1 is done — a world is a number
 
 `src/world-seed.js`, `tests/world-seed.test.cjs`. The brief said nothing else here
