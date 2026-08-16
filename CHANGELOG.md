@@ -4,6 +4,30 @@
 
 ### Fixed
 
+- **The free-agent market could not be browsed or filtered properly, and a big
+  club could not search for anybody cheap.** Three faults, all in the free-agent
+  tab this repository added.
+
+  The wage brackets slide with your money, which fixed the original problem —
+  Premier League rungs bracket nothing for a non-league club — but broke the
+  mirror image. Managing Manchester United the cheapest bracket on offer was
+  **£15,000 a week**, so there was no way to ask for a free agent on two grand.
+  The ladder now runs from the bottom up to a ceiling set by your budget instead
+  of showing only the top eight rungs: the cheapest offered is £500 a week, and a
+  "wage up to £2k" search returns 77 players across 4 pages where it could not
+  previously be expressed at all.
+
+  The free-agent list stopped at twenty and told you to tighten the filters to see
+  further down, while the market tab beside it paged through everything — so the
+  one list you actually browse was the one you could not. It now pages: 212 free
+  agents, 11 pages, same control as the rest of the market.
+
+  And it applied seven filters while silently ignoring the rest. Mood, fitness,
+  squad role and the attribute minimum did nothing on this tab, so the panel said
+  it had filtered and had not — asking for pace 16+ returned all 212 players.
+  It now returns 2. It also filters on the wage he would want *here*, which is
+  what the market tab has always used, rather than what he was last paid.
+
 - **The test suite was failing about one run in three, and never the same test.**
   `a season does not fill the treatment room` failed with 2 injuries against a
   floor of 3, then with 20 against a ceiling of 16; later `the story layer writes

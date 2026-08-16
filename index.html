@@ -50170,8 +50170,23 @@ function myRoom(){
 function wageHere(p){
  try{return expectedWage(p,false)}catch(e){return p.wage||0}}
 
-function feeRungs(){return rungWindow(FEE_RUNGS,Math.max(5e4,myBudget()*4),8)}
-function wageRungs(){return rungWindow(WAGE_RUNGS,Math.max(2e3,myRoom()*4),8)}
+/* EVERY RUNG UP TO YOUR CEILING, NOT THE TOP EIGHT OF THEM.
+   The window slid with your money, which fixed the original complaint —
+   £5M/£15M/£30M brackets nothing for a club with £120,000 — but it broke
+   the other direction. Managing United the wage list started at £15,000
+   a week, so there was NO WAY TO ASK FOR ANYBODY CHEAP: a rich club
+   looking for a free agent on two grand could not express it. A big club
+   still signs cheap players; that is most of what a free-agent market
+   is for.
+   So the ladder now runs from the bottom up to a ceiling set by your
+   money. Truro is still not offered £200M. United gets every rung it
+   might ever want, and the low ones are the point. */
+function rungsUpTo(rungs,top){
+ let hi=rungs.findIndex(r=>r>=top);
+ if(hi<0)hi=rungs.length-1;
+ return rungs.slice(0,hi+1)}
+function feeRungs(){return rungsUpTo(FEE_RUNGS,Math.max(5e4,myBudget()*4))}
+function wageRungs(){return rungsUpTo(WAGE_RUNGS,Math.max(2e3,myRoom()*4))}
 
 /* ability and potential against the division you are in, not against
    the Premier League: "65+" is meaningless in the National League,
