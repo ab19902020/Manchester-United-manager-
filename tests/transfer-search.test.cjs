@@ -190,7 +190,13 @@ test('a market row for a free agent asks no fee and does not throw', async () =>
         ask, rivalAsk,
         saysFreeAgent: /FREE AGENT/.test(html),
         saysNoFee: /No fee/.test(html),
-        opensFreeAgentSheet: /data-action="faOpen"/.test(html),
+        /* WAS faOpen, AND THAT WAS THIS TEST PINNING THE BUG.
+           The live ACTIONS.faOpen ignores its argument and reopens the
+           whole free-agent modal, so a row wired to it sent you back to
+           the list you were already looking at. This test asserted that
+           wiring, so it was holding the fault in place. */
+        opensFreeAgentSheet: /data-action="faCard"/.test(html),
+        notTheOldListAction: !/data-action="faOpen"/.test(html),
         noBidSheet: !/data-action="openBid"/.test(html),
       };
     }())`);
@@ -201,7 +207,9 @@ test('a market row for a free agent asks no fee and does not throw', async () =>
     assert.equal(result.saysFreeAgent, true, 'the row says what he is');
     assert.equal(result.saysNoFee, true, 'and that there is no fee');
     assert.equal(result.opensFreeAgentSheet, true,
-      'and tapping him opens the free-agent talks, not a bid to a club that does not exist');
+      'and tapping him opens his card, not a bid to a club that does not exist');
+    assert.equal(result.notTheOldListAction, true,
+      'and never the action that just reopens the whole list');
   } finally {
     game.close();
   }
@@ -349,6 +357,103 @@ test('the filters the free-agent list used to ignore now bite', async () => {
       `a £2k wage ceiling returned ${out.cheap} of ${out.everyone}`);
     assert.ok(out.cheap > 0, 'and cheap free agents do exist to be found');
     assert.ok(out.fit <= out.everyone, 'the fitness filter runs');
+  } finally {
+    game.close();
+  }
+});
+
+/*
+ * The three faults reported from play, all in the free-agent tab.
+ *
+ *   "first time around it says NaN on every player and I can't see them"
+ *   "when I click on one of the players it takes me back into the full list"
+ *
+ * A save stores free agents compactly — as plain arrays — and `faList()`
+ * is what turns them back into players, in place, on first read. This
+ * list read `G.freeAgents` directly, so until something else happened to
+ * call `faList()` every row was built out of an array: no name, no age,
+ * and every number NaN. That is also why it looked fine "after the first
+ * time" — opening the game's own free-agent modal called `faList()`.
+ */
+
+test('free agents straight out of a save render as players, not NaN', async () => {
+  const game = await createGame();
+  try {
+    await startCareer(game, 'Rehydrate');
+
+    const out = await game.eval(`(function () {
+      /* exactly the state a career comes back from disk in */
+      G.freeAgents = faList().map((p) => faToRow(p));
+      const compacted = Array.isArray(G.freeAgents[0]);
+
+      Object.keys(TR_DEF).forEach((k) => { UI[k] = TR_DEF[k]; });
+      UI.trPos = 'Any'; UI.trAge = '40'; UI.trQ = ''; UI.trShort = false;
+      UI.trAfford = false; UI.trPage = 0;
+      ACTIONS.trDeal({ dataset: { v: 'free' } });
+
+      const html = trResultsHtml();
+      return {
+        compacted: compacted,
+        nan: (html.match(/NaN/g) || []).length,
+        undef: (html.match(/undefined/g) || []).length,
+        rows: (html.match(/class="prow/g) || []).length,
+      };
+    }())`);
+
+    assert.equal(out.compacted, true, 'the pool really is in compact form for this test');
+    assert.equal(out.nan, 0, `the first render printed NaN ${out.nan} times`);
+    assert.equal(out.undef, 0, `the first render printed "undefined" ${out.undef} times`);
+    assert.ok(out.rows > 0, 'and there are players to see');
+  } finally {
+    game.close();
+  }
+});
+
+test('clicking a free agent opens that player, not the whole list again', async () => {
+  const game = await createGame();
+  try {
+    await startCareer(game, 'Clicker');
+
+    const out = await game.eval(`(function () {
+      Object.keys(TR_DEF).forEach((k) => { UI[k] = TR_DEF[k]; });
+      UI.trPos = 'Any'; UI.trAge = '40'; UI.trQ = ''; UI.trShort = false;
+      UI.trAfford = false; UI.trPage = 0;
+      ACTIONS.trDeal({ dataset: { v: 'free' } });
+
+      const html = trResultsHtml();
+      const m = html.match(/data-action="([a-zA-Z]+)" data-id="(\\d+)"/);
+      if (!m) return { action: 'no row' };
+      const action = m[1];
+      const id = +m[2];
+      const who = faList().filter((x) => x && x.id === id)[0];
+
+      /* faOpen ignores its argument and reopens the whole modal, which
+         is what made a click feel like it went backwards. NO BACKTICKS
+         IN HERE -- this is inside a template literal and one would end
+         it early, which is the second time I have done that. */
+      let card = '';
+      try { card = String(window.RBSTransferSearch.cardHtml(who)); }
+      catch (e) { card = 'THREW: ' + e.message; }
+      /* the card escapes his name, so compare like for like -- a name
+         with an apostrophe in it would never match raw */
+      const shown = (typeof esc === 'function') ? esc(who.name) : who.name;
+
+      return {
+        action: action,
+        name: who ? who.name : null,
+        namesHim: who ? card.indexOf(shown) >= 0 : false,
+        card: card.slice(0, 80),
+        offersHim: card.indexOf('data-action="faSign" data-v="' + id + '"') >= 0,
+        signsOnSight: action === 'faSign',
+      };
+    }())`);
+
+    assert.notEqual(out.action, 'faOpen',
+      'the row must not use the action that ignores its id and reopens the list');
+    assert.equal(out.signsOnSight, false,
+      'and it must not be faSign, which signs him with no confirmation');
+    assert.ok(out.namesHim, 'the card is about the player you clicked');
+    assert.ok(out.offersHim, 'and it offers you him, rather than a list');
   } finally {
     game.close();
   }

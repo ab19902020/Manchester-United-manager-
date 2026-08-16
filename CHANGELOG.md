@@ -4,6 +4,31 @@
 
 ### Fixed
 
+- **Free agents showed NaN on every row, and clicking one took you back to the
+  list.** Both faults were in the free-agent tab and both had the same shape: a
+  layer reaching past the function that was supposed to be used.
+
+  A save stores free agents compactly, as plain arrays, and `faList()` is what
+  turns them back into players — in place, on first read. This list read
+  `G.freeAgents` directly, so until something else happened to call `faList()`
+  every row was built out of an array: no name, no age, and every number `NaN`.
+  Reproduced exactly by putting the pool back into compact form: **40 `NaN` and
+  80 `undefined` across 20 rows**, now 0 and 0. It is also why it looked fine
+  "after the first time" — opening the game's own free-agent modal calls
+  `faList()`.
+
+  The rows were wired to `faOpen`, and the live `ACTIONS.faOpen` **ignores its
+  argument** and reopens the whole modal; an earlier definition did take a player
+  id and this one overrode it. Clicking a player took you back to the list you
+  were already looking at. Rows now open a card for that player — his asking
+  wage, whether it fits your wage room, whether he would come, and the offer
+  button. Deliberately not `faSign`, which signs on the spot with no
+  confirmation, and not the game's `openProfile`, which looks players up in
+  `G.clubs` only and would read `G.clubs[-1]` for a man with no club.
+
+  Rows also print what he actually asks (`faAsk`, which falls the longer he
+  waits) rather than what his last club paid him.
+
 - **The free-agent market could not be browsed or filtered properly, and a big
   club could not search for anybody cheap.** Three faults, all in the free-agent
   tab this repository added.
