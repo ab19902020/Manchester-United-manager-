@@ -369,7 +369,28 @@ const DAYS_PER_SEASON = 340;
             }
             parsed[i] = arr;
           }
-          if (!tabular) { big.push(k); return; }
+          if (!tabular) {
+            /* Long is not the same as varied. `comp` on a cup tie is one
+               of a few dozen competition names repeated across thousands
+               of ties, and the four `...Source` fields on a club are one
+               URL each repeated across 484 clubs — all of them over the
+               40-character line and all of them nearly constant. Sent to
+               a blob they were 39 kB of the same text written out again
+               and again; through the string table they are one index a
+               row. Only a field that is long AND genuinely varied is
+               worth a blob of its own. */
+            const distinct = new Set();
+            for (let i = 0; i < n && distinct.size <= 4096; i += 1) {
+              const v = rows[i][k];
+              if (v != null) distinct.add(String(v));
+            }
+            if (distinct.size <= Math.max(64, n / 20)) {
+              chunks.push(column(n, (i) => sIdx(rows[i][k])));
+              return;
+            }
+            big.push(k);
+            return;
+          }
           const entries = [];
           for (let i = 0; i < n; i += 1) {
             const arr = parsed[i];

@@ -1,101 +1,103 @@
-seed 2324161916 | season 1, day 340 | 1 season(s) played
+seed 2207137136 | season 1, day 340 | 1 season(s) played
 
-players now                 16329
-  the seed also produces    14169 (77 of them completely unchanged)
-  born since generation     2160 (no seed makes these)
-  the seed makes, gone now  4 (ids only)
+players now                 16295
+  the seed also produces    14164 (83 of them completely unchanged)
+  born since generation     2131 (no seed makes these)
+  the seed makes, gone now  5 (ids only)
 
 fields the seed gets right for everyone: 41 (free under B)
   _cap _injScaled _rbsGrow.age _rbsGrow.ovr _rbsGrow.season _youth academy age ambition born displayHeight displayWeight dob espnId form#5 form#6 form#7 heightCm id injury injuryProneness joined listed loyalty name nat nationality pers persNote playerFactsReadDate playerFactsSource playerProfile pos pot pressure rest role scouted shirt weightKg youth
 fields that moved for somebody:          155
 
-columns that had to fall back to Float64: 131
+columns that had to fall back to Float64: 133
 
 A. THE WHOLE WORLD, exact           (212 columns)
    columns          2892 kB
    strTable         80 kB
    bigFields        33 kB
-   world            228 kB
-   TOTAL            3233 kB   OVER by 2209 kB
+   world            225 kB
+   TOTAL            3229 kB   OVER by 2205 kB
    set aside as blobs: persNote playerFactsSource playerProfile
 
 B. SEED PLUS WHAT MOVED, exact       (175 columns)
-   changedColumns   2420 kB
+   changedColumns   2424 kB
    changedBig       0 kB
-   newPlayers       344 kB
+   newPlayers       339 kB
    newPlayersBig    0 kB
-   strTable         13 kB
+   strTable         12 kB
    goneIds          0 kB
-   world            228 kB
-   TOTAL            3004 kB   OVER by 1980 kB
+   world            225 kB
+   TOTAL            3000 kB   OVER by 1976 kB
 
 C. THE WHOLE WORLD, to a hundredth   (212 columns)
-   columns          978 kB
+   columns          979 kB
    strTable         80 kB
    bigFields        33 kB
-   world            228 kB
-   TOTAL            1319 kB   OVER by 295 kB
+   world            225 kB
+   TOTAL            1317 kB   OVER by 293 kB
    set aside as blobs: persNote playerFactsSource playerProfile
 
 D. SEED PLUS WHAT MOVED, hundredth   (175 columns)
-   changedColumns   745 kB
+   changedColumns   749 kB
    changedBig       0 kB
-   newPlayers       103 kB
+   newPlayers       101 kB
    newPlayersBig    0 kB
-   strTable         13 kB
+   strTable         12 kB
    goneIds          0 kB
-   world            228 kB
-   TOTAL            1089 kB   OVER by 65 kB
+   world            225 kB
+   TOTAL            1087 kB   OVER by 63 kB
 
 E. D, WITH THE WORLD IN COLUMNS TOO
-   changedColumns   745 kB
+   changedColumns   749 kB
    changedBig       0 kB
-   newPlayers       103 kB
+   newPlayers       101 kB
    newPlayersBig    0 kB
-   strTable         13 kB
+   strTable         12 kB
    goneIds          0 kB
-   world            166 kB
-   TOTAL            1027 kB   OVER by 3 kB
+   world            163 kB
+   TOTAL            1026 kB   OVER by 2 kB
 
 the world, packed:
-   cupTiesBig   40 kB
-   rest         35 kB
-   cupTies      24 kB
+   cupTiesBig   39 kB
+   rest         34 kB
+   cupTies      23 kB
    fixtures     22 kB
    strTable     20 kB
    clubs        18 kB
    inbox        5 kB
    clubsBig     1 kB
    cupShell     1 kB
-   TOTAL        166 kB  was 228 kB
+   TOTAL        163 kB  was 225 kB
+   cup-tie fields still in a blob: comp ctx rep
+   club fields still in a blob: fixtureMembershipSource playerFactsSource rosterSource venueSource
 
 arrays turned into side tables (field, rows, columns):
-   log         15020 rows   14 columns
-   mlog          258 rows    5 columns
-   log         14888 rows   14 columns
-   log           132 rows   14 columns
-   _injLog        12 rows    4 columns
-   recent        558 rows    5 columns
-   sc           2346 rows    8 columns
+   log         15123 rows   14 columns
+   mlog          264 rows    5 columns
+   log         15071 rows   14 columns
+   log            52 rows   14 columns
+   _injLog         8 rows    4 columns
+   recent        564 rows    5 columns
+   sc           2233 rows    8 columns
 
 what is left in D, blob by blob:
 
 what is in the world blob:
-   cups             93 kB
+   cups             90 kB
    fixtures         49 kB
    clubs            45 kB
-   rest             35 kB
+   rest             34 kB
    inbox            5 kB
 
 what the growing history looks like:
-   log    length 59
-        [{"d":334,"s":1,"o":11,"gf":1,"ga":0,"h":1,"r":7,"g":0,"a":0,"m":90,"pos":"GK","c":"Premier League · Matchday 38","yc":0,"rc":0},{"d":327,"s":1,"o":5,"gf":5,"ga":0,"h":0,"r":7,"g":0,"a":0,"m":90,"pos":"GK","c":"Premier L
+   log    length 55
+        [{"d":334,"s":1,"o":11,"gf":0,"ga":1,"h":1,"r":5.8,"g":0,"a":0,"m":90,"pos":"GK","c":"Premier League · Matchday 38","yc":0,"rc":0},{"d":327,"s":1,"o":5,"gf":3,"ga":0,"h":0,"r":7.1,"g":0,"a":0,"m":90,"pos":"GK","c":"Premi
    car    length 1
-        {"apps":59,"mins":5347,"goals":0,"assists":0,"motm":0,"yc":0,"rc":0,"rSum":394.2000000000001,"cleanSheets":17,"pas":468,"pasC":378,"key":0,"sh":0,"sot":0,"tak":11,"takW":7,"intc":5,"clr":14,"duel":29,"duelW":16,"aer":13,
+        {"apps":55,"mins":5059,"goals":0,"assists":0,"motm":0,"yc":0,"rc":0,"rSum":368.7,"cleanSheets":16,"pas":435,"pasC":358,"key":0,"sh":0,"sot":0,"tak":10,"takW":5,"intc":6,"clr":15,"duel":23,"duelW":12,"aer":9,"aerW":5,"drb
    mlog   length 20
-        [{"d":231,"r":6.7,"g":0,"a":0,"m":90},{"d":232,"r":6.3,"g":0,"a":0,"m":90},{"d":235,"r":6.8,"g":0,"a":0,"m":90},{"d":239,"r":6.7,"g":0,"a":0,"m":120},{"d":242,"r":7.1,"g":0,"a":0,"m":90},{"d":246,"r":6.5,"g":0,"a":0,"m":
+        [{"d":221,"r":6.9,"g":0,"a":0,"m":90},{"d":225,"r":7,"g":0,"a":0,"m":90},{"d":235,"r":6.3,"g":0,"a":0,"m":90},{"d":242,"r":6.8,"g":0,"a":0,"m":90},{"d":246,"r":7.2,"g":0,"a":0,"m":90},{"d":253,"r":6.4,"g":0,"a":0,"m":120
 
-smallest: E 1027 kB OVER by 3 kB
-full save as JSON, uncompressed, for scale: 26326 kB
+smallest: E 1026 kB OVER by 2 kB
+full save as JSON, uncompressed, for scale: 26351 kB
 errors: none
 EXIT=0
