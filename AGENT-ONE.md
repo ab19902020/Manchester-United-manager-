@@ -240,6 +240,54 @@ comes back different. And the growth question is open: `log` is 51 entries a pla
 after one season, so a thirty-season career has to be measured before anyone calls
 this settled. 212 kB of headroom is real but it is not unlimited.
 
+### Found, not fixed: every save deletes most of the game's history
+
+The director's instruction after the save work was called off: *"make sure
+everything's in the game. Everything's working. Nothing deletes itself. Nothing's
+missing."* Everything is in and everything runs — 44 modules, each wired in the
+page, the service worker and the test harness, no mismatches, suite green. One
+thing does delete itself, and it is not small.
+
+`saveBlob()` runs `trimCareers()` on the way out, every time:
+
+```js
+const KEEP_MINE=24, KEEP_DIV=4, KEEP_REST=0;
+```
+
+Your squad keeps twenty-four entries of `hist` and `log`, your division keeps
+four, and **the other four hundred and sixty clubs keep none**. Measured on a
+career 120 days in: 1,160 players outside the manager's division had a match log,
+and a save carries none of them. Every appearance, goal and rating of every player
+outside your division is discarded on the way to disk. The game has been quietly
+forgetting most of its own past on every save.
+
+It was written when a save was a localStorage string against a five-megabyte
+browser ceiling. Careers now go through `RBSSaves` into IndexedDB, which has no
+such ceiling, so the reason has largely gone.
+
+**I wrote the fix and then backed it out, and the reason is the point.** A module
+that switched the trims off measured *byte-identical* save output, and `loadSlot`
+returned false in the harness where I had not established whether that was
+pre-existing or something I had caused. Two unknowns on the one code path in this
+game where a mistake costs somebody their career. After three confident answers
+this session that were each wrong for reasons nobody had checked, shipping a
+fourth into the save path would have been the worst possible place to do it.
+
+**What it needs, concretely, before anybody tries again:**
+
+1. Establish where a save actually lands. `writeSlot` returned true while
+   `loadSlot` returned false on the same slot, so the two halves are not
+   necessarily talking to the same store. Find out which of localStorage and
+   IndexedDB served each, in the harness and in a real browser.
+2. `saveBlob()` calls `trimCareers()` itself, so neutralising the global from
+   outside changes nothing unless the neutering is in scope at the moment
+   `saveBlob` runs. Mine set the flag inside a `writeSlot` wrapper, which is why
+   a direct `saveBlob()` was unaffected — the measurement that would have caught
+   this is comparing payload LENGTH with the trims on and off, and it must differ
+   before anything else is believed.
+3. Keep a fallback. If the untrimmed save will not fit a given browser, it has to
+   fall back to the old shape and say so out loud rather than fail.
+
 ### The seed does not scale, and that settles the design
 
 Measured at five seasons, which I should have done before recommending anything:

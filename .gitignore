@@ -4,3 +4,4 @@ npm-debug.log*
 coverage/
 .div-e.log
 .div-5s.log
+.check.log
