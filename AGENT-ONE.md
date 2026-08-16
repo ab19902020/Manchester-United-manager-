@@ -282,13 +282,14 @@ the game uses. Saving and loading are healthy.
 
 ### What I would not ship without knowing about
 
-**1. Every save discards the history of 460 clubs.** `trimCareers()`,
-`KEEP_MINE=24, KEEP_DIV=4, KEEP_REST=0`. Measured: 1,160 players outside the
-manager's division had a match log and a save carries none of them. Not a crash
-and not a blocker — the career, the world and your own club all survive — but the
-game forgets most of its own past on every save, and a player who checks a rival
-striker's record after a reload will find it empty. Detail and the three things to
-establish before changing it are in the section below.
+**1. ~~Every save discards the history of 460 clubs.~~ WITHDRAWN — already fixed.**
+`src/keep-history.js` (`0ef2a07`, *Stop the world forgetting its seasons*) turns
+both `trimCareers` and `trimFixtures` into no-ops, it is wired in the page, the
+service worker and the harness, and it has two tests. The changelog entry carries
+the measurements: 2,010 players outside your division carry a match log and all
+2,010 survive the round trip, 15,003 log entries in the world and 15,003 come
+back. I raised this the day before release against a checkout that had reverted
+to `ffcb227`, which predates the fix. Nothing to do.
 
 **2. The 3D Dugout has never run on a phone.** Codex's item 3, still open and now
 the more important of the two hardware items. Frame time in open play and at a
@@ -313,53 +314,41 @@ the job — but a player who clicks through a season will find himself thin, and
 is the point where injuries start forcing odd selections. Worth a look at whether
 the board should offer to fill the squad, not worth holding a release for.
 
-### Found, not fixed: every save deletes most of the game's history
+### Withdrawn: the save already keeps the world's history
 
-The director's instruction after the save work was called off: *"make sure
-everything's in the game. Everything's working. Nothing deletes itself. Nothing's
-missing."* Everything is in and everything runs — 44 modules, each wired in the
-page, the service worker and the test harness, no mismatches, suite green. One
-thing does delete itself, and it is not small.
+I reported that every save throws away the career history of the 460 clubs
+outside the manager's division, and put it in the release notes the night before
+a release. **It was already fixed** — `src/keep-history.js`, commit `0ef2a07`,
+wired everywhere and covered by two tests, with the measurements in the
+changelog. I was reading `ffcb227`, because this checkout has reverted to it
+seven times in two days and I re-read the old source without re-checking the
+date.
 
-`saveBlob()` runs `trimCareers()` on the way out, every time:
+**How it looked from inside, since the symptoms were confusing and every one of
+them has a clean explanation now.** I built the encoder at the right seam this
+time: `RBSSaves.save()` calls `saveBlob()`, so `saveBlob` is what every save path
+passes through — the first attempt wrapped `writeSlot`, which the real path never
+touches. Then:
 
-```js
-const KEEP_MINE=24, KEEP_DIV=4, KEEP_REST=0;
-```
+- the payload came back **byte-identical**, 5,916,841 against 5,916,841, with the
+  trims provably not running. Because they were already not running.
+- a probe reported `window.trimCareers` was "back to the original". It was not —
+  it was `keep-history.js`'s replacement, which of course does not contain my
+  wrapper's variable name, which is all my check was looking for.
+- the round-trip test passed with my module removed. Because the behaviour was
+  already correct.
 
-Your squad keeps twenty-four entries of `hist` and `log`, your division keeps
-four, and **the other four hundred and sixty clubs keep none**. Measured on a
-career 120 days in: 1,160 players outside the manager's division had a match log,
-and a save carries none of them. Every appearance, goal and rating of every player
-outside your division is discarded on the way to disk. The game has been quietly
-forgetting most of its own past on every save.
+Three symptoms, one cause, and I read each of them as a new mystery instead of
+asking whether the thing was already done.
 
-It was written when a save was a localStorage string against a five-megabyte
-browser ceiling. Careers now go through `RBSSaves` into IndexedDB, which has no
-such ceiling, so the reason has largely gone.
+**Two lessons, and the second is the one that cost the time.** Do not assert from
+reading source in a file whose whole purpose is measurements — the byte-length
+comparison that settled this took four minutes and should have been first, not
+fourth. And on a checkout that reverts, `git log` on the file you are about to
+"fix" is the cheapest question there is.
 
-**I wrote the fix and then backed it out, and the reason is the point.** A module
-that switched the trims off measured *byte-identical* save output, and `loadSlot`
-returned false in the harness where I had not established whether that was
-pre-existing or something I had caused. Two unknowns on the one code path in this
-game where a mistake costs somebody their career. After three confident answers
-this session that were each wrong for reasons nobody had checked, shipping a
-fourth into the save path would have been the worst possible place to do it.
-
-**What it needs, concretely, before anybody tries again:**
-
-1. Establish where a save actually lands. `writeSlot` returned true while
-   `loadSlot` returned false on the same slot, so the two halves are not
-   necessarily talking to the same store. Find out which of localStorage and
-   IndexedDB served each, in the harness and in a real browser.
-2. `saveBlob()` calls `trimCareers()` itself, so neutralising the global from
-   outside changes nothing unless the neutering is in scope at the moment
-   `saveBlob` runs. Mine set the flag inside a `writeSlot` wrapper, which is why
-   a direct `saveBlob()` was unaffected — the measurement that would have caught
-   this is comparing payload LENGTH with the trims on and off, and it must differ
-   before anything else is believed.
-3. Keep a fallback. If the untrimmed save will not fit a given browser, it has to
-   fall back to the old shape and say so out loud rather than fail.
+What survives: nothing of mine, which is the right outcome. `keep-history.js`
+already covers it.
 
 ### The seed does not scale, and that settles the design
 
