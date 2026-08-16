@@ -524,6 +524,39 @@
     return Math.max(step, Math.round(raw / step) * step);
   }
 
+  /* A round number at the size of the number, so a control is offered in
+     units that mean something at the level being played. */
+  function stepFor(amount) {
+    const n = Math.max(0, +amount || 0);
+    if (n >= 5e6) return 5e5;
+    if (n >= 5e5) return 5e4;
+    if (n >= 5e4) return 5e3;
+    if (n >= 5e3) return 500;
+    if (n >= 500) return 50;
+    return 10;
+  }
+
+  /* THE SIGN-ON FEE HAD ONE STEP FOR THE WHOLE PYRAMID.
+     The field was `step="50000"`, defaulting to three weeks' wages
+     ROUNDED TO THE NEAREST FIFTY THOUSAND. In the Premier League that is
+     sensible. In the National League, where the asking wage is about
+     £1,200 a week, three weeks is £3,600 — which rounds to ZERO, and the
+     smallest offer the control would accept was £50,000: forty-one weeks
+     of his wages, and more than most budgets at that level hold. So the
+     lever read as broken to anybody below roughly £8,300 a week, which
+     is everybody in the bottom two divisions.
+
+     The acceptance formula was never the problem — it measures the fee
+     against the asking wage and always has. Only the control was wrong,
+     and a control you cannot use is the same as a term you cannot
+     offer. */
+  function signOnFor(weekly, renewing) {
+    if (renewing) return 0;
+    const raw = Math.max(0, (+weekly || 0)) * 3;
+    const step = stepFor(raw);
+    return Math.max(step, Math.round(raw / step) * step);
+  }
+
   function renewalCost(p, wage) {
     return Math.round(((+wage || 0) - (p.wage || 0)) * (typeof WEEKS_IN_YEAR === 'number' ? WEEKS_IN_YEAR : 52));
   }
@@ -540,6 +573,15 @@
           bonus.value = String(value);
           bonus.step = String(Math.max(10, Math.round(value / 4 / 10) * 10));
         }
+        const sign = document.getElementById('tSign');
+        if (sign) {
+          sign.step = String(stepFor(Math.max(exp * 3, 1)));
+          sign.value = String(signOnFor(exp, opt && opt.renew));
+        }
+        /* and the release clause, fixed at a million a click — more than
+           the whole squad is worth in the National League */
+        const clause = document.getElementById('tClause');
+        if (clause) clause.step = String(stepFor(Math.max(0, (p && p.value) || 0)));
         if (!(opt && opt.renew)) return;
 
         /* A rise has to be paid for, and the game already has an
@@ -1066,7 +1108,7 @@
 
   try {
     window.RBSBalance = Object.freeze({
-      loanFeeQuote, goalBonusFor, standingRole, localDivisions, roleShare,
+      loanFeeQuote, goalBonusFor, signOnFor, stepFor, standingRole, localDivisions, roleShare,
       seasonMatches, unrestOpensAt: () => Math.ceil(seasonMatches() * UNREST_SEASON_OPENS),
     });
   } catch (error) { /* no window */ }

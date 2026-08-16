@@ -22,6 +22,23 @@
 
 ### Fixed
 
+- **The sign-on fee could not be offered at all in the bottom two divisions.** The
+  field stepped by £50,000 and defaulted to three weeks' wages rounded to the
+  nearest fifty thousand. In the Premier League that is sensible. In the National
+  League, where the asking wage is about £1,400 a week, three weeks is £4,200 —
+  which rounds to **zero**, and the smallest offer the control would accept was
+  £50,000, or forty-one weeks of his wages and more than most budgets at that
+  level hold. Anybody below roughly £8,300 a week saw a term that defaulted to
+  nothing and could not be nudged. The acceptance formula was never the problem;
+  it has always measured the fee against the asking wage. The control now offers
+  three weeks' wages on a step sized to the money involved: £50 a click in the
+  National League, £500 in League Two, £50,000 in the Premier League, which is
+  unchanged. Measured across the pyramid, the default goes from £0 to £4,200 (NL)
+  and £0 to £13,500 (L2), while the Premier League stays at £1,050,000. The
+  release clause had the same fault — a flat £1,000,000 a click, more than a whole
+  National League squad is worth — and now steps by the player's value.
+
+
 - **A CrazyGames SDK adapter, written to be safe while its API names are
   unconfirmed.** `SDK.init` during loading, `loadingStart/Stop` around building a
   world, `gameplayStart/Stop` around a match, and every local save mirrored to
