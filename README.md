@@ -58,6 +58,7 @@ GitHub Actions runs the same checks on every pull request.
 - `src/trophy-room.js` — the season's campaign board on the Trophies tab, and what stands in the empty room.
 - `src/world-seed.js` — world generation behind one 32-bit seed, so the same number gives back the same world.
 - `src/one-job.js` — one man, one job: no manager is in charge of two clubs at once.
+- `src/front-door.js` — the club picker: browse the pyramid by league and read the job before you take it.
 - `src/layout-repair.js` — measured fixes to the landscape shell, the tactics pitch and the way into training.
 - `src/mailbox-pro.js` — delete, ignore and important, a landscape sheet that fits, and a shelf life for the home-screen card.
 - `src/press-questions.js` — twenty-six more press topics, weighted toward the ordinary week.

@@ -325,6 +325,23 @@
 
 ### Added
 
+- **The club picker tells you about the job before you take it.** It was a grid of
+  crests — twenty at a time, a three-letter short form and nothing else — so you
+  chose a club knowing its badge and its name and found out about the money, the
+  ground and the size of the task afterwards. Every club in the world was already
+  carrying its reputation, transfer budget, stadium, capacity and a star rating;
+  none of it was on screen. Now you land on a club and read it: difficulty in
+  stars, what there is to spend, how many the ground holds, where the club stands,
+  and a line on what is expected of you — *"Everything is expected. Anything less
+  is a crisis"* at Manchester United, *"Small money, long odds, and a long way up"*
+  in the National League. Twenty-eight league tabs cover the English pyramid in
+  order and then the rest of Europe, the tiles carry each club's budget under the
+  badge, and the start button names the club you actually chose so you cannot take
+  the wrong job by accident. Taking a job and building your own club sit at the top
+  as equal ways in. A club outside the Premier League has no squad until the world
+  is generated, so it is not shown one rather than being shown invented names.
+
+
 - **A full save fits after all — 812 kB against the 1 MB the shop allows, with 212 kB
   spare.** Every club, every player in the world, every attribute, every fixture and
   result, every cup tie, every player's match log and career record, restored exactly
