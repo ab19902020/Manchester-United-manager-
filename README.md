@@ -66,6 +66,9 @@ GitHub Actions runs the same checks on every pull request.
 - `src/transfer-structure.js` — the manager's choice of how a fee is paid, and what a selling club charges to wait.
 - `src/crazygames.js` — the CrazyGames SDK adapter: feature-detected, gzipped cloud saves,
   and an honest refusal when a save is over the platform's 1 MB cap.
+- `src/stadium-costs.js` — what a ground costs depends on whose ground it is:
+  facility prices scaled by club reputation and a rebuild priced off the ground,
+  so a non-league club can build and Old Trafford still costs £352m.
 - `src/keep-history.js` — stops a save discarding the match logs of 460 clubs and the
   scorers of every match you were not in.
 - `src/transfer-search.js` — free agents in the market search, a contract filter, and the

@@ -29039,8 +29039,34 @@ stadiumArt=function(c){
    something you save up for, which is the point of a ceiling.
    ===================================================================== */
 const SEAT_CAP=105000, SEAT_STEP=8000;
-const seatGain=cap=>Math.max(0,Math.min(SEAT_STEP,SEAT_CAP-(cap||0)));
-const seatCost=cap=>Math.round((40e6+(cap||0)/1000*1.15e6)/1e6)*1e6;
+/* A PHASE THE SIZE OF THE GROUND, AT THE PRICE OF THE GROUND.
+   Both of these were written for a Premier League club and charged to
+   everybody. The old cost was a FLAT £40m plus £1.15m per 1,000 seats,
+   so a National League club with 3,500 seats and £376k in the bank was
+   quoted £44m — a hundred and seventeen times everything it had. Nobody
+   below the Championship could ever lay a single seat.
+   The step was flat too: +8,000 seats onto a 3,500-seat non-league
+   ground is not a phase, it is a different stadium.
+   So the phase is now proportional to the ground (a floor of 1,500 so it
+   is always worth doing, the old 8,000 as the ceiling), and the price
+   per seat climbs with the size of the bowl you are building. Bolting a
+   stand onto a non-league ground is not the job that adding a tier to a
+   74,000-seat one is, and the prices now say so. */
+const seatGain=cap=>Math.max(0,Math.min(SEAT_CAP-(cap||0),
+ Math.max(1500,Math.min(SEAT_STEP,Math.round((cap||0)*0.4/500)*500))));
+const seatPerSeat=cap=>(cap<8000?550:cap<12000?900:cap<20000?1400
+ :cap<40000?3000:cap<60000?6500:11000);
+/* AND WHO YOU ARE, NOT ONLY HOW BIG THE GROUND IS. On capacity alone a
+   League Two club that inherited a 16,000-seat ground was quoted £9.1m
+   against a £1.2m bank — priced like a big club because it stands in a
+   big stadium. A mild reputation factor, floored so a giant never gets
+   it cheap and capped so nobody pays a premium, keeps the ladder honest
+   at both ends. */
+const seatRepFactor=()=>{try{
+ const r=+G.clubs[G.my].rep;
+ return Number.isFinite(r)&&r>0?Math.max(.4,Math.min(1,Math.pow(r/7950,1.2))):1;
+}catch(e){return 1}};
+const seatCost=cap=>Math.round(seatGain(cap)*seatPerSeat(cap||0)*seatRepFactor()/1e5)*1e5;
 const seatDays=cap=>Math.round(58+(cap||0)/2600);
 
 /* the upgrade card is built by the original view straight out of
@@ -57019,6 +57045,7 @@ showStart();
 <script src="src/front-door.js"></script>
 <script src="src/transfer-search.js"></script>
 <script src="src/keep-history.js"></script>
+<script src="src/stadium-costs.js"></script>
 <script src="src/crazygames.js"></script>
 </body>
 </html>

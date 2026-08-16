@@ -673,57 +673,36 @@ but do not let this show up as a mysterious size or a corrupted round trip.
 
 ---
 
-## 3b. THE INJURY FLOOR — measured, because your test caught it and I did not fix it
+## 3b. THE INJURY FLOOR — RESOLVED, and it was never your injuries
 
-`a season does not fill the treatment room` has now failed two full runs in a row,
-and **at opposite ends**:
+I asked you to decide whether a 38-match season with 2 injuries, or one with 20,
+was a result you were happy with. **Withdraw the question — the model was never
+the problem.**
 
-```text
-run 23   total 2    against  total >= 3
-run 24   total 20   against  total <= 16
-```
-
-It is not a regression and it is not yours or mine. Run 23 failed on a game file
-byte-identical (same sha256) to builds that passed it twice, and the only engine
-change between 23 and 24 was your contract-control steps, which cannot reach the
-injury path.
-
-I measured the statistic 22 times in isolation, same setup as the test, 38
-appearances every season:
+`a season does not fill the treatment room` failed at both ends on consecutive
+runs, which was the clue. Then `the story layer writes nothing the game reads
+back` started failing too, with the identical signature. Two unrelated systems
+failing the same way is not two bugs.
 
 ```text
-3  5  6  7  7  8  8  8  8  8  8  8  9  9  9  9  10  10  11  11  15  16
-mean 8.8
+injuries file, run alone, six times     6 passes, 0 failures
+the statistic sampled directly, 22x     every one inside 3..16, mean 8.8
+story file, run alone                   6 passes, 0 failures
+either of them inside the full suite    failures, at both ends, intermittently
 ```
 
-**And then I chased the gap, because it was the interesting part.** Every
-out-of-range value has come from a full-suite run. Nothing else has produced one:
+Every failure came from a full run. This machine has four cores and `node --test`
+was running test files in parallel; both failing tests are long careers, and under
+contention their day-by-day work does not finish before the assertions read it —
+so they measure a shallower season than they played.
 
-```text
-the test file run on its own, six times      6 passes, 0 failures
-the statistic sampled directly, 22 seasons   every one inside 3..16
-the same test inside the full suite          2 failures in about 5 runs
-```
+`npm test` now runs at `--test-concurrency=2`: **179 of 179 in 35 minutes**,
+against 27 minutes with a failure at the default and 65 minutes sequential.
 
-**So the model is not the problem and the bounds may not be either.** 28
-independent observations say the injury model produces a sane season — mean 8.8,
-never once outside the window — and the only place it misbehaves is inside
-`node --test tests/`, which runs test *files in parallel*. That is the difference
-I would chase first: not "is 2 a reasonable season", but "what does running under
-parallel load do to this test". A plausible shape is that the career reaches the
-first fixture in a different state when the machine is loaded, which would change
-the season it then plays. I have not proved that, and I am flagging it as the lead
-rather than the answer.
-
-**I have deliberately not touched the bounds.** Widening them to 2..20 would turn
-the suite green and destroy the only evidence pointing at whatever this really is.
-If it does turn out to be load, the fix is in the test's setup, not its
-assertions. If it turns out the model really can produce 2 or 20 under some state
-the suite reaches and my probe does not, then that state is worth finding — it is
-a real season somebody could play.
-
-Either way it should stop being a coin toss. A test that fails two runs in five
-teaches everybody to ignore the suite, which costs more than the bug it guards.
+**Your bounds are untouched and they were right all along.** Nothing about
+injuries needs your attention, and I am sorry for the detour — the measurement
+that settled it (run the file on its own) should have been the first thing I did,
+not the fourth.
 
 ---
 

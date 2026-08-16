@@ -4,6 +4,74 @@
 
 ### Fixed
 
+- **The test suite was failing about one run in three, and never the same test.**
+  `a season does not fill the treatment room` failed with 2 injuries against a
+  floor of 3, then with 20 against a ceiling of 16; later `the story layer writes
+  nothing the game reads back` failed with no story letters at all. Each looked
+  like a defect in the system it tested, and none of them was.
+
+  All three were the suite, not the game. Measured: the injuries file passes 6 of
+  6 run on its own and the statistic sampled 22 times never left its window; the
+  story file passes 6 of 6 on its own. Every failure came from a full run, which
+  on this four-core machine executed test files in parallel — and both failing
+  tests are long careers whose day-by-day work does not finish under contention,
+  so they assert against a shallower season than they played.
+
+  `npm test` now runs at `--test-concurrency=2`. A full run is 179 of 179 in 35
+  minutes, against 27 minutes with a failure at the default and 65 minutes
+  sequential. Nothing about the shipped game changes; the assertions were left
+  exactly as they were, because widening them would have hidden this rather than
+  found it.
+
+- **The story repeated itself word for word inside a career.** Measured across
+  three careers, only 3% of sentences were shared — the story really is built out
+  of your results rather than a script, and the reporter, his paper and his
+  temperament already differ per career. But *within* one career the same kind of
+  beat used one fixed phrasing, so two milestones a fortnight apart read
+  identically apart from the name, like a mail-merge. The reporter's temperament
+  also reached exactly one line of the whole layer: the opening of the monthly
+  column. A sceptic and a romantic filed the same note about everything else.
+
+  Each beat now has several phrasings, chosen from the reporter's name, his
+  temperament and the beat's own key — stable when you re-read a letter, different
+  for the next player to reach the same milestone, different again under another
+  byline. Same career now yields "Dalot reaches 50 appearances" beside "Tielemans
+  quietly passes 50"; between-career overlap stays at 2%.
+
+- **Stadium and facility prices were Premier League numbers charged to all 484
+  clubs.** Rebuilding the ground cost a flat **£380,000,000** whether you were
+  Manchester United or a National League side with £376,000 in the bank. A phase
+  of seats was a flat £40m plus £1.15m per 1,000 seats, so the smallest ground in
+  the National League was quoted £44m — **117 times its entire bank.** The
+  training centre (£22m), academy (£18m) and redevelopment (£45m) were flat in the
+  same way. Below the Championship, none of it could ever be bought.
+
+  Prices now scale two ways. A phase of seats is proportional to the ground —
+  floor 1,500, ceiling the old 8,000 — at a price per seat that climbs with the
+  size of the bowl, with a mild reputation factor so a League Two club that
+  inherited a 16,000-seat ground is not billed like a giant. The facility
+  upgrades scale by club reputation, `(rep / 7950) ^ 2.5`, an exponent fitted to
+  the five English tiers rather than guessed; reputation is used instead of league
+  so all twenty countries are priced without a lookup table. A rebuild is priced
+  off the ground at four phases of expansion.
+
+  Measured, median club per tier, against the median bank at that level:
+
+  | tier | ground | bank | + seats | rebuild | academy |
+  |---|---|---|---|---|---|
+  | NL | 7,856 | £428k | £700k | £2.8m | £700k |
+  | L2 | 16,587 | £1.2m | £3.6m | £14.4m | £1.5m |
+  | L1 | 7,800 | £3.0m | £700k | £2.8m | £2.3m |
+  | CH | 23,404 | £14.1m | £13.3m | £53m | £5.3m |
+  | PL | 30,400 | £142m | £24m | £96m | £18m |
+  | Man Utd | 74,310 | £263m | £88m | £352m | £23m |
+
+  Growing a non-league ground from 3,500 to over 20,000 seats is now six phases
+  and **£10.4m in total** — less than a quarter of what one phase used to cost —
+  while Old Trafford still costs £352m to rebuild, near the £380m it always was.
+  A partial redevelopment is also capped below the price of a full rebuild, which
+  it exceeded at the bottom of the pyramid.
+
 - **Losing the WebGL context threw an uncaught error instead of falling back.**
   This is the one failure that is specific to phones: a handset drops the GL
   context routinely — backgrounding the tab, taking a call, memory pressure —

@@ -247,6 +247,30 @@
       ' #app>#view>.secnav.xscroll{overflow-x:auto;flex-wrap:nowrap}',
       '}',
       '#view .chips.xscroll,#view .subtabs.xscroll{overflow-x:auto;flex-wrap:nowrap}',
+
+      /* 6. TWO BUTTONS ON THE FRONT DOOR COULD NOT BE REACHED IN LANDSCAPE.
+
+         `#startScreen.front` is `overflow:hidden`, and on a phone held
+         sideways the door is 586px of content in a 390px viewport. An
+         `overflow:hidden` box scrolls programmatically but NOT with a
+         finger, and the page itself does not scroll either — so SOUND
+         and HOW IT WORKS sat at 398px and 467px and there was no way to
+         get to them. NEW CAREER and LOAD A SAVE are above the fold, and
+         the injected CONTINUE YOUR CAREER goes in above those, so no
+         career was ever stranded — but two settings were.
+
+         Measured on the commit BEFORE the front door was redesigned as
+         well as after, and the numbers are identical, so this is the
+         legacy shell rather than anything the redesign did.
+
+         `hidden` is there to stop the animated background canvas from
+         producing a scrollbar. That reason only holds while the content
+         fits; when it does not, being able to reach the buttons wins.
+         Restricted to short viewports so the desktop door is untouched. */
+      '@media (max-height:520px){',
+      ' #startScreen.front{overflow-y:auto;overflow-x:hidden;',
+      '  -webkit-overflow-scrolling:touch}',
+      '}',
     ].join('');
     document.head.appendChild(tag);
   }
