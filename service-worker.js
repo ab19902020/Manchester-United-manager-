@@ -1,4 +1,4 @@
-const CACHE_NAME = 'results-business-v30';
+const CACHE_NAME = 'results-business-v31';
 const CORE_ASSETS = [
   './',
   './index.html',
@@ -47,6 +47,7 @@ const CORE_ASSETS = [
   './src/cup-calendar.js',
   './src/trophy-room.js',
   './src/world-seed.js',
+  './src/one-job.js',
   './src/transfer-search.js',
   './src/keep-history.js',
   './src/crazygames.js',

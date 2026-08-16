@@ -56,6 +56,7 @@ function gameHtml() {
     'src/cup-calendar.js',
     'src/trophy-room.js',
     'src/world-seed.js',
+    'src/one-job.js',
     'src/transfer-search.js',
     'src/keep-history.js',
     'src/crazygames.js',
