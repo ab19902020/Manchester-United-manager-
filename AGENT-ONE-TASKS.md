@@ -522,35 +522,126 @@ will keep doing this whatever the bound is.
 
 ---
 
-## 3b. THE INJURY FLOOR — measured, because your test caught it and I did not fix it
+## 0. THE SAVE DECISION IS MINE AND HERE IT IS (16 August 2026)
 
-`a season does not fill the treatment room` failed once in a full run, on
-`total >= 3`, with 2. It is not a regression: it failed on a build whose game
-file is byte-identical (same sha256) to one that passed twice, and nothing in
-that run touched the engine. It is the assertion meeting the low tail of a real
-distribution.
+You ended the format work with *"the honest options are a coarser grid for distant
+clubs, or keeping the history trim the game already does rather than restoring it.
+Neither is my call alone and I am not going to make it quietly."* That was the
+right place to stop. Here is the answer, plus three measurements you do not have.
 
-So I measured it rather than guess, eight seasons, same club, 38 appearances
-every time:
+### The history stays. That part is not open.
+
+The director asked for it twice, in his own words — *"He can't forget anything
+from the seasons"* — and `keep-history.js` delivers it. Do not close the gap by
+taking it back.
+
+### But the local save and the cloud save do not have to be the same artifact
+
+This is the thing that dissolves the impasse, and I do not think either of us had
+put it plainly. **IndexedDB has no 1 MB cap. Only their cloud slot does.** So:
+
+- the **local** save stays exactly as it is — full fidelity, full history, every
+  club, no compromise, and it is the authoritative copy;
+- the **cloud** copy exists to carry a career to another device. It can be a
+  reduced artifact — coarser for distant clubs — as long as we say so.
+
+A player who moves devices and gets their career back with thinner history for
+clubs they have never played is in a far better position than one who gets
+nothing. Losing depth on 460 rival clubs beats losing the career. So: **coarser
+grid for distant clubs, on the cloud copy only.** That is my call, it does not
+touch what the game keeps locally, and it means the 1 MB target no longer has to
+fight the director's instruction.
+
+### Measurement 1: it is not a blocker, and I checked rather than assumed
+
+You quoted their docs saying not to rely on local saves because of third-party
+storage. I tested the actual behaviour: parent page on one origin, game framed
+from a different origin, so the game's storage is genuinely third-party and
+partitioned. Career saved, page closed entirely, reopened:
 
 ```text
-injuries per season   3  8  8  9  9  10  10  11
-mean                  8.5
-at or below the bound 1 of 8
+in the frame   indexedDB opens = true
+               career saved    = Manchester United day 20
+after closing the page and coming back
+               career found    = Manchester United day 20
+               resume button   = true
 ```
 
-A normal season is 8 to 11 and nowhere near the floor. But the tail reaches down
-to 2, which is what a suite of 165 tests will keep finding — roughly one run in
-eight sits on the bound. Eight seasons is a small sample and I am not claiming a
-rate beyond "often enough to be a nuisance".
+It survives. **One browser, Chromium, default settings** — I am not claiming
+Safari or a locked-down profile behaves the same, and iOS is the one to distrust.
+But the local save is a real fallback, not a mirage, so an over-cap save is a
+degraded feature and not a lost career. Take the pressure off accordingly: this
+is a quality bar, not a release gate.
 
-**I have deliberately not touched the bound.** Widening it to 2 would turn the
-suite green and hide the question, and the question is yours: is a 25-man squad
-getting through a 38-match season with two injuries a result you are happy with?
-If it is, lower the assertion and say why. If it is not, the floor belongs in the
-injury model — a season should not be able to produce almost none — and the test
-is right to complain. Either way it should stop being a coin toss, because a test
-that fails one run in eight teaches everybody to ignore it.
+### Measurement 2: your target is not 1,024 kB of packed bytes
+
+You have been measuring E against the cap directly. It does not reach the
+platform in that form. `src/crazygames.js` **gzips and base64s** every save before
+the cap check, and the cap applies to what comes out:
+
+```text
+today's JSON save   5,578 kB  ->  1,712 kB gzip+base64   (3.26x)
+```
+
+So a packed E is measured after that pipeline, not before. Gzip will do less for
+packed binary than for JSON — you have already squeezed the redundancy out — but
+base64 costs a flat third. **The number you actually need is E's real bytes run
+through `window.RBSCrazyGames.pack()`.** That is minutes of work with the buffers
+you already build, and until it exists neither of us knows whether E at five
+seasons is over or under. It could easily change the answer.
+
+### Measurement 3: the trap in my code that will bite you on the day
+
+`pack()` calls `new TextEncoder().encode(text)`, which is **UTF-8**. Hand it a
+binary string — any byte above 0x7F — and every one of those bytes becomes two
+before it is even compressed. A packed encoder handed straight to it would be
+measured almost twice its real size, and `unpack()` decodes as UTF-8 too, so the
+round trip would not be symmetric.
+
+**So do not hand me raw binary.** Either base64 it first (ASCII, safe, and gzip
+takes most of the third back), or tell me when your encoder is ready and I will
+add a proper binary path with its own prefix and a symmetric decode. Your call —
+but do not let this show up as a mysterious size or a corrupted round trip.
+
+---
+
+## 3b. THE INJURY FLOOR — measured, because your test caught it and I did not fix it
+
+`a season does not fill the treatment room` has now failed two full runs in a row,
+and **at opposite ends**:
+
+```text
+run 23   total 2    against  total >= 3
+run 24   total 20   against  total <= 16
+```
+
+It is not a regression and it is not yours or mine. Run 23 failed on a game file
+byte-identical (same sha256) to builds that passed it twice, and the only engine
+change between 23 and 24 was your contract-control steps, which cannot reach the
+injury path.
+
+I measured the statistic 22 times in isolation, same setup as the test, 38
+appearances every season:
+
+```text
+3  5  6  7  7  8  8  8  8  8  8  8  9  9  9  9  10  10  11  11  15  16
+mean 8.8
+```
+
+**A caveat I cannot explain and am not going to paper over.** All 22 isolated runs
+landed inside the window; the two values that broke it, 2 and 20, both came from
+full-suite runs. Either that is tail luck on a small number of suite runs, or
+something about running inside the suite shifts the distribution. I have not
+established which, and it is worth knowing before you tune anything — if it is the
+second, the bounds are not the problem.
+
+**I have deliberately not touched the bounds.** Widening them to 2..20 would turn
+the suite green and hide the question, which is yours: a 26-man squad taking 20
+injuries in a season, or getting through one on 2, are both results somebody has
+to decide are acceptable. If they are, widen the assertion and say why. If they
+are not, the model wants a floor and a ceiling rather than the test having them.
+Either way it should stop being a coin toss — a test that fails two runs in three
+teaches everybody to ignore the suite, which is worse than the bug it is guarding.
 
 ---
 
