@@ -376,11 +376,21 @@ asserted, because that is also every offline PWA install.
 What it wires:
 
 ```text
-init            once, during loading
+init                once, during loading
 loadingStart/Stop   around building a world
 gameplayStart/Stop  a match kicking off and ending
-data.setItem    every local save mirrored, gzipped and base64'd
+data.setItem        every local save mirrored, gzipped and base64'd
+data.getItem        a device with NO career of its own pulls one back
 ```
+
+The restore is the half that makes it a cloud save rather than an upload, and it
+is deliberately timid: it fires only when auto/1/2/3 are all empty, it validates
+what comes back through `RBSCareerStore.validatePayload` before the store sees
+it, and it writes into `auto` so the CONTINUE YOUR CAREER button appears by the
+normal path. It never overwrites, never merges, and never asks a player to choose
+between two versions of their own season. Verified in a real browser: a 5,578 kB
+career packed to 1,712 kB, restored byte-for-byte, and `RBSSaves.load('auto')`
+returns true on it.
 
 **Two things it deliberately does not do.**
 
@@ -420,12 +430,33 @@ and put the URL and date in your report as usual:
 1. the script URL — I have guessed `https://sdk.crazygames.com/crazygames-sdk-v3.js`
 2. `SDK.init`, `SDK.data.setItem/getItem`, `SDK.game.gameplayStart/gameplayStop`,
    `SDK.game.loadingStart/loadingStop`
-3. whether `data.getItem` is synchronous — I have assumed it is, and the adapter
-   tolerates a promise, but a wrong assumption here is the one that would show up
-   as an empty career rather than as an error
+3. whether `data.getItem` is synchronous — the adapter now awaits it either way,
+   so a promise and a plain string both work. **This started as a bug I wrote and
+   then claimed the opposite of in this file:** `pull()` type-checked for a string,
+   so a promised `getItem` would have been thrown away and reported as "no cloud
+   career". That is the shape of wrong assumption that shows up as an empty career
+   rather than as an error, which is why it is now awaited and tested against a
+   promise-returning stub. Confirm anyway.
 4. the submission requirements themselves
 
 Correct the constants and the guarded dispatcher will do the rest.
+
+### Two ways to check your corrections, so you are not guessing either
+
+`npm run framed` loads the game in an iframe over http with the SDK served from
+an intercepted route, and reports whether the gate opened, the script went in,
+`attach()` ran and the markers fired. That path had never been executed anywhere
+before it existed — the suite runs without an SDK deliberately, and every browser
+probe loads unframed from `file://`, which are precisely the two cases where the
+adapter is meant to do nothing. **It cannot tell you the names are right**: the
+stub answers to whatever the adapter asks for, so it would pass just as happily
+with every name wrong. It proves the plumbing, not the contract. That part is
+still yours.
+
+`npm run upload` builds the actual zip and then runs it — extracted, served,
+framed, world built, failing on any 404 outside the optional audio pack. Its file
+list comes out of `service-worker.js`, so if you add a module, add it there and
+both the offline install and the upload pick it up. Currently 54 files, 1.7 MB.
 
 ---
 

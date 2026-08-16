@@ -154,3 +154,90 @@ test('a save too big for the cloud is kept locally and refused honestly', async 
     game.close();
   }
 });
+
+/*
+ * The restore, which is the half that makes it a cloud save rather than
+ * an upload. Two properties matter more than the happy path:
+ *
+ *   it must NEVER overwrite a career already on the device, and
+ *   it must survive `data.getItem` being asynchronous.
+ *
+ * The second is a guess I cannot check — their documentation is
+ * unreachable — and a wrong guess there does not throw. It reports "no
+ * cloud career" and the player starts again. So it is awaited, and this
+ * pins that it is.
+ */
+test('a cloud career is restored only onto a device that has none', async () => {
+  const game = await createGame();
+  try {
+    await startCareer(game, 'Crazy');
+
+    const outcome = await game.eval(`(async function () {
+      const api = window.RBSCrazyGames;
+      const out = {};
+
+      /* getItem returns a PROMISE, which is the case the first version
+         of pull() silently threw away */
+      const shelf = {};
+      window.CrazyGames = { SDK: {
+        init: () => Promise.resolve(),
+        data: {
+          setItem: (k, v) => { shelf[k] = v; },
+          getItem: (k) => Promise.resolve(shelf[k] || null),
+        },
+        game: {},
+      } };
+      api.attach();
+
+      /* Seed the cloud with a real career, packed the way push() packs
+         one. NOT through push() itself: JSDOM has no CompressionStream,
+         so a 3.6 MB career stays raw and is correctly refused by the cap
+         — which the previous test already proves. The restore is what is
+         under test here. */
+      const career = saveBlob();
+      shelf[api.KEY] = await api.pack(career);
+
+      /* 1. a device that already has a career must be left alone */
+      const before = window.RBSSaves.metas.get('auto');
+      out.hadLocal = !!before;
+      const guarded = await api.restoreIfEmpty();
+      out.guarded = guarded.skipped || 'RESTORED OVER A LOCAL CAREER';
+
+      /* 2. now empty the device and let it restore */
+      await window.RBSSaves.store.remove('auto');
+      for (const slot of ['1', '2', '3']) {
+        try { await window.RBSSaves.store.remove(slot); } catch (e) { /* not there */ }
+      }
+      await window.RBSSaves.init();
+      out.nowEmpty = !window.RBSSaves.metas.get('auto');
+
+      const done = await api.restoreIfEmpty();
+      out.restored = done.restored ? 'yes' : (done.skipped || '?');
+      const back = await window.RBSSaves.store.get('auto');
+      out.exact = !!back && back.payload === career;
+
+      /* 3. and rubbish in the cloud is refused, not stored */
+      shelf[api.KEY] = await api.pack('this is not a career');
+      await window.RBSSaves.store.remove('auto');
+      await window.RBSSaves.init();
+      const junk = await api.restoreIfEmpty();
+      out.junk = junk.restored ? 'STORED RUBBISH' : (junk.skipped || '?');
+
+      delete window.CrazyGames;
+      return out;
+    }())`);
+
+    assert.equal(outcome.hadLocal, true, 'the device starts with a career on it');
+    assert.equal(outcome.guarded, 'local career already here',
+      'a device with a career of its own is never overwritten from the cloud');
+    assert.equal(outcome.nowEmpty, true, 'the device is now empty');
+    assert.equal(outcome.restored, 'yes',
+      'an empty device pulls the career back — through a PROMISED getItem');
+    assert.equal(outcome.exact, true,
+      'and what comes back is the career that went up, byte for byte');
+    assert.match(outcome.junk, /^cloud save rejected/,
+      'a damaged or foreign cloud save is validated and refused, not written');
+  } finally {
+    game.close();
+  }
+});
