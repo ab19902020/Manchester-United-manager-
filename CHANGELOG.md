@@ -22,6 +22,21 @@
 
 ### Fixed
 
+- **José Mourinho was managing Real Madrid and Benfica at the same time.** So were
+  fourteen other men, in pairs, across the world — De Zerbi at Tottenham and
+  Marseille, Pierre Sage at Crystal Palace and Lens, and twelve more in the lower
+  divisions and abroad. Two causes. The three real managers are in the game twice
+  because it holds two separate manager lists that nothing reconciles: one keyed by
+  club code and curated for 2026/27, another keyed by club name covering the rest
+  of Europe. The other twelve are generated names — a club with no entry draws from
+  its country's name pool seeded off its own key, and four hundred and fifty
+  independent draws from a pool that size collide, which nothing was checking for.
+  A club the game names by hand now keeps its man, so Mourinho stays at Real
+  Madrid; whoever loses a collision gets a fresh name from his own country's pool
+  rather than inheriting a real person's job. Measured across the world: 484 clubs,
+  484 distinct managers, no man in two jobs.
+
+
 - **The sign-on fee could not be offered at all in the bottom two divisions.** The
   field stepped by £50,000 and defaulted to three weeks' wages rounded to the
   nearest fifty thousand. In the Premier League that is sensible. In the National
