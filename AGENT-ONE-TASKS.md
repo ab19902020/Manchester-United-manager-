@@ -628,20 +628,34 @@ appearances every season:
 mean 8.8
 ```
 
-**A caveat I cannot explain and am not going to paper over.** All 22 isolated runs
-landed inside the window; the two values that broke it, 2 and 20, both came from
-full-suite runs. Either that is tail luck on a small number of suite runs, or
-something about running inside the suite shifts the distribution. I have not
-established which, and it is worth knowing before you tune anything — if it is the
-second, the bounds are not the problem.
+**And then I chased the gap, because it was the interesting part.** Every
+out-of-range value has come from a full-suite run. Nothing else has produced one:
+
+```text
+the test file run on its own, six times      6 passes, 0 failures
+the statistic sampled directly, 22 seasons   every one inside 3..16
+the same test inside the full suite          2 failures in about 5 runs
+```
+
+**So the model is not the problem and the bounds may not be either.** 28
+independent observations say the injury model produces a sane season — mean 8.8,
+never once outside the window — and the only place it misbehaves is inside
+`node --test tests/`, which runs test *files in parallel*. That is the difference
+I would chase first: not "is 2 a reasonable season", but "what does running under
+parallel load do to this test". A plausible shape is that the career reaches the
+first fixture in a different state when the machine is loaded, which would change
+the season it then plays. I have not proved that, and I am flagging it as the lead
+rather than the answer.
 
 **I have deliberately not touched the bounds.** Widening them to 2..20 would turn
-the suite green and hide the question, which is yours: a 26-man squad taking 20
-injuries in a season, or getting through one on 2, are both results somebody has
-to decide are acceptable. If they are, widen the assertion and say why. If they
-are not, the model wants a floor and a ceiling rather than the test having them.
-Either way it should stop being a coin toss — a test that fails two runs in three
-teaches everybody to ignore the suite, which is worse than the bug it is guarding.
+the suite green and destroy the only evidence pointing at whatever this really is.
+If it does turn out to be load, the fix is in the test's setup, not its
+assertions. If it turns out the model really can produce 2 or 20 under some state
+the suite reaches and my probe does not, then that state is worth finding — it is
+a real season somebody could play.
+
+Either way it should stop being a coin toss. A test that fails two runs in five
+teaches everybody to ignore the suite, which costs more than the bug it guards.
 
 ---
 

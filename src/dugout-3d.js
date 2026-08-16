@@ -2482,6 +2482,32 @@
     return replacement;
   }
 
+  /* A CANVAS THAT HAS HELD A WEBGL CONTEXT CAN NEVER GIVE A 2D ONE.
+     `getContext('2d')` on it returns null for the life of the element,
+     and both the 2D fallback and the legacy dugout call it without a
+     guard — so the fallback throws, its catch calls the legacy
+     renderer, and that throws too, uncaught.
+
+     It only happens on one path, and it is the mobile path: losing the
+     WebGL context. The handler defers its cleanup with `setTimeout(0)`,
+     and a frame drawn in that window is handed the dead canvas. A
+     desktop browser practically never drops a context, which is why
+     this survived until somebody took the context away on purpose; a
+     phone drops one whenever the tab is backgrounded.
+
+     Replacing it is safe here because it is only ever called on the way
+     out to the fallback, when 3D is already disabled and no longer owns
+     the canvas. */
+  function ensureFallbackCanvas() {
+    try {
+      const canvas = document.getElementById('dugCanvas');
+      if (!canvas) return;
+      let usable = false;
+      try { usable = !!canvas.getContext('2d'); } catch (error) { usable = false; }
+      if (!usable) replaceWebGLCanvas(canvas);
+    } catch (error) { /* the fallback still has its own guard */ }
+  }
+
   function destroyScene() {
     if (state.canvas && state.canvas.parentElement) state.canvas.parentElement.classList.remove('rbs-3d-active');
     if (state.scene3D) disposeObject(state.scene3D);
@@ -2745,6 +2771,8 @@
         replaceWebGLCanvas(failedCanvas);
         state.disabled = true;
       }
+      /* never hand the fallback a canvas it cannot paint on */
+      ensureFallbackCanvas();
       return fallback.apply(this, arguments);
     };
     state.installed = true;
