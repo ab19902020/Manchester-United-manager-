@@ -556,6 +556,7 @@ const DAYS_PER_SEASON = 340;
       qdiff: { parts: qdiffParts, total: sum(qdiffParts), columns: qdiff.columns, big: qdiff.big },
       bigBreakdown, worldBits, samples, sideTables,
       worldPacked, worldPackedTotal,
+      worldBlobs: { cupTies: tieEnc ? tieEnc.big : [], clubs: clubsEnc.big },
       packed: { parts: Object.assign({}, qdiffParts, { world: worldPackedTotal }),
         total: sum(qdiffParts) - qdiffParts.world + worldPackedTotal },
       fullSaveRaw,
@@ -599,6 +600,8 @@ const DAYS_PER_SEASON = 340;
   Object.entries(r.worldPacked).sort((a, b) => b[1] - a[1])
     .forEach(([k, v]) => console.log('   ' + k.padEnd(12), kb(v)));
   console.log('   ' + 'TOTAL'.padEnd(12), kb(r.worldPackedTotal), ' was', kb(r.qdiff.parts.world));
+  if (r.worldBlobs.cupTies.length) console.log('   cup-tie fields still in a blob:', r.worldBlobs.cupTies.join(' '));
+  if (r.worldBlobs.clubs.length) console.log('   club fields still in a blob:', r.worldBlobs.clubs.join(' '));
   console.log('');
 
   if (r.sideTables.length) {
