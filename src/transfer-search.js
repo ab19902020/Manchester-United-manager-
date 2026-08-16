@@ -1,5 +1,7 @@
 /* global G, UI, ACTIONS, trResultsHtml:writable, vTrFilters:writable, askPrice:writable,
-          shortlist, pRow, emptyBox, esc, fmtM, fmtW, posBadge, render, vTransfers:writable, vTransferBudget, vScouts */
+          shortlist, pRow, emptyBox, esc, fmtM, fmtW, posBadge, render, vTransfers:writable,
+          vTransferBudget, vScouts, faList, faAsk, faAppeal, myRoom, face, ovrPill,
+          toast, openModal */
 
 /* =====================================================================
    SEARCHING FOR A FREE AGENT
@@ -125,10 +127,109 @@
     return out;
   }
 
+  /* `num` IS NOT A GLOBAL. There are two of them in the legacy file and
+     both are `const` inside a function body, so neither is on `window`.
+     I added it to this file's eslint globals, which silenced the linter
+     without creating the function — the card would have thrown
+     ReferenceError on first click. Same trap as the lexical `class` and
+     `const` hooks; declaring a global to a linter does not make one. */
+  const num = (v) => (v == null ? 0 : +v || 0);
+
+  /* WHAT HE ACTUALLY ASKS FOR. `p.wage` is what his last club paid him,
+     and on a free agent freshly rehydrated from a save it is not set at
+     all — which is where the NaN came from. `faAsk` is the number the
+     game charges you, and it falls as he waits. */
+  function asking(p) {
+    try {
+      if (typeof faAsk === 'function') return faAsk(p);
+    } catch (error) { /* fall through */ }
+    const w = +(p && (p.askWage || p.wage));
+    return Number.isFinite(w) ? w : 0;
+  }
+
+  /* CLICKING A PLAYER OPENS THAT PLAYER.
+     The game's own `openProfile` cannot be used here: it looks the man
+     up with `playerById`, which walks `G.clubs` only and never sees the
+     free-agent pool, and it then reads `G.clubs[p.club]` — which for a
+     free agent is `G.clubs[-1]`. It would find nobody, and if it did it
+     would throw on the crest.
+     And it must NOT be `faSign`, which signs him on the spot with no
+     confirmation — a misplaced tap would put a player on your wage bill.
+     So this is a card: who he is, what he wants, whether he would come,
+     and then the offer button he already has. */
+  function faCardHtml(p) {
+    const ask = asking(p);
+    let appeal = null;
+    try { if (typeof faAppeal === 'function') appeal = faAppeal(p); } catch (error) { appeal = null; }
+    const mood = appeal == null ? ''
+      : appeal >= 70 ? 'Keen to sign'
+        : appeal >= 45 ? 'Would consider it'
+          : appeal >= 25 ? 'Needs persuading' : 'Not interested';
+    let room = Infinity;
+    try { if (typeof myRoom === 'function') room = myRoom(); } catch (error) { room = Infinity; }
+    const fits = ask <= room;
+
+    const kpi = (v, l, colour) => '<div class="kpi"><div class="v num"'
+      + (colour ? ' style="color:' + colour + '"' : '') + '>' + v + '</div>'
+      + '<div class="l">' + l + '</div></div>';
+
+    let h = '<div class="row" style="margin-bottom:2px;gap:8px">'
+      + (typeof face === 'function' ? face(p, 34) : '')
+      + '<div style="flex:1;min-width:0"><h3>' + esc(p.name) + '</h3>'
+      + '<div class="small muted">Free agent · ' + num(p.age) + ' yrs · ' + esc(p.pos)
+      + '</div></div>'
+      + (typeof ovrPill === 'function' ? ovrPill(p) : '<b class="num">' + num(p.ovr) + '</b>')
+      + '</div>';
+
+    h += '<div class="grid3" style="margin:12px 0">'
+      + kpi(fmtW(ask), 'He asks', fits ? 'var(--green)' : 'var(--danger)')
+      + kpi(num(p.ovr), 'Ability')
+      + kpi(num(p.pot || p.ovr), 'Potential')
+      + '</div>';
+
+    h += '<div class="small muted" style="line-height:1.55;margin-bottom:10px">'
+      + (mood ? '<b>' + mood + '.</b> ' : '')
+      + 'No fee and no selling club — you are agreeing wages only. '
+      + (fits ? 'That fits inside your wage room.'
+        : 'That is more than your wage room allows, so the board will block it.')
+      + (p.scouted ? '' : ' He has not been scouted, so the detail is a guess.')
+      + '</div>';
+
+    h += '<button class="btn ' + (fits ? 'btn-gold' : 'btn-ghost')
+      + ' btn-block" data-action="faSign" data-v="' + p.id + '">'
+      + (fits ? 'Offer him ' + fmtW(ask) : 'Offer anyway') + '</button>'
+      + '<button class="btn btn-ghost btn-block" style="margin-top:8px" '
+      + 'data-action="closeModal">Close</button>';
+    return h;
+  }
+
+  try {
+    if (ACTIONS && typeof openModal === 'function') {
+      ACTIONS.faCard = function faCardOpen(el) {
+        const id = +((el && el.dataset && el.dataset.id) || 0);
+        let p = null;
+        try {
+          const pool = (typeof faList === 'function') ? faList() : (G.freeAgents || []);
+          p = pool.filter((x) => x && x.id === id)[0] || null;
+        } catch (error) { p = null; }
+        if (!p) {
+          try { toast('He is no longer a free agent.'); } catch (error) { /* no toast */ }
+          return;
+        }
+        openModal(faCardHtml(p));
+      };
+    }
+  } catch (error) { /* the list still renders */ }
+
   function freeRow(p) {
-    const wanted = fmtW(p.wage);
+    const wanted = fmtW(asking(p));
     return pRow(p, {
-      act: 'faOpen',
+      /* NOT `faOpen`. The live `ACTIONS.faOpen` ignores its argument
+         entirely and reopens the whole free-agent modal, so clicking a
+         player took you back to the list you were already looking at.
+         An earlier definition of it did take an id; this one overrode
+         it, and nothing complained. */
+      act: 'faCard',
       meta: '<span class="xs" style="color:#7fe0a6;font-weight:800">FREE AGENT</span> · ' + p.age
         + (p.scouted ? '' : ' · <span style="color:var(--blue)">unscouted</span>'),
       rail: '<span class="num" style="color:var(--green);font-weight:800">✓ No fee</span>'
@@ -173,15 +274,10 @@
     const attr = get('trAttr', '');
     const attrMin = +get('trAttrMin', 14) || 0;
 
-    /* THE WAGE HE WOULD WANT HERE, which is the number the rest of the
-       market filters on. This list was testing `p.wage` — what he was
-       last paid — so the wage filter meant something different on this
-       tab than on the other one, for the same slider. */
-    const wageOf = (p) => {
-      try {
-        return (typeof window.wageHere === 'function') ? window.wageHere(p) : (p.wage || 0);
-      } catch (error) { return p.wage || 0; }
-    };
+    /* THE WAGE HE ACTUALLY ASKS. This list was testing `p.wage` — what
+       his last club paid him — so the same slider meant one thing on the
+       market tab and another here. `faAsk` is what the signing costs. */
+    const wageOf = asking;
     const room = (() => {
       try {
         return (typeof window.myRoom === 'function') ? window.myRoom() : Infinity;
@@ -198,9 +294,25 @@
       } catch (error) { return p.nat; }
     };
 
+    /* THROUGH `faList()`, NEVER OFF `G.freeAgents` DIRECTLY.
+       A save stores free agents in a compact form — plain arrays — and
+       `faList()` is what rehydrates them back into players, in place, on
+       first read. This list went to the raw array, so before anything
+       else happened to call `faList()` every row was built from an
+       array: no name, no age, no wage, and every number NaN. Opening the
+       game's own free-agent modal fixed it, because that calls
+       `faList()` — which is exactly why it looked fine "after the first
+       time" and broken before. */
+    const pool = (() => {
+      try {
+        if (typeof faList === 'function') return faList() || [];
+      } catch (error) { /* fall through */ }
+      return G.freeAgents || [];
+    })();
+
     let blocked = 0;
-    const list = (G.freeAgents || []).filter((p) => {
-      if (!p) return false;
+    const list = pool.filter((p) => {
+      if (!p || Array.isArray(p)) return false;
       if (UI.trShort && sl.indexOf(p.id) < 0) return false;
       if (UI.trPos !== 'Any' && p.pos !== UI.trPos) return false;
       if (p.age > +(UI.trAge || '40')) return false;
@@ -345,8 +457,14 @@
   }
 
   try {
+    /* ONE export, at the end. I briefly added a second one earlier in
+       the file and this one silently overwrote it -- the same last-write
+       -wins trap that put faOpen over the id-taking version in the first
+       place. cardHtml and asking are here so the suite can assert on the
+       player card without opening a real modal. */
     window.RBSTransferSearch = Object.freeze({
       DEALS, deal, isFree, isExpiring, pool, results,
+      cardHtml: faCardHtml, asking,
     });
   } catch (error) { /* no window */ }
 }());
