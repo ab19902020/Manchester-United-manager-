@@ -240,6 +240,49 @@ comes back different. And the growth question is open: `log` is 51 entries a pla
 after one season, so a thirty-season career has to be measured before anyone calls
 this settled. 212 kB of headroom is real but it is not unlimited.
 
+### The seed does not scale, and that settles the design
+
+Measured at five seasons, which I should have done before recommending anything:
+
+```text
+                         1 season      5 seasons
+players in the world        16,345         17,135
+  the seed produces         14,167          7,998
+  of those, unchanged           78              0
+  born since generation      2,178          9,137
+  seed makes, now gone           6          6,173
+
+E (hundredths, packed)       1,024 kB       1,479 kB
+F (tenths, packed)             812 kB       1,240 kB
+```
+
+**By season five, more than half the world never existed at generation**, and of
+the 7,998 players the seed still produces, **not one is unchanged**. The seed is
+carrying less than half the world and getting nothing right about any of it. The
+format cannot rest on it: E grows 455 kB over four seasons and F grows 428 kB, so
+both cross the limit somewhere in season two or three and keep going.
+
+**So `src/world-seed.js` is not a save strategy and I should stop presenting it as
+one.** It is still worth having — a world you can reproduce from four bytes is
+good hygiene, it is what let me measure any of this, and it costs nothing at
+runtime — but the thing I built it for does not work at the timescale a career
+actually runs.
+
+Worth noting because I called it wrong: I flagged `log` growth as the risk to a
+thirty-season save. It is not. `changedColumns` barely moved between one season
+and five (749 kB to 739 kB) because the existing trim already caps history. What
+grew was **population turnover** — `newPlayers` went 103 kB to 524 kB — players
+the seed cannot produce because they were born after it. I was watching the wrong
+number.
+
+**What this leaves.** A save that fits for thirty seasons has to be small per
+player with no help from a seed, which means the column encoding carries all of
+it: at five seasons that is 1,479 kB at today's precision and the target is
+1,024 kB. The levers named below are worth about 50 kB, not 455 kB. Something
+larger has to give, and the honest options are a coarser grid for distant clubs,
+or keeping the history trim the game already does rather than restoring it.
+Neither is my call alone and I am not going to make it quietly.
+
 ### The correction that matters most: the save already does two of these things
 
 Before writing any of the format I went to read what `saveBlob()` actually
