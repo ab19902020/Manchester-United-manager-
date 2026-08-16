@@ -1,4 +1,4 @@
-const CACHE_NAME = 'results-business-v29';
+const CACHE_NAME = 'results-business-v30';
 const CORE_ASSETS = [
   './',
   './index.html',
@@ -83,7 +83,7 @@ self.addEventListener('fetch', (event) => {
           caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
           return response;
         })
-        .catch(() => caches.match(request).then((response) => response || caches.match('./red-devil-manager.html'))),
+        .catch(() => caches.match(request).then((response) => response || caches.match('./index.html'))),
     );
     return;
   }

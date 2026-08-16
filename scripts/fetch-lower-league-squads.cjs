@@ -4,7 +4,7 @@ const vm = require('node:vm');
 
 const root = path.resolve(__dirname, '..');
 const output = path.join(root, 'src', 'lower-league-data.js');
-const gameFile = path.join(root, 'red-devil-manager.html');
+const gameFile = path.join(root, 'index.html');
 const readDate = new Date().toISOString().slice(0, 10);
 
 const DIVISIONS = Object.freeze([

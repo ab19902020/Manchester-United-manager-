@@ -453,6 +453,14 @@ stub answers to whatever the adapter asks for, so it would pass just as happily
 with every name wrong. It proves the plumbing, not the contract. That part is
 still yours.
 
+**And the game file is now `index.html`.** CrazyGames loads that name and nothing
+else, so it is the game rather than a redirect pointing at the game — one hop
+fewer on their platform. `red-devil-manager.html` is a one-kilobyte shim
+redirecting the other way, so anything you have bookmarked still opens.
+`AGENT-ONE.md` is yours and mentions the old name eleven times; I have not touched
+it, because it is a record of work you did when that was the name. Edit
+`index.html`.
+
 `npm run upload` builds the actual zip and then runs it — extracted, served,
 framed, world built, failing on any 404 outside the optional audio pack. Its file
 list comes out of `service-worker.js`, so if you add a module, add it there and
@@ -511,6 +519,38 @@ move, or seventeen cup matches is too many and the entry rounds want revisiting.
 **I have not touched your threshold.** A boundary is a decision, not a typo. The
 test also wants a seed — an unseeded stochastic assertion over a 55-match season
 will keep doing this whatever the bound is.
+
+---
+
+## 3b. THE INJURY FLOOR — measured, because your test caught it and I did not fix it
+
+`a season does not fill the treatment room` failed once in a full run, on
+`total >= 3`, with 2. It is not a regression: it failed on a build whose game
+file is byte-identical (same sha256) to one that passed twice, and nothing in
+that run touched the engine. It is the assertion meeting the low tail of a real
+distribution.
+
+So I measured it rather than guess, eight seasons, same club, 38 appearances
+every time:
+
+```text
+injuries per season   3  8  8  9  9  10  10  11
+mean                  8.5
+at or below the bound 1 of 8
+```
+
+A normal season is 8 to 11 and nowhere near the floor. But the tail reaches down
+to 2, which is what a suite of 165 tests will keep finding — roughly one run in
+eight sits on the bound. Eight seasons is a small sample and I am not claiming a
+rate beyond "often enough to be a nuisance".
+
+**I have deliberately not touched the bound.** Widening it to 2 would turn the
+suite green and hide the question, and the question is yours: is a 25-man squad
+getting through a 38-match season with two injuries a result you are happy with?
+If it is, lower the assertion and say why. If it is not, the floor belongs in the
+injury model — a season should not be able to produce almost none — and the test
+is right to complain. Either way it should stop being a coin toss, because a test
+that fails one run in eight teaches everybody to ignore it.
 
 ---
 

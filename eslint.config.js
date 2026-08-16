@@ -3,7 +3,7 @@ const globals = require('globals');
 module.exports = [
   {
     ignores: [
-      'red-devil-manager.html',
+      'index.html',
       'vendor/**',
       'node_modules/**',
       'assets/**',

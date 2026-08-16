@@ -34,7 +34,7 @@ async function main() {
   const { chromium } = require(PLAYWRIGHT);
   const minutes = Number(arg('minutes', 90));
   const shot = arg('shot', '');
-  const file = 'file://' + path.resolve(__dirname, '..', 'red-devil-manager.html');
+  const file = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
   const browser = await chromium.launch({
     executablePath: CHROME,

@@ -13,7 +13,7 @@
    GAMEPLAY BALANCE — six things the game got wrong away from the pitch
    ---------------------------------------------------------------------
    Everything here is loaded after the game and patches it in place, for
-   one reason: red-devil-manager.html is three megabytes of appended
+   one reason: index.html is three megabytes of appended
    layers and two other agents are working in it this week. One script
    tag is the whole footprint in that file.
 
