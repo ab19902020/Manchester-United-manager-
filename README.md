@@ -62,6 +62,8 @@ GitHub Actions runs the same checks on every pull request.
 - `src/press-questions.js` — twenty-six more press topics, weighted toward the ordinary week.
 - `src/press-voice.js` — British male voice selection, and a pool that cannot fall back to a woman.
 - `src/transfer-structure.js` — the manager's choice of how a fee is paid, and what a selling club charges to wait.
+- `src/crazygames.js` — the CrazyGames SDK adapter: feature-detected, gzipped cloud saves,
+  and an honest refusal when a save is over the platform's 1 MB cap.
 - `src/keep-history.js` — stops a save discarding the match logs of 460 clubs and the
   scorers of every match you were not in.
 - `src/transfer-search.js` — free agents in the market search, a contract filter, and the
