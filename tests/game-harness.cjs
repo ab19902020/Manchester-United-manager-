@@ -60,6 +60,7 @@ function gameHtml() {
     'src/front-door.js',
     'src/transfer-search.js',
     'src/keep-history.js',
+    'src/dugout-matchday.js',
     'src/stadium-costs.js',
     'src/crazygames.js',
   ]) {
