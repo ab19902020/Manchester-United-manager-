@@ -35,7 +35,8 @@ The automated suite covers:
 - sourced 2026/27 English fixture dates, pairings and season-two handoff;
 - sourced English squad identities, nationality, birth date and physical facts;
 - press-conference, fullscreen, SVG-ID and transfer-pagination regressions;
-- Dugout 3D camera, accelerated analytics timeline, WebGL fallback and live-render integration;
+- the dugout broadcast: the goal seam the picture scores through, the tab the
+  match opens on, and the 2D fallback for a browser without WebGL;
 - goalkeeper Man of the Match frequency across all five English divisions;
 - full-season statistical bands for both match simulators.
 
@@ -52,7 +53,8 @@ GitHub Actions runs the same checks on every pull request.
 - `src/authentic-fixtures.js` — applies sourced dates to season one without moving them for cups.
 - `src/runtime-enhancements.js` — save integration, diagnostics, accessibility and PWA wiring.
 - `src/match-ratings.js` — diminishing goalkeeper save rewards and rating-distribution guardrails.
-- `src/dugout-3d.js` — the Three.js stadium broadcast and accelerated analytics-to-animation timeline.
+- `src/matchday-engine.js` — the broadcast: pitch, stadium, crowd, camera director and the football itself, scoped under `#mdHost`.
+- `src/dugout-matchday.js` — the dugout tab. Paces the save to the picture's clock, pushes the picture's goals into the save, and owns full screen.
 - `src/dugout-renderer.js` — the tested perspective 2D fallback for browsers without WebGL.
 - `src/cup-calendar.js` — keeps a cup tie off a date that has already gone past, and rescues any that are.
 - `src/trophy-room.js` — the season's campaign board on the Trophies tab, and what stands in the empty room.

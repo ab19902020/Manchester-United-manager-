@@ -2,6 +2,115 @@
 
 ## Unreleased
 
+### Changed
+
+- **The dugout is the match now, and it decides the result.** The broadcast
+  engine used to perform a result that had already been calculated: walking
+  into the dugout played the whole ninety minutes instantly, handed the goals
+  to the picture as a script, and let it act them out. It worked and it was
+  wrong — the manager screen would sit on **FULL TIME 0–3 while the broadcast
+  was still goalless in the first half**, which is a screenshot of a game
+  arguing with itself.
+
+  The authority is inverted. The broadcast plays out of the players you picked,
+  and the save follows it minute by minute. Three seams do it:
+
+  - **The clock.** MatchSim advances a minute at a time and is ticked only as
+    far as the minute on the broadcast clock, so the commentary, the stats, the
+    scoreline and the picture are reading the same minute by construction.
+  - **The goals.** Every goal in this game goes through
+    `MatchSim.prototype.goal`, which is the only thing that moves the score. A
+    goal MatchSim invents for itself now becomes a chance that did not quite
+    come off; the goal that goes through is the one the broadcast has just
+    scored, with its scorer, its minute and its penalty flag.
+  - **The whistle.** MatchSim is held a minute short of full time until the
+    picture blows, so the save cannot finish before the match does.
+
+  Watched end to end at match speed: the picture scored at 25′ and the save
+  recorded `24' Gonçalo Silva`; at half time both read **2–1** with the same
+  three scorers at the same minutes. Everything MatchSim is good at — bookings,
+  injuries, substitutions, fitness, ratings, its commentary voice — carries on
+  untouched. What it no longer does is decide the result.
+
+- **Full screen means the match.** It used to switch itself on in landscape and
+  stay on, so the bar ended up over the home screen with no match in sight. It
+  is no longer a mode you enter but a condition that is checked four times a
+  second: a match screen that is open, on the dugout tab, with the broadcast
+  running in it. Kick-off now opens on the dugout, because that is where the
+  football is.
+
+- **A loose ball is a duel, not a measurement.** Who reached a loose ball first
+  was pure geometry, and geometry is set by the formation — so a four-point gap
+  in quality could be beaten by a spare holding midfielder. Measured: the same
+  two squads, one always in 4-3-3, produced **12 wins from 12 against a 4-4-2
+  and 5 from 12 against a 4-2-3-1**. Reading the ball, reacting to it and
+  getting a yard on the man beside you is now worth about half of the 1.35 m
+  control radius between the best in the division and the worst. Shape still
+  matters; it no longer decides the match on its own.
+
+### Added
+
+- **The technical areas.** Two managers on the touchline, working the edge of
+  their boxes and pointing people twenty yards further up, and four
+  substitutes a side — two on the bench, two warming up along the strip behind
+  the assistant referee. They use the players' rig and run cycle, so there is no
+  second animation path to keep working.
+
+- **Substitutions you can see.** A change in the save is a change on the pitch:
+  the man coming on takes the place of the man going off, in his own shirt
+  number with his own attributes and his own build, and one of the substitutes
+  warming up stops warming up. It is watched rather than wired to the sub
+  sheet, because changes are made in half a dozen places across the game — the
+  sub sheet, a forced change for an injury, an AI manager chasing a goal — and
+  the only thing they all agree on is who is on the pitch.
+
+- **Corners that actually happen.** Throw-ins, goal kicks, free kicks, offsides
+  and penalties were already played out; corners were in the code and almost
+  never occurred — **2 in six matches**, because every parry and every block
+  was sent back up the pitch and every clearance went forward, however
+  desperate. The ticker even said "pushes it behind" while the ball went the
+  other way. A keeper at full stretch now turns it round the post 62% of the
+  time, a defender blocking deflects it behind 34% of the time, and a defender
+  hacking one clear inside his own box puts it out 30% of the time. Measured
+  again: **2.0 corners a match**, in most matches rather than one in six. Real
+  football runs at about ten, so this is closer rather than right.
+
+### Fixed
+
+- **The broadcast froze whenever you looked at another match tab.** The engine
+  found its scoreboard with `document.getElementById`, which is right for a
+  page that is nothing but the engine. Here it lives in a tab the manager game
+  rebuilds, so switching to Tactics detached the host, every id vanished from
+  the document and the next frame threw on `el('clock')` — the match stopped
+  exactly when you were making the tactical change. It searches its own host
+  now, which is held as a reference whether or not it is on the page.
+
+- **Full screen was a 554-pixel box with the class on it.** The frame carries an
+  inline `position:relative` from the moment it is built and an inline style
+  beats a stylesheet rule. Written inline now: measured 844×390 at the top of
+  the screen.
+
+- **A phone with no WebGL stood still for twelve seconds before the match
+  started.** The broadcast fails when its renderer is constructed, which was
+  swallowed and reported as "not ready yet" -- so the dugout rebuilt the whole
+  stadium and ran the boot again on every frame, and only a timeout eventually
+  handed the match back to the tested 2D renderer. Failing to boot is now
+  final, and it is noticed where it happens. Measured with WebGL switched off
+  in Chromium: the match is running on the 2D renderer inside a second, and
+  the broadcast is not attempted again.
+
+- **The lit tab chip never followed the tab.** The strip is written by
+  `buildMatchScreen` and switching tabs only rewrites the body, so the highlight
+  stayed wherever kick-off left it. Measured stuck on Pitch before this change
+  and stuck on Dugout after it; correct now.
+
+- **The advertising boards were a blurred smear.** Every panel is authored at
+  512×128, which is the right shape and the wrong number of pixels for a camera
+  that sits a few metres from the near boards. The strip renders at twice that
+  with the context scaled, so none of the artwork had to be re-measured, and
+  there are six sponsor panels rather than three, each with its own strapline
+  and a bar of its own colour.
+
 ### Fixed
 
 - **Free agents showed NaN on every row, and clicking one took you back to the

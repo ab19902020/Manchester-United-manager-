@@ -25,6 +25,8 @@ const srv=http.createServer((q,r)=>{let f=decodeURIComponent(q.url.split('?')[0]
  r.writeHead(200,{'content-type':T[path.extname(p)]||'application/octet-stream'});
  fs.createReadStream(p).pipe(r);});
 const N = +(process.argv[2]||10);
+/* the half length the dugout actually plays at, not the engine default */
+const HALF = +(process.argv[3]||150);
 srv.listen(0, async()=>{
  const port=srv.address().port;
  const b=await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
@@ -53,23 +55,50 @@ srv.listen(0, async()=>{
   return out;
  });
  await gp.close();
+ console.log('half length:', HALF, process.argv[4]?('| every side in '+process.argv[4]):'');
  console.log('teams:', squads.names.join(' | '));
  console.log('quality:', JSON.stringify(squads.quality));
  console.log('tactics:', JSON.stringify(squads.tac));
 
  const mp=await b.newPage({viewport:{width:844,height:390}});
  const errs=[]; mp.on('pageerror',e=>errs.push(String(e).slice(0,140)));
- await mp.goto('http://127.0.0.1:'+port+'/matchday.html');
- await mp.waitForTimeout(5000);
+ /* THE ENGINE LIVES IN THE GAME NOW. matchday.html is gone -- it was
+    inlined as src/matchday-engine.js so the dugout could reach it from
+    a file:// page -- so the rig boots it the same way the dugout does,
+    into a host of its own. */
+ await mp.goto('http://127.0.0.1:'+port+'/index.html');
+ await mp.waitForTimeout(2500);
+ /* mount() returns null until three.js has finished loading, exactly as
+    it does in the dugout, so it is asked again until the API is there */
+ let booted=false;
+ for(let i=0;i<60&&!booted;i++){
+  booted=await mp.evaluate(()=>{
+   let d=document.getElementById('rigHost');
+   if(!d){d=document.createElement('div');d.id='rigHost';
+    d.style.cssText='position:fixed;left:0;top:0;width:640px;height:360px;z-index:0';
+    document.body.appendChild(d);}
+   window.RBSMatchday.mount(d);
+   return !!window.Matchday;});
+  if(!booted) await mp.waitForTimeout(500);
+ }
+ if(!booted){console.log('the engine never booted'); await b.close(); srv.close(); return;}
+ await mp.waitForTimeout(1500);
 
+ /* IS IT THE SHAPE OR IS IT THE PLAYERS? Forcing one formation on both
+    sides takes shape out of the comparison, which is the only way to
+    tell whether a four-point attribute gap or a spare holding midfielder
+    is deciding the match. */
+ const SHAPE = process.argv[4] || '';
+ if(SHAPE) for(const k of ['best','sixth','worstPL','nonleague']) squads[k].formation = SHAPE;
  const run=async(h,a,n)=>{
-   return await mp.evaluate(({H,A,n})=>{
+   return await mp.evaluate(({H,A,n,HALF})=>{
      const res=[];
-     Matchday.loadSquads({home:H,away:A}); Matchday.clearScript(); Matchday.setHalfLength(240);
+     const Matchday=window.Matchday;
+     Matchday.loadSquads({home:H,away:A}); Matchday.clearScript(); Matchday.setHalfLength(HALF);
      for(let i=0;i<n;i++){ const s=Matchday.simulateMatch(); res.push({sc:s.score.slice(),
        sh:s.shots.slice(), ok:s.completed}); }
      return res;
-   },{H:squads[h],A:squads[a],n});
+   },{H:squads[h],A:squads[a],n,HALF});
  };
  const rep=(label,r)=>{
    const g=r.reduce((t,x)=>t+x.sc[0]+x.sc[1],0)/r.length;
@@ -84,6 +113,8 @@ srv.listen(0, async()=>{
  rep('best v nonleague', await run('best','nonleague',N));
  rep('best v sixth',     await run('best','sixth',N));
  rep('best v worstPL',   await run('best','worstPL',N));
+ rep('worstPL v best',   await run('worstPL','best',N));
+ rep('sixth v worstPL',  await run('sixth','worstPL',N));
  console.log('errors:', errs.length?errs.slice(0,2):'none');
  await b.close(); srv.close();
 });

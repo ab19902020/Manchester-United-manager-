@@ -1,214 +1,53 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<title>Matchday — Broadcast</title>
-<!--
-  Matchday Broadcast — AI vs AI football, presented as a television feed.
+/* global THREE */
 
-  Two things worth knowing before you edit:
+/* =====================================================================
+   THE MATCHDAY BROADCAST, INSIDE THE GAME
+   ---------------------------------------------------------------------
+   "you've made a separate dot file. We can't have that. It's gonna be
+    merged into the main games, so it works with it."
 
-  1. YOUR LOGO. Search for "const BRAND" and set logoSrc to a data URI of
-     your United Road artwork. Everything brand-facing — the LED boards,
-     the big screen, the on-screen bug — repaints itself the moment it
-     loads. Until then a procedural mark stands in.
+   Right, and for a better reason than tidiness: as its own page it had
+   to be reached through an iframe, and a browser refuses same-origin
+   access to an iframe on a `file://` page - so opening the game off a
+   disk fell back to the old view and nothing explained why. As part of
+   the game there is no frame, no second document, and no origin rule to
+   fall foul of.
 
-  2. JOINT SIGNS. Search for "JOINT CONVENTION". The rig is built so a
-     knee can only fold backwards and an elbow only forwards; poses are
-     assembled from terms that cannot go negative. Keep to that and legs
-     will never bend inside out again.
--->
-<style>
-  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-  html,body{width:100%;height:100%;overflow:hidden;background:#03050d;
-    font-family:"Arial Narrow","Helvetica Neue",system-ui,sans-serif;
-    user-select:none;-webkit-user-select:none;touch-action:none;overscroll-behavior:none}
-  #scene{position:fixed;inset:0;display:block}
-  #hud{position:fixed;inset:0;pointer-events:none;z-index:10}
+   Three things had to change to bring it in, and only three:
 
-  /* -------- scoreboard -------- */
-  .board{position:absolute;top:calc(env(safe-area-inset-top,0px) + 10px);left:12px;
-    display:flex;height:40px;border-radius:4px;overflow:hidden;
-    box-shadow:0 8px 26px rgba(0,0,0,.6)}
-  .crest{width:7px}
-  .side{display:flex;align-items:center;gap:9px;padding:0 10px;background:rgba(10,14,32,.9)}
-  .abbr{font-size:17px;font-weight:700;letter-spacing:.1em;color:#eef2fb}
-  .num{font-size:20px;font-weight:700;color:#fff;font-variant-numeric:tabular-nums;
-    font-family:ui-monospace,"SF Mono",Menlo,monospace}
-  .clock{display:flex;flex-direction:column;justify-content:center;align-items:center;
-    padding:0 9px;background:#e9ff4a;min-width:56px}
-  .clock b{font-size:15px;font-weight:700;color:#0a0e20;font-variant-numeric:tabular-nums;
-    font-family:ui-monospace,"SF Mono",Menlo,monospace;line-height:1}
-  .clock i{font-size:7px;letter-spacing:.2em;color:#0a0e20;font-style:normal;opacity:.7;margin-top:2px}
-  .poss{position:absolute;top:calc(env(safe-area-inset-top,0px) + 54px);left:12px;
-    width:198px;height:16px;background:rgba(10,14,32,.9);border-radius:3px;overflow:hidden;
-    display:flex;align-items:center;font-size:9px;letter-spacing:.12em;color:#eef2fb}
-  .poss span{padding:0 6px;z-index:2;font-weight:700}
-  .poss span:last-child{margin-left:auto}
-  #possFill{position:absolute;left:0;top:0;bottom:0;width:50%;opacity:.55}
+   1. ITS STYLESHEET IS SCOPED. Nineteen class names, thirteen of which
+      the game already uses - .card, .chip, .row, .on, .num. Left alone
+      its `.card{}` would have restyled every card in the game. Every
+      rule now sits under #mdHost, and its html,body rule became the
+      host. Its thirty-two ids collide with nothing, so those are
+      untouched.
 
-  /* -------- controls -------- */
-  .rail{position:absolute;top:calc(env(safe-area-inset-top,0px) + 10px);right:12px;
-    display:flex;flex-direction:column;gap:6px;align-items:flex-end;pointer-events:auto}
-  .grp{display:flex;gap:5px}
-  .chip{height:34px;min-width:34px;padding:0 9px;border-radius:4px;background:rgba(10,14,32,.86);
-    border:1px solid rgba(238,242,251,.16);color:#dfe5f4;display:flex;align-items:center;
-    justify-content:center;font-size:10px;letter-spacing:.11em;font-weight:700;cursor:pointer}
-  .chip.on{background:#e9ff4a;color:#0a0e20;border-color:#e9ff4a}
-  .chip:active{transform:scale(.96)}
-  .chip svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2.2;
-    stroke-linecap:round;stroke-linejoin:round}
+   2. position:fixed BECAME position:absolute. Fixed is relative to the
+      viewport, so the pitch and the HUD would have escaped the dugout
+      and covered the whole game.
 
-  /* -------- radar -------- */
-  #radar{position:absolute;bottom:calc(env(safe-area-inset-bottom,0px) + 10px);right:12px;
-    width:170px;height:104px;opacity:.92;filter:drop-shadow(0 6px 16px rgba(0,0,0,.7))}
+   3. IT SIZES TO THE HOST rather than to the window.
 
-  /* -------- ticker -------- */
-  #feed{position:absolute;bottom:calc(env(safe-area-inset-bottom,0px) + 12px);left:12px;
-    width:210px;display:flex;flex-direction:column-reverse;gap:4px}
-  .ev{background:rgba(10,14,32,.82);border-left:3px solid #e9ff4a;padding:5px 8px;
-    border-radius:2px;font-size:10px;letter-spacing:.05em;color:#cfd7ea;
-    font-family:system-ui,-apple-system,sans-serif;animation:slide .3s ease}
-  .ev b{color:#fff}
-  @keyframes slide{from{opacity:0;transform:translateX(-10px)}to{opacity:1;transform:none}}
+   The engine is otherwise the file from the Gamefootball repository,
+   unedited, and it boots lazily - a WebGL context is not worth building
+   until somebody walks into the dugout.
+   ===================================================================== */
 
-  /* -------- lower third -------- */
-  #lower{position:absolute;left:0;right:0;bottom:22%;display:flex;justify-content:center;
-    opacity:0;transition:opacity .3s}
-  #lower .card{display:flex;align-items:stretch;box-shadow:0 14px 40px rgba(0,0,0,.7);
-    border-radius:4px;overflow:hidden;transform:translateY(14px);transition:transform .35s}
-  #lower.show .card{transform:none}
-  #lower .tag{background:#e9ff4a;color:#0a0e20;font-size:26px;font-weight:700;
-    letter-spacing:.22em;padding:12px 18px;display:flex;align-items:center}
-  #lower .txt{background:rgba(10,14,32,.94);padding:10px 20px;display:flex;
-    flex-direction:column;justify-content:center;min-width:170px}
-  #lower .txt b{color:#fff;font-size:19px;letter-spacing:.09em}
-  #lower .txt i{color:#98a3bd;font-size:10px;font-style:normal;letter-spacing:.2em;margin-top:3px}
-
-  /* -------- menu -------- */
-  #menu{position:fixed;inset:0;z-index:30;background:rgba(3,5,13,.92);backdrop-filter:blur(12px);
-    display:flex;align-items:center;justify-content:center;padding:22px}
-  #menu.off{display:none}
-  .card2{width:min(370px,100%);background:rgba(10,14,32,.95);
-    border:1px solid rgba(238,242,251,.13);border-radius:8px;padding:22px}
-  .card2 h1{font-size:25px;letter-spacing:.15em;color:#eef2fb;font-weight:700;line-height:1.15}
-  .card2 h1 em{font-style:normal;color:#e9ff4a}
-  .card2 p{font-size:12px;line-height:1.6;color:rgba(238,242,251,.55);margin-top:9px;
-    font-family:system-ui,-apple-system,sans-serif}
-  .row{display:flex;align-items:center;justify-content:space-between;margin-top:13px;
-    padding-top:11px;border-top:1px solid rgba(238,242,251,.09)}
-  .row label{font-size:10px;letter-spacing:.17em;color:rgba(238,242,251,.6)}
-  .seg{display:flex;gap:4px}
-  .seg button{background:rgba(238,242,251,.07);border:1px solid rgba(238,242,251,.13);
-    color:#e3e8f5;font-size:10px;letter-spacing:.09em;padding:6px 9px;border-radius:3px;
-    font-family:inherit;cursor:pointer}
-  .seg button.on{background:#e9ff4a;color:#0a0e20;border-color:#e9ff4a;font-weight:700}
-  .go{width:100%;margin-top:19px;padding:14px;border:none;border-radius:4px;background:#e9ff4a;
-    color:#0a0e20;font-size:14px;font-weight:700;letter-spacing:.2em;font-family:inherit;cursor:pointer}
-  #load{position:fixed;inset:0;z-index:40;background:#03050d;display:flex;
-    align-items:center;justify-content:center;color:#e9ff4a;font-size:11px;letter-spacing:.35em}
-  #load.off{display:none}
-
-  /* -------- broadcast grade --------
-     A vignette, a cool lift in the shadows and a whisper of grain. None
-     of this costs a draw call and together they do most of what a real
-     post chain would: they stop the render reading as a render. */
-  #grade{position:fixed;inset:0;z-index:5;pointer-events:none;
-    background:radial-gradient(125% 92% at 50% 44%,
-      rgba(0,0,0,0) 38%, rgba(0,0,0,.20) 70%, rgba(2,4,12,.62) 100%)}
-  #tint{position:fixed;inset:0;z-index:5;pointer-events:none;opacity:.16;
-    mix-blend-mode:screen;
-    background:linear-gradient(178deg, rgba(80,130,255,.55) 0%,
-      rgba(0,0,0,0) 46%, rgba(255,178,90,.30) 100%)}
-  #grain{position:fixed;inset:-60%;z-index:6;pointer-events:none;opacity:.05;
-    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-    animation:grain 1.1s steps(5) infinite}
-  @keyframes grain{
-    0%{transform:translate(0,0)}      20%{transform:translate(-3%,-4%)}
-    40%{transform:translate(2%,3%)}   60%{transform:translate(-2%,4%)}
-    80%{transform:translate(4%,-2%)}  100%{transform:translate(0,0)}}
-
-  /* -------- brand bug -------- */
-  #bug{position:absolute;top:calc(env(safe-area-inset-top,0px) + 78px);left:12px;
-    display:flex;align-items:center;gap:7px;padding:5px 9px 5px 6px;
-    background:linear-gradient(90deg,rgba(10,12,16,.92),rgba(10,12,16,.55));
-    border-left:3px solid #da291c;border-radius:3px}
-  #bug canvas{width:22px;height:22px;display:block;border-radius:3px}
-  #bug b{font-size:10px;letter-spacing:.16em;color:#fff;font-weight:700;line-height:1.15}
-  #bug i{font-size:8px;letter-spacing:.14em;color:#f5c518;font-style:normal;display:block}
-  .live{display:inline-block;width:5px;height:5px;border-radius:50%;background:#ff3b3b;
-    margin-right:5px;vertical-align:middle;animation:pulse 1.6s ease-in-out infinite}
-  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
-</style>
-</head>
-<body>
-<canvas id="scene"></canvas>
-
-<div id="hud">
-  <div class="board">
-    <div class="crest" id="crestA"></div>
-    <div class="side"><span class="abbr" id="abbrA"></span><span class="num" id="scoreA">0</span></div>
-    <div class="clock"><b id="clock">00:00</b><i id="period">1ST</i></div>
-    <div class="side"><span class="num" id="scoreB">0</span><span class="abbr" id="abbrB"></span></div>
-    <div class="crest" id="crestB"></div>
-  </div>
-  <div class="poss"><div id="possFill"></div><span id="possA">50%</span><span id="possB">50%</span></div>
-  <div id="bug"><canvas id="bugLogo" width="64" height="64"></canvas>
-    <b><span class="live"></span>UNITED ROAD<i id="bugDomain">unitedroad.uk</i></b></div>
-
-  <div class="rail">
-    <div class="grp">
-      <div class="chip" id="btnFull"><svg viewBox="0 0 24 24"><path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5"/></svg></div>
-      <div class="chip" id="btnPause"><svg viewBox="0 0 24 24"><path d="M9 4v16M15 4v16"/></svg></div>
-    </div>
-    <div class="grp" id="camGrp">
-      <div class="chip on" data-cam="auto">AUTO</div>
-      <div class="chip" data-cam="broadcast">WIDE</div>
-      <div class="chip" data-cam="tele">TELE</div>
-      <div class="chip" data-cam="goal">GOAL</div>
-    </div>
-    <div class="grp" id="spdGrp">
-      <div class="chip on" data-spd="1">1×</div>
-      <div class="chip" data-spd="2">2×</div>
-      <div class="chip" data-spd="4">4×</div>
-    </div>
-  </div>
-
-  <div id="feed"></div>
-  <canvas id="radar" width="340" height="208"></canvas>
-
-  <div id="lower"><div class="card">
-    <div class="tag" id="lowTag">GOAL</div>
-    <div class="txt"><b id="lowName">—</b><i id="lowSub">—</i></div>
-  </div></div>
-</div>
-
-<div id="menu">
-  <div class="card2">
-    <h1>MATCHDAY<br><em>BROADCAST</em></h1>
-    <p>Northgate against Valemont, played out by the AI under the lights at United Road. You're in the gantry — pick a camera, change the speed, and watch. AUTO cuts to the keeper for a save and behind the goal for a celebration.</p>
-    <div class="row"><label>HALF LENGTH</label>
-      <div class="seg" id="segLen"><button data-v="120">2m</button><button data-v="240" class="on">4m</button><button data-v="420">7m</button></div></div>
-    <div class="row"><label>TEMPO</label>
-      <div class="seg" id="segDiff"><button data-v="0.7">LOOSE</button><button data-v="0.86" class="on">PRO</button><button data-v="1">ELITE</button></div></div>
-    <div class="row"><label>DETAIL</label>
-      <div class="seg" id="segQual"><button data-v="1" class="on">HIGH</button><button data-v="0">LITE</button></div></div>
-    <button class="go" id="btnStart">KICK OFF</button>
-  </div>
-</div>
-<div id="grade"></div>
-<div id="tint"></div>
-<div id="grain"></div>
-<div id="load">WARMING UP</div>
-
-<!-- OUR VENDORED COPY, NOT A CDN. The upstream file pulls three.js r128
-     from cdnjs; this game ships offline and onto CrazyGames, where an
-     outside request is at best a slow frame and at worst a black screen.
-     vendor/three.min.js is the same revision, r128, so nothing else in
-     this file changes. -->
-<script src="vendor/three.min.js"></script>
-<script>
+(function matchdayEngine() {
+  var STYLE_ID = 'mdStyle';
+  var CSS = '/* the host itself is the stage */\n#mdHost{position:relative;contain:layout paint}\n#mdHost *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}\n#mdHost{width:100%;height:100%;overflow:hidden;background:#03050d;\n    font-family:"Arial Narrow","Helvetica Neue",system-ui,sans-serif;\n    user-select:none;-webkit-user-select:none;touch-action:none;overscroll-behavior:none}\n#mdHost #scene{position:absolute;inset:0;display:block}\n#mdHost #hud{position:absolute;inset:0;pointer-events:none;z-index:10}\n\n  /* -------- scoreboard -------- */\n#mdHost .board{position:absolute;top:calc(env(safe-area-inset-top,0px) + 10px);left:12px;\n    display:flex;height:40px;border-radius:4px;overflow:hidden;\n    box-shadow:0 8px 26px rgba(0,0,0,.6)}\n#mdHost .crest{width:7px}\n#mdHost .side{display:flex;align-items:center;gap:9px;padding:0 10px;background:rgba(10,14,32,.9)}\n#mdHost .abbr{font-size:17px;font-weight:700;letter-spacing:.1em;color:#eef2fb}\n#mdHost .num{font-size:20px;font-weight:700;color:#fff;font-variant-numeric:tabular-nums;\n    font-family:ui-monospace,"SF Mono",Menlo,monospace}\n#mdHost .clock{display:flex;flex-direction:column;justify-content:center;align-items:center;\n    padding:0 9px;background:#e9ff4a;min-width:56px}\n#mdHost .clock b{font-size:15px;font-weight:700;color:#0a0e20;font-variant-numeric:tabular-nums;\n    font-family:ui-monospace,"SF Mono",Menlo,monospace;line-height:1}\n#mdHost .clock i{font-size:7px;letter-spacing:.2em;color:#0a0e20;font-style:normal;opacity:.7;margin-top:2px}\n#mdHost .poss{position:absolute;top:calc(env(safe-area-inset-top,0px) + 54px);left:12px;\n    width:198px;height:16px;background:rgba(10,14,32,.9);border-radius:3px;overflow:hidden;\n    display:flex;align-items:center;font-size:9px;letter-spacing:.12em;color:#eef2fb}\n#mdHost .poss span{padding:0 6px;z-index:2;font-weight:700}\n#mdHost .poss span:last-child{margin-left:auto}\n#mdHost #possFill{position:absolute;left:0;top:0;bottom:0;width:50%;opacity:.55}\n\n  /* -------- controls -------- */\n#mdHost .rail{position:absolute;top:calc(env(safe-area-inset-top,0px) + 10px);right:12px;\n    display:flex;flex-direction:column;gap:6px;align-items:flex-end;pointer-events:auto}\n#mdHost .grp{display:flex;gap:5px}\n#mdHost .chip{height:34px;min-width:34px;padding:0 9px;border-radius:4px;background:rgba(10,14,32,.86);\n    border:1px solid rgba(238,242,251,.16);color:#dfe5f4;display:flex;align-items:center;\n    justify-content:center;font-size:10px;letter-spacing:.11em;font-weight:700;cursor:pointer}\n#mdHost .chip.on{background:#e9ff4a;color:#0a0e20;border-color:#e9ff4a}\n#mdHost .chip:active{transform:scale(.96)}\n#mdHost .chip svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2.2;\n    stroke-linecap:round;stroke-linejoin:round}\n\n  /* -------- radar -------- */\n#mdHost #radar{position:absolute;bottom:calc(env(safe-area-inset-bottom,0px) + 10px);right:12px;\n    width:170px;height:104px;opacity:.92;filter:drop-shadow(0 6px 16px rgba(0,0,0,.7))}\n\n  /* -------- ticker -------- */\n#mdHost #feed{position:absolute;bottom:calc(env(safe-area-inset-bottom,0px) + 12px);left:12px;\n    width:210px;display:flex;flex-direction:column-reverse;gap:4px}\n#mdHost .ev{background:rgba(10,14,32,.82);border-left:3px solid #e9ff4a;padding:5px 8px;\n    border-radius:2px;font-size:10px;letter-spacing:.05em;color:#cfd7ea;\n    font-family:system-ui,-apple-system,sans-serif;animation:slide .3s ease}\n#mdHost .ev b{color:#fff}\n  @keyframes slide{from{opacity:0;transform:translateX(-10px)}to{opacity:1;transform:none}}\n\n  /* -------- lower third -------- */\n#mdHost #lower{position:absolute;left:0;right:0;bottom:22%;display:flex;justify-content:center;\n    opacity:0;transition:opacity .3s}\n#mdHost #lower .card{display:flex;align-items:stretch;box-shadow:0 14px 40px rgba(0,0,0,.7);\n    border-radius:4px;overflow:hidden;transform:translateY(14px);transition:transform .35s}\n#mdHost #lower.show .card{transform:none}\n#mdHost #lower .tag{background:#e9ff4a;color:#0a0e20;font-size:26px;font-weight:700;\n    letter-spacing:.22em;padding:12px 18px;display:flex;align-items:center}\n#mdHost #lower .txt{background:rgba(10,14,32,.94);padding:10px 20px;display:flex;\n    flex-direction:column;justify-content:center;min-width:170px}\n#mdHost #lower .txt b{color:#fff;font-size:19px;letter-spacing:.09em}\n#mdHost #lower .txt i{color:#98a3bd;font-size:10px;font-style:normal;letter-spacing:.2em;margin-top:3px}\n\n  /* -------- menu -------- */\n#mdHost #menu{position:absolute;inset:0;z-index:30;background:rgba(3,5,13,.92);backdrop-filter:blur(12px);\n    display:flex;align-items:center;justify-content:center;padding:22px}\n#mdHost #menu.off{display:none}\n#mdHost .card2{width:min(370px,100%);background:rgba(10,14,32,.95);\n    border:1px solid rgba(238,242,251,.13);border-radius:8px;padding:22px}\n#mdHost .card2 h1{font-size:25px;letter-spacing:.15em;color:#eef2fb;font-weight:700;line-height:1.15}\n#mdHost .card2 h1 em{font-style:normal;color:#e9ff4a}\n#mdHost .card2 p{font-size:12px;line-height:1.6;color:rgba(238,242,251,.55);margin-top:9px;\n    font-family:system-ui,-apple-system,sans-serif}\n#mdHost .row{display:flex;align-items:center;justify-content:space-between;margin-top:13px;\n    padding-top:11px;border-top:1px solid rgba(238,242,251,.09)}\n#mdHost .row label{font-size:10px;letter-spacing:.17em;color:rgba(238,242,251,.6)}\n#mdHost .seg{display:flex;gap:4px}\n#mdHost .seg button{background:rgba(238,242,251,.07);border:1px solid rgba(238,242,251,.13);\n    color:#e3e8f5;font-size:10px;letter-spacing:.09em;padding:6px 9px;border-radius:3px;\n    font-family:inherit;cursor:pointer}\n#mdHost .seg button.on{background:#e9ff4a;color:#0a0e20;border-color:#e9ff4a;font-weight:700}\n#mdHost .go{width:100%;margin-top:19px;padding:14px;border:none;border-radius:4px;background:#e9ff4a;\n    color:#0a0e20;font-size:14px;font-weight:700;letter-spacing:.2em;font-family:inherit;cursor:pointer}\n#mdHost #load{position:absolute;inset:0;z-index:40;background:#03050d;display:flex;\n    align-items:center;justify-content:center;color:#e9ff4a;font-size:11px;letter-spacing:.35em}\n#mdHost #load.off{display:none}\n\n  /* -------- broadcast grade --------\n     A vignette, a cool lift in the shadows and a whisper of grain. None\n     of this costs a draw call and together they do most of what a real\n     post chain would: they stop the render reading as a render. */\n#mdHost #grade{position:absolute;inset:0;z-index:5;pointer-events:none;\n    background:radial-gradient(125% 92% at 50% 44%,\n      rgba(0,0,0,0) 38%, rgba(0,0,0,.20) 70%, rgba(2,4,12,.62) 100%)}\n#mdHost #tint{position:absolute;inset:0;z-index:5;pointer-events:none;opacity:.16;\n    mix-blend-mode:screen;\n    background:linear-gradient(178deg, rgba(80,130,255,.55) 0%,\n      rgba(0,0,0,0) 46%, rgba(255,178,90,.30) 100%)}\n#mdHost #grain{position:absolute;inset:-60%;z-index:6;pointer-events:none;opacity:.05;\n    background-image:url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'180\' height=\'180\'%3E%3Cfilter id=\'n\'%3E%3CfeTurbulence type=\'fractalNoise\' baseFrequency=\'.85\' numOctaves=\'3\' stitchTiles=\'stitch\'/%3E%3C/filter%3E%3Crect width=\'100%25\' height=\'100%25\' filter=\'url(%23n)\'/%3E%3C/svg%3E");\n    animation:grain 1.1s steps(5) infinite}\n  @keyframes grain{\n    0%{transform:translate(0,0)}      20%{transform:translate(-3%,-4%)}\n    40%{transform:translate(2%,3%)}   60%{transform:translate(-2%,4%)}\n    80%{transform:translate(4%,-2%)}  100%{transform:translate(0,0)}}\n\n  /* -------- brand bug -------- */\n#mdHost #bug{position:absolute;top:calc(env(safe-area-inset-top,0px) + 78px);left:12px;\n    display:flex;align-items:center;gap:7px;padding:5px 9px 5px 6px;\n    background:linear-gradient(90deg,rgba(10,12,16,.92),rgba(10,12,16,.55));\n    border-left:3px solid #da291c;border-radius:3px}\n#mdHost #bug canvas{width:22px;height:22px;display:block;border-radius:3px}\n#mdHost #bug b{font-size:10px;letter-spacing:.16em;color:#fff;font-weight:700;line-height:1.15}\n#mdHost #bug i{font-size:8px;letter-spacing:.14em;color:#f5c518;font-style:normal;display:block}\n#mdHost .live{display:inline-block;width:5px;height:5px;border-radius:50%;background:#ff3b3b;\n    margin-right:5px;vertical-align:middle;animation:pulse 1.6s ease-in-out infinite}\n  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}';
+  var MARKUP = '<canvas id="scene"></canvas>\n\n<div id="hud">\n  <div class="board">\n    <div class="crest" id="crestA"></div>\n    <div class="side"><span class="abbr" id="abbrA"></span><span class="num" id="scoreA">0</span></div>\n    <div class="clock"><b id="clock">00:00</b><i id="period">1ST</i></div>\n    <div class="side"><span class="num" id="scoreB">0</span><span class="abbr" id="abbrB"></span></div>\n    <div class="crest" id="crestB"></div>\n  </div>\n  <div class="poss"><div id="possFill"></div><span id="possA">50%</span><span id="possB">50%</span></div>\n  <div id="bug"><canvas id="bugLogo" width="64" height="64"></canvas>\n    <b><span class="live"></span>UNITED ROAD<i id="bugDomain">unitedroad.uk</i></b></div>\n\n  <div class="rail">\n    <div class="grp">\n      <div class="chip" id="btnFull"><svg viewBox="0 0 24 24"><path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5"/></svg></div>\n      <div class="chip" id="btnPause"><svg viewBox="0 0 24 24"><path d="M9 4v16M15 4v16"/></svg></div>\n    </div>\n    <div class="grp" id="camGrp">\n      <div class="chip on" data-cam="auto">AUTO</div>\n      <div class="chip" data-cam="broadcast">WIDE</div>\n      <div class="chip" data-cam="tele">TELE</div>\n      <div class="chip" data-cam="goal">GOAL</div>\n    </div>\n    <div class="grp" id="spdGrp">\n      <div class="chip on" data-spd="1">1×</div>\n      <div class="chip" data-spd="2">2×</div>\n      <div class="chip" data-spd="4">4×</div>\n    </div>\n  </div>\n\n  <div id="feed"></div>\n  <canvas id="radar" width="340" height="208"></canvas>\n\n  <div id="lower"><div class="card">\n    <div class="tag" id="lowTag">GOAL</div>\n    <div class="txt"><b id="lowName">—</b><i id="lowSub">—</i></div>\n  </div></div>\n</div>\n\n<div id="menu">\n  <div class="card2">\n    <h1>MATCHDAY<br><em>BROADCAST</em></h1>\n    <p>Northgate against Valemont, played out by the AI under the lights at United Road. You\'re in the gantry — pick a camera, change the speed, and watch. AUTO cuts to the keeper for a save and behind the goal for a celebration.</p>\n    <div class="row"><label>HALF LENGTH</label>\n      <div class="seg" id="segLen"><button data-v="120">2m</button><button data-v="240" class="on">4m</button><button data-v="420">7m</button></div></div>\n    <div class="row"><label>TEMPO</label>\n      <div class="seg" id="segDiff"><button data-v="0.7">LOOSE</button><button data-v="0.86" class="on">PRO</button><button data-v="1">ELITE</button></div></div>\n    <div class="row"><label>DETAIL</label>\n      <div class="seg" id="segQual"><button data-v="1" class="on">HIGH</button><button data-v="0">LITE</button></div></div>\n    <button class="go" id="btnStart">KICK OFF</button>\n  </div>\n</div>\n<div id="grade"></div>\n<div id="tint"></div>\n<div id="grain"></div>\n<div id="load">WARMING UP</div>\n\n<!-- OUR VENDORED COPY, NOT A CDN. The upstream file pulls three.js r128\n     from cdnjs; this game ships offline and onto CrazyGames, where an\n     outside request is at best a slow frame and at worst a black screen.\n     vendor/three.min.js is the same revision, r128, so nothing else in\n     this file changes. -->';
+  var booted = false;
+  var host = null;
+  function hostW(){ return (host && host.clientWidth) || 640; }
+  function hostH(){ return (host && host.clientHeight) || 360; }
+  function inject(){
+    if (document.getElementById(STYLE_ID)) return;
+    var st = document.createElement('style');
+    st.id = STYLE_ID; st.textContent = CSS;
+    document.head.appendChild(st);
+  }
+  function boot() {
 "use strict";
 /* =====================================================================
    MATCHDAY — AI vs AI football, broadcast presentation.
@@ -467,7 +306,7 @@ const NAME_POOL = [
 const canvas = document.getElementById('scene');
 const renderer = new THREE.WebGLRenderer({canvas, antialias:true, powerPreference:'high-performance'});
 renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, 2));
-renderer.setSize(innerWidth, innerHeight);
+renderer.setSize(hostW(), hostH());
 renderer.outputEncoding = THREE.sRGBEncoding;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 0.92;
@@ -476,12 +315,12 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
 const scene = new THREE.Scene();
 scene.fog = new THREE.FogExp2(0x070c1c, 0.0042);
-const camera = new THREE.PerspectiveCamera(30, innerWidth/innerHeight, 0.4, 900);
+const camera = new THREE.PerspectiveCamera(30, hostW()/hostH(), 0.4, 900);
 camera.position.set(0, 22, -60);
 
 addEventListener('resize', ()=>{
-  camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix();
-  renderer.setSize(innerWidth, innerHeight);
+  camera.aspect = hostW()/hostH(); camera.updateProjectionMatrix();
+  renderer.setSize(hostW(), hostH());
 });
 
 /* ================== procedural textures ================== */
@@ -782,7 +621,15 @@ function drawBrandLogo(g, cx, cy, s){
 
 /* Each creative paints into its own SEG-wide slot on one long strip. The
    strip scrolls behind the goal-line boards exactly like a real LED rig. */
-const AD_SEG = 512, AD_H = 128;
+/* THE BOARDS, AT THE RESOLUTION THEY ARE ACTUALLY SEEN AT.
+   Every creative is drawn in a 512x128 panel, which is the right shape
+   and the wrong number of pixels: the low touchline camera puts the
+   near boards a few metres from the lens, where 512 across reads as a
+   blurred smear behind the play. The panels are still authored at
+   512x128 -- the strip is simply rendered at twice that and the
+   context scaled, so the type has edges and none of the artwork had to
+   be re-measured. */
+const AD_SEG = 512, AD_H = 128, AD_SS = 2;
 const CREATIVES = [
   function unitedRoad(g,x){
     const gr=g.createLinearGradient(x,0,x+AD_SEG,AD_H);
@@ -849,29 +696,46 @@ const CREATIVES = [
     g.fillStyle=BRAND.gold; g.font='bold 23px Arial,sans-serif';
     g.fillText(BRAND.domain, x+AD_SEG-26, AD_H/2+24);
   },
-  function nova(g,x){    adFiller(g,x,'NOVA ENERGY','#0b2a7a','#e9ff4a'); },
-  function kestrel(g,x){ adFiller(g,x,'KESTREL AIR','#111318','#ff5252'); },
-  function meridian(g,x){adFiller(g,x,'MERIDIAN BANK','#3a1060','#9fe8ff'); }
+  function nova(g,x){    adFiller(g,x,'NOVA ENERGY','#0b2a7a','#e9ff4a','POWERING THE NORTH'); },
+  function kestrel(g,x){ adFiller(g,x,'KESTREL AIR','#111318','#ff5252','FLY THE RED TAIL'); },
+  function meridian(g,x){adFiller(g,x,'MERIDIAN BANK','#3a1060','#9fe8ff','SINCE 1874'); },
+  function harrow(g,x){  adFiller(g,x,'HARROWGATE ALES','#20120a','#f0b64a','BREWED MATCHDAY'); },
+  function saltmark(g,x){adFiller(g,x,'SALTMARK TYRES','#0d1512','#7dffb0','GRIP, WHATEVER THE WEATHER'); },
+  function orbit(g,x){   adFiller(g,x,'ORBIT SPORTSWEAR','#141416','#ffffff','OFFICIAL KIT PARTNER'); }
 ];
-function adFiller(g,x,text,bg,ink){
+function adFiller(g,x,text,bg,ink,strap){
   g.fillStyle=bg; g.fillRect(x,0,AD_SEG,AD_H);
   g.fillStyle='rgba(255,255,255,.06)'; g.fillRect(x,0,AD_SEG,34);
+  /* a bar of the sponsor's own colour, so one board is not another */
+  g.fillStyle=ink; g.globalAlpha=.85; g.fillRect(x,AD_H-7,AD_SEG,7); g.globalAlpha=1;
   g.textAlign='center'; g.textBaseline='middle';
-  g.fillStyle=ink; g.font='bold 54px "Arial Narrow",Arial,sans-serif';
-  g.fillText(text, x+AD_SEG/2, AD_H/2);
+  g.fillStyle=ink; g.font='bold '+(strap?50:54)+'px "Arial Narrow",Arial,sans-serif';
+  g.fillText(text, x+AD_SEG/2, AD_H/2 - (strap?12:0));
+  if(strap){
+    g.fillStyle='rgba(255,255,255,.62)'; g.font='bold 19px Arial,sans-serif';
+    g.fillText(strap, x+AD_SEG/2, AD_H/2+26);
+  }
 }
 
 let adCanvas = null;
 function paintAds(){
-  if(!adCanvas) adCanvas = cv(AD_SEG*CREATIVES.length, AD_H);
+  const W = AD_SEG*CREATIVES.length;
+  if(!adCanvas) adCanvas = cv(W*AD_SS, AD_H*AD_SS);
   const g = adCanvas.getContext('2d');
-  g.clearRect(0,0,adCanvas.width,AD_H);
+  g.setTransform(AD_SS,0,0,AD_SS,0,0);
+  g.clearRect(0,0,W,AD_H);
   CREATIVES.forEach((fn,i)=>{ g.save(); fn(g, i*AD_SEG); g.restore(); });
-  // LED pitch: a fine dark grid so the strip reads as diodes, not paint
-  g.globalAlpha=.20; g.fillStyle='#000000';
-  for(let x=0;x<adCanvas.width;x+=4) g.fillRect(x,0,1,AD_H);
-  for(let y=0;y<AD_H;y+=4) g.fillRect(0,y,adCanvas.width,1);
-  g.globalAlpha=.12; g.fillStyle='#ffffff'; g.fillRect(0,0,adCanvas.width,2);
+  /* LED pitch: a fine dark grid so the strip reads as diodes, not paint.
+     Drawn in device pixels, so the diodes stay the same size on screen
+     however far the artwork is supersampled. */
+  g.setTransform(1,0,0,1,0,0);
+  const px = adCanvas.width, py = adCanvas.height;
+  g.globalAlpha=.18; g.fillStyle='#000000';
+  for(let x=0;x<px;x+=4*AD_SS) g.fillRect(x,0,AD_SS,py);
+  for(let y=0;y<py;y+=4*AD_SS) g.fillRect(0,y,px,AD_SS);
+  /* the top edge of a real board catches the floodlights */
+  g.globalAlpha=.14; g.fillStyle='#ffffff'; g.fillRect(0,0,px,2*AD_SS);
+  g.globalAlpha=.10; g.fillStyle='#000000'; g.fillRect(0,py-3*AD_SS,px,3*AD_SS);
   g.globalAlpha=1;
   return adCanvas;
 }
@@ -1917,6 +1781,66 @@ function buildTeams(){
   players.length = 0;
   for(let t=0;t<2;t++){ buildSquad(t); for(let i=0;i<11;i++) players.push(makePlayer(t,i)); }
 }
+
+/* =====================================================================
+   A SUBSTITUTION, PROPERLY MADE
+   ---------------------------------------------------------------------
+   The manager game makes the changes; this shows them. The man going
+   off is replaced where he stood by the man coming on, wearing his own
+   number, with his own attributes and his own build -- not a rename.
+   One of the substitutes warming up on the touchline stops warming up,
+   because he is the one who has just gone on.
+
+   Rebuilding one body costs a kit canvas; the geometry comes out of the
+   shared cache. Twice a half is nothing.
+   ===================================================================== */
+function substitutePlayer(team, offPid, coming){
+  const t = (team===1) ? 1 : 0;
+  const side = teamOf(t);
+  let p = offPid!=null ? side.find(x=>String(x.pid)===String(offPid)) : null;
+  /* nobody named, or he is not on the pitch: take the tiredest outfielder,
+     which is who a manager would be taking off anyway */
+  if(!p) p = side.filter(x=>!x.isGK).sort((a,b)=>a.stamina-b.stamina)[0];
+  if(!p || !coming) return null;
+
+  const T = TEAMS[t];
+  /* p.idx is the squad slot he was built from, which is the slot the man
+     coming on takes over */
+  const idx = p.idx;
+  const grp = SLOT_GROUP[coming.slot || p.slot] || 'M';
+  const a = ANTHRO[grp];
+  const h = coming.heightCm ? THREE.MathUtils.clamp(coming.heightCm,150,215)/100
+    : THREE.MathUtils.clamp(a.h + gauss()*a.hsd, 166, 203)/100;
+  const w = coming.weightKg ? THREE.MathUtils.clamp(coming.weightKg,45,130)
+    : THREE.MathUtils.clamp(a.w + gauss()*a.wsd, 58, 104);
+  const entry = {
+    pid: coming.id!=null ? String(coming.id) : (T.abbr+'-sub'+Math.floor(Math.random()*1e4)),
+    name: String(coming.name || 'SUBSTITUTE').toUpperCase(),
+    num: coming.number || coming.shirt || p.num,
+    slot: coming.slot || p.slot,
+    pos: new THREE.Vector2(p.home.x, p.home.y),
+    h, w, build: THREE.MathUtils.clamp(1 + (w/(h*h)-22.4)*0.030, 0.86, 1.15),
+    attrs: coming.attrs || p.attrs
+  };
+  if(!(idx>=0 && T.squad[idx])) return null;
+  T.squad[idx] = entry;
+
+  const where = p.pos.clone(), facing = p.face;
+  const at = players.indexOf(p);
+  scene.remove(p.mesh); disposeBody(p.body);
+  const made = makePlayer(t, idx);
+  if(at>=0) players[at] = made; else players.push(made);
+  made.pos.copy(where); made.face = facing; made.stamina = 100;
+  if(ball.owner===p) ball.owner = made;
+  if(S.lastTouch===p) S.lastTouch = made;
+
+  benchUsed(t);
+  lowerThird('SUB', made.name, p.name + '  ·  ' + (TEAMS[t].name||'') + '  ·  ' + clockLabel());
+  event('SUB', made.name + ' on for ' + p.name);
+  emit('substitution', {team:t, on:made.name, onPid:made.pid, off:p.name, offPid:p.pid,
+                        minute:clockLabel()});
+  return made;
+}
 /* Geometry is shared through the G() cache, so only materials and the
    per-player kit canvases are ours to release. */
 function disposeBody(b){
@@ -1956,6 +1880,136 @@ function makeOfficial(kind){
 officials.push(makeOfficial('ref'), makeOfficial('ar1'), makeOfficial('ar2'));
 officials[1].pos.set(-20, -(HALF_W+1.6));
 officials[2].pos.set( 20,  (HALF_W+1.6));
+
+/* =====================================================================
+   THE TECHNICAL AREAS
+   ---------------------------------------------------------------------
+   "the substitutes warm up and go out, the managers be on the touch
+    line, showing instructions"
+
+   Twenty-two players on an empty stage is the tell that a football game
+   is a football game. A real ground has two men in coats on the edge of
+   their boxes waving people forward, and four more in bibs jogging up
+   and down behind the assistant with their hands over their heads.
+
+   They live on the far touchline, which is the one the camera looks
+   across, so they are in shot behind the play rather than behind the
+   lens. They cost eight bodies on a stage that already carries
+   twenty-five, and they use the same rig and the same run cycle as the
+   players — no second animation path to keep working.
+   ===================================================================== */
+/* WHERE THEY ACTUALLY STAND. The first attempt put everybody at
+   HALF_W+3.4, which is within a metre of the advertising boards at
+   HALF_W+5 — from a low camera they merged into the artwork and could
+   not be seen at all. A real technical area is a metre outside the
+   touchline, the warm-up strip runs behind the assistant referee at
+   HALF_W+1.6, and the dugout itself is back against the boards. */
+const TOUCH_Z  = HALF_W + 1.35;        /* the technical area, by the line   */
+const WARM_Z   = HALF_W + 2.75;        /* the warm-up strip, behind the AR  */
+const DUGOUT_Z = HALF_W + 4.10;        /* the bench, back against the ads   */
+const bench = [];
+let benchTeams = [null, null];
+
+function coatKit(team){
+  const T = TEAMS[team] || {};
+  return {shirt:'#171a20', trim:T.shirt||'#888', shorts:'#0e1116', socks:'#0e1116',
+          sleeve:'#101319', pattern:'none', numberInk:'#c8cede'};
+}
+function bibKit(team){
+  const T = TEAMS[team] || {};
+  return {shirt:T.shirt||'#c33', trim:'#f2f5ff', shorts:T.shorts||'#111', socks:T.socks||'#111',
+          sleeve:T.trim||'#f2f5ff', pattern:'none', numberInk:'#ffffff'};
+}
+function makeBenchFigure(kind, team, seat){
+  const ph = physique(kind==='manager' ? 'GK' : 'M');
+  const body = buildBody(kind==='manager' ? coatKit(team) : bibKit(team), null, {
+    height: ph.h*(kind==='manager' ? 0.98 : 1),
+    build: ph.build*(kind==='manager' ? 1.08 : 1),
+    boot: kind==='manager' ? 0x14161b : 0x0c0c0e,
+    skin: SKIN[(Math.random()*SKIN.length)|0],
+    hair: HAIR[(Math.random()*HAIR.length)|0],
+    hairStyle: [0,1,2,4][(Math.random()*4)|0]
+  });
+  scene.add(body.group);
+  addContact(body, ph.h);
+  return { kind, team, seat, pos:new THREE.Vector2(0,TOUCH_Z), vel:new THREE.Vector2(),
+    face:-Math.PI/2, phase:Math.random()*TAU, H:ph.h, body, mesh:body.group,
+    kickAnim:0, lunge:0, dive:0, celeb:0, isGK:false, isBench:true,
+    idx: seat, point:0, pointArm: Math.random()<0.5 ? 0 : 1,
+    /* a warming-up substitute owns a stretch of touchline and runs it */
+    lane:0, way:1, next:1 + Math.random()*4 };
+}
+function buildTouchline(force){
+  /* The kits are the clubs', so this is rebuilt when the clubs change --
+     and always at the start of a match, because substitutions take
+     figures out of the warm-up group and the same two clubs meeting
+     again would otherwise kick off with a bench that is already short. */
+  if(!force && benchTeams[0]===(TEAMS[0]||{}).name
+     && benchTeams[1]===(TEAMS[1]||{}).name && bench.length) return;
+  for(const b of bench){ scene.remove(b.mesh); }
+  bench.length = 0;
+  for(let team=0; team<2; team++){
+    const side = team===0 ? -1 : 1;                    // one technical area each
+    const man = makeBenchFigure('manager', team, 0);
+    man.home = new THREE.Vector2(side*10.5, TOUCH_Z);
+    man.pos.copy(man.home);
+    bench.push(man);
+    for(let i=0;i<4;i++){
+      const sub = makeBenchFigure(i<2 ? 'warmup' : 'sub', team, i);
+      if(i<2){
+        /* the warm-up strip runs from the corner back toward halfway */
+        sub.lane = side*(26 + i*7);
+        sub.pos.set(sub.lane, WARM_Z + i*0.85);
+        sub.way = i%2 ? -1 : 1;
+      } else {
+        sub.home = new THREE.Vector2(side*(14.5 + (i-2)*1.7), DUGOUT_Z);
+        sub.pos.copy(sub.home);
+      }
+      bench.push(sub);
+    }
+  }
+  benchTeams = [(TEAMS[0]||{}).name, (TEAMS[1]||{}).name];
+}
+/* A substitute who has come on stops warming up: the group shrinks. */
+function benchUsed(team){
+  const warm = bench.filter(b=>b.team===team && b.kind==='warmup');
+  const last = warm[warm.length-1];
+  if(!last) return;
+  last.kind = 'gone'; last.mesh.visible = false;
+}
+function stepTouchline(dt){
+  if(!bench.length) return;
+  for(const b of bench){
+    if(b.kind==='gone') continue;
+    if(b.kind==='warmup'){
+      /* up and down his own stretch, turning at each end */
+      const span = 9;
+      const target = new THREE.Vector2(b.lane + b.way*span, b.pos.y);
+      if(Math.abs(b.pos.x - target.x) < 1.2) b.way *= -1;
+      movePlayerLite(b, target, dt, 4.2);
+      continue;
+    }
+    if(b.kind==='manager'){
+      /* he does not stand still: he works the edge of his box, and every
+         few seconds he is pointing somebody twenty yards further up */
+      b.next -= dt;
+      if(b.next<=0){
+        b.next = 2.5 + Math.random()*5;
+        b.point = 1.1 + Math.random()*0.8;
+        b.pointArm = Math.random()<0.5 ? 0 : 1;
+      }
+      const push = (ball.pos.x - b.home.x)*0.06;
+      const target = new THREE.Vector2(
+        THREE.MathUtils.clamp(b.home.x + push, b.home.x-7, b.home.x+7), b.home.y);
+      movePlayerLite(b, target, dt, 2.3);
+      /* facing the pitch, not the way he happens to be walking */
+      b.face = -Math.PI/2;
+      continue;
+    }
+    movePlayerLite(b, b.home, dt, 2.0);
+    b.face = -Math.PI/2;
+  }
+}
 
 /* ================== movement & animation ================== */
 function slotWorld(p){
@@ -2410,6 +2464,21 @@ function animate(p, dt){
     b.root.position.y = b.hipY - b.H*0.030;
   }
 
+  /* ---- a manager giving somebody instructions ----
+     Not the celebration pose: one arm out, pointing up the pitch, held
+     for a second or two and dropped. It is the single most recognisable
+     thing a man in a coat does on a touchline. */
+  if(p.point > 0){
+    const c = Math.min(1, p.point/0.35);
+    const j = Math.sin(t*4.5 + (p.seat||0))*0.16;
+    const arm = b.arms[p.pointArm||0];
+    arm.sh.rotation.x = lerp(arm.sh.rotation.x, -1.42 + j, c);
+    arm.sh.rotation.z = lerp(arm.sh.rotation.z, OUT(p.pointArm||0)*0.30, c);
+    arm.el.rotation.x = lerp(arm.el.rotation.x, -0.12, c);
+    b.torso.rotation.y = lerp(b.torso.rotation.y, OUT(p.pointArm||0)*-0.16, c);
+    p.point -= dt;
+  }
+
   /* ---- celebration ---- */
   if(p.celeb > 0){
     const c = Math.min(1, p.celeb/0.4);
@@ -2713,6 +2782,21 @@ function doShot(p, aimV, power, forced){
   kick(p, to.normalize(), speed, lift, curl, kind);
 }
 function clearance(p, panic){
+  /* IN HIS OWN SIX-YARD BOX, UNDER PRESSURE, HE PUTS IT OUT.
+     Every clearance used to go up the pitch, however desperate, which is
+     one of the reasons corners were so rare. A defender stretching for
+     one on his own goal line hooks it behind and takes the corner. */
+  if(panic && !p.isGK){
+    const line = S.dir[p.team]*-HALF_L;
+    if(Math.abs(p.pos.x-line) < CFG.PEN_D*0.72 && Math.random() < 0.30){
+      S.stats.corners[1-p.team]++;
+      S.lastTouch = p; p.cool = .35;
+      setRestart('corner', 1-p.team,
+        new THREE.Vector2(line, Math.sign(p.pos.y||1)*(HALF_W-.4)), 'CORNER');
+      event('CLEARANCE', p.name+' hacks it behind');
+      return;
+    }
+  }
   // a keeper with distribution picks a man; a panicking defender does not
   const acc = p.isGK ? A01(p,'distribution') : A01(p,'passing')*0.6;
   const spread = (panic ? 2.1 : 1.1) * (1.15 - acc*0.85);
@@ -2751,6 +2835,17 @@ function resolvePossession(){
     let score = d;
     if(p===owner) score -= .65;
     else if(owner && p.team===owner.team) score += .5;
+    /* WHO GETS THERE FIRST IS NOT ONLY WHO IS NEAREST.
+       This was pure geometry, and geometry is decided by the formation --
+       which is why a four-point gap in quality could be beaten by a
+       spare holding midfielder, and why the same two squads produced
+       12 wins out of 12 in one shape and 5 out of 12 in another. A
+       loose ball is a duel like any other: reading it, reacting to it
+       and getting a yard on the man beside you. It is worth about half
+       a metre of the 1.35m control radius between the best in the
+       division and the worst, so shape still matters -- it simply no
+       longer decides the match on its own. */
+    score -= (Amix(p,{positioning:1.3, decisions:1.0, acceleration:0.9, workRate:0.5}) - 0.5) * 1.05;
     if(SCRIPT.active && SCRIPT.stats && SCRIPT.stats.possession)
       score -= (possBias(p.team)-1)*9.0;             // 50-50s go the plan's way
     if(score<bestD){ bestD=score; best=p; }
@@ -2829,11 +2924,32 @@ function resolvePossession(){
         event('SAVE', best.name+' holds it');
         return;
       }
-      const away = -S.dir[best.team];              // parried behind, or blocked clear
+      /* BEHIND FOR A CORNER, WHICH IS WHERE THESE ACTUALLY GO.
+         This used to send every parry and every block back up the pitch,
+         so the only way to win a corner was a wayward pass — measured at
+         two corners in six matches, against about ten a game in real
+         football, and the ticker said "pushes it behind" while the ball
+         went the other way. A keeper at full stretch puts it round the
+         post most of the time; a defender throwing himself in front of
+         one deflects it over rather less often. */
+      const behind = Math.random() < (best.isGK ? 0.62 : 0.34);
+      if(behind){
+        const line = S.dir[best.team]*-HALF_L;      // the goal he is defending
+        const z = THREE.MathUtils.clamp(ball.pos.z + (Math.random()-.5)*6,
+                                        -(HALF_W-.4), HALF_W-.4);
+        S.stats.corners[1-best.team]++;
+        S.lastTouch = best; best.cool = .5;
+        setRestart('corner', 1-best.team,
+          new THREE.Vector2(line, Math.sign(z||1)*(HALF_W-.4)), 'CORNER');
+        event(best.isGK?'SAVE':'BLOCK',
+              best.name + (best.isGK?' turns it round the post':' deflects it behind'));
+        return;
+      }
+      const away = -S.dir[best.team];              // parried clear, back into play
       ball.vel.set(away*9, 2.6, (Math.random()-.5)*12);
       ball.cool = .45; best.cool = .5; S.lastTouch = best;
       event(best.isGK?'SAVE':'BLOCK',
-            best.name + (best.isGK?' pushes it behind':' throws himself in front'));
+            best.name + (best.isGK?' parries it clear':' throws himself in front'));
       return;
     }
     if(best.isGK && Math.random() < 0.35) event('SAVE', best.name+' gathers it');
@@ -3505,8 +3621,19 @@ function updateCamera(dt){
   LIGHTS.key.target.updateMatrixWorld();
 }
 
-/* ================== HUD ================== */
-const el = id=>document.getElementById(id);
+/* ================== HUD ==================
+   THE SCOREBOARD IS LOOKED UP INSIDE THE HOST, NOT THE DOCUMENT.
+   Upstream this was `document.getElementById`, which was right for a
+   page that is nothing but this engine. Here the stadium lives in a tab
+   that the manager game rebuilds whenever you look at another one — the
+   host is detached, not destroyed, so every id vanishes from the
+   document and the very next frame threw on `el('clock').textContent`.
+   The match froze in place while you were on the tactics screen, which
+   is exactly when it is supposed to still be being played.
+
+   `host` is held as a reference, so it can be searched whether or not it
+   is currently on the page. */
+const el = id => (host ? host.querySelector('#' + id) : document.getElementById(id));
 function paintBug(){
   const c = el('bugLogo'); if(!c) return;
   const g = c.getContext('2d');
@@ -3652,6 +3779,9 @@ function frame(now){
     let guard=0;
     while(acc>=CFG.DT && guard++<8){ tick(CFG.DT); acc-=CFG.DT; }
     stepOfficials(raw*liveSpeed);
+    /* the touchline runs on the real clock, not the match clock: a coach
+       does not pace twice as fast because you pressed 2x */
+    stepTouchline(raw);
   }
   updateCamera(raw); drawRadar(); updatePoss();
   if(lowerT>0){ lowerT-=raw; if(lowerT<=0){ el('lower').style.opacity=0; el('lower').classList.remove('show'); } }
@@ -3901,7 +4031,7 @@ window.Matchday = {
   loadSquads(cfg){
     cfg = cfg || {};
     applyTeam(0, cfg.home); applyTeam(1, cfg.away);
-    buildTeams(); S.squadsDirty = false;
+    buildTeams(); buildTouchline(true); S.squadsDirty = false;
     paintBoard();
     S.phase = 'menu'; S.running = false;
     kickoff(0);
@@ -3925,6 +4055,19 @@ window.Matchday = {
      divingheader). `stats` is optional and steers rather than clamps. */
   playScript(plan){ loadScript(plan); return this; },
   clearScript(){ clearScript(); return this; },
+  /* Make a substitution the crowd can see.
+
+       Matchday.substitute({ team:0, offPid:'123',
+         on:{ id:'456', name:'Mainoo', number:37, slot:'MC',
+              heightCm:180, weightKg:73, attrs:{...} } });
+
+     The man coming on takes the place of the man going off, in his own
+     shirt, and one of the substitutes warming up on that touchline is
+     taken out of the group. */
+  substitute(spec){
+    if(!spec) return null;
+    return substitutePlayer(spec.team, spec.offPid, spec.on || spec.player);
+  },
   /* PLAY A WHOLE MATCH WITHOUT DRAWING IT.
      The frame loop caps at eight sub-steps a frame, so how fast a match
      can run is bound by the frame rate — on a slow renderer ninety
@@ -3969,7 +4112,11 @@ window.Matchday = {
       teams:[TEAMS[0].name, TEAMS[1].name],
       possession:[Math.round(S.stats.poss[0]/t*100), Math.round(S.stats.poss[1]/t*100)],
       shots:S.stats.shots.slice(), onTarget:S.stats.onTarget.slice(),
-      corners:S.stats.corners.slice(), pitch:PITCH.cut.id };
+      corners:S.stats.corners.slice(), pitch:PITCH.cut.id,
+      /* who else is out there — the officials and the two technical
+         areas, so a test can prove the touchline is populated */
+      crew:{ officials:officials.length, bench:bench.filter(b=>b.kind!=='gone').length,
+             benchAt:bench.slice(0,3).map(b=>b.kind+':'+b.pos.x.toFixed(1)+','+b.pos.y.toFixed(1)) } };
   }
 };
 
@@ -3978,9 +4125,72 @@ paintBoard();
 kickoff(0);
 for(const p of players) animate(p, 0);
 for(const o of officials) animateLite(o);
+buildTouchline();
+for(const b of bench) animateLite(b);
 updateBoard();
 el('load').classList.add('off');
 requestAnimationFrame(frame);
-</script>
-</body>
-</html>
+  }
+
+  /* THREE HAS TO BE FETCHED, AND USED TO BE SOMEBODY ELSE'S JOB.
+     The old 3D dugout lazy-loaded it and this engine simply assumed it
+     was there; deleting that dugout took the loader with it, so the
+     broadcast silently never booted and the tab fell back to the 2D
+     renderer. It loads its own dependency now. */
+  var loading = false, loadFailed = false, bootFailed = false;
+  function ensureThree() {
+    if (typeof THREE !== 'undefined') return true;
+    if (loadFailed || loading) return false;
+    loading = true;
+    try {
+      var tag = document.createElement('script');
+      tag.src = (typeof window.THREE_LOCAL === 'string') ? window.THREE_LOCAL : 'vendor/three.min.js';
+      tag.async = false;
+      tag.onload = function () { loading = false; };
+      tag.onerror = function () { loading = false; loadFailed = true; };
+      document.head.appendChild(tag);
+    } catch (error) { loading = false; loadFailed = true; }
+    return false;
+  }
+
+  window.RBSMatchday = {
+    /* Build it once, into the element the dugout hands us. */
+    mount: function (el) {
+      if (!el) return null;
+      if (booted) {
+        if (host && host.parentNode !== el) el.appendChild(host);
+        return window.Matchday || null;
+      }
+      /* not ready yet is not the same as broken: the dugout calls this
+         every frame, so it boots on whichever call finds THREE there.
+         Broken, though, is final — see bootFailed below. */
+      if (bootFailed) return null;
+      if (!ensureThree()) return null;
+      host = document.createElement('div');
+      host.id = 'mdHost';
+      host.style.cssText = 'width:100%;height:100%';
+      host.innerHTML = MARKUP;
+      el.appendChild(host);
+      inject();
+      try { boot(); booted = true; } catch (error) {
+        /* A DEVICE WITH NO WebGL FAILS HERE, AND FAILS FOR GOOD.
+           This used to swallow the error and return null, which the
+           dugout reads as "not ready yet" — so it rebuilt the host and
+           ran the whole boot again on every frame, and waited twelve
+           seconds before handing the match back to the 2D renderer.
+           Measured with WebGL switched off in Chromium. */
+        try { if (host.parentNode) host.parentNode.removeChild(host); } catch (e2) { /* gone */ }
+        host = null; bootFailed = true;
+        return null;
+      }
+      return window.Matchday || null;
+    },
+    booted: function () { return booted; },
+    waiting: function () { return loading; },
+    unavailable: function () { return loadFailed || bootFailed; },
+    host: function () { return host; },
+    resize: function () {
+      try { window.dispatchEvent(new Event('resize')); } catch (error) { /* no window */ }
+    }
+  };
+}());
