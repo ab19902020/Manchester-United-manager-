@@ -1,7 +1,8 @@
-const CACHE_NAME = 'results-business-v32';
+const CACHE_NAME = 'results-business-v33';
 const CORE_ASSETS = [
   './',
   './index.html',
+  './matchday.html',
   './red-devil-manager.html',
   './manifest.webmanifest',
   './src/simulation-model.js',
