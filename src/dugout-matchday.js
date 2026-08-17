@@ -60,11 +60,22 @@
   const FRAME_ID = 'mdFrame';
   const SRC = 'matchday.html';
 
+  /* HOW LONG THE FRAME GETS BEFORE WE GIVE UP ON IT.
+     The first version waited for `contentWindow.Matchday` for ever, and
+     "for ever" is a real state: a device with no WebGL loads the page,
+     its renderer throws on construction, the script dies and the API is
+     never defined. The dugout would then sit blank until you left it,
+     with the tested 2D renderer sitting right there unused. Six seconds
+     is far longer than a local file needs and short enough that nobody
+     stares at nothing. */
+  const PATIENCE = 6000;
+
   const state = {
     fixture: null,      /* the fixture the frame is currently showing   */
     started: false,
     failed: false,
     lastSpeed: 0,
+    mountedAt: 0,
   };
 
   const num = (v, d) => (Number.isFinite(+v) ? +v : d);
@@ -190,13 +201,19 @@
       f.style.cssText = 'display:block;width:100%;height:100%;min-height:200px;'
         + 'border:0;background:#03050d';
       host.appendChild(f);
+      state.mountedAt = Date.now();
     }
     return f;
   }
 
   function drive() {
     const md = api();
-    if (!md) return false;
+    if (!md) {
+      /* it has had long enough; hand the tab back to the 2D renderer
+         rather than leave a blank rectangle over the match */
+      if (state.mountedAt && Date.now() - state.mountedAt > PATIENCE) state.failed = true;
+      return false;
+    }
     const match = MU && MU.m;
     const fixture = MU && MU.fix;
     if (!match || !fixture) return false;
@@ -238,6 +255,7 @@
           const old = frame();
           if (old && old.parentElement) old.parentElement.removeChild(old);
           state.fixture = null; state.started = false; state.failed = false;
+          state.mountedAt = 0;
         }
 
         if (state.failed) return previous.apply(this, arguments);
@@ -245,7 +263,12 @@
         const f = mount();
         if (!f) return previous.apply(this, arguments);
 
-        if (!state.started) { drive(); return undefined; }
+        if (!state.started) {
+          drive();
+          /* while it is coming up, and for good if it never does, the
+             2D renderer keeps drawing underneath */
+          return previous.apply(this, arguments);
+        }
 
         /* keep the broadcast at the speed the match controls are set to */
         const want = num(MU.speed, 1) || 1;

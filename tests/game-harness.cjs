@@ -36,7 +36,6 @@ function gameHtml() {
     'src/boardroom.js',
     'src/match-ratings.js',
     'src/dugout-renderer.js',
-    'src/dugout-3d.js',
     'src/contract-score.js',
     'src/squad-identity.js',
     'src/dugout-drama.js',
