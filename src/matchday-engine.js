@@ -621,7 +621,15 @@ function drawBrandLogo(g, cx, cy, s){
 
 /* Each creative paints into its own SEG-wide slot on one long strip. The
    strip scrolls behind the goal-line boards exactly like a real LED rig. */
-const AD_SEG = 512, AD_H = 128;
+/* THE BOARDS, AT THE RESOLUTION THEY ARE ACTUALLY SEEN AT.
+   Every creative is drawn in a 512x128 panel, which is the right shape
+   and the wrong number of pixels: the low touchline camera puts the
+   near boards a few metres from the lens, where 512 across reads as a
+   blurred smear behind the play. The panels are still authored at
+   512x128 -- the strip is simply rendered at twice that and the
+   context scaled, so the type has edges and none of the artwork had to
+   be re-measured. */
+const AD_SEG = 512, AD_H = 128, AD_SS = 2;
 const CREATIVES = [
   function unitedRoad(g,x){
     const gr=g.createLinearGradient(x,0,x+AD_SEG,AD_H);
@@ -688,29 +696,46 @@ const CREATIVES = [
     g.fillStyle=BRAND.gold; g.font='bold 23px Arial,sans-serif';
     g.fillText(BRAND.domain, x+AD_SEG-26, AD_H/2+24);
   },
-  function nova(g,x){    adFiller(g,x,'NOVA ENERGY','#0b2a7a','#e9ff4a'); },
-  function kestrel(g,x){ adFiller(g,x,'KESTREL AIR','#111318','#ff5252'); },
-  function meridian(g,x){adFiller(g,x,'MERIDIAN BANK','#3a1060','#9fe8ff'); }
+  function nova(g,x){    adFiller(g,x,'NOVA ENERGY','#0b2a7a','#e9ff4a','POWERING THE NORTH'); },
+  function kestrel(g,x){ adFiller(g,x,'KESTREL AIR','#111318','#ff5252','FLY THE RED TAIL'); },
+  function meridian(g,x){adFiller(g,x,'MERIDIAN BANK','#3a1060','#9fe8ff','SINCE 1874'); },
+  function harrow(g,x){  adFiller(g,x,'HARROWGATE ALES','#20120a','#f0b64a','BREWED MATCHDAY'); },
+  function saltmark(g,x){adFiller(g,x,'SALTMARK TYRES','#0d1512','#7dffb0','GRIP, WHATEVER THE WEATHER'); },
+  function orbit(g,x){   adFiller(g,x,'ORBIT SPORTSWEAR','#141416','#ffffff','OFFICIAL KIT PARTNER'); }
 ];
-function adFiller(g,x,text,bg,ink){
+function adFiller(g,x,text,bg,ink,strap){
   g.fillStyle=bg; g.fillRect(x,0,AD_SEG,AD_H);
   g.fillStyle='rgba(255,255,255,.06)'; g.fillRect(x,0,AD_SEG,34);
+  /* a bar of the sponsor's own colour, so one board is not another */
+  g.fillStyle=ink; g.globalAlpha=.85; g.fillRect(x,AD_H-7,AD_SEG,7); g.globalAlpha=1;
   g.textAlign='center'; g.textBaseline='middle';
-  g.fillStyle=ink; g.font='bold 54px "Arial Narrow",Arial,sans-serif';
-  g.fillText(text, x+AD_SEG/2, AD_H/2);
+  g.fillStyle=ink; g.font='bold '+(strap?50:54)+'px "Arial Narrow",Arial,sans-serif';
+  g.fillText(text, x+AD_SEG/2, AD_H/2 - (strap?12:0));
+  if(strap){
+    g.fillStyle='rgba(255,255,255,.62)'; g.font='bold 19px Arial,sans-serif';
+    g.fillText(strap, x+AD_SEG/2, AD_H/2+26);
+  }
 }
 
 let adCanvas = null;
 function paintAds(){
-  if(!adCanvas) adCanvas = cv(AD_SEG*CREATIVES.length, AD_H);
+  const W = AD_SEG*CREATIVES.length;
+  if(!adCanvas) adCanvas = cv(W*AD_SS, AD_H*AD_SS);
   const g = adCanvas.getContext('2d');
-  g.clearRect(0,0,adCanvas.width,AD_H);
+  g.setTransform(AD_SS,0,0,AD_SS,0,0);
+  g.clearRect(0,0,W,AD_H);
   CREATIVES.forEach((fn,i)=>{ g.save(); fn(g, i*AD_SEG); g.restore(); });
-  // LED pitch: a fine dark grid so the strip reads as diodes, not paint
-  g.globalAlpha=.20; g.fillStyle='#000000';
-  for(let x=0;x<adCanvas.width;x+=4) g.fillRect(x,0,1,AD_H);
-  for(let y=0;y<AD_H;y+=4) g.fillRect(0,y,adCanvas.width,1);
-  g.globalAlpha=.12; g.fillStyle='#ffffff'; g.fillRect(0,0,adCanvas.width,2);
+  /* LED pitch: a fine dark grid so the strip reads as diodes, not paint.
+     Drawn in device pixels, so the diodes stay the same size on screen
+     however far the artwork is supersampled. */
+  g.setTransform(1,0,0,1,0,0);
+  const px = adCanvas.width, py = adCanvas.height;
+  g.globalAlpha=.18; g.fillStyle='#000000';
+  for(let x=0;x<px;x+=4*AD_SS) g.fillRect(x,0,AD_SS,py);
+  for(let y=0;y<py;y+=4*AD_SS) g.fillRect(0,y,px,AD_SS);
+  /* the top edge of a real board catches the floodlights */
+  g.globalAlpha=.14; g.fillStyle='#ffffff'; g.fillRect(0,0,px,2*AD_SS);
+  g.globalAlpha=.10; g.fillStyle='#000000'; g.fillRect(0,py-3*AD_SS,px,3*AD_SS);
   g.globalAlpha=1;
   return adCanvas;
 }
@@ -1756,6 +1781,66 @@ function buildTeams(){
   players.length = 0;
   for(let t=0;t<2;t++){ buildSquad(t); for(let i=0;i<11;i++) players.push(makePlayer(t,i)); }
 }
+
+/* =====================================================================
+   A SUBSTITUTION, PROPERLY MADE
+   ---------------------------------------------------------------------
+   The manager game makes the changes; this shows them. The man going
+   off is replaced where he stood by the man coming on, wearing his own
+   number, with his own attributes and his own build -- not a rename.
+   One of the substitutes warming up on the touchline stops warming up,
+   because he is the one who has just gone on.
+
+   Rebuilding one body costs a kit canvas; the geometry comes out of the
+   shared cache. Twice a half is nothing.
+   ===================================================================== */
+function substitutePlayer(team, offPid, coming){
+  const t = (team===1) ? 1 : 0;
+  const side = teamOf(t);
+  let p = offPid!=null ? side.find(x=>String(x.pid)===String(offPid)) : null;
+  /* nobody named, or he is not on the pitch: take the tiredest outfielder,
+     which is who a manager would be taking off anyway */
+  if(!p) p = side.filter(x=>!x.isGK).sort((a,b)=>a.stamina-b.stamina)[0];
+  if(!p || !coming) return null;
+
+  const T = TEAMS[t];
+  /* p.idx is the squad slot he was built from, which is the slot the man
+     coming on takes over */
+  const idx = p.idx;
+  const grp = SLOT_GROUP[coming.slot || p.slot] || 'M';
+  const a = ANTHRO[grp];
+  const h = coming.heightCm ? THREE.MathUtils.clamp(coming.heightCm,150,215)/100
+    : THREE.MathUtils.clamp(a.h + gauss()*a.hsd, 166, 203)/100;
+  const w = coming.weightKg ? THREE.MathUtils.clamp(coming.weightKg,45,130)
+    : THREE.MathUtils.clamp(a.w + gauss()*a.wsd, 58, 104);
+  const entry = {
+    pid: coming.id!=null ? String(coming.id) : (T.abbr+'-sub'+Math.floor(Math.random()*1e4)),
+    name: String(coming.name || 'SUBSTITUTE').toUpperCase(),
+    num: coming.number || coming.shirt || p.num,
+    slot: coming.slot || p.slot,
+    pos: new THREE.Vector2(p.home.x, p.home.y),
+    h, w, build: THREE.MathUtils.clamp(1 + (w/(h*h)-22.4)*0.030, 0.86, 1.15),
+    attrs: coming.attrs || p.attrs
+  };
+  if(!(idx>=0 && T.squad[idx])) return null;
+  T.squad[idx] = entry;
+
+  const where = p.pos.clone(), facing = p.face;
+  const at = players.indexOf(p);
+  scene.remove(p.mesh); disposeBody(p.body);
+  const made = makePlayer(t, idx);
+  if(at>=0) players[at] = made; else players.push(made);
+  made.pos.copy(where); made.face = facing; made.stamina = 100;
+  if(ball.owner===p) ball.owner = made;
+  if(S.lastTouch===p) S.lastTouch = made;
+
+  benchUsed(t);
+  lowerThird('SUB', made.name, p.name + '  ·  ' + (TEAMS[t].name||'') + '  ·  ' + clockLabel());
+  event('SUB', made.name + ' on for ' + p.name);
+  emit('substitution', {team:t, on:made.name, onPid:made.pid, off:p.name, offPid:p.pid,
+                        minute:clockLabel()});
+  return made;
+}
 /* Geometry is shared through the G() cache, so only materials and the
    per-player kit canvases are ours to release. */
 function disposeBody(b){
@@ -1795,6 +1880,136 @@ function makeOfficial(kind){
 officials.push(makeOfficial('ref'), makeOfficial('ar1'), makeOfficial('ar2'));
 officials[1].pos.set(-20, -(HALF_W+1.6));
 officials[2].pos.set( 20,  (HALF_W+1.6));
+
+/* =====================================================================
+   THE TECHNICAL AREAS
+   ---------------------------------------------------------------------
+   "the substitutes warm up and go out, the managers be on the touch
+    line, showing instructions"
+
+   Twenty-two players on an empty stage is the tell that a football game
+   is a football game. A real ground has two men in coats on the edge of
+   their boxes waving people forward, and four more in bibs jogging up
+   and down behind the assistant with their hands over their heads.
+
+   They live on the far touchline, which is the one the camera looks
+   across, so they are in shot behind the play rather than behind the
+   lens. They cost eight bodies on a stage that already carries
+   twenty-five, and they use the same rig and the same run cycle as the
+   players — no second animation path to keep working.
+   ===================================================================== */
+/* WHERE THEY ACTUALLY STAND. The first attempt put everybody at
+   HALF_W+3.4, which is within a metre of the advertising boards at
+   HALF_W+5 — from a low camera they merged into the artwork and could
+   not be seen at all. A real technical area is a metre outside the
+   touchline, the warm-up strip runs behind the assistant referee at
+   HALF_W+1.6, and the dugout itself is back against the boards. */
+const TOUCH_Z  = HALF_W + 1.35;        /* the technical area, by the line   */
+const WARM_Z   = HALF_W + 2.75;        /* the warm-up strip, behind the AR  */
+const DUGOUT_Z = HALF_W + 4.10;        /* the bench, back against the ads   */
+const bench = [];
+let benchTeams = [null, null];
+
+function coatKit(team){
+  const T = TEAMS[team] || {};
+  return {shirt:'#171a20', trim:T.shirt||'#888', shorts:'#0e1116', socks:'#0e1116',
+          sleeve:'#101319', pattern:'none', numberInk:'#c8cede'};
+}
+function bibKit(team){
+  const T = TEAMS[team] || {};
+  return {shirt:T.shirt||'#c33', trim:'#f2f5ff', shorts:T.shorts||'#111', socks:T.socks||'#111',
+          sleeve:T.trim||'#f2f5ff', pattern:'none', numberInk:'#ffffff'};
+}
+function makeBenchFigure(kind, team, seat){
+  const ph = physique(kind==='manager' ? 'GK' : 'M');
+  const body = buildBody(kind==='manager' ? coatKit(team) : bibKit(team), null, {
+    height: ph.h*(kind==='manager' ? 0.98 : 1),
+    build: ph.build*(kind==='manager' ? 1.08 : 1),
+    boot: kind==='manager' ? 0x14161b : 0x0c0c0e,
+    skin: SKIN[(Math.random()*SKIN.length)|0],
+    hair: HAIR[(Math.random()*HAIR.length)|0],
+    hairStyle: [0,1,2,4][(Math.random()*4)|0]
+  });
+  scene.add(body.group);
+  addContact(body, ph.h);
+  return { kind, team, seat, pos:new THREE.Vector2(0,TOUCH_Z), vel:new THREE.Vector2(),
+    face:-Math.PI/2, phase:Math.random()*TAU, H:ph.h, body, mesh:body.group,
+    kickAnim:0, lunge:0, dive:0, celeb:0, isGK:false, isBench:true,
+    idx: seat, point:0, pointArm: Math.random()<0.5 ? 0 : 1,
+    /* a warming-up substitute owns a stretch of touchline and runs it */
+    lane:0, way:1, next:1 + Math.random()*4 };
+}
+function buildTouchline(force){
+  /* The kits are the clubs', so this is rebuilt when the clubs change --
+     and always at the start of a match, because substitutions take
+     figures out of the warm-up group and the same two clubs meeting
+     again would otherwise kick off with a bench that is already short. */
+  if(!force && benchTeams[0]===(TEAMS[0]||{}).name
+     && benchTeams[1]===(TEAMS[1]||{}).name && bench.length) return;
+  for(const b of bench){ scene.remove(b.mesh); }
+  bench.length = 0;
+  for(let team=0; team<2; team++){
+    const side = team===0 ? -1 : 1;                    // one technical area each
+    const man = makeBenchFigure('manager', team, 0);
+    man.home = new THREE.Vector2(side*10.5, TOUCH_Z);
+    man.pos.copy(man.home);
+    bench.push(man);
+    for(let i=0;i<4;i++){
+      const sub = makeBenchFigure(i<2 ? 'warmup' : 'sub', team, i);
+      if(i<2){
+        /* the warm-up strip runs from the corner back toward halfway */
+        sub.lane = side*(26 + i*7);
+        sub.pos.set(sub.lane, WARM_Z + i*0.85);
+        sub.way = i%2 ? -1 : 1;
+      } else {
+        sub.home = new THREE.Vector2(side*(14.5 + (i-2)*1.7), DUGOUT_Z);
+        sub.pos.copy(sub.home);
+      }
+      bench.push(sub);
+    }
+  }
+  benchTeams = [(TEAMS[0]||{}).name, (TEAMS[1]||{}).name];
+}
+/* A substitute who has come on stops warming up: the group shrinks. */
+function benchUsed(team){
+  const warm = bench.filter(b=>b.team===team && b.kind==='warmup');
+  const last = warm[warm.length-1];
+  if(!last) return;
+  last.kind = 'gone'; last.mesh.visible = false;
+}
+function stepTouchline(dt){
+  if(!bench.length) return;
+  for(const b of bench){
+    if(b.kind==='gone') continue;
+    if(b.kind==='warmup'){
+      /* up and down his own stretch, turning at each end */
+      const span = 9;
+      const target = new THREE.Vector2(b.lane + b.way*span, b.pos.y);
+      if(Math.abs(b.pos.x - target.x) < 1.2) b.way *= -1;
+      movePlayerLite(b, target, dt, 4.2);
+      continue;
+    }
+    if(b.kind==='manager'){
+      /* he does not stand still: he works the edge of his box, and every
+         few seconds he is pointing somebody twenty yards further up */
+      b.next -= dt;
+      if(b.next<=0){
+        b.next = 2.5 + Math.random()*5;
+        b.point = 1.1 + Math.random()*0.8;
+        b.pointArm = Math.random()<0.5 ? 0 : 1;
+      }
+      const push = (ball.pos.x - b.home.x)*0.06;
+      const target = new THREE.Vector2(
+        THREE.MathUtils.clamp(b.home.x + push, b.home.x-7, b.home.x+7), b.home.y);
+      movePlayerLite(b, target, dt, 2.3);
+      /* facing the pitch, not the way he happens to be walking */
+      b.face = -Math.PI/2;
+      continue;
+    }
+    movePlayerLite(b, b.home, dt, 2.0);
+    b.face = -Math.PI/2;
+  }
+}
 
 /* ================== movement & animation ================== */
 function slotWorld(p){
@@ -2249,6 +2464,21 @@ function animate(p, dt){
     b.root.position.y = b.hipY - b.H*0.030;
   }
 
+  /* ---- a manager giving somebody instructions ----
+     Not the celebration pose: one arm out, pointing up the pitch, held
+     for a second or two and dropped. It is the single most recognisable
+     thing a man in a coat does on a touchline. */
+  if(p.point > 0){
+    const c = Math.min(1, p.point/0.35);
+    const j = Math.sin(t*4.5 + (p.seat||0))*0.16;
+    const arm = b.arms[p.pointArm||0];
+    arm.sh.rotation.x = lerp(arm.sh.rotation.x, -1.42 + j, c);
+    arm.sh.rotation.z = lerp(arm.sh.rotation.z, OUT(p.pointArm||0)*0.30, c);
+    arm.el.rotation.x = lerp(arm.el.rotation.x, -0.12, c);
+    b.torso.rotation.y = lerp(b.torso.rotation.y, OUT(p.pointArm||0)*-0.16, c);
+    p.point -= dt;
+  }
+
   /* ---- celebration ---- */
   if(p.celeb > 0){
     const c = Math.min(1, p.celeb/0.4);
@@ -2552,6 +2782,21 @@ function doShot(p, aimV, power, forced){
   kick(p, to.normalize(), speed, lift, curl, kind);
 }
 function clearance(p, panic){
+  /* IN HIS OWN SIX-YARD BOX, UNDER PRESSURE, HE PUTS IT OUT.
+     Every clearance used to go up the pitch, however desperate, which is
+     one of the reasons corners were so rare. A defender stretching for
+     one on his own goal line hooks it behind and takes the corner. */
+  if(panic && !p.isGK){
+    const line = S.dir[p.team]*-HALF_L;
+    if(Math.abs(p.pos.x-line) < CFG.PEN_D*0.72 && Math.random() < 0.30){
+      S.stats.corners[1-p.team]++;
+      S.lastTouch = p; p.cool = .35;
+      setRestart('corner', 1-p.team,
+        new THREE.Vector2(line, Math.sign(p.pos.y||1)*(HALF_W-.4)), 'CORNER');
+      event('CLEARANCE', p.name+' hacks it behind');
+      return;
+    }
+  }
   // a keeper with distribution picks a man; a panicking defender does not
   const acc = p.isGK ? A01(p,'distribution') : A01(p,'passing')*0.6;
   const spread = (panic ? 2.1 : 1.1) * (1.15 - acc*0.85);
@@ -2590,6 +2835,17 @@ function resolvePossession(){
     let score = d;
     if(p===owner) score -= .65;
     else if(owner && p.team===owner.team) score += .5;
+    /* WHO GETS THERE FIRST IS NOT ONLY WHO IS NEAREST.
+       This was pure geometry, and geometry is decided by the formation --
+       which is why a four-point gap in quality could be beaten by a
+       spare holding midfielder, and why the same two squads produced
+       12 wins out of 12 in one shape and 5 out of 12 in another. A
+       loose ball is a duel like any other: reading it, reacting to it
+       and getting a yard on the man beside you. It is worth about half
+       a metre of the 1.35m control radius between the best in the
+       division and the worst, so shape still matters -- it simply no
+       longer decides the match on its own. */
+    score -= (Amix(p,{positioning:1.3, decisions:1.0, acceleration:0.9, workRate:0.5}) - 0.5) * 1.05;
     if(SCRIPT.active && SCRIPT.stats && SCRIPT.stats.possession)
       score -= (possBias(p.team)-1)*9.0;             // 50-50s go the plan's way
     if(score<bestD){ bestD=score; best=p; }
@@ -2668,11 +2924,32 @@ function resolvePossession(){
         event('SAVE', best.name+' holds it');
         return;
       }
-      const away = -S.dir[best.team];              // parried behind, or blocked clear
+      /* BEHIND FOR A CORNER, WHICH IS WHERE THESE ACTUALLY GO.
+         This used to send every parry and every block back up the pitch,
+         so the only way to win a corner was a wayward pass — measured at
+         two corners in six matches, against about ten a game in real
+         football, and the ticker said "pushes it behind" while the ball
+         went the other way. A keeper at full stretch puts it round the
+         post most of the time; a defender throwing himself in front of
+         one deflects it over rather less often. */
+      const behind = Math.random() < (best.isGK ? 0.62 : 0.34);
+      if(behind){
+        const line = S.dir[best.team]*-HALF_L;      // the goal he is defending
+        const z = THREE.MathUtils.clamp(ball.pos.z + (Math.random()-.5)*6,
+                                        -(HALF_W-.4), HALF_W-.4);
+        S.stats.corners[1-best.team]++;
+        S.lastTouch = best; best.cool = .5;
+        setRestart('corner', 1-best.team,
+          new THREE.Vector2(line, Math.sign(z||1)*(HALF_W-.4)), 'CORNER');
+        event(best.isGK?'SAVE':'BLOCK',
+              best.name + (best.isGK?' turns it round the post':' deflects it behind'));
+        return;
+      }
+      const away = -S.dir[best.team];              // parried clear, back into play
       ball.vel.set(away*9, 2.6, (Math.random()-.5)*12);
       ball.cool = .45; best.cool = .5; S.lastTouch = best;
       event(best.isGK?'SAVE':'BLOCK',
-            best.name + (best.isGK?' pushes it behind':' throws himself in front'));
+            best.name + (best.isGK?' parries it clear':' throws himself in front'));
       return;
     }
     if(best.isGK && Math.random() < 0.35) event('SAVE', best.name+' gathers it');
@@ -3502,6 +3779,9 @@ function frame(now){
     let guard=0;
     while(acc>=CFG.DT && guard++<8){ tick(CFG.DT); acc-=CFG.DT; }
     stepOfficials(raw*liveSpeed);
+    /* the touchline runs on the real clock, not the match clock: a coach
+       does not pace twice as fast because you pressed 2x */
+    stepTouchline(raw);
   }
   updateCamera(raw); drawRadar(); updatePoss();
   if(lowerT>0){ lowerT-=raw; if(lowerT<=0){ el('lower').style.opacity=0; el('lower').classList.remove('show'); } }
@@ -3751,7 +4031,7 @@ window.Matchday = {
   loadSquads(cfg){
     cfg = cfg || {};
     applyTeam(0, cfg.home); applyTeam(1, cfg.away);
-    buildTeams(); S.squadsDirty = false;
+    buildTeams(); buildTouchline(true); S.squadsDirty = false;
     paintBoard();
     S.phase = 'menu'; S.running = false;
     kickoff(0);
@@ -3775,6 +4055,19 @@ window.Matchday = {
      divingheader). `stats` is optional and steers rather than clamps. */
   playScript(plan){ loadScript(plan); return this; },
   clearScript(){ clearScript(); return this; },
+  /* Make a substitution the crowd can see.
+
+       Matchday.substitute({ team:0, offPid:'123',
+         on:{ id:'456', name:'Mainoo', number:37, slot:'MC',
+              heightCm:180, weightKg:73, attrs:{...} } });
+
+     The man coming on takes the place of the man going off, in his own
+     shirt, and one of the substitutes warming up on that touchline is
+     taken out of the group. */
+  substitute(spec){
+    if(!spec) return null;
+    return substitutePlayer(spec.team, spec.offPid, spec.on || spec.player);
+  },
   /* PLAY A WHOLE MATCH WITHOUT DRAWING IT.
      The frame loop caps at eight sub-steps a frame, so how fast a match
      can run is bound by the frame rate — on a slow renderer ninety
@@ -3819,7 +4112,11 @@ window.Matchday = {
       teams:[TEAMS[0].name, TEAMS[1].name],
       possession:[Math.round(S.stats.poss[0]/t*100), Math.round(S.stats.poss[1]/t*100)],
       shots:S.stats.shots.slice(), onTarget:S.stats.onTarget.slice(),
-      corners:S.stats.corners.slice(), pitch:PITCH.cut.id };
+      corners:S.stats.corners.slice(), pitch:PITCH.cut.id,
+      /* who else is out there — the officials and the two technical
+         areas, so a test can prove the touchline is populated */
+      crew:{ officials:officials.length, bench:bench.filter(b=>b.kind!=='gone').length,
+             benchAt:bench.slice(0,3).map(b=>b.kind+':'+b.pos.x.toFixed(1)+','+b.pos.y.toFixed(1)) } };
   }
 };
 
@@ -3828,6 +4125,8 @@ paintBoard();
 kickoff(0);
 for(const p of players) animate(p, 0);
 for(const o of officials) animateLite(o);
+buildTouchline();
+for(const b of bench) animateLite(b);
 updateBoard();
 el('load').classList.add('off');
 requestAnimationFrame(frame);
@@ -3838,7 +4137,7 @@ requestAnimationFrame(frame);
      was there; deleting that dugout took the loader with it, so the
      broadcast silently never booted and the tab fell back to the 2D
      renderer. It loads its own dependency now. */
-  var loading = false, loadFailed = false;
+  var loading = false, loadFailed = false, bootFailed = false;
   function ensureThree() {
     if (typeof THREE !== 'undefined') return true;
     if (loadFailed || loading) return false;
@@ -3863,7 +4162,9 @@ requestAnimationFrame(frame);
         return window.Matchday || null;
       }
       /* not ready yet is not the same as broken: the dugout calls this
-         every frame, so it boots on whichever call finds THREE there */
+         every frame, so it boots on whichever call finds THREE there.
+         Broken, though, is final — see bootFailed below. */
+      if (bootFailed) return null;
       if (!ensureThree()) return null;
       host = document.createElement('div');
       host.id = 'mdHost';
@@ -3872,15 +4173,21 @@ requestAnimationFrame(frame);
       el.appendChild(host);
       inject();
       try { boot(); booted = true; } catch (error) {
+        /* A DEVICE WITH NO WebGL FAILS HERE, AND FAILS FOR GOOD.
+           This used to swallow the error and return null, which the
+           dugout reads as "not ready yet" — so it rebuilt the host and
+           ran the whole boot again on every frame, and waited twelve
+           seconds before handing the match back to the 2D renderer.
+           Measured with WebGL switched off in Chromium. */
         try { if (host.parentNode) host.parentNode.removeChild(host); } catch (e2) { /* gone */ }
-        host = null;
+        host = null; bootFailed = true;
         return null;
       }
       return window.Matchday || null;
     },
     booted: function () { return booted; },
     waiting: function () { return loading; },
-    unavailable: function () { return loadFailed; },
+    unavailable: function () { return loadFailed || bootFailed; },
     host: function () { return host; },
     resize: function () {
       try { window.dispatchEvent(new Event('resize')); } catch (error) { /* no window */ }

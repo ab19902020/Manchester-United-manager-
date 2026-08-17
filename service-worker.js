@@ -1,4 +1,4 @@
-const CACHE_NAME = 'results-business-v35';
+const CACHE_NAME = 'results-business-v36';
 const CORE_ASSETS = [
   './',
   './index.html',
