@@ -167,6 +167,17 @@
   miss a beat, the kick-off cannot. The other three unguarded HUD writes are
   guarded too.
 
+- **The goalkeeper dived on the spot while the ball bounced off the post.** When the
+  match plan blocks a goal, the engine fires the keeper's dive and pushes the ball
+  back off the line -- but it never moved the keeper. He threw himself sideways
+  where he stood while the ball was repelled by the paint several metres away, so
+  a save read as the ball rebounding off nothing, which is what it was. The engine
+  has already decided the shot is saved, so the keeper is the one who saves it now:
+  he gets across to where the ball is going as far as his reflexes, agility and
+  handling allow, and the ball comes off him. What he cannot quite reach he gets
+  fingertips to, and the more stretched he was the further the rebound runs away
+  from him.
+
 - **Every defender ran the same way at the same moment.** The off-ball line was
   `t.x*.55 + ball.pos.x*.45` and `t.y*.6 + ball.pos.z*.4` — identical weights for
   all ten, all reading the ball on the same frame — so moving the ball two metres

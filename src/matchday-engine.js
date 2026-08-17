@@ -3572,14 +3572,44 @@ function checkRules(){
           event('WOODWORK', 'off the frame');
         } else {
           ball.pos.x = s*(HALF_L-CFG.BALL_R*1.5);
-          ball.vel.set(away*8, 2.6, (Math.random()-.5)*11);
           if(gk){
-            const sideDot = (ball.pos.z - gk.pos.y);
-            gk.dive = .85; gk.diveDir = sideDot>=0 ? 1 : -1;
+            /* THE SAVE USED TO HAPPEN AT THE GOAL LINE, NOT AT HIS HANDS.
+               The dive animation fired and the ball was pushed back off
+               the line, but the keeper was never moved — so he threw
+               himself sideways on the spot while the ball was repelled by
+               the post four metres away. It read as the ball bouncing off
+               nothing, which is exactly what it was.
+
+               The engine has already decided this one is saved, so the
+               keeper is the one who saves it: he gets across to where the
+               ball is going, as far as his reflexes let him, and the ball
+               comes off him rather than off the paint. What his reflexes
+               cannot reach, he only gets fingertips to, and the rebound
+               runs further away from him. */
+            const gdir = S.dir[gk.team];
+            const line = gdir*-(HALF_L-1.4);
+            const aimZ = THREE.MathUtils.clamp(b.z, -CFG.GOAL_W/2-0.3, CFG.GOAL_W/2+0.3);
+            const gap = aimZ - gk.pos.y;
+            const span = 1.6 + Amix(gk,{reflexes:1.6, agility:1.2, handling:0.8})*4.4;
+            const got = Math.sign(gap) * Math.min(Math.abs(gap), span);
+            gk.pos.set(line, gk.pos.y + got);
+            gk.face = gdir > 0 ? 0 : Math.PI;
+
+            const stretched = Math.abs(gap) - Math.abs(got);   // what he could not cover
+            ball.pos.z = gk.pos.y + Math.sign(gap || 1) * (0.45 + Math.min(stretched, 1.2));
+            ball.vel.set(away*(7 + stretched*2.4), 2.4 + Math.random()*0.5,
+                         Math.sign(gap || 1) * (3 + stretched*5) + (Math.random()-.5)*4);
+
+            gk.dive = .85; gk.diveDir = gap>=0 ? 1 : -1;
             gk.diveHigh = b.y > 1.15 ? 1 : 0;
             gk.cool = .4; S.lastTouch = gk;
             event('SAVE', gk.name+' keeps it out');
             cutTo('save', 1.6);
+          } else {
+            /* no keeper on the pitch to credit it to — the ball still has
+               to leave, or it crosses the line again on the next frame
+               and blocks forever */
+            ball.vel.set(away*8, 2.6, (Math.random()-.5)*11);
           }
         }
         ball.cool = .4; S.liveShot = null;
