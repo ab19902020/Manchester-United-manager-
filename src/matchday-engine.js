@@ -4157,7 +4157,27 @@ function tick(dt){
   }
   if(S.phase==='half'){
     S.freeze -= dt;
-    for(const p of players){ movePlayer(p,ZERO,false,dt); animate(p,dt); }
+    /* HALF-TIME: THEY GO OFF, AND THEY COME BACK AT THE OTHER END.
+       This used to be `movePlayer(p, ZERO, ...)` — twenty-two men
+       standing exactly where the whistle caught them for three seconds,
+       and then snapping into their second-half positions. Nobody left
+       the pitch, so nothing about it read as half-time; the ends simply
+       changed while you were looking at it.
+
+       They walk to the tunnel now, spread along its mouth so they do not
+       stack into one another, and the restart puts them out at their new
+       ends while they are off the pitch — which is where a substitution
+       of eleven positions is supposed to happen. */
+    const mouthZ = HALF_W + 3.2;
+    for(const p of players){
+      const lane = ((p.idx % 11) - 5) * 1.15 + (p.team ? 7 : -7);
+      const to = new THREE.Vector2(lane, mouthZ);
+      const gap = to.sub(p.pos);
+      const there = gap.length() < 0.9;
+      movePlayer(p, there ? ZERO : gap.clampLength(0,1), false, dt);
+      if(there) p.face = Math.PI/2;
+      animate(p,dt);
+    }
     if(S.freeze<=0){
       S.half=2; S.clock=0; S.dir=[S.dir[0]*-1,S.dir[1]*-1];
       /* THE SECOND HALF USED TO START WHEREVER THE FIRST ONE STOPPED.
@@ -4202,7 +4222,7 @@ function tick(dt){
       if(S.stoppage < S.halfLen*2.0){ const c=el('clock'); if(c) c.textContent = fmtClock(); return; }
     }
     if(S.half===1){
-      S.phase='half'; S.freeze=3;
+      S.phase='half'; S.freeze=6;   /* long enough to actually walk off */
       lowerThird('HT', S.score[0]+' — '+S.score[1], TEAMS[0].abbr+' v '+TEAMS[1].abbr);
       event('HALF TIME', S.score[0]+'-'+S.score[1]);
       emit('halftime', {score:S.score.slice()});
