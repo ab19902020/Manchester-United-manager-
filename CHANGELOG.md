@@ -156,6 +156,34 @@
 
 ### Fixed
 
+- **The second half kicked off with everyone standing where the first one stopped.**
+  `el()` returns null while the match host is detached — the game rebuilds a tab
+  whenever you look at another one, and the engine's own comment says so — and the
+  half-time line was `el('period').textContent='2ND'; kickoff(1);` with no guard.
+  Half-time ending while you were on any other tab threw on `.textContent`, which
+  killed the frame before `kickoff(1)` could run: no repositioning, no centre spot,
+  twenty-two men in their first-half positions defending the wrong ends. The
+  restart now goes first and unconditionally; the scoreboard is cosmetic and can
+  miss a beat, the kick-off cannot. The other three unguarded HUD writes are
+  guarded too.
+
+- **Every defender ran the same way at the same moment.** The off-ball line was
+  `t.x*.55 + ball.pos.x*.45` and `t.y*.6 + ball.pos.z*.4` — identical weights for
+  all ten, all reading the ball on the same frame — so moving the ball two metres
+  moved every target by the same fraction of it and the block slid across the
+  grass as one piece. Now each man reacts to what *he* has seen: `p.seen`, a
+  delayed extrapolated read refreshed on his own thinking timer, already existed
+  for all twenty-two and was being used by two. How far he leaves his post is his
+  own blend of positioning, decisions and marking against work rate, aggression
+  and off-the-ball, so a disciplined centre-half holds shape while a busy
+  midfielder goes to the ball. Defenders and midfielders now pick up a man rather
+  than a patch of grass, assigned from the back so two players cannot take the
+  same opponent and leave another free, and how tightly he stays is his marking.
+  With the ball, wide players hold the touchline until play comes to their side,
+  full-backs overlap if their work rate says they can get back, and a deep
+  midfielder screens instead of joining in.
+
+
 - **The wrong team kicked off after a goal, and the wrong team celebrated it.**
   Everything that happened after a goal was decided by `S.score[0]>S.score[1]` —
   which asks who is winning, not who just scored, and gives a different answer

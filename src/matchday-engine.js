@@ -3064,6 +3064,47 @@ function nearestToBall(team){
   }
   return best;
 }
+/* ---------------------------------------------------------------------
+   WHO IS PICKING UP WHOM
+   ---------------------------------------------------------------------
+   Built once a frame for the side without the ball and cached, because
+   every defender asking every opponent every frame is the same work
+   eleven times over.
+
+   The rule is the one a defence actually uses: the men closest to their
+   own goal take the men closest to their own goal. Working through the
+   defending side from the back means a centre-half claims the striker
+   before a midfielder wanders over and takes him, which is what stops
+   two players marking one man and leaving another free.
+   --------------------------------------------------------------------- */
+const MARKS = { frame:-1, team:-1, map:new Map() };
+function markAssignment(p){
+  if(MARKS.frame===S.frameId && MARKS.team===p.team) return MARKS.map.get(p) || null;
+  MARKS.frame = S.frameId; MARKS.team = p.team; MARKS.map.clear();
+
+  const dir = S.dir[p.team];
+  const mine = teamOf(p.team).filter(q=>!q.isGK)
+    .sort((a,b)=> (a.pos.x*dir) - (b.pos.x*dir));      // deepest first
+  const theirs = teamOf(1-p.team).filter(q=>!q.isGK)
+    .sort((a,b)=> (a.pos.x*dir) - (b.pos.x*dir));
+  const taken = new Set();
+
+  for(const d of mine){
+    /* a forward is not a marker; he presses, which the chaser branch
+       already covers */
+    if(d.isFwd && !d.isDef) continue;
+    let best=null, bd=1e9;
+    const reach = d.isDef ? 13 : 10;
+    for(const o of theirs){
+      if(taken.has(o)) continue;
+      const dist = Math.hypot(o.pos.x-d.pos.x, o.pos.y-d.pos.y);
+      if(dist < bd && dist < reach){ bd=dist; best=o; }
+    }
+    if(best){ taken.add(best); MARKS.map.set(d, best); }
+  }
+  return MARKS.map.get(p) || null;
+}
+
 function aiPlayer(p, dt){
   const dir = S.dir[p.team];
   let want = new THREE.Vector2(0,0), sprint = false;
@@ -3208,6 +3249,33 @@ function aiPlayer(p, dt){
     // good movement off the ball buys a forward a few extra yards
     if(p.isFwd && ball.pos.x*dir>0)
       t.x = THREE.MathUtils.clamp(t.x+dir*(3+A01(p,'offTheBall')*7),-HALF_L+3,HALF_L-3);
+
+    /* WITH THE BALL, THE SAME COMPLAINT APPLIED IN REVERSE: ten men
+       walking to ten fixed slots. What separates them is what their job
+       asks of them, so it is asked here.
+
+       A wide player holds the touchline until the ball is on his side,
+       and how disciplined he is about that is his own positioning. A
+       full-back overlaps when the ball is ahead of him and his work rate
+       says he can get back. A deep midfielder does the opposite and
+       stays behind it. */
+    const see = p.seen || new THREE.Vector2(ball.pos.x, ball.pos.z);
+    if(p.isWide){
+      const side = Math.sign(p.home.y || 1);
+      const ballSide = Math.sign(see.y || 0) === side;
+      const hold = 0.35 + A01(p,'positioning')*0.45;
+      const width = (HALF_W-7) * (ballSide ? 1 : hold);
+      t.y = side*Math.max(Math.abs(t.y), width);
+      if(p.isDef && see.x*dir > 6){
+        /* the overlap, if he is the sort who makes it */
+        t.x += dir*(A01(p,'workRate')*6 + A01(p,'offTheBall')*4);
+      }
+    } else if(!p.isFwd && !p.isDef){
+      /* the midfielder who screens rather than joins in */
+      const screen = Amix(p,{positioning:1.2, decisions:1.0, marking:0.7});
+      if(screen > 0.58) t.x -= dir*(screen-0.58)*16;
+      else t.x += dir*(0.58-screen)*10;
+    }
     // and the man the plan says scores gets into the box for it
     if(isScriptScorer(p)){
       const u = 0.4 + scriptUrgency(p.team)*0.6;
@@ -3224,10 +3292,58 @@ function aiPlayer(p, dt){
          Math.random() < (0.018 + Amix(p,{tackling:1,aggression:1})*0.075)
                        * (1 + scriptUrgency(p.team)*1.8)) p.lunge=.35;
     } else {
-      const t = slotWorld(p);
+      /* EVERY DEFENDER USED TO RUN THE SAME WAY AT THE SAME MOMENT, and
+         the arithmetic said so plainly:
+
+             want.set(t.x*.55 + ball.pos.x*.45 - push - p.pos.x,
+                      t.y*.6  + ball.pos.z*.4  - p.pos.y);
+
+         Identical weights for all ten, all reading `ball.pos` on the
+         same frame. Move the ball two metres and every target moved by
+         the same 0.45 and 0.4 of it, so the block slid across the grass
+         as one piece. Nobody was thinking; one man was thinking and the
+         other nine were copying him.
+
+         Two things change here.
+
+         FIRST, he reacts to what HE has seen. `p.seen` already exists —
+         a delayed, velocity-extrapolated read of the ball refreshed on
+         the player's own `think` timer, which is itself set from his
+         decisions. It was computed for all twenty-two and then used by
+         exactly two of them. Reading it here means a slow centre-half is
+         still turning while a sharp one has already moved, which is most
+         of what makes a back four look like four men.
+
+         SECOND, how far he leaves his post is his own number. A
+         disciplined reader of the game holds shape; a busy, aggressive
+         one goes to the ball. That is the difference between a holding
+         midfielder and a terrier, and it was a shared constant. */
       const ment = MENT_MOD[TEAMS[p.team].mentality] || MENT_MOD.Balanced;
+      const see = p.seen || new THREE.Vector2(ball.pos.x, ball.pos.z);
+      const t = slotWorld(p);
+
+      const disc  = Amix(p,{positioning:1.4, decisions:1.0, marking:0.8});
+      const eager = Amix(p,{workRate:1.2, aggression:1.0, offTheBall:0.6});
+      let pull = THREE.MathUtils.clamp(0.15 + eager*0.44 - disc*0.24, 0.06, 0.64);
+      /* the last line holds its shape hardest — a centre-half who chases
+         the ball is how a defence is pulled apart */
+      if(p.isDef && !p.isWide) pull *= 0.62;
+
       const push = dir*(3 - ment.line*22);            // an attacking side defends higher
-      want.set(t.x*.55+ball.pos.x*.45-push-p.pos.x, t.y*.6+ball.pos.z*.4-p.pos.y);
+      let tx = t.x*(1-pull) + see.x*pull - push;
+      let tz = t.y*(1-pull*0.9) + see.y*(pull*0.9);
+
+      /* AND HE MARKS A MAN, not a patch of grass. Whether he stays with
+         him is his marking attribute: a good one is on a shoulder, a
+         poor one is loosely in the area and can be lost. */
+      const man = markAssignment(p);
+      if(man){
+        const tight = THREE.MathUtils.clamp(0.22 + A01(p,'marking')*0.52, 0.18, 0.80);
+        tx = tx*(1-tight) + (man.pos.x + dir*1.05)*tight;
+        tz = tz*(1-tight) + man.pos.y*tight;
+      }
+
+      want.set(tx-p.pos.x, tz-p.pos.y);
       sprint = want.length() > 12 - A01(p,'workRate')*5;
     }
   }
@@ -3910,6 +4026,9 @@ function frame(now){
 }
 
 function tick(dt){
+  /* one number a frame, so the marking assignment is built once for the
+     defending side and read eleven times rather than built eleven times */
+  S.frameId = (S.frameId|0) + 1;
   if(S.phase==='goal'){
     S.freeze -= dt;
     for(const p of players){
@@ -3936,7 +4055,19 @@ function tick(dt){
     for(const p of players){ movePlayer(p,ZERO,false,dt); animate(p,dt); }
     if(S.freeze<=0){
       S.half=2; S.clock=0; S.dir=[S.dir[0]*-1,S.dir[1]*-1];
-      el('period').textContent='2ND'; kickoff(1);
+      /* THE SECOND HALF USED TO START WHEREVER THE FIRST ONE STOPPED.
+         `el()` returns null while the host is detached — the note above
+         says so, and paintBug() has guarded against it for months — and
+         this line did not. Half-time ending while the manager was on any
+         other tab threw on `.textContent`, which killed the frame before
+         `kickoff(1)` could run: no repositioning, no centre spot, twenty
+         two men standing exactly where the whistle left them, defending
+         the wrong ends.
+
+         So the restart goes first and unconditionally. The scoreboard is
+         cosmetic and can miss a beat; the kick-off cannot. */
+      kickoff(1);
+      const per = el('period'); if(per) per.textContent='2ND';
     }
     return;
   }
@@ -3963,7 +4094,7 @@ function tick(dt){
          mode exists to prevent. Two halves' worth is a safety net for a
          plan that genuinely cannot be satisfied -- with the escalating
          spot kick above, it is never reached in practice. */
-      if(S.stoppage < S.halfLen*2.0){ el('clock').textContent = fmtClock(); return; }
+      if(S.stoppage < S.halfLen*2.0){ const c=el('clock'); if(c) c.textContent = fmtClock(); return; }
     }
     if(S.half===1){
       S.phase='half'; S.freeze=3;
@@ -3984,7 +4115,7 @@ function tick(dt){
     }
     return;
   }
-  el('clock').textContent = fmtClock();
+  { const c = el('clock'); if(c) c.textContent = fmtClock(); }
   if(ball.owner) S.stats.poss[ball.owner.team]++;
   if(S.liveShot){ S.liveShot.t -= dt; if(S.liveShot.t<=0) S.liveShot = null; }
 
@@ -4030,7 +4161,7 @@ function newMatch(){
   for(const e of SCRIPT.events) e.fired = false;
   SCRIPT.blocked=0; SCRIPT.forced=0; SCRIPT.pending=null; SCRIPT.penWait=0;
   SCRIPT.penTries=0; S.stoppage=0;
-  el('period').textContent='1ST'; updateBoard(); paintBoard();
+  { const p1 = el('period'); if(p1) p1.textContent='1ST'; } updateBoard(); paintBoard();
   kickoff(0); cutTo('broadcast',1);
   event('KICK OFF', TEAMS[0].name+' v '+TEAMS[1].name);
   emit('kickoff', {home:TEAMS[0].name, away:TEAMS[1].name, pitch:PITCH.cut.id});
