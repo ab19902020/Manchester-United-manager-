@@ -3068,6 +3068,7 @@ const SCRIPT = {
 function clearScript(){
   SCRIPT.active=false; SCRIPT.events=[]; SCRIPT.stats=null;
   SCRIPT.pending=null; SCRIPT.blocked=0; SCRIPT.forced=0; SCRIPT.penWait=0;
+  SCRIPT.penTries=0;
 }
 /* Minutes elapsed on the 90-minute clock the HUD shows. */
 function scriptMinute(){
@@ -3112,7 +3113,7 @@ function markGoalScored(team){
   if(!SCRIPT.active) return null;
   const e = nextGoal(team);
   if(e){ e.fired = true; if(SCRIPT.pending===e) SCRIPT.pending=null; }
-  SCRIPT.penWait = 0; SCRIPT.penAt = 0;
+  SCRIPT.penWait = 0; SCRIPT.penAt = 0; SCRIPT.penTries = 0;
   return e;
 }
 /* Each tick: work out whether a goal is due, and if it is overdue push
@@ -3138,8 +3139,19 @@ function scriptTick(){
   SCRIPT.penWait = wait + (1/60);
   if(!SCRIPT.penAt) SCRIPT.penAt = 5 + Math.random()*5;   // jittered, so the fallback
   const limit = S.stoppage > 0 ? 1.5 : SCRIPT.penAt;      // never lands on the same minute
-  if(late > limit && SCRIPT.penWait > 6){
-    SCRIPT.penWait = 0; SCRIPT.penAt = 0; SCRIPT.forced++;
+  /* EACH ATTEMPT COMES SOONER THAN THE LAST.
+     This used to wait six seconds, award a spot kick, and then reset
+     BOTH counters -- so a saved penalty put the whole thing back to the
+     start, and against a keeper under siege the owed goal could run out
+     of stoppage time. Measured: a save recording Hull 1-4 finished on
+     screen as 0-4, because Hull's 82nd minute never arrived while they
+     managed two shots to United's thirty-five.
+     Now only the wait resets, the jittered first delay is kept, and the
+     wait shortens with every failed attempt. A missed penalty is a
+     setback, not a fresh start. */
+  const need = Math.max(1.2, 6/(1+(SCRIPT.penTries||0)));
+  if(late > limit && SCRIPT.penWait > need){
+    SCRIPT.penWait = 0; SCRIPT.penTries = (SCRIPT.penTries||0)+1; SCRIPT.forced++;
     const named = due.pid || due.scorer
       ? teamOf(due.team).find(q => (due.pid && String(q.pid)===due.pid) ||
           (due.scorer && q.name.toUpperCase()===String(due.scorer).toUpperCase()))
@@ -3565,6 +3577,57 @@ function updatePoss(){
   el('possA').textContent = a+'%'; el('possB').textContent = (100-a)+'%';
 }
 
+/* =====================================================================
+   REPLAYS — a goal is worth seeing twice
+   ---------------------------------------------------------------------
+   Every frame of play writes the ball and all twenty-two into a ring
+   buffer holding the last few seconds of match time. It stores what the
+   posing code needs and nothing more — each man's position on the pitch
+   and the way he is facing — so playback runs through the same animate()
+   the live match uses and the figures move exactly as they did.
+
+   The buffer only records live play. A replay of a replay would be a
+   loop, and a replay of a celebration is not a replay.
+   ===================================================================== */
+const REPLAY = { buf:[], playing:false, i:0, seconds:6.5 };
+
+function replayRecord(dt){
+  if(REPLAY.playing) return;
+  const f = { d:dt, b:[ball.pos.x, ball.pos.y, ball.pos.z], p:[] };
+  for(const q of players) f.p.push(q.pos.x, q.pos.y, q.face);
+  REPLAY.buf.push(f);
+  let total = 0;
+  for(let i=REPLAY.buf.length-1; i>=0; i--){
+    total += REPLAY.buf[i].d;
+    if(total > REPLAY.seconds){ REPLAY.buf.splice(0,i); break; }
+  }
+}
+function replayStart(){
+  if(REPLAY.buf.length < 12) return false;
+  REPLAY.playing = true; REPLAY.i = 0;
+  lowerThird('REPLAY', S.scorer ? S.scorer.name : 'THE GOAL',
+    TEAMS[S.goalSide!=null && S.score[0]>S.score[1] ? 0 : 1].name);
+  cutTo('goal', 99);
+  return true;
+}
+function replayStop(){
+  REPLAY.playing = false; REPLAY.buf.length = 0;
+}
+/* One recorded frame per step, at the speed it was recorded — so a
+   replay always runs in real time however fast the match was going. */
+function replayStep(dt){
+  const f = REPLAY.buf[REPLAY.i++];
+  if(!f){ replayStop(); return false; }
+  ball.pos.set(f.b[0], f.b[1], f.b[2]);
+  ballMesh.position.copy(ball.pos);
+  for(let k=0;k<players.length;k++){
+    const q = players[k];
+    q.pos.x = f.p[k*3]; q.pos.y = f.p[k*3+1]; q.face = f.p[k*3+2];
+    animate(q, dt);
+  }
+  return true;
+}
+
 /* ================== loop ================== */
 let last = performance.now(), acc = 0, fpsAcc = 0, fpsN = 0, autoTuned = false;
 function frame(now){
@@ -3580,10 +3643,15 @@ function frame(now){
   FLASH.step(raw, S.phase==='goal' || (S.freeze>0 && S.phase!=='play'));
 
   if(S.running){
-    acc += raw*S.speed;
+    /* A GOAL IS WATCHED AT THE SPEED IT HAPPENED. At 4x a celebration
+       went by in a blink and a replay would have been useless; the whole
+       point of both is to see it. So the goal, and the replay after it,
+       ignore the speed control and run a second to the second. */
+    const liveSpeed = (S.phase==='goal' || S.phase==='replay') ? 1 : S.speed;
+    acc += raw*liveSpeed;
     let guard=0;
     while(acc>=CFG.DT && guard++<8){ tick(CFG.DT); acc-=CFG.DT; }
-    stepOfficials(raw*S.speed);
+    stepOfficials(raw*liveSpeed);
   }
   updateCamera(raw); drawRadar(); updatePoss();
   if(lowerT>0){ lowerT-=raw; if(lowerT<=0){ el('lower').style.opacity=0; el('lower').classList.remove('show'); } }
@@ -3615,7 +3683,15 @@ function tick(dt){
       animate(p,dt);
     }
     stepBall(dt);
-    if(S.freeze<=0){ kickoff(S.score[0]>S.score[1]?1:0); }
+    /* the celebration, then the replay, and only then the restart */
+    if(S.freeze<=0){
+      if(replayStart()){ S.phase='replay'; return; }
+      kickoff(S.score[0]>S.score[1]?1:0);
+    }
+    return;
+  }
+  if(S.phase==='replay'){
+    if(!replayStep(dt)) kickoff(S.score[0]>S.score[1]?1:0);
     return;
   }
   if(S.phase==='half'){
@@ -3633,6 +3709,8 @@ function tick(dt){
   }
 
   S.clock += dt;
+  /* the last few seconds of live play, kept so a goal can be shown again */
+  replayRecord(dt);
   scriptTick();
   if(S.clock >= S.halfLen){
     /* A referee plays added time, and so does this. If the plan is still
@@ -3642,7 +3720,13 @@ function tick(dt){
        ends the match. */
     if(S.half===2 && SCRIPT.active && SCRIPT.events.some(e=>!e.fired)){
       S.stoppage = (S.stoppage||0) + dt;
-      if(S.stoppage < S.halfLen*0.30){ el('clock').textContent = fmtClock(); return; }
+      /* WAS 0.30 OF A HALF, WHICH RAN OUT. The referee here keeps the
+         match alive until the plan is paid, because ending on a
+         scoreline that disagrees with the save is the one thing this
+         mode exists to prevent. Two halves' worth is a safety net for a
+         plan that genuinely cannot be satisfied -- with the escalating
+         spot kick above, it is never reached in practice. */
+      if(S.stoppage < S.halfLen*2.0){ el('clock').textContent = fmtClock(); return; }
     }
     if(S.half===1){
       S.phase='half'; S.freeze=3;
@@ -3706,7 +3790,8 @@ function newMatch(){
   S.stats={poss:[0,0],shots:[0,0],onTarget:[0,0],corners:[0,0]};
   for(const p of players){ p.stamina=100; p.celeb=0; p.skill=0; p.dive=0; p.kickAnim=0; }
   for(const e of SCRIPT.events) e.fired = false;
-  SCRIPT.blocked=0; SCRIPT.forced=0; SCRIPT.pending=null; SCRIPT.penWait=0; S.stoppage=0;
+  SCRIPT.blocked=0; SCRIPT.forced=0; SCRIPT.pending=null; SCRIPT.penWait=0;
+  SCRIPT.penTries=0; S.stoppage=0;
   el('period').textContent='1ST'; updateBoard(); paintBoard();
   kickoff(0); cutTo('broadcast',1);
   event('KICK OFF', TEAMS[0].name+' v '+TEAMS[1].name);
