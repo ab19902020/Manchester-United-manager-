@@ -1,8 +1,7 @@
-const CACHE_NAME = 'results-business-v34';
+const CACHE_NAME = 'results-business-v35';
 const CORE_ASSETS = [
   './',
   './index.html',
-  './matchday.html',
   './red-devil-manager.html',
   './manifest.webmanifest',
   './src/simulation-model.js',
@@ -51,6 +50,7 @@ const CORE_ASSETS = [
   './src/front-door.js',
   './src/transfer-search.js',
   './src/keep-history.js',
+  './src/matchday-engine.js',
   './src/dugout-matchday.js',
   './src/stadium-costs.js',
   './src/crazygames.js',

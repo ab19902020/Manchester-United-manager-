@@ -1,214 +1,53 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<title>Matchday — Broadcast</title>
-<!--
-  Matchday Broadcast — AI vs AI football, presented as a television feed.
+/* global THREE */
 
-  Two things worth knowing before you edit:
+/* =====================================================================
+   THE MATCHDAY BROADCAST, INSIDE THE GAME
+   ---------------------------------------------------------------------
+   "you've made a separate dot file. We can't have that. It's gonna be
+    merged into the main games, so it works with it."
 
-  1. YOUR LOGO. Search for "const BRAND" and set logoSrc to a data URI of
-     your United Road artwork. Everything brand-facing — the LED boards,
-     the big screen, the on-screen bug — repaints itself the moment it
-     loads. Until then a procedural mark stands in.
+   Right, and for a better reason than tidiness: as its own page it had
+   to be reached through an iframe, and a browser refuses same-origin
+   access to an iframe on a `file://` page - so opening the game off a
+   disk fell back to the old view and nothing explained why. As part of
+   the game there is no frame, no second document, and no origin rule to
+   fall foul of.
 
-  2. JOINT SIGNS. Search for "JOINT CONVENTION". The rig is built so a
-     knee can only fold backwards and an elbow only forwards; poses are
-     assembled from terms that cannot go negative. Keep to that and legs
-     will never bend inside out again.
--->
-<style>
-  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-  html,body{width:100%;height:100%;overflow:hidden;background:#03050d;
-    font-family:"Arial Narrow","Helvetica Neue",system-ui,sans-serif;
-    user-select:none;-webkit-user-select:none;touch-action:none;overscroll-behavior:none}
-  #scene{position:fixed;inset:0;display:block}
-  #hud{position:fixed;inset:0;pointer-events:none;z-index:10}
+   Three things had to change to bring it in, and only three:
 
-  /* -------- scoreboard -------- */
-  .board{position:absolute;top:calc(env(safe-area-inset-top,0px) + 10px);left:12px;
-    display:flex;height:40px;border-radius:4px;overflow:hidden;
-    box-shadow:0 8px 26px rgba(0,0,0,.6)}
-  .crest{width:7px}
-  .side{display:flex;align-items:center;gap:9px;padding:0 10px;background:rgba(10,14,32,.9)}
-  .abbr{font-size:17px;font-weight:700;letter-spacing:.1em;color:#eef2fb}
-  .num{font-size:20px;font-weight:700;color:#fff;font-variant-numeric:tabular-nums;
-    font-family:ui-monospace,"SF Mono",Menlo,monospace}
-  .clock{display:flex;flex-direction:column;justify-content:center;align-items:center;
-    padding:0 9px;background:#e9ff4a;min-width:56px}
-  .clock b{font-size:15px;font-weight:700;color:#0a0e20;font-variant-numeric:tabular-nums;
-    font-family:ui-monospace,"SF Mono",Menlo,monospace;line-height:1}
-  .clock i{font-size:7px;letter-spacing:.2em;color:#0a0e20;font-style:normal;opacity:.7;margin-top:2px}
-  .poss{position:absolute;top:calc(env(safe-area-inset-top,0px) + 54px);left:12px;
-    width:198px;height:16px;background:rgba(10,14,32,.9);border-radius:3px;overflow:hidden;
-    display:flex;align-items:center;font-size:9px;letter-spacing:.12em;color:#eef2fb}
-  .poss span{padding:0 6px;z-index:2;font-weight:700}
-  .poss span:last-child{margin-left:auto}
-  #possFill{position:absolute;left:0;top:0;bottom:0;width:50%;opacity:.55}
+   1. ITS STYLESHEET IS SCOPED. Nineteen class names, thirteen of which
+      the game already uses - .card, .chip, .row, .on, .num. Left alone
+      its `.card{}` would have restyled every card in the game. Every
+      rule now sits under #mdHost, and its html,body rule became the
+      host. Its thirty-two ids collide with nothing, so those are
+      untouched.
 
-  /* -------- controls -------- */
-  .rail{position:absolute;top:calc(env(safe-area-inset-top,0px) + 10px);right:12px;
-    display:flex;flex-direction:column;gap:6px;align-items:flex-end;pointer-events:auto}
-  .grp{display:flex;gap:5px}
-  .chip{height:34px;min-width:34px;padding:0 9px;border-radius:4px;background:rgba(10,14,32,.86);
-    border:1px solid rgba(238,242,251,.16);color:#dfe5f4;display:flex;align-items:center;
-    justify-content:center;font-size:10px;letter-spacing:.11em;font-weight:700;cursor:pointer}
-  .chip.on{background:#e9ff4a;color:#0a0e20;border-color:#e9ff4a}
-  .chip:active{transform:scale(.96)}
-  .chip svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2.2;
-    stroke-linecap:round;stroke-linejoin:round}
+   2. position:fixed BECAME position:absolute. Fixed is relative to the
+      viewport, so the pitch and the HUD would have escaped the dugout
+      and covered the whole game.
 
-  /* -------- radar -------- */
-  #radar{position:absolute;bottom:calc(env(safe-area-inset-bottom,0px) + 10px);right:12px;
-    width:170px;height:104px;opacity:.92;filter:drop-shadow(0 6px 16px rgba(0,0,0,.7))}
+   3. IT SIZES TO THE HOST rather than to the window.
 
-  /* -------- ticker -------- */
-  #feed{position:absolute;bottom:calc(env(safe-area-inset-bottom,0px) + 12px);left:12px;
-    width:210px;display:flex;flex-direction:column-reverse;gap:4px}
-  .ev{background:rgba(10,14,32,.82);border-left:3px solid #e9ff4a;padding:5px 8px;
-    border-radius:2px;font-size:10px;letter-spacing:.05em;color:#cfd7ea;
-    font-family:system-ui,-apple-system,sans-serif;animation:slide .3s ease}
-  .ev b{color:#fff}
-  @keyframes slide{from{opacity:0;transform:translateX(-10px)}to{opacity:1;transform:none}}
+   The engine is otherwise the file from the Gamefootball repository,
+   unedited, and it boots lazily - a WebGL context is not worth building
+   until somebody walks into the dugout.
+   ===================================================================== */
 
-  /* -------- lower third -------- */
-  #lower{position:absolute;left:0;right:0;bottom:22%;display:flex;justify-content:center;
-    opacity:0;transition:opacity .3s}
-  #lower .card{display:flex;align-items:stretch;box-shadow:0 14px 40px rgba(0,0,0,.7);
-    border-radius:4px;overflow:hidden;transform:translateY(14px);transition:transform .35s}
-  #lower.show .card{transform:none}
-  #lower .tag{background:#e9ff4a;color:#0a0e20;font-size:26px;font-weight:700;
-    letter-spacing:.22em;padding:12px 18px;display:flex;align-items:center}
-  #lower .txt{background:rgba(10,14,32,.94);padding:10px 20px;display:flex;
-    flex-direction:column;justify-content:center;min-width:170px}
-  #lower .txt b{color:#fff;font-size:19px;letter-spacing:.09em}
-  #lower .txt i{color:#98a3bd;font-size:10px;font-style:normal;letter-spacing:.2em;margin-top:3px}
-
-  /* -------- menu -------- */
-  #menu{position:fixed;inset:0;z-index:30;background:rgba(3,5,13,.92);backdrop-filter:blur(12px);
-    display:flex;align-items:center;justify-content:center;padding:22px}
-  #menu.off{display:none}
-  .card2{width:min(370px,100%);background:rgba(10,14,32,.95);
-    border:1px solid rgba(238,242,251,.13);border-radius:8px;padding:22px}
-  .card2 h1{font-size:25px;letter-spacing:.15em;color:#eef2fb;font-weight:700;line-height:1.15}
-  .card2 h1 em{font-style:normal;color:#e9ff4a}
-  .card2 p{font-size:12px;line-height:1.6;color:rgba(238,242,251,.55);margin-top:9px;
-    font-family:system-ui,-apple-system,sans-serif}
-  .row{display:flex;align-items:center;justify-content:space-between;margin-top:13px;
-    padding-top:11px;border-top:1px solid rgba(238,242,251,.09)}
-  .row label{font-size:10px;letter-spacing:.17em;color:rgba(238,242,251,.6)}
-  .seg{display:flex;gap:4px}
-  .seg button{background:rgba(238,242,251,.07);border:1px solid rgba(238,242,251,.13);
-    color:#e3e8f5;font-size:10px;letter-spacing:.09em;padding:6px 9px;border-radius:3px;
-    font-family:inherit;cursor:pointer}
-  .seg button.on{background:#e9ff4a;color:#0a0e20;border-color:#e9ff4a;font-weight:700}
-  .go{width:100%;margin-top:19px;padding:14px;border:none;border-radius:4px;background:#e9ff4a;
-    color:#0a0e20;font-size:14px;font-weight:700;letter-spacing:.2em;font-family:inherit;cursor:pointer}
-  #load{position:fixed;inset:0;z-index:40;background:#03050d;display:flex;
-    align-items:center;justify-content:center;color:#e9ff4a;font-size:11px;letter-spacing:.35em}
-  #load.off{display:none}
-
-  /* -------- broadcast grade --------
-     A vignette, a cool lift in the shadows and a whisper of grain. None
-     of this costs a draw call and together they do most of what a real
-     post chain would: they stop the render reading as a render. */
-  #grade{position:fixed;inset:0;z-index:5;pointer-events:none;
-    background:radial-gradient(125% 92% at 50% 44%,
-      rgba(0,0,0,0) 38%, rgba(0,0,0,.20) 70%, rgba(2,4,12,.62) 100%)}
-  #tint{position:fixed;inset:0;z-index:5;pointer-events:none;opacity:.16;
-    mix-blend-mode:screen;
-    background:linear-gradient(178deg, rgba(80,130,255,.55) 0%,
-      rgba(0,0,0,0) 46%, rgba(255,178,90,.30) 100%)}
-  #grain{position:fixed;inset:-60%;z-index:6;pointer-events:none;opacity:.05;
-    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-    animation:grain 1.1s steps(5) infinite}
-  @keyframes grain{
-    0%{transform:translate(0,0)}      20%{transform:translate(-3%,-4%)}
-    40%{transform:translate(2%,3%)}   60%{transform:translate(-2%,4%)}
-    80%{transform:translate(4%,-2%)}  100%{transform:translate(0,0)}}
-
-  /* -------- brand bug -------- */
-  #bug{position:absolute;top:calc(env(safe-area-inset-top,0px) + 78px);left:12px;
-    display:flex;align-items:center;gap:7px;padding:5px 9px 5px 6px;
-    background:linear-gradient(90deg,rgba(10,12,16,.92),rgba(10,12,16,.55));
-    border-left:3px solid #da291c;border-radius:3px}
-  #bug canvas{width:22px;height:22px;display:block;border-radius:3px}
-  #bug b{font-size:10px;letter-spacing:.16em;color:#fff;font-weight:700;line-height:1.15}
-  #bug i{font-size:8px;letter-spacing:.14em;color:#f5c518;font-style:normal;display:block}
-  .live{display:inline-block;width:5px;height:5px;border-radius:50%;background:#ff3b3b;
-    margin-right:5px;vertical-align:middle;animation:pulse 1.6s ease-in-out infinite}
-  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
-</style>
-</head>
-<body>
-<canvas id="scene"></canvas>
-
-<div id="hud">
-  <div class="board">
-    <div class="crest" id="crestA"></div>
-    <div class="side"><span class="abbr" id="abbrA"></span><span class="num" id="scoreA">0</span></div>
-    <div class="clock"><b id="clock">00:00</b><i id="period">1ST</i></div>
-    <div class="side"><span class="num" id="scoreB">0</span><span class="abbr" id="abbrB"></span></div>
-    <div class="crest" id="crestB"></div>
-  </div>
-  <div class="poss"><div id="possFill"></div><span id="possA">50%</span><span id="possB">50%</span></div>
-  <div id="bug"><canvas id="bugLogo" width="64" height="64"></canvas>
-    <b><span class="live"></span>UNITED ROAD<i id="bugDomain">unitedroad.uk</i></b></div>
-
-  <div class="rail">
-    <div class="grp">
-      <div class="chip" id="btnFull"><svg viewBox="0 0 24 24"><path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5"/></svg></div>
-      <div class="chip" id="btnPause"><svg viewBox="0 0 24 24"><path d="M9 4v16M15 4v16"/></svg></div>
-    </div>
-    <div class="grp" id="camGrp">
-      <div class="chip on" data-cam="auto">AUTO</div>
-      <div class="chip" data-cam="broadcast">WIDE</div>
-      <div class="chip" data-cam="tele">TELE</div>
-      <div class="chip" data-cam="goal">GOAL</div>
-    </div>
-    <div class="grp" id="spdGrp">
-      <div class="chip on" data-spd="1">1×</div>
-      <div class="chip" data-spd="2">2×</div>
-      <div class="chip" data-spd="4">4×</div>
-    </div>
-  </div>
-
-  <div id="feed"></div>
-  <canvas id="radar" width="340" height="208"></canvas>
-
-  <div id="lower"><div class="card">
-    <div class="tag" id="lowTag">GOAL</div>
-    <div class="txt"><b id="lowName">—</b><i id="lowSub">—</i></div>
-  </div></div>
-</div>
-
-<div id="menu">
-  <div class="card2">
-    <h1>MATCHDAY<br><em>BROADCAST</em></h1>
-    <p>Northgate against Valemont, played out by the AI under the lights at United Road. You're in the gantry — pick a camera, change the speed, and watch. AUTO cuts to the keeper for a save and behind the goal for a celebration.</p>
-    <div class="row"><label>HALF LENGTH</label>
-      <div class="seg" id="segLen"><button data-v="120">2m</button><button data-v="240" class="on">4m</button><button data-v="420">7m</button></div></div>
-    <div class="row"><label>TEMPO</label>
-      <div class="seg" id="segDiff"><button data-v="0.7">LOOSE</button><button data-v="0.86" class="on">PRO</button><button data-v="1">ELITE</button></div></div>
-    <div class="row"><label>DETAIL</label>
-      <div class="seg" id="segQual"><button data-v="1" class="on">HIGH</button><button data-v="0">LITE</button></div></div>
-    <button class="go" id="btnStart">KICK OFF</button>
-  </div>
-</div>
-<div id="grade"></div>
-<div id="tint"></div>
-<div id="grain"></div>
-<div id="load">WARMING UP</div>
-
-<!-- OUR VENDORED COPY, NOT A CDN. The upstream file pulls three.js r128
-     from cdnjs; this game ships offline and onto CrazyGames, where an
-     outside request is at best a slow frame and at worst a black screen.
-     vendor/three.min.js is the same revision, r128, so nothing else in
-     this file changes. -->
-<script src="vendor/three.min.js"></script>
-<script>
+(function matchdayEngine() {
+  var STYLE_ID = 'mdStyle';
+  var CSS = '/* the host itself is the stage */\n#mdHost{position:relative;contain:layout paint}\n#mdHost *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}\n#mdHost{width:100%;height:100%;overflow:hidden;background:#03050d;\n    font-family:"Arial Narrow","Helvetica Neue",system-ui,sans-serif;\n    user-select:none;-webkit-user-select:none;touch-action:none;overscroll-behavior:none}\n#mdHost #scene{position:absolute;inset:0;display:block}\n#mdHost #hud{position:absolute;inset:0;pointer-events:none;z-index:10}\n\n  /* -------- scoreboard -------- */\n#mdHost .board{position:absolute;top:calc(env(safe-area-inset-top,0px) + 10px);left:12px;\n    display:flex;height:40px;border-radius:4px;overflow:hidden;\n    box-shadow:0 8px 26px rgba(0,0,0,.6)}\n#mdHost .crest{width:7px}\n#mdHost .side{display:flex;align-items:center;gap:9px;padding:0 10px;background:rgba(10,14,32,.9)}\n#mdHost .abbr{font-size:17px;font-weight:700;letter-spacing:.1em;color:#eef2fb}\n#mdHost .num{font-size:20px;font-weight:700;color:#fff;font-variant-numeric:tabular-nums;\n    font-family:ui-monospace,"SF Mono",Menlo,monospace}\n#mdHost .clock{display:flex;flex-direction:column;justify-content:center;align-items:center;\n    padding:0 9px;background:#e9ff4a;min-width:56px}\n#mdHost .clock b{font-size:15px;font-weight:700;color:#0a0e20;font-variant-numeric:tabular-nums;\n    font-family:ui-monospace,"SF Mono",Menlo,monospace;line-height:1}\n#mdHost .clock i{font-size:7px;letter-spacing:.2em;color:#0a0e20;font-style:normal;opacity:.7;margin-top:2px}\n#mdHost .poss{position:absolute;top:calc(env(safe-area-inset-top,0px) + 54px);left:12px;\n    width:198px;height:16px;background:rgba(10,14,32,.9);border-radius:3px;overflow:hidden;\n    display:flex;align-items:center;font-size:9px;letter-spacing:.12em;color:#eef2fb}\n#mdHost .poss span{padding:0 6px;z-index:2;font-weight:700}\n#mdHost .poss span:last-child{margin-left:auto}\n#mdHost #possFill{position:absolute;left:0;top:0;bottom:0;width:50%;opacity:.55}\n\n  /* -------- controls -------- */\n#mdHost .rail{position:absolute;top:calc(env(safe-area-inset-top,0px) + 10px);right:12px;\n    display:flex;flex-direction:column;gap:6px;align-items:flex-end;pointer-events:auto}\n#mdHost .grp{display:flex;gap:5px}\n#mdHost .chip{height:34px;min-width:34px;padding:0 9px;border-radius:4px;background:rgba(10,14,32,.86);\n    border:1px solid rgba(238,242,251,.16);color:#dfe5f4;display:flex;align-items:center;\n    justify-content:center;font-size:10px;letter-spacing:.11em;font-weight:700;cursor:pointer}\n#mdHost .chip.on{background:#e9ff4a;color:#0a0e20;border-color:#e9ff4a}\n#mdHost .chip:active{transform:scale(.96)}\n#mdHost .chip svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2.2;\n    stroke-linecap:round;stroke-linejoin:round}\n\n  /* -------- radar -------- */\n#mdHost #radar{position:absolute;bottom:calc(env(safe-area-inset-bottom,0px) + 10px);right:12px;\n    width:170px;height:104px;opacity:.92;filter:drop-shadow(0 6px 16px rgba(0,0,0,.7))}\n\n  /* -------- ticker -------- */\n#mdHost #feed{position:absolute;bottom:calc(env(safe-area-inset-bottom,0px) + 12px);left:12px;\n    width:210px;display:flex;flex-direction:column-reverse;gap:4px}\n#mdHost .ev{background:rgba(10,14,32,.82);border-left:3px solid #e9ff4a;padding:5px 8px;\n    border-radius:2px;font-size:10px;letter-spacing:.05em;color:#cfd7ea;\n    font-family:system-ui,-apple-system,sans-serif;animation:slide .3s ease}\n#mdHost .ev b{color:#fff}\n  @keyframes slide{from{opacity:0;transform:translateX(-10px)}to{opacity:1;transform:none}}\n\n  /* -------- lower third -------- */\n#mdHost #lower{position:absolute;left:0;right:0;bottom:22%;display:flex;justify-content:center;\n    opacity:0;transition:opacity .3s}\n#mdHost #lower .card{display:flex;align-items:stretch;box-shadow:0 14px 40px rgba(0,0,0,.7);\n    border-radius:4px;overflow:hidden;transform:translateY(14px);transition:transform .35s}\n#mdHost #lower.show .card{transform:none}\n#mdHost #lower .tag{background:#e9ff4a;color:#0a0e20;font-size:26px;font-weight:700;\n    letter-spacing:.22em;padding:12px 18px;display:flex;align-items:center}\n#mdHost #lower .txt{background:rgba(10,14,32,.94);padding:10px 20px;display:flex;\n    flex-direction:column;justify-content:center;min-width:170px}\n#mdHost #lower .txt b{color:#fff;font-size:19px;letter-spacing:.09em}\n#mdHost #lower .txt i{color:#98a3bd;font-size:10px;font-style:normal;letter-spacing:.2em;margin-top:3px}\n\n  /* -------- menu -------- */\n#mdHost #menu{position:absolute;inset:0;z-index:30;background:rgba(3,5,13,.92);backdrop-filter:blur(12px);\n    display:flex;align-items:center;justify-content:center;padding:22px}\n#mdHost #menu.off{display:none}\n#mdHost .card2{width:min(370px,100%);background:rgba(10,14,32,.95);\n    border:1px solid rgba(238,242,251,.13);border-radius:8px;padding:22px}\n#mdHost .card2 h1{font-size:25px;letter-spacing:.15em;color:#eef2fb;font-weight:700;line-height:1.15}\n#mdHost .card2 h1 em{font-style:normal;color:#e9ff4a}\n#mdHost .card2 p{font-size:12px;line-height:1.6;color:rgba(238,242,251,.55);margin-top:9px;\n    font-family:system-ui,-apple-system,sans-serif}\n#mdHost .row{display:flex;align-items:center;justify-content:space-between;margin-top:13px;\n    padding-top:11px;border-top:1px solid rgba(238,242,251,.09)}\n#mdHost .row label{font-size:10px;letter-spacing:.17em;color:rgba(238,242,251,.6)}\n#mdHost .seg{display:flex;gap:4px}\n#mdHost .seg button{background:rgba(238,242,251,.07);border:1px solid rgba(238,242,251,.13);\n    color:#e3e8f5;font-size:10px;letter-spacing:.09em;padding:6px 9px;border-radius:3px;\n    font-family:inherit;cursor:pointer}\n#mdHost .seg button.on{background:#e9ff4a;color:#0a0e20;border-color:#e9ff4a;font-weight:700}\n#mdHost .go{width:100%;margin-top:19px;padding:14px;border:none;border-radius:4px;background:#e9ff4a;\n    color:#0a0e20;font-size:14px;font-weight:700;letter-spacing:.2em;font-family:inherit;cursor:pointer}\n#mdHost #load{position:absolute;inset:0;z-index:40;background:#03050d;display:flex;\n    align-items:center;justify-content:center;color:#e9ff4a;font-size:11px;letter-spacing:.35em}\n#mdHost #load.off{display:none}\n\n  /* -------- broadcast grade --------\n     A vignette, a cool lift in the shadows and a whisper of grain. None\n     of this costs a draw call and together they do most of what a real\n     post chain would: they stop the render reading as a render. */\n#mdHost #grade{position:absolute;inset:0;z-index:5;pointer-events:none;\n    background:radial-gradient(125% 92% at 50% 44%,\n      rgba(0,0,0,0) 38%, rgba(0,0,0,.20) 70%, rgba(2,4,12,.62) 100%)}\n#mdHost #tint{position:absolute;inset:0;z-index:5;pointer-events:none;opacity:.16;\n    mix-blend-mode:screen;\n    background:linear-gradient(178deg, rgba(80,130,255,.55) 0%,\n      rgba(0,0,0,0) 46%, rgba(255,178,90,.30) 100%)}\n#mdHost #grain{position:absolute;inset:-60%;z-index:6;pointer-events:none;opacity:.05;\n    background-image:url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'180\' height=\'180\'%3E%3Cfilter id=\'n\'%3E%3CfeTurbulence type=\'fractalNoise\' baseFrequency=\'.85\' numOctaves=\'3\' stitchTiles=\'stitch\'/%3E%3C/filter%3E%3Crect width=\'100%25\' height=\'100%25\' filter=\'url(%23n)\'/%3E%3C/svg%3E");\n    animation:grain 1.1s steps(5) infinite}\n  @keyframes grain{\n    0%{transform:translate(0,0)}      20%{transform:translate(-3%,-4%)}\n    40%{transform:translate(2%,3%)}   60%{transform:translate(-2%,4%)}\n    80%{transform:translate(4%,-2%)}  100%{transform:translate(0,0)}}\n\n  /* -------- brand bug -------- */\n#mdHost #bug{position:absolute;top:calc(env(safe-area-inset-top,0px) + 78px);left:12px;\n    display:flex;align-items:center;gap:7px;padding:5px 9px 5px 6px;\n    background:linear-gradient(90deg,rgba(10,12,16,.92),rgba(10,12,16,.55));\n    border-left:3px solid #da291c;border-radius:3px}\n#mdHost #bug canvas{width:22px;height:22px;display:block;border-radius:3px}\n#mdHost #bug b{font-size:10px;letter-spacing:.16em;color:#fff;font-weight:700;line-height:1.15}\n#mdHost #bug i{font-size:8px;letter-spacing:.14em;color:#f5c518;font-style:normal;display:block}\n#mdHost .live{display:inline-block;width:5px;height:5px;border-radius:50%;background:#ff3b3b;\n    margin-right:5px;vertical-align:middle;animation:pulse 1.6s ease-in-out infinite}\n  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}';
+  var MARKUP = '<canvas id="scene"></canvas>\n\n<div id="hud">\n  <div class="board">\n    <div class="crest" id="crestA"></div>\n    <div class="side"><span class="abbr" id="abbrA"></span><span class="num" id="scoreA">0</span></div>\n    <div class="clock"><b id="clock">00:00</b><i id="period">1ST</i></div>\n    <div class="side"><span class="num" id="scoreB">0</span><span class="abbr" id="abbrB"></span></div>\n    <div class="crest" id="crestB"></div>\n  </div>\n  <div class="poss"><div id="possFill"></div><span id="possA">50%</span><span id="possB">50%</span></div>\n  <div id="bug"><canvas id="bugLogo" width="64" height="64"></canvas>\n    <b><span class="live"></span>UNITED ROAD<i id="bugDomain">unitedroad.uk</i></b></div>\n\n  <div class="rail">\n    <div class="grp">\n      <div class="chip" id="btnFull"><svg viewBox="0 0 24 24"><path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5"/></svg></div>\n      <div class="chip" id="btnPause"><svg viewBox="0 0 24 24"><path d="M9 4v16M15 4v16"/></svg></div>\n    </div>\n    <div class="grp" id="camGrp">\n      <div class="chip on" data-cam="auto">AUTO</div>\n      <div class="chip" data-cam="broadcast">WIDE</div>\n      <div class="chip" data-cam="tele">TELE</div>\n      <div class="chip" data-cam="goal">GOAL</div>\n    </div>\n    <div class="grp" id="spdGrp">\n      <div class="chip on" data-spd="1">1×</div>\n      <div class="chip" data-spd="2">2×</div>\n      <div class="chip" data-spd="4">4×</div>\n    </div>\n  </div>\n\n  <div id="feed"></div>\n  <canvas id="radar" width="340" height="208"></canvas>\n\n  <div id="lower"><div class="card">\n    <div class="tag" id="lowTag">GOAL</div>\n    <div class="txt"><b id="lowName">—</b><i id="lowSub">—</i></div>\n  </div></div>\n</div>\n\n<div id="menu">\n  <div class="card2">\n    <h1>MATCHDAY<br><em>BROADCAST</em></h1>\n    <p>Northgate against Valemont, played out by the AI under the lights at United Road. You\'re in the gantry — pick a camera, change the speed, and watch. AUTO cuts to the keeper for a save and behind the goal for a celebration.</p>\n    <div class="row"><label>HALF LENGTH</label>\n      <div class="seg" id="segLen"><button data-v="120">2m</button><button data-v="240" class="on">4m</button><button data-v="420">7m</button></div></div>\n    <div class="row"><label>TEMPO</label>\n      <div class="seg" id="segDiff"><button data-v="0.7">LOOSE</button><button data-v="0.86" class="on">PRO</button><button data-v="1">ELITE</button></div></div>\n    <div class="row"><label>DETAIL</label>\n      <div class="seg" id="segQual"><button data-v="1" class="on">HIGH</button><button data-v="0">LITE</button></div></div>\n    <button class="go" id="btnStart">KICK OFF</button>\n  </div>\n</div>\n<div id="grade"></div>\n<div id="tint"></div>\n<div id="grain"></div>\n<div id="load">WARMING UP</div>\n\n<!-- OUR VENDORED COPY, NOT A CDN. The upstream file pulls three.js r128\n     from cdnjs; this game ships offline and onto CrazyGames, where an\n     outside request is at best a slow frame and at worst a black screen.\n     vendor/three.min.js is the same revision, r128, so nothing else in\n     this file changes. -->';
+  var booted = false;
+  var host = null;
+  function hostW(){ return (host && host.clientWidth) || 640; }
+  function hostH(){ return (host && host.clientHeight) || 360; }
+  function inject(){
+    if (document.getElementById(STYLE_ID)) return;
+    var st = document.createElement('style');
+    st.id = STYLE_ID; st.textContent = CSS;
+    document.head.appendChild(st);
+  }
+  function boot() {
 "use strict";
 /* =====================================================================
    MATCHDAY — AI vs AI football, broadcast presentation.
@@ -467,7 +306,7 @@ const NAME_POOL = [
 const canvas = document.getElementById('scene');
 const renderer = new THREE.WebGLRenderer({canvas, antialias:true, powerPreference:'high-performance'});
 renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, 2));
-renderer.setSize(innerWidth, innerHeight);
+renderer.setSize(hostW(), hostH());
 renderer.outputEncoding = THREE.sRGBEncoding;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 0.92;
@@ -476,12 +315,12 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
 const scene = new THREE.Scene();
 scene.fog = new THREE.FogExp2(0x070c1c, 0.0042);
-const camera = new THREE.PerspectiveCamera(30, innerWidth/innerHeight, 0.4, 900);
+const camera = new THREE.PerspectiveCamera(30, hostW()/hostH(), 0.4, 900);
 camera.position.set(0, 22, -60);
 
 addEventListener('resize', ()=>{
-  camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix();
-  renderer.setSize(innerWidth, innerHeight);
+  camera.aspect = hostW()/hostH(); camera.updateProjectionMatrix();
+  renderer.setSize(hostW(), hostH());
 });
 
 /* ================== procedural textures ================== */
@@ -3505,8 +3344,19 @@ function updateCamera(dt){
   LIGHTS.key.target.updateMatrixWorld();
 }
 
-/* ================== HUD ================== */
-const el = id=>document.getElementById(id);
+/* ================== HUD ==================
+   THE SCOREBOARD IS LOOKED UP INSIDE THE HOST, NOT THE DOCUMENT.
+   Upstream this was `document.getElementById`, which was right for a
+   page that is nothing but this engine. Here the stadium lives in a tab
+   that the manager game rebuilds whenever you look at another one — the
+   host is detached, not destroyed, so every id vanishes from the
+   document and the very next frame threw on `el('clock').textContent`.
+   The match froze in place while you were on the tactics screen, which
+   is exactly when it is supposed to still be being played.
+
+   `host` is held as a reference, so it can be searched whether or not it
+   is currently on the page. */
+const el = id => (host ? host.querySelector('#' + id) : document.getElementById(id));
 function paintBug(){
   const c = el('bugLogo'); if(!c) return;
   const g = c.getContext('2d');
@@ -3981,6 +3831,59 @@ for(const o of officials) animateLite(o);
 updateBoard();
 el('load').classList.add('off');
 requestAnimationFrame(frame);
-</script>
-</body>
-</html>
+  }
+
+  /* THREE HAS TO BE FETCHED, AND USED TO BE SOMEBODY ELSE'S JOB.
+     The old 3D dugout lazy-loaded it and this engine simply assumed it
+     was there; deleting that dugout took the loader with it, so the
+     broadcast silently never booted and the tab fell back to the 2D
+     renderer. It loads its own dependency now. */
+  var loading = false, loadFailed = false;
+  function ensureThree() {
+    if (typeof THREE !== 'undefined') return true;
+    if (loadFailed || loading) return false;
+    loading = true;
+    try {
+      var tag = document.createElement('script');
+      tag.src = (typeof window.THREE_LOCAL === 'string') ? window.THREE_LOCAL : 'vendor/three.min.js';
+      tag.async = false;
+      tag.onload = function () { loading = false; };
+      tag.onerror = function () { loading = false; loadFailed = true; };
+      document.head.appendChild(tag);
+    } catch (error) { loading = false; loadFailed = true; }
+    return false;
+  }
+
+  window.RBSMatchday = {
+    /* Build it once, into the element the dugout hands us. */
+    mount: function (el) {
+      if (!el) return null;
+      if (booted) {
+        if (host && host.parentNode !== el) el.appendChild(host);
+        return window.Matchday || null;
+      }
+      /* not ready yet is not the same as broken: the dugout calls this
+         every frame, so it boots on whichever call finds THREE there */
+      if (!ensureThree()) return null;
+      host = document.createElement('div');
+      host.id = 'mdHost';
+      host.style.cssText = 'width:100%;height:100%';
+      host.innerHTML = MARKUP;
+      el.appendChild(host);
+      inject();
+      try { boot(); booted = true; } catch (error) {
+        try { if (host.parentNode) host.parentNode.removeChild(host); } catch (e2) { /* gone */ }
+        host = null;
+        return null;
+      }
+      return window.Matchday || null;
+    },
+    booted: function () { return booted; },
+    waiting: function () { return loading; },
+    unavailable: function () { return loadFailed; },
+    host: function () { return host; },
+    resize: function () {
+      try { window.dispatchEvent(new Event('resize')); } catch (error) { /* no window */ }
+    }
+  };
+}());
