@@ -2768,17 +2768,43 @@ function finishOptions(p, d, ballY, pressure){
 }
 function pickFinish(p, d, pressure){
   const opts = finishOptions(p, d, ball.pos.y, pressure);
-  let best = opts[0], bs = -1e9;
+
+  /* EVERY GOAL LOOKED THE SAME, and this is where it came from. The
+     engine knows ten ways to finish, and then took the ARGMAX of them:
+     for a given player at a given distance the same option won almost
+     every time, because the only thing separating the candidates was a
+     ±26 jitter against a score built from a hundred points of ability
+     and twenty-two of difficulty. One striker, one distance, one finish,
+     for ever.
+
+     Two ways to fix that and only one of them is honest. Widening the
+     jitter would have a poor finisher attempt an overhead kick as often
+     as a good one; that is variety bought by making everybody stupid.
+     Instead the score becomes a WEIGHT and the finish is drawn from it,
+     so a player still mostly does what he is best at and occasionally
+     does something else — which is what makes two goals by the same man
+     look like two goals rather than one played twice.
+
+     The temperature is what buys the variety. At 16 the best option is
+     roughly six times likelier than one a couple of classes below it, so
+     the tap-in is still the tap-in and the thirty-yarder is still rare
+     and still mostly struck by somebody who can strike it. */
+  const weighted = [];
+  let total = 0;
   for(const k of opts){
     const f = FINISH[k];
-    // how good he is at it, minus how hard it is, plus a little appetite
-    let sc = Amix(p, f.attr)*100 - f.spread*22 + Math.random()*26;
+    let sc = Amix(p, f.attr)*100 - f.spread*22;
     if(k==='banger') sc += (A01(p,'shooting')-0.55)*70;      // only real strikers try these
     if(k==='chip')   sc += (A01(p,'composure')-0.6)*60;
     if(k==='divingheader') sc += (A01(p,'aggression')-0.5)*40;
-    if(sc>bs){ bs=sc; best=k; }
+    const w = Math.exp(sc/16);
+    weighted.push({ k, w });
+    total += w;
   }
-  return best;
+  if(!(total > 0)) return opts[0];
+  let r = Math.random()*total;
+  for(const o of weighted){ r -= o.w; if(r <= 0) return o.k; }
+  return weighted[weighted.length-1].k;
 }
 
 function doShot(p, aimV, power, forced){
