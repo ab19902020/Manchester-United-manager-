@@ -163,7 +163,8 @@ const S = {
   possTeam:1, lastTouch:null, pendingOffside:null, running:false,
   dir:[1,-1], speed:1, quality:1,
   stats:{ poss:[0,0], shots:[0,0], onTarget:[0,0], corners:[0,0] }, stoppage:0,
-  camMode:'auto', camShot:'broadcast', camHold:0, focus:null
+  camMode:'auto', camShot:'broadcast', camHold:0, focus:null,
+  org:[0.5,0.5]        /* how well each side is led — see teamOrg() */
 };
 
 /* =====================================================================
@@ -1872,6 +1873,31 @@ function disposeBody(b){
 }
 buildTeams();
 function teamOf(t){ return players.filter(p=>p.team===t); }
+/* =====================================================================
+   LEADERSHIP, WHICH USED TO BE DECORATION
+   ---------------------------------------------------------------------
+   It was in the attribute list and in the table the generator uses to
+   weight a position, and nowhere in play: a squad of captains and a
+   squad of passengers played exactly the same football. Caught by a
+   sensitivity rig -- two identical elevens, one attribute at 18 against
+   6 -- where leadership was the only one that moved nothing.
+
+   A captain does not take the shots. He organises: the side keeps its
+   heads under pressure, holds its shape, wins the second ball and stops
+   diving into tackles it cannot win. So leadership is a team number,
+   not a personal one -- the best man in the side carries most of it and
+   the rest of the dressing room carries the remainder -- and it leans
+   on those three things a little each rather than any one of them a
+   lot.
+   ===================================================================== */
+function teamOrg(t){
+  const men = teamOf(t).filter(p=>!p.isGK);
+  if(!men.length) return 0.5;
+  let best = 0, sum = 0;
+  for(const p of men){ const l = A01(p,'leadership'); sum += l; if(l>best) best = l; }
+  return 0.55*best + 0.45*(sum/men.length);
+}
+function orgOf(t){ return (S.org && S.org[t] != null) ? S.org[t] : 0.5; }
 function keeperOf(t){ return players.find(p=>p.team===t && p.isGK); }
 
 // match officials
@@ -2574,6 +2600,8 @@ function passError(p,d){
      ones, composure keeps him steady under pressure, and a rare wobble
      stands in for the ball bobbling off a divot. */
   let skill = Amix(p, {passing:2.6, vision:1.0, decisions:0.7, composure:0.5, firstTouch:0.4});
+  /* a well-led side keeps its head; a badly led one starts to rush */
+  skill = THREE.MathUtils.clamp(skill + (orgOf(p.team)-0.5)*0.24, 0, 1);
   /* A side defending a goal the plan has already awarded starts to look
      ragged — which is how a scripted goal arrives out of real play
      rather than being dropped in from nowhere. */
@@ -2867,7 +2895,8 @@ function resolvePossession(){
        a metre of the 1.35m control radius between the best in the
        division and the worst, so shape still matters -- it simply no
        longer decides the match on its own. */
-    score -= (Amix(p,{positioning:1.3, decisions:1.0, acceleration:0.9, workRate:0.5}) - 0.5) * 1.80;
+    score -= (Amix(p,{positioning:1.3, decisions:1.0, acceleration:0.9, workRate:0.5})
+              + (orgOf(p.team)-0.5)*0.62 - 0.5) * 1.80;
     if(SCRIPT.active && SCRIPT.stats && SCRIPT.stats.possession)
       score -= (possBias(p.team)-1)*9.0;             // 50-50s go the plan's way
     if(score<bestD){ bestD=score; best=p; }
@@ -2889,7 +2918,8 @@ function resolvePossession(){
       const win  = Amix(best,  {tackling:2.4, positioning:0.8, strength:0.8, agility:0.6});
       const keep = Amix(owner, {dribbling:2.0, agility:1.0, composure:0.9, strength:0.8});
       const edge = win - keep;                       // -1 .. +1
-      const foul = THREE.MathUtils.clamp(0.34 - edge*0.42 + A01(best,'aggression')*0.20, 0.04, 0.72);
+      const foul = THREE.MathUtils.clamp(0.34 - edge*0.42 + A01(best,'aggression')*0.20
+                                         - (orgOf(best.team)-0.5)*0.30, 0.04, 0.72);
       if(Math.random() < foul){
         const line = S.dir[best.team]*-HALF_L;
         const inBox = Math.abs(owner.pos.x-line) < CFG.PEN_D
@@ -3941,6 +3971,7 @@ function newMatch(){
   S.score=[0,0]; S.half=1; S.clock=0; S.dir=[1,-1];
   S.stats={poss:[0,0],shots:[0,0],onTarget:[0,0],corners:[0,0]};
   for(const p of players){ p.stamina=100; p.celeb=0; p.skill=0; p.dive=0; p.kickAnim=0; }
+  S.org = [teamOrg(0), teamOrg(1)];        /* who is leading whom, this match */
   for(const e of SCRIPT.events) e.fired = false;
   SCRIPT.blocked=0; SCRIPT.forced=0; SCRIPT.pending=null; SCRIPT.penWait=0;
   SCRIPT.penTries=0; S.stoppage=0;

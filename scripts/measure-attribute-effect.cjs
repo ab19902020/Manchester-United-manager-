@@ -22,6 +22,9 @@ const srv = http.createServer((q, r) => { let f = decodeURIComponent(q.url.split
   r.writeHead(200, {'content-type': T[path.extname(p)] || 'application/octet-stream'});
   fs.createReadStream(p).pipe(r); });
 const N = +(process.argv[2] || 24);
+/* an optional list, so one attribute can be re-checked on its own after
+   it has been wired up rather than paying for all nineteen again */
+const ONLY = (process.argv[3] || '').split(',').filter(Boolean);
 srv.listen(0, async () => {
   const port = srv.address().port;
   const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
@@ -39,7 +42,12 @@ srv.listen(0, async () => {
   }
   if (!booted) { console.log('the engine never booted'); await b.close(); srv.close(); return; }
 
-  const keys = await p.evaluate(() => window.Matchday.ATTR_KEYS.slice());
+  /* THE CONTROL COMES FIRST, because without it there is no way to tell
+     a real effect from a run of luck. It is the same test with nothing
+     varied at all: whatever spread it shows is the noise floor, and
+     nothing smaller than that means anything. */
+  let keys = ['(control: nothing varied)'].concat(await p.evaluate(() => window.Matchday.ATTR_KEYS.slice()));
+  if (ONLY.length) keys = keys.filter((k, i) => i === 0 || ONLY.indexOf(k) >= 0);
   console.log('one attribute at a time: 18 for the home side, 6 for the away side,');
   console.log('everything else 12 for both.', N, 'matches each.\n');
   console.log('attribute       goals for  against   diff   shots for  against    diff');
@@ -54,7 +62,7 @@ srv.listen(0, async () => {
         players: shape.map((s, i) => {
           const attrs = {};
           for (const k of M.ATTR_KEYS) attrs[k] = 12;
-          attrs[key] = level;
+          if (M.ATTR_KEYS.indexOf(key) >= 0) attrs[key] = level;
           return { id: 't' + i, name: 'P' + i, number: i + 1, slot: s[0],
             heightCm: 182, weightKg: 76, attrs };
         }),
@@ -74,10 +82,13 @@ srv.listen(0, async () => {
       r.sf.toFixed(1).padStart(10), r.sa.toFixed(1).padStart(9), f(r.sf - r.sa).padStart(8));
     out.push({ key, goals: r.gf - r.ga, shots: r.sf - r.sa });
   }
-  out.sort((a, b) => Math.abs(a.goals) - Math.abs(b.goals));
-  console.log('\nweakest effect on the scoreline, in order:');
-  for (const o of out.slice(0, 6))
-    console.log('  ' + o.key.padEnd(14), 'goal diff', (o.goals >= 0 ? '+' : '') + o.goals.toFixed(2),
-      ' shot diff', (o.shots >= 0 ? '+' : '') + o.shots.toFixed(1));
+  const control = out.shift();
+  out.sort((a, b) => a.shots - b.shots);
+  console.log('\nnoise floor (control): goal diff ' + control.goals.toFixed(2)
+    + ', shot diff ' + control.shots.toFixed(1));
+  console.log('\nevery attribute by how much it moves the shot count, weakest first:');
+  for (const o of out)
+    console.log('  ' + o.key.padEnd(14), 'shots', (o.shots >= 0 ? '+' : '') + o.shots.toFixed(1).padStart(5),
+      '  goals', (o.goals >= 0 ? '+' : '') + o.goals.toFixed(2));
   await b.close(); srv.close();
 });
