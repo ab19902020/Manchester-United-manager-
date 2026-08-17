@@ -162,7 +162,11 @@ const S = {
   aiSkill:0.86, offsideOn:true, freeze:0, restart:null,
   possTeam:1, lastTouch:null, pendingOffside:null, running:false,
   dir:[1,-1], speed:1, quality:1,
-  stats:{ poss:[0,0], shots:[0,0], onTarget:[0,0], corners:[0,0] }, stoppage:0,
+  /* aerial and loose are duels won, which is a real match statistic and
+     also the only way to measure whether an attribute does anything: a
+     scoreline gives you one number a match, duels give you hundreds. */
+  stats:{ poss:[0,0], shots:[0,0], onTarget:[0,0], corners:[0,0],
+          aerial:[0,0], loose:[0,0] }, stoppage:0,
   camMode:'auto', camShot:'broadcast', camHold:0, focus:null,
   org:[0.5,0.5]        /* how well each side is led — see teamOrg() */
 };
@@ -2870,9 +2874,16 @@ function doCross(p){
 }
 
 /* ================== possession ================== */
+/* HOW HIGH IS AN AERIAL DUEL. Above the head was the obvious answer and
+   the wrong one: at 1.05 m the contest happened three times a match, so
+   heading had nothing to act on however heavily it was weighted. A ball
+   at chest height is headed or chested as often as one above the head,
+   and it is still won by the man who reads and attacks it. */
+const AERIAL_H = 0.72;
 function resolvePossession(){
   if(ball.cool>0 || S.phase!=='play') return;
   const owner = ball.owner;
+  const wasHigh = ball.pos.y > AERIAL_H;  /* for the aerial-duel count */
   let best=null, bestD=1e9;
   for(const p of players){
     if(p.cool>0) continue;
@@ -2897,6 +2908,24 @@ function resolvePossession(){
        longer decides the match on its own. */
     score -= (Amix(p,{positioning:1.3, decisions:1.0, acceleration:0.9, workRate:0.5})
               + (orgOf(p.team)-0.5)*0.62 - 0.5) * 1.80;
+    /* A HIGH BALL IS WON IN THE AIR, NOT BY WHOEVER IS NEAREST.
+       Heading had one job in this engine -- the accuracy of a header
+       once he was already taking one -- and no say at all in whether he
+       got to it. So a 4-heading winger out-jumped an 18-heading centre
+       half as long as he stood a few inches closer, and the attribute
+       barely showed in a match. A ball above chest height is now a
+       contest, and it is the one place strength is worth as much as
+       timing. */
+    if(ball.pos.y > AERIAL_H && !p.isGK)
+      score -= (Amix(p,{heading:2.2, strength:1.0, positioning:0.6}) - 0.5) * 0.85;
+    /* AND A BALL ARRIVING QUICKLY HAS TO BE CONTROLLED.
+       First touch only sharpened a finish and steadied a pass; taking a
+       driven ball down was free for everybody. The quicker it arrives,
+       the more a poor touch lets it run. */
+    const arriving = ball.vel.length();
+    if(arriving > 8 && p !== owner)
+      score += (0.55 - Amix(p,{firstTouch:2.0, composure:0.7, agility:0.6}))
+               * Math.min(1, arriving/22) * 0.75;
     if(SCRIPT.active && SCRIPT.stats && SCRIPT.stats.possession)
       score -= (possBias(p.team)-1)*9.0;             // 50-50s go the plan's way
     if(score<bestD){ bestD=score; best=p; }
@@ -3013,6 +3042,10 @@ function resolvePossession(){
     ball.vel.set(ball.vel.x*.4, 1.2, out*7);
     ball.cool = .35; best.cool = .4; S.lastTouch = best;
     return;
+  }
+  if(!owner || owner.team !== best.team){
+    S.stats.loose[best.team]++;
+    if(wasHigh) S.stats.aerial[best.team]++;
   }
   ball.owner = best; ball.vel.set(0,0,0);
   S.possTeam = best.team; S.lastTouch = best;
@@ -3969,7 +4002,7 @@ function newMatch(){
   if(S.squadsDirty){ buildTeams(); S.squadsDirty=false; }
   reskinPitch();                                   // a freshly cut pitch each time
   S.score=[0,0]; S.half=1; S.clock=0; S.dir=[1,-1];
-  S.stats={poss:[0,0],shots:[0,0],onTarget:[0,0],corners:[0,0]};
+  S.stats={poss:[0,0],shots:[0,0],onTarget:[0,0],corners:[0,0],aerial:[0,0],loose:[0,0]};
   for(const p of players){ p.stamina=100; p.celeb=0; p.skill=0; p.dive=0; p.kickAnim=0; }
   S.org = [teamOrg(0), teamOrg(1)];        /* who is leading whom, this match */
   for(const e of SCRIPT.events) e.fired = false;
@@ -4181,6 +4214,7 @@ window.Matchday = {
       possession:[Math.round(S.stats.poss[0]/t*100), Math.round(S.stats.poss[1]/t*100)],
       shots:S.stats.shots.slice(), onTarget:S.stats.onTarget.slice(),
       corners:S.stats.corners.slice(), pitch:PITCH.cut.id,
+      aerial:S.stats.aerial.slice(), loose:S.stats.loose.slice(),
       /* who else is out there — the officials and the two technical
          areas, so a test can prove the touchline is populated */
       crew:{ officials:officials.length, bench:bench.filter(b=>b.kind!=='gone').length,

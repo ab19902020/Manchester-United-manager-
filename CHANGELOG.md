@@ -4,6 +4,48 @@
 
 ### Changed
 
+- **Every attribute now does something, and there is a rig that proves it.**
+  "All attributes should make a difference" is a claim you can argue about or
+  measure. `scripts/measure-attribute-effect.cjs` measures it: two identical
+  elevens, every attribute at 12, then one attribute raised to 18 on one side
+  and dropped to 6 on the other — plus a **control row with nothing varied at
+  all**, which turned out to be the most important line in the table.
+
+  - **`leadership` did nothing whatsoever.** It was in the attribute list and
+    in the table the generator uses to weight a position, and nowhere in play:
+    a squad of captains played exactly the same football as a squad of
+    passengers. A captain does not take the shots, he organises, so it is a
+    team number rather than a personal one — the best man in the side carries
+    most of it and the dressing room the rest — and it leans a little on three
+    things: keeping heads when passing under pressure, winning second balls,
+    and not diving into tackles. Measured at **+2.0 shots and +0.27 goals** a
+    match, the size of composure or vision, which is right for it.
+  - **`heading` had one job that almost never came up.** It set the accuracy of
+    a header once a man was already taking one, and had no say in whether he
+    got to the ball — so a 4-heading winger out-jumped an 18-heading centre
+    half by standing a few inches closer. A ball above chest height is now a
+    contest, weighted on heading and strength.
+  - **`firstTouch` and `strength`**: taking a driven ball down was free for
+    everybody. The quicker it arrives, the more a poor touch lets it run.
+    Strength now moves the loose-ball share by nine points across its range.
+
+- **The engine counts duels now** — loose balls and aerials won, per side, in
+  `getState()`. They are ordinary match statistics, and they are also the only
+  instrument fine enough to tune with: a match gives one scoreline and about
+  ten shots, so the control row swings **±3 shots between runs of forty-four
+  matches** and anything smaller than that is noise. It gives 150 loose balls,
+  which settle down in a handful of matches.
+
+### Known
+
+- **This engine plays on the floor.** With duels counted, a match produces
+  **3 to 5 aerial contests against about forty in real football**. Heading
+  works now, but it cannot matter much until the game plays more balls in the
+  air — more crosses, more long balls, contested goal kicks. That is a bigger
+  job than this one and it is logged rather than glossed over.
+
+### Changed
+
 - **Pace shows on the pitch.** "Every player seems the same speed" was correct,
   and here is the number: top speed was `5.6 + 2.4 × (0.25 + pace × 1.25)`,
   which put an entire squad between **7.7 and 9.2 m/s — an 18% spread across

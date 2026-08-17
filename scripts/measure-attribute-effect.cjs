@@ -50,7 +50,12 @@ srv.listen(0, async () => {
   if (ONLY.length) keys = keys.filter((k, i) => i === 0 || ONLY.indexOf(k) >= 0);
   console.log('one attribute at a time: 18 for the home side, 6 for the away side,');
   console.log('everything else 12 for both.', N, 'matches each.\n');
-  console.log('attribute       goals for  against   diff   shots for  against    diff');
+  /* DUELS ARE THE SIGNAL. A match gives one scoreline and about ten
+     shots, so a scoreline needs hundreds of matches to say anything;
+     it gives hundreds of duels, so the share of them a side wins
+     settles down in a handful. Both are printed -- the duel shares are
+     the ones worth believing at this sample size. */
+  console.log('attribute        goals   shots   loose balls won   aerials won   duels a match');
   const out = [];
   for (const key of keys) {
     const r = await p.evaluate(({ key, n }) => {
@@ -69,26 +74,34 @@ srv.listen(0, async () => {
       });
       M.loadSquads({ home: squad(18), away: squad(6) });
       M.clearScript(); M.setHalfLength(150);
-      let gf = 0, ga = 0, sf = 0, sa = 0;
+      let gf = 0, ga = 0, sf = 0, sa = 0, af = 0, aa = 0, lf = 0, la = 0;
       for (let i = 0; i < n; i++) {
         const s = M.simulateMatch();
         gf += s.score[0]; ga += s.score[1]; sf += s.shots[0]; sa += s.shots[1];
+        af += s.aerial[0]; aa += s.aerial[1]; lf += s.loose[0]; la += s.loose[1];
       }
-      return { gf: gf / n, ga: ga / n, sf: sf / n, sa: sa / n };
+      return { gf: gf / n, ga: ga / n, sf: sf / n, sa: sa / n,
+        aerial: (af + aa) ? af / (af + aa) : 0.5, loose: (lf + la) ? lf / (lf + la) : 0.5,
+        nAerial: (af + aa) / n, nLoose: (lf + la) / n };
     }, { key, n: N });
     const f = (v) => (v >= 0 ? '+' : '') + (Math.round(v * 100) / 100).toFixed(2);
-    console.log(key.padEnd(15),
-      r.gf.toFixed(2).padStart(8), r.ga.toFixed(2).padStart(8), f(r.gf - r.ga).padStart(7),
-      r.sf.toFixed(1).padStart(10), r.sa.toFixed(1).padStart(9), f(r.sf - r.sa).padStart(8));
-    out.push({ key, goals: r.gf - r.ga, shots: r.sf - r.sa });
+    const pc = (v) => (Math.round(v * 1000) / 10).toFixed(1) + '%';
+    console.log(key.padEnd(15), f(r.gf - r.ga).padStart(7), f(r.sf - r.sa).padStart(7),
+      pc(r.loose).padStart(17), pc(r.aerial).padStart(13),
+      ('  ' + Math.round(r.nLoose) + ' loose / ' + Math.round(r.nAerial) + ' aerial').padStart(20));
+    out.push({ key, goals: r.gf - r.ga, shots: r.sf - r.sa, loose: r.loose, aerial: r.aerial });
   }
   const control = out.shift();
-  out.sort((a, b) => a.shots - b.shots);
-  console.log('\nnoise floor (control): goal diff ' + control.goals.toFixed(2)
-    + ', shot diff ' + control.shots.toFixed(1));
-  console.log('\nevery attribute by how much it moves the shot count, weakest first:');
+  const pc = (v) => (Math.round(v * 1000) / 10).toFixed(1) + '%';
+  console.log('\ncontrol, nothing varied: goals ' + control.goals.toFixed(2)
+    + ', shots ' + control.shots.toFixed(1)
+    + ', loose ' + pc(control.loose) + ', aerials ' + pc(control.aerial));
+  console.log('\nhow far each attribute moves the duels it should, weakest first');
+  console.log('(loose and aerial are the home share; 50% is no effect at all)\n');
+  out.sort((a, b) => Math.abs(a.loose - control.loose) - Math.abs(b.loose - control.loose));
   for (const o of out)
-    console.log('  ' + o.key.padEnd(14), 'shots', (o.shots >= 0 ? '+' : '') + o.shots.toFixed(1).padStart(5),
-      '  goals', (o.goals >= 0 ? '+' : '') + o.goals.toFixed(2));
+    console.log('  ' + o.key.padEnd(14), 'loose', pc(o.loose).padStart(6),
+      ' aerial', pc(o.aerial).padStart(6),
+      ' shots', ((o.shots >= 0 ? '+' : '') + o.shots.toFixed(1)).padStart(6));
   await b.close(); srv.close();
 });
