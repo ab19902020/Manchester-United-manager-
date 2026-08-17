@@ -56,6 +56,7 @@ function gameHtml() {
     'src/trophy-room.js',
     'src/world-seed.js',
     'src/one-job.js',
+    'src/one-soundtrack.js',
     'src/front-door.js',
     'src/transfer-search.js',
     'src/keep-history.js',
