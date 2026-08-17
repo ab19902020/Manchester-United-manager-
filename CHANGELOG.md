@@ -156,6 +156,24 @@
 
 ### Fixed
 
+- **The wrong team kicked off after a goal, and the wrong team celebrated it.**
+  Everything that happened after a goal was decided by `S.score[0]>S.score[1]` —
+  which asks who is winning, not who just scored, and gives a different answer
+  whenever the scoring side is still behind. Three goals down and pulling one
+  back, the team that scored was judged the loser and made to restart, while the
+  side three up ran to the corner flag celebrating a goal it had just conceded.
+  The replay caption named that side too. The engine now remembers who actually
+  scored and the conceding team restarts, which is the rule.
+
+- **Goal replays showed players with their legs together, sliding.** The stride is
+  driven off each player's velocity, and a replay writes positions frame by frame
+  without ever touching velocity — so everybody kept whatever speed he happened to
+  hold when the ball crossed the line, which after the freeze and the celebration
+  is nothing. The replay buffer already stores how long each frame took, so the
+  velocity is recovered from the distance between consecutive frames rather than
+  invented, and the legs run at the speed they actually ran at.
+
+
 - **The broadcast froze whenever you looked at another match tab.** The engine
   found its scoreboard with `document.getElementById`, which is right for a
   page that is nothing but the engine. Here it lives in a tab the manager game

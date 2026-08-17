@@ -3472,6 +3472,13 @@ function checkRules(){
 
       rippleNet(s, ball.pos.z, ball.pos.y);
       S.score[scorer]++;
+      /* WHO SCORED, not who is winning. Everything after a goal used to
+         be decided by `S.score[0]>S.score[1]`, which is a different
+         question and gives a different answer whenever the scoring side
+         is still behind: at 3-0 down, a team that pulls one back was
+         judged the loser and so restarted the game it had just conceded
+         nothing in, while the side that was three up celebrated it. */
+      S.lastScorer = scorer;
       const planned = markGoalScored(scorer);
       /* The plan names the scorer, so the graphic credits him even if
          the last touch in the box was somebody else's knee. */
@@ -3818,7 +3825,7 @@ function replayStart(){
   if(REPLAY.buf.length < 12) return false;
   REPLAY.playing = true; REPLAY.i = 0;
   lowerThird('REPLAY', S.scorer ? S.scorer.name : 'THE GOAL',
-    TEAMS[S.goalSide!=null && S.score[0]>S.score[1] ? 0 : 1].name);
+    TEAMS[S.lastScorer==null ? (S.score[0]>S.score[1] ? 0 : 1) : S.lastScorer].name);
   cutTo('goal', 99);
   return true;
 }
@@ -3832,9 +3839,24 @@ function replayStep(dt){
   if(!f){ replayStop(); return false; }
   ball.pos.set(f.b[0], f.b[1], f.b[2]);
   ballMesh.position.copy(ball.pos);
+  /* A REPLAY HAD TO STAND STILL, and this is why. `animate()` reads the
+     stride straight off `p.vel`, and a replay sets `pos` frame by frame
+     without ever touching velocity — so every player kept whatever speed
+     he happened to hold when the goal went in, which after the freeze
+     and the celebration is nothing. Twenty-two men slid across the grass
+     with their legs together.
+
+     The buffer already knows how fast everybody was going: it is the
+     distance between this frame and the last one, over the time between
+     them. So the velocity is recovered rather than invented, and the
+     legs run at the speed they actually ran at. */
+  const prev = REPLAY.buf[REPLAY.i-2];
+  const step = Math.max(1e-3, f.d || dt || 1/60);   /* every frame stored its own */
   for(let k=0;k<players.length;k++){
     const q = players[k];
-    q.pos.x = f.p[k*3]; q.pos.y = f.p[k*3+1]; q.face = f.p[k*3+2];
+    const nx = f.p[k*3], nz = f.p[k*3+1];
+    if(prev) q.vel.set((nx-prev.p[k*3])/step, (nz-prev.p[k*3+1])/step);
+    q.pos.x = nx; q.pos.y = nz; q.face = f.p[k*3+2];
     animate(q, dt);
   }
   return true;
@@ -3891,7 +3913,7 @@ function tick(dt){
   if(S.phase==='goal'){
     S.freeze -= dt;
     for(const p of players){
-      if(p.celeb>0 && p.team===(S.score[0]>S.score[1]?0:1)){
+      if(p.celeb>0 && p.team===(S.lastScorer==null?(S.score[0]>S.score[1]?0:1):S.lastScorer)){
         const corner = new THREE.Vector2(S.goalSide*(HALF_L-6), (p.idx%2?1:-1)*(HALF_W-6));
         movePlayer(p, corner.sub(p.pos).clampLength(0,1), true, dt);
       } else movePlayer(p, ZERO, false, dt);
@@ -3901,12 +3923,12 @@ function tick(dt){
     /* the celebration, then the replay, and only then the restart */
     if(S.freeze<=0){
       if(replayStart()){ S.phase='replay'; return; }
-      kickoff(S.score[0]>S.score[1]?1:0);
+      kickoff(S.lastScorer==null?(S.score[0]>S.score[1]?1:0):1-S.lastScorer);
     }
     return;
   }
   if(S.phase==='replay'){
-    if(!replayStep(dt)) kickoff(S.score[0]>S.score[1]?1:0);
+    if(!replayStep(dt)) kickoff(S.lastScorer==null?(S.score[0]>S.score[1]?1:0):1-S.lastScorer);
     return;
   }
   if(S.phase==='half'){
