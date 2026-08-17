@@ -4,5 +4,6 @@ npm-debug.log*
 coverage/
 .div-e.log
 .div-5s.log
-.check.log
 dist/
+.check*.log
+.div-*.log
