@@ -36,7 +36,6 @@ function gameHtml() {
     'src/boardroom.js',
     'src/match-ratings.js',
     'src/dugout-renderer.js',
-    'src/dugout-3d.js',
     'src/contract-score.js',
     'src/squad-identity.js',
     'src/dugout-drama.js',
@@ -60,6 +59,7 @@ function gameHtml() {
     'src/front-door.js',
     'src/transfer-search.js',
     'src/keep-history.js',
+    'src/dugout-matchday.js',
     'src/stadium-costs.js',
     'src/crazygames.js',
   ]) {

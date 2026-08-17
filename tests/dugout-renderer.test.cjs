@@ -57,17 +57,21 @@ test('the extracted Dugout renderer owns the live frame and receives engine even
     MU.m.say(MU.m.dispMin(),side,player.p.name+' completes a pass through midfield.','');
     drawDugout();
     const event=window.RBSDugoutRenderer.scene.event;
-    const threeEvent=window.RBSDugout3D.state.timeline.queue.at(-1);
+    /* THE 3D DUGOUT IS GONE. It was replaced by the Matchday broadcast,
+       which runs in its own frame -- so what this test now checks is the
+       thing that still matters here: the 2D renderer is what draws while
+       that frame is coming up, and for good if it never does. In JSDOM
+       it never does, which is exactly the fallback case. */
     const canvasPresent=!!document.getElementById('dugCanvas');
     ACTIONS.mtab(document.querySelector('.mtabs [data-action="mtab"][data-v="pitch"]'));
     return {
       installed:window.RBSDugoutRenderer.installed,
-      threeInstalled:window.RBSDugout3D.installed,
-      threeFallback:window.RBSDugout3D.state.disabled,
+      broadcastLoaded:!!window.RBSDugoutMatchday,
+      broadcastStarted:!!(window.RBSDugoutMatchday&&window.RBSDugoutMatchday.state.started),
       frames:window.RBSDugoutRenderer.scene.frame,
       advanced:window.RBSDugoutRenderer.scene.frame>before,
       event:event&&event.type,
-      threeEvent:threeEvent&&threeEvent.type,
+
       actor:event&&event.primary&&event.primary.p.name,
       canvas:canvasPresent,
       pitchTabSelected:document.querySelector('.mtabs [data-v="pitch"]').classList.contains('on'),
@@ -77,15 +81,16 @@ test('the extracted Dugout renderer owns the live frame and receives engine even
   })()`);
 
   assert.equal(result.installed, true);
-  assert.equal(result.threeInstalled, true);
-  assert.equal(result.threeFallback, true);
+  assert.equal(result.broadcastLoaded, true,
+    'the broadcast driver is installed');
+  assert.equal(result.broadcastStarted, false,
+    'and in JSDOM the frame never comes up, which is the fallback case');
   assert.equal(result.canvas, true);
   assert.equal(result.pitchTabSelected, true);
   assert.equal(result.dugoutTabSelected, false);
   assert.equal(result.advanced, true);
   assert.ok(result.frames >= 2);
   assert.equal(result.event, 'pass');
-  assert.equal(result.threeEvent, 'pass');
   assert.ok(result.actor);
   assert.equal(result.error, null);
 });
