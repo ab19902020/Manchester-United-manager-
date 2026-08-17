@@ -584,6 +584,15 @@
         const late = LIVE.began && Date.now() - LIVE.began > PATIENCE * 2;
         if (state.failed || late) {
           LIVE.want = false; LIVE.on = false;
+          /* AND THIS MATCH IS THE 2D RENDERER'S NOW.
+             Without this the dugout would still take the broadcast if
+             you walked into it later — down the non-live path, which
+             plays the whole ninety out at once and hands the picture a
+             script. The save would jump to full time while the
+             broadcast kicked off at 0-0, which is the exact fault this
+             whole change exists to remove. Whatever the match is being
+             played on when it starts, it stays on. */
+          state.failed = true;
           stopLoop();
           passLoop.call(null);
         }
