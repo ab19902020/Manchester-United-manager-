@@ -2501,8 +2501,14 @@ function animate(p, dt){
       b.legs[i].ankle.rotation.x = 0.25;
     }
     b.torso.rotation.set(-0.15, 0, 0);
-  } else if(p.isGK && spd < 1.7 && p.kickAnim<=0 && p.celeb<=0){
-    // set position: on the toes, hands up, weight forward
+  } else if(p.isGK && spd < 4.2 && p.kickAnim<=0 && p.celeb<=0){
+    /* Set position: on the toes, hands up, weight forward.
+       This used to need him almost stationary (1.7 m/s), and a keeper is
+       almost never stationary — he tracks across his line every time the
+       ball moves, which took him over the threshold and dropped him into
+       an ordinary run with his arms by his sides. A keeper shuffling
+       across his goal keeps his hands up; only a genuine sprint off his
+       line, for a cross or a through ball, should put them down. */
     const br = Math.sin(t*2.4 + p.phase)*0.5+0.5;
     for(let i=0;i<2;i++){
       b.arms[i].sh.rotation.x = -0.62 - br*0.06;
@@ -3271,10 +3277,53 @@ function aiPlayer(p, dt){
         t.x += dir*(A01(p,'workRate')*6 + A01(p,'offTheBall')*4);
       }
     } else if(!p.isFwd && !p.isDef){
-      /* the midfielder who screens rather than joins in */
+      /* The midfielder who screens rather than joins in — but a much
+         smaller step than it was. At sixteen metres this pulled the one
+         man the carrier could reach out of range, and it is the ball
+         carrier who decides where support has to be, not the diagram. */
       const screen = Amix(p,{positioning:1.2, decisions:1.0, marking:0.7});
-      if(screen > 0.58) t.x -= dir*(screen-0.58)*16;
-      else t.x += dir*(0.58-screen)*10;
+      t.x -= dir*(screen-0.5)*7;
+    }
+
+    /* =================================================================
+       SOMEBODY HAS TO SHOW FOR IT
+       -----------------------------------------------------------------
+       "every time my team gets the ball, every pass, teammates run away"
+       — and they did. In possession every player walked to a slot in the
+       formation and NOTHING in that sum referred to where the ball
+       actually was. The man on it had no short option, so he held it,
+       got closed down and lost it. In the National League, where passing
+       and vision are at their lowest, that is a turnover nearly every
+       time.
+
+       That was made worse by the width and overlap rules just above,
+       which are mine: they push a wide man to the touchline and a
+       full-back upfield, both away from the ball.
+
+       So the three nearest team-mates now come and offer an angle. One
+       ahead and inside for the forward pass, one square for the switch,
+       one behind as the out-ball — the shape any side makes around
+       whoever has it. How readily he leaves his position to do it is his
+       own off-the-ball, decisions and work rate, so a thoughtful player
+       shows for it and a lazy one stands and watches.
+       ================================================================= */
+    const carrier = (ball.owner && ball.owner.team===p.team)
+                  ? ball.owner : nearestToBall(p.team);
+    if(carrier && carrier!==p && !p.isGK){
+      const mates = teamOf(p.team).filter(q=>!q.isGK && q!==carrier);
+      mates.sort((a,b)=>
+        (Math.hypot(a.pos.x-carrier.pos.x, a.pos.y-carrier.pos.y)) -
+        (Math.hypot(b.pos.x-carrier.pos.x, b.pos.y-carrier.pos.y)));
+      const rank = mates.indexOf(p);
+      if(rank>=0 && rank<3){
+        const OFF = [[8.5, 6.0], [1.5, -9.5], [-7.5, 3.5]][rank];
+        const sx = THREE.MathUtils.clamp(carrier.pos.x + dir*OFF[0], -HALF_L+4, HALF_L-4);
+        const sz = THREE.MathUtils.clamp(carrier.pos.y + OFF[1], -HALF_W+3, HALF_W-3);
+        const show = THREE.MathUtils.clamp(
+          0.34 + Amix(p,{offTheBall:1.3, decisions:1.0, workRate:0.8})*0.44, 0.28, 0.82);
+        t.x = t.x*(1-show) + sx*show;
+        t.y = t.y*(1-show) + sz*show;
+      }
     }
     // and the man the plan says scores gets into the box for it
     if(isScriptScorer(p)){
