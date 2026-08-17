@@ -1767,11 +1767,26 @@ function makePlayer(team, i){
     skill:0, skillKind:0, skillDir:1, strike:null,
     body, mesh:body.group };
 
-  /* Top speed and how fast he gets there come straight off pace and
-     acceleration; a heavier man pays for it. A 20-pace winger and a
-     6-pace centre-half are genuinely different players to watch. */
-  p.topSpeed = CFG.JOG + (CFG.SPRINT-CFG.JOG)*(0.25 + A01(p,'pace')*1.25) * (1.04 - e.build*0.04);
-  p.accel    = CFG.ACCEL * (0.72 + A01(p,'acceleration')*0.62);
+  /* SPEED, IN METRES A SECOND, AND ENOUGH OF IT TO SEE.
+     The old line read 5.6 + 2.4*(0.25 + pace*1.25), which put a whole
+     squad between 7.7 and 9.2 m/s -- an 18% spread across the entire
+     range of the pace attribute. Measured over a match, every player
+     reached his own top speed and they were all within a stride of each
+     other, which is exactly what "every player seems the same speed"
+     looks like from the gantry.
+
+     Real football is 7.5 m/s for a slow centre-half and 10.3 for the
+     quickest men alive: a 37% spread. So the scale is the real one now,
+     with the attribute running the whole way from one end of it to the
+     other, and a heavier man paying a little for it.
+
+     Cruising is his too. Everybody used to jog at a flat 70% of top
+     speed; a high work rate and deep stamina now mean he covers the
+     ground quicker even when he is not sprinting, which is most of the
+     match. */
+  p.topSpeed = (6.00 + 4.40*A01(p,'pace')) * (1.05 - e.build*0.05);
+  p.cruise   = 0.62 + 0.16*A01(p,'workRate') + 0.06*A01(p,'stamina');
+  p.accel    = CFG.ACCEL * (0.60 + A01(p,'acceleration')*0.85);
   p.turn     = 6.0 + A01(p,'agility')*6.5;
   p.gait     = gaitOf(p);
   return p;
@@ -2035,7 +2050,7 @@ function movePlayer(p, want, sprint, dt){
      rate set how long that lasts, so a 5-stamina player is walking by
      the hour mark and a 18-stamina one is still pressing. */
   const fatigue = 0.72 + 0.28*Math.min(1, p.stamina/60);
-  const maxS = (sprint && p.stamina>2 ? p.topSpeed : p.topSpeed*0.70) * fatigue;
+  const maxS = (sprint && p.stamina>2 ? p.topSpeed : p.topSpeed*(p.cruise||0.70)) * fatigue;
   const desired = want.clone();
   if(desired.length()>1) desired.normalize();
   desired.multiplyScalar(maxS);
@@ -2049,6 +2064,11 @@ function movePlayer(p, want, sprint, dt){
   p.pos.addScaledVector(p.vel, dt);
   p.pos.x = THREE.MathUtils.clamp(p.pos.x,-HALF_L-3,HALF_L+3);
   p.pos.y = THREE.MathUtils.clamp(p.pos.y,-HALF_W-3,HALF_W+3);
+  /* what he actually did, so the attributes can be checked against the
+     pitch rather than against the formula that set them */
+  const now = p.vel.length();
+  if(now > (p.peak||0)) p.peak = now;
+  p.ran = (p.ran||0) + now*dt;
   const burn = 17 - A01(p,'stamina')*9;
   const rec  = 5.5 + A01(p,'stamina')*6;
   if(sprint && desired.length()>.1) p.stamina = Math.max(0,p.stamina-burn*dt);
@@ -2065,7 +2085,9 @@ function movePlayer(p, want, sprint, dt){
      the extra ground speed comes from stride LENGTH, which is the swing
      amplitude in animate(). Driving phase straight off speed gave a
      jog that twinkled and a sprint that scissored. */
-  const runN = Math.min(1, spd/CFG.SPRINT);
+  /* against HIS top end, not a constant: a 10 m/s winger and a 7.6 m/s
+     centre-half should both look flat out when they are flat out */
+  const runN = Math.min(1, spd/(p.topSpeed || CFG.SPRINT));
   const gt = p.gait || DEFAULT_GAIT;
   p.phase += (1.15 + runN*1.85) * gt.cadence * Math.PI*2 * dt;
   if(p.phase > Math.PI*2) p.phase -= Math.PI*2;
@@ -2208,7 +2230,7 @@ const lerp = THREE.MathUtils.lerp, clamp = THREE.MathUtils.clamp;
 
 function animate(p, dt){
   const b = p.body, spd = p.vel.length();
-  const run = Math.min(1, spd/CFG.SPRINT);
+  const run = Math.min(1, spd/(p.topSpeed || CFG.SPRINT));
   const gait = clamp((spd-0.30)/1.30, 0, 1);      // fades the stride out to a stand
   const gt = p.gait || DEFAULT_GAIT;
   const u = (p.phase/TAU) % 1;                    // 0 = right foot strike
@@ -2845,7 +2867,7 @@ function resolvePossession(){
        a metre of the 1.35m control radius between the best in the
        division and the worst, so shape still matters -- it simply no
        longer decides the match on its own. */
-    score -= (Amix(p,{positioning:1.3, decisions:1.0, acceleration:0.9, workRate:0.5}) - 0.5) * 1.05;
+    score -= (Amix(p,{positioning:1.3, decisions:1.0, acceleration:0.9, workRate:0.5}) - 0.5) * 1.80;
     if(SCRIPT.active && SCRIPT.stats && SCRIPT.stats.possession)
       score -= (possBias(p.team)-1)*9.0;             // 50-50s go the plan's way
     if(score<bestD){ bestD=score; best=p; }
@@ -4105,6 +4127,21 @@ window.Matchday = {
   recutPitch(){ reskinPitch(); return this; },
   on(name, fn){ (LISTENERS[name] || (LISTENERS[name]=[])).push(fn); return this; },
   off(name, fn){ const l=LISTENERS[name]; if(l) LISTENERS[name]=l.filter(f=>f!==fn); return this; },
+  /* WHAT EACH MAN ACTUALLY DID. Top speed reached and ground covered,
+     against the attributes that were supposed to decide them -- the only
+     way to answer "do the attributes show on the pitch?" with a number
+     instead of an opinion. */
+  playerReport(){
+    return players.map(p=>({
+      team:p.team, name:p.name, slot:p.slot,
+      pace:Math.round(effA(p,'pace')*10)/10,
+      acceleration:Math.round(effA(p,'acceleration')*10)/10,
+      stamina:Math.round(effA(p,'stamina')*10)/10,
+      topSpeed:Math.round(p.topSpeed*100)/100,
+      peak:Math.round((p.peak||0)*100)/100,
+      metres:Math.round(p.ran||0)
+    }));
+  },
   getState(){
     const t = S.stats.poss[0]+S.stats.poss[1] || 1;
     return { phase:S.phase, running:S.running, half:S.half, minute:clockLabel(),

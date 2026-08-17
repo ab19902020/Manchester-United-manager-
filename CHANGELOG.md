@@ -4,6 +4,43 @@
 
 ### Changed
 
+- **Pace shows on the pitch.** "Every player seems the same speed" was correct,
+  and here is the number: top speed was `5.6 + 2.4 × (0.25 + pace × 1.25)`,
+  which put an entire squad between **7.7 and 9.2 m/s — an 18% spread across
+  the whole range of the attribute**. Measured over a full match every player
+  reached his own top speed, and they were all within a stride of each other.
+  Real football is about 7.5 m/s for a slow centre-half and 10.3 for the
+  quickest men alive, a 37% spread.
+
+  The scale is the real one now — `6.00 + 4.40 × pace`, with a heavier man
+  paying a little for it — and the same match measures **7.7 to 10.4 m/s, a
+  34% spread**, with Saka at 10.4 and a bottom-half centre-half at 8.1.
+  Cruising is his own too: everybody used to jog at a flat 70% of top speed,
+  where work rate and stamina now set it between 62% and 84%, which is most of
+  the match. And the run cycle reads against *his* top end rather than a
+  constant, so a 10 m/s winger and a 7.7 m/s centre-half both look flat out
+  when they are flat out. `scripts/measure-player-speed.cjs` prints the table.
+
+  Faster football is a different game, and the first measurement of it was
+  worse: the better side's win rate fell in every fixture (a top-six game went
+  from 9 wins in 16 to 5, with six draws) because less time on the ball costs
+  the better team more than the worse one. Winning a loose ball now leans
+  harder on reading it — the term added last week went from 1.05 to 1.80 —
+  and the balance came back past where it started:
+
+  | | before speed | after speed | after both |
+  |---|---|---|---|
+  | top v sixth | 9/16 | 5/16 | 11/16 |
+  | top v worst (4-4-2) | 16/16 | 13/16 | 14/16 |
+  | top v worst (4-2-3-1) | 8/16 | 6/16 | 12/16 |
+  | top v worst (3-5-2) | 10/16 | 6/16 | 8/16 |
+  | top v worst (5-3-2) | 14/16 | 12/16 | 10/16 |
+  | top v worst, away | 16/16 | 15/16 | 15/16 |
+
+  Corners came up with it, from 2.0 a match to **3.3**.
+
+### Changed
+
 - **The dugout is the match now, and it decides the result.** The broadcast
   engine used to perform a result that had already been calculated: walking
   into the dugout played the whole ninety minutes instantly, handed the goals
