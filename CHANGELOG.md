@@ -4,6 +4,85 @@
 
 ### Changed
 
+- **Every attribute now does something, and there is a rig that proves it.**
+  "All attributes should make a difference" is a claim you can argue about or
+  measure. `scripts/measure-attribute-effect.cjs` measures it: two identical
+  elevens, every attribute at 12, then one attribute raised to 18 on one side
+  and dropped to 6 on the other — plus a **control row with nothing varied at
+  all**, which turned out to be the most important line in the table.
+
+  - **`leadership` did nothing whatsoever.** It was in the attribute list and
+    in the table the generator uses to weight a position, and nowhere in play:
+    a squad of captains played exactly the same football as a squad of
+    passengers. A captain does not take the shots, he organises, so it is a
+    team number rather than a personal one — the best man in the side carries
+    most of it and the dressing room the rest — and it leans a little on three
+    things: keeping heads when passing under pressure, winning second balls,
+    and not diving into tackles. Measured at **+2.0 shots and +0.27 goals** a
+    match, the size of composure or vision, which is right for it.
+  - **`heading` had one job that almost never came up.** It set the accuracy of
+    a header once a man was already taking one, and had no say in whether he
+    got to the ball — so a 4-heading winger out-jumped an 18-heading centre
+    half by standing a few inches closer. A ball above chest height is now a
+    contest, weighted on heading and strength.
+  - **`firstTouch` and `strength`**: taking a driven ball down was free for
+    everybody. The quicker it arrives, the more a poor touch lets it run.
+    Strength now moves the loose-ball share by nine points across its range.
+
+- **The engine counts duels now** — loose balls and aerials won, per side, in
+  `getState()`. They are ordinary match statistics, and they are also the only
+  instrument fine enough to tune with: a match gives one scoreline and about
+  ten shots, so the control row swings **±3 shots between runs of forty-four
+  matches** and anything smaller than that is noise. It gives 150 loose balls,
+  which settle down in a handful of matches.
+
+### Known
+
+- **This engine plays on the floor.** With duels counted, a match produces
+  **3 to 5 aerial contests against about forty in real football**. Heading
+  works now, but it cannot matter much until the game plays more balls in the
+  air — more crosses, more long balls, contested goal kicks. That is a bigger
+  job than this one and it is logged rather than glossed over.
+
+### Changed
+
+- **Pace shows on the pitch.** "Every player seems the same speed" was correct,
+  and here is the number: top speed was `5.6 + 2.4 × (0.25 + pace × 1.25)`,
+  which put an entire squad between **7.7 and 9.2 m/s — an 18% spread across
+  the whole range of the attribute**. Measured over a full match every player
+  reached his own top speed, and they were all within a stride of each other.
+  Real football is about 7.5 m/s for a slow centre-half and 10.3 for the
+  quickest men alive, a 37% spread.
+
+  The scale is the real one now — `6.00 + 4.40 × pace`, with a heavier man
+  paying a little for it — and the same match measures **7.7 to 10.4 m/s, a
+  34% spread**, with Saka at 10.4 and a bottom-half centre-half at 8.1.
+  Cruising is his own too: everybody used to jog at a flat 70% of top speed,
+  where work rate and stamina now set it between 62% and 84%, which is most of
+  the match. And the run cycle reads against *his* top end rather than a
+  constant, so a 10 m/s winger and a 7.7 m/s centre-half both look flat out
+  when they are flat out. `scripts/measure-player-speed.cjs` prints the table.
+
+  Faster football is a different game, and the first measurement of it was
+  worse: the better side's win rate fell in every fixture (a top-six game went
+  from 9 wins in 16 to 5, with six draws) because less time on the ball costs
+  the better team more than the worse one. Winning a loose ball now leans
+  harder on reading it — the term added last week went from 1.05 to 1.80 —
+  and the balance came back past where it started:
+
+  | | before speed | after speed | after both |
+  |---|---|---|---|
+  | top v sixth | 9/16 | 5/16 | 11/16 |
+  | top v worst (4-4-2) | 16/16 | 13/16 | 14/16 |
+  | top v worst (4-2-3-1) | 8/16 | 6/16 | 12/16 |
+  | top v worst (3-5-2) | 10/16 | 6/16 | 8/16 |
+  | top v worst (5-3-2) | 14/16 | 12/16 | 10/16 |
+  | top v worst, away | 16/16 | 15/16 | 15/16 |
+
+  Corners came up with it, from 2.0 a match to **3.3**.
+
+### Changed
+
 - **The dugout is the match now, and it decides the result.** The broadcast
   engine used to perform a result that had already been calculated: walking
   into the dugout played the whole ninety minutes instantly, handed the goals

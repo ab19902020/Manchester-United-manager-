@@ -162,8 +162,13 @@ const S = {
   aiSkill:0.86, offsideOn:true, freeze:0, restart:null,
   possTeam:1, lastTouch:null, pendingOffside:null, running:false,
   dir:[1,-1], speed:1, quality:1,
-  stats:{ poss:[0,0], shots:[0,0], onTarget:[0,0], corners:[0,0] }, stoppage:0,
-  camMode:'auto', camShot:'broadcast', camHold:0, focus:null
+  /* aerial and loose are duels won, which is a real match statistic and
+     also the only way to measure whether an attribute does anything: a
+     scoreline gives you one number a match, duels give you hundreds. */
+  stats:{ poss:[0,0], shots:[0,0], onTarget:[0,0], corners:[0,0],
+          aerial:[0,0], loose:[0,0] }, stoppage:0,
+  camMode:'auto', camShot:'broadcast', camHold:0, focus:null,
+  org:[0.5,0.5]        /* how well each side is led — see teamOrg() */
 };
 
 /* =====================================================================
@@ -1767,11 +1772,26 @@ function makePlayer(team, i){
     skill:0, skillKind:0, skillDir:1, strike:null,
     body, mesh:body.group };
 
-  /* Top speed and how fast he gets there come straight off pace and
-     acceleration; a heavier man pays for it. A 20-pace winger and a
-     6-pace centre-half are genuinely different players to watch. */
-  p.topSpeed = CFG.JOG + (CFG.SPRINT-CFG.JOG)*(0.25 + A01(p,'pace')*1.25) * (1.04 - e.build*0.04);
-  p.accel    = CFG.ACCEL * (0.72 + A01(p,'acceleration')*0.62);
+  /* SPEED, IN METRES A SECOND, AND ENOUGH OF IT TO SEE.
+     The old line read 5.6 + 2.4*(0.25 + pace*1.25), which put a whole
+     squad between 7.7 and 9.2 m/s -- an 18% spread across the entire
+     range of the pace attribute. Measured over a match, every player
+     reached his own top speed and they were all within a stride of each
+     other, which is exactly what "every player seems the same speed"
+     looks like from the gantry.
+
+     Real football is 7.5 m/s for a slow centre-half and 10.3 for the
+     quickest men alive: a 37% spread. So the scale is the real one now,
+     with the attribute running the whole way from one end of it to the
+     other, and a heavier man paying a little for it.
+
+     Cruising is his too. Everybody used to jog at a flat 70% of top
+     speed; a high work rate and deep stamina now mean he covers the
+     ground quicker even when he is not sprinting, which is most of the
+     match. */
+  p.topSpeed = (6.00 + 4.40*A01(p,'pace')) * (1.05 - e.build*0.05);
+  p.cruise   = 0.62 + 0.16*A01(p,'workRate') + 0.06*A01(p,'stamina');
+  p.accel    = CFG.ACCEL * (0.60 + A01(p,'acceleration')*0.85);
   p.turn     = 6.0 + A01(p,'agility')*6.5;
   p.gait     = gaitOf(p);
   return p;
@@ -1857,6 +1877,31 @@ function disposeBody(b){
 }
 buildTeams();
 function teamOf(t){ return players.filter(p=>p.team===t); }
+/* =====================================================================
+   LEADERSHIP, WHICH USED TO BE DECORATION
+   ---------------------------------------------------------------------
+   It was in the attribute list and in the table the generator uses to
+   weight a position, and nowhere in play: a squad of captains and a
+   squad of passengers played exactly the same football. Caught by a
+   sensitivity rig -- two identical elevens, one attribute at 18 against
+   6 -- where leadership was the only one that moved nothing.
+
+   A captain does not take the shots. He organises: the side keeps its
+   heads under pressure, holds its shape, wins the second ball and stops
+   diving into tackles it cannot win. So leadership is a team number,
+   not a personal one -- the best man in the side carries most of it and
+   the rest of the dressing room carries the remainder -- and it leans
+   on those three things a little each rather than any one of them a
+   lot.
+   ===================================================================== */
+function teamOrg(t){
+  const men = teamOf(t).filter(p=>!p.isGK);
+  if(!men.length) return 0.5;
+  let best = 0, sum = 0;
+  for(const p of men){ const l = A01(p,'leadership'); sum += l; if(l>best) best = l; }
+  return 0.55*best + 0.45*(sum/men.length);
+}
+function orgOf(t){ return (S.org && S.org[t] != null) ? S.org[t] : 0.5; }
 function keeperOf(t){ return players.find(p=>p.team===t && p.isGK); }
 
 // match officials
@@ -2035,7 +2080,7 @@ function movePlayer(p, want, sprint, dt){
      rate set how long that lasts, so a 5-stamina player is walking by
      the hour mark and a 18-stamina one is still pressing. */
   const fatigue = 0.72 + 0.28*Math.min(1, p.stamina/60);
-  const maxS = (sprint && p.stamina>2 ? p.topSpeed : p.topSpeed*0.70) * fatigue;
+  const maxS = (sprint && p.stamina>2 ? p.topSpeed : p.topSpeed*(p.cruise||0.70)) * fatigue;
   const desired = want.clone();
   if(desired.length()>1) desired.normalize();
   desired.multiplyScalar(maxS);
@@ -2049,6 +2094,11 @@ function movePlayer(p, want, sprint, dt){
   p.pos.addScaledVector(p.vel, dt);
   p.pos.x = THREE.MathUtils.clamp(p.pos.x,-HALF_L-3,HALF_L+3);
   p.pos.y = THREE.MathUtils.clamp(p.pos.y,-HALF_W-3,HALF_W+3);
+  /* what he actually did, so the attributes can be checked against the
+     pitch rather than against the formula that set them */
+  const now = p.vel.length();
+  if(now > (p.peak||0)) p.peak = now;
+  p.ran = (p.ran||0) + now*dt;
   const burn = 17 - A01(p,'stamina')*9;
   const rec  = 5.5 + A01(p,'stamina')*6;
   if(sprint && desired.length()>.1) p.stamina = Math.max(0,p.stamina-burn*dt);
@@ -2065,7 +2115,9 @@ function movePlayer(p, want, sprint, dt){
      the extra ground speed comes from stride LENGTH, which is the swing
      amplitude in animate(). Driving phase straight off speed gave a
      jog that twinkled and a sprint that scissored. */
-  const runN = Math.min(1, spd/CFG.SPRINT);
+  /* against HIS top end, not a constant: a 10 m/s winger and a 7.6 m/s
+     centre-half should both look flat out when they are flat out */
+  const runN = Math.min(1, spd/(p.topSpeed || CFG.SPRINT));
   const gt = p.gait || DEFAULT_GAIT;
   p.phase += (1.15 + runN*1.85) * gt.cadence * Math.PI*2 * dt;
   if(p.phase > Math.PI*2) p.phase -= Math.PI*2;
@@ -2208,7 +2260,7 @@ const lerp = THREE.MathUtils.lerp, clamp = THREE.MathUtils.clamp;
 
 function animate(p, dt){
   const b = p.body, spd = p.vel.length();
-  const run = Math.min(1, spd/CFG.SPRINT);
+  const run = Math.min(1, spd/(p.topSpeed || CFG.SPRINT));
   const gait = clamp((spd-0.30)/1.30, 0, 1);      // fades the stride out to a stand
   const gt = p.gait || DEFAULT_GAIT;
   const u = (p.phase/TAU) % 1;                    // 0 = right foot strike
@@ -2552,6 +2604,8 @@ function passError(p,d){
      ones, composure keeps him steady under pressure, and a rare wobble
      stands in for the ball bobbling off a divot. */
   let skill = Amix(p, {passing:2.6, vision:1.0, decisions:0.7, composure:0.5, firstTouch:0.4});
+  /* a well-led side keeps its head; a badly led one starts to rush */
+  skill = THREE.MathUtils.clamp(skill + (orgOf(p.team)-0.5)*0.24, 0, 1);
   /* A side defending a goal the plan has already awarded starts to look
      ragged — which is how a scripted goal arrives out of real play
      rather than being dropped in from nowhere. */
@@ -2820,9 +2874,16 @@ function doCross(p){
 }
 
 /* ================== possession ================== */
+/* HOW HIGH IS AN AERIAL DUEL. Above the head was the obvious answer and
+   the wrong one: at 1.05 m the contest happened three times a match, so
+   heading had nothing to act on however heavily it was weighted. A ball
+   at chest height is headed or chested as often as one above the head,
+   and it is still won by the man who reads and attacks it. */
+const AERIAL_H = 0.72;
 function resolvePossession(){
   if(ball.cool>0 || S.phase!=='play') return;
   const owner = ball.owner;
+  const wasHigh = ball.pos.y > AERIAL_H;  /* for the aerial-duel count */
   let best=null, bestD=1e9;
   for(const p of players){
     if(p.cool>0) continue;
@@ -2845,7 +2906,26 @@ function resolvePossession(){
        a metre of the 1.35m control radius between the best in the
        division and the worst, so shape still matters -- it simply no
        longer decides the match on its own. */
-    score -= (Amix(p,{positioning:1.3, decisions:1.0, acceleration:0.9, workRate:0.5}) - 0.5) * 1.05;
+    score -= (Amix(p,{positioning:1.3, decisions:1.0, acceleration:0.9, workRate:0.5})
+              + (orgOf(p.team)-0.5)*0.62 - 0.5) * 1.80;
+    /* A HIGH BALL IS WON IN THE AIR, NOT BY WHOEVER IS NEAREST.
+       Heading had one job in this engine -- the accuracy of a header
+       once he was already taking one -- and no say at all in whether he
+       got to it. So a 4-heading winger out-jumped an 18-heading centre
+       half as long as he stood a few inches closer, and the attribute
+       barely showed in a match. A ball above chest height is now a
+       contest, and it is the one place strength is worth as much as
+       timing. */
+    if(ball.pos.y > AERIAL_H && !p.isGK)
+      score -= (Amix(p,{heading:2.2, strength:1.0, positioning:0.6}) - 0.5) * 0.85;
+    /* AND A BALL ARRIVING QUICKLY HAS TO BE CONTROLLED.
+       First touch only sharpened a finish and steadied a pass; taking a
+       driven ball down was free for everybody. The quicker it arrives,
+       the more a poor touch lets it run. */
+    const arriving = ball.vel.length();
+    if(arriving > 8 && p !== owner)
+      score += (0.55 - Amix(p,{firstTouch:2.0, composure:0.7, agility:0.6}))
+               * Math.min(1, arriving/22) * 0.75;
     if(SCRIPT.active && SCRIPT.stats && SCRIPT.stats.possession)
       score -= (possBias(p.team)-1)*9.0;             // 50-50s go the plan's way
     if(score<bestD){ bestD=score; best=p; }
@@ -2867,7 +2947,8 @@ function resolvePossession(){
       const win  = Amix(best,  {tackling:2.4, positioning:0.8, strength:0.8, agility:0.6});
       const keep = Amix(owner, {dribbling:2.0, agility:1.0, composure:0.9, strength:0.8});
       const edge = win - keep;                       // -1 .. +1
-      const foul = THREE.MathUtils.clamp(0.34 - edge*0.42 + A01(best,'aggression')*0.20, 0.04, 0.72);
+      const foul = THREE.MathUtils.clamp(0.34 - edge*0.42 + A01(best,'aggression')*0.20
+                                         - (orgOf(best.team)-0.5)*0.30, 0.04, 0.72);
       if(Math.random() < foul){
         const line = S.dir[best.team]*-HALF_L;
         const inBox = Math.abs(owner.pos.x-line) < CFG.PEN_D
@@ -2961,6 +3042,10 @@ function resolvePossession(){
     ball.vel.set(ball.vel.x*.4, 1.2, out*7);
     ball.cool = .35; best.cool = .4; S.lastTouch = best;
     return;
+  }
+  if(!owner || owner.team !== best.team){
+    S.stats.loose[best.team]++;
+    if(wasHigh) S.stats.aerial[best.team]++;
   }
   ball.owner = best; ball.vel.set(0,0,0);
   S.possTeam = best.team; S.lastTouch = best;
@@ -3917,8 +4002,9 @@ function newMatch(){
   if(S.squadsDirty){ buildTeams(); S.squadsDirty=false; }
   reskinPitch();                                   // a freshly cut pitch each time
   S.score=[0,0]; S.half=1; S.clock=0; S.dir=[1,-1];
-  S.stats={poss:[0,0],shots:[0,0],onTarget:[0,0],corners:[0,0]};
+  S.stats={poss:[0,0],shots:[0,0],onTarget:[0,0],corners:[0,0],aerial:[0,0],loose:[0,0]};
   for(const p of players){ p.stamina=100; p.celeb=0; p.skill=0; p.dive=0; p.kickAnim=0; }
+  S.org = [teamOrg(0), teamOrg(1)];        /* who is leading whom, this match */
   for(const e of SCRIPT.events) e.fired = false;
   SCRIPT.blocked=0; SCRIPT.forced=0; SCRIPT.pending=null; SCRIPT.penWait=0;
   SCRIPT.penTries=0; S.stoppage=0;
@@ -4105,6 +4191,21 @@ window.Matchday = {
   recutPitch(){ reskinPitch(); return this; },
   on(name, fn){ (LISTENERS[name] || (LISTENERS[name]=[])).push(fn); return this; },
   off(name, fn){ const l=LISTENERS[name]; if(l) LISTENERS[name]=l.filter(f=>f!==fn); return this; },
+  /* WHAT EACH MAN ACTUALLY DID. Top speed reached and ground covered,
+     against the attributes that were supposed to decide them -- the only
+     way to answer "do the attributes show on the pitch?" with a number
+     instead of an opinion. */
+  playerReport(){
+    return players.map(p=>({
+      team:p.team, name:p.name, slot:p.slot,
+      pace:Math.round(effA(p,'pace')*10)/10,
+      acceleration:Math.round(effA(p,'acceleration')*10)/10,
+      stamina:Math.round(effA(p,'stamina')*10)/10,
+      topSpeed:Math.round(p.topSpeed*100)/100,
+      peak:Math.round((p.peak||0)*100)/100,
+      metres:Math.round(p.ran||0)
+    }));
+  },
   getState(){
     const t = S.stats.poss[0]+S.stats.poss[1] || 1;
     return { phase:S.phase, running:S.running, half:S.half, minute:clockLabel(),
@@ -4113,6 +4214,7 @@ window.Matchday = {
       possession:[Math.round(S.stats.poss[0]/t*100), Math.round(S.stats.poss[1]/t*100)],
       shots:S.stats.shots.slice(), onTarget:S.stats.onTarget.slice(),
       corners:S.stats.corners.slice(), pitch:PITCH.cut.id,
+      aerial:S.stats.aerial.slice(), loose:S.stats.loose.slice(),
       /* who else is out there — the officials and the two technical
          areas, so a test can prove the touchline is populated */
       crew:{ officials:officials.length, bench:bench.filter(b=>b.kind!=='gone').length,
