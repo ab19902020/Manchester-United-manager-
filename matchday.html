@@ -3925,6 +3925,27 @@ window.Matchday = {
      divingheader). `stats` is optional and steers rather than clamps. */
   playScript(plan){ loadScript(plan); return this; },
   clearScript(){ clearScript(); return this; },
+  /* PLAY A WHOLE MATCH WITHOUT DRAWING IT.
+     The frame loop caps at eight sub-steps a frame, so how fast a match
+     can run is bound by the frame rate — on a slow renderer ninety
+     minutes takes six real minutes, which makes both tuning and any
+     "simulate the rest of the league" use of this engine impossible.
+     This runs the same tick() the live match runs, with no rendering
+     and no camera, until the whistle. Same football, no pictures. */
+  simulateMatch(opts){
+    const o = opts || {};
+    newMatch();
+    const wasRunning = S.running;
+    S.running = false;                       // the frame loop must not also step it
+    let guard = 0;
+    const cap = Math.max(1000, +o.maxTicks || 400000);
+    while(S.phase !== 'end' && guard++ < cap) tick(CFG.DT);
+    const out = this.getState();
+    out.ticks = guard;
+    out.completed = S.phase === 'end';
+    S.running = wasRunning;
+    return out;
+  },
   scriptState(){ return {active:SCRIPT.active, blocked:SCRIPT.blocked,
     remaining:SCRIPT.events.filter(e=>!e.fired).length,
     events:SCRIPT.events.map(e=>({minute:e.minute, team:e.team, scorer:e.scorer, fired:e.fired}))}; },
