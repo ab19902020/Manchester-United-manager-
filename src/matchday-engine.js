@@ -1191,7 +1191,7 @@ function buildWorld(){
       const sub = buildBody(track, null, {
         simple:true, height:ph.h, build:ph.build,
         skin:SKIN[(Math.random()*SKIN.length)|0], hair:HAIR[(Math.random()*HAIR.length)|0],
-        hairStyle:(Math.random()*7)|0, boot:BOOTS[(Math.random()*BOOTS.length)|0]
+        hairStyle:pickHairStyle(), beard:pickBeard(), boot:BOOTS[(Math.random()*BOOTS.length)|0]
       });
       seatPose(sub, 0.12 + Math.random()*0.10);
       sub.group.position.set(x, 0.12, 0.16);
@@ -1610,10 +1610,130 @@ function addHair(parent, style, R, hairMat, trimMat){
     case 5: put(cap(R*1.02,0.56), hairMat, R*0.09, [1.00,0.78,1.02]);                       // headband
             { const b=new THREE.Mesh(new THREE.TorusGeometry(R*1.00, R*0.062, 6, 16), trimMat);
               b.rotation.x = Math.PI/2; b.position.y = R*0.14; parent.add(b); made.push(b); } break;
-    default:put(cap(R*1.02,0.58), hairMat, R*0.09, [1.00,0.80,1.02]);                       // topknot
-            put(new THREE.SphereGeometry(R*0.26,8,7), hairMat, R*0.74, [1,0.9,1], -R*0.22);
+    case 6: put(cap(R*1.02,0.58), hairMat, R*0.09, [1.00,0.80,1.02]);                       // topknot
+            put(new THREE.SphereGeometry(R*0.26,8,7), hairMat, R*0.74, [1,0.9,1], -R*0.22); break;
+
+    /* ---- seven more, because six heads and a bald one is not a crowd.
+       A stand full of players should look like a stand full of people:
+       the common cuts stay common (see HAIR_WEIGHTS below), and the ones
+       you notice — dreads, a mohawk, a ponytail — stay rare enough to be
+       worth noticing. */
+
+    case 7: { // dreadlocks: a cap, and ropes down the back of the neck
+      put(cap(R*1.03,0.60), hairMat, R*0.09, [1.00,0.82,1.02]);
+      const rope = new THREE.CylinderGeometry(R*0.075, R*0.062, R*0.95, 5);
+      for(let i=0;i<7;i++){
+        const a = (i/6 - 0.5)*2.1;
+        const m = new THREE.Mesh(rope, hairMat);
+        m.position.set(Math.sin(a)*R*0.78, -R*0.46, -Math.cos(a)*R*0.60 - R*0.10);
+        m.rotation.x = 0.30 + (i%2)*0.06;
+        parent.add(m); made.push(m);
+      }
+      break;
+    }
+    case 8: { // mohawk: shaved at the sides, a ridge over the crown
+      put(cap(R*1.00,0.52), hairMat, R*0.05, [1.00,0.34,1.02]);
+      const ridge = new THREE.SphereGeometry(R*0.92, 12, 9, 0, Math.PI*2, 0, Math.PI*0.52);
+      const m = new THREE.Mesh(ridge, hairMat);
+      m.position.y = R*0.16; m.scale.set(0.30, 1.02, 1.06); m.rotation.x = -0.20;
+      parent.add(m); made.push(m);
+      break;
+    }
+    case 9: { // volume on top, faded at the sides
+      put(cap(R*1.00,0.50), hairMat, R*0.04, [1.00,0.40,1.02]);
+      const top = new THREE.SphereGeometry(R*0.86, 12, 10);
+      const m = new THREE.Mesh(top, hairMat);
+      m.position.set(0, R*0.42, -R*0.03); m.scale.set(1.06, 0.72, 1.04);
+      parent.add(m); made.push(m);
+      break;
+    }
+    case 10: { // ponytail
+      put(cap(R*1.02,0.62), hairMat, R*0.08, [1.00,0.84,1.02]);
+      const band = new THREE.Mesh(new THREE.SphereGeometry(R*0.20,8,7), trimMat);
+      band.position.set(0, -R*0.06, -R*0.86); parent.add(band); made.push(band);
+      const tail = new THREE.Mesh(new THREE.CylinderGeometry(R*0.16, R*0.10, R*0.80, 7), hairMat);
+      tail.position.set(0, -R*0.36, -R*0.92); tail.rotation.x = 0.42;
+      parent.add(tail); made.push(tail);
+      break;
+    }
+    case 11: { // going back at the temples — footballers get older too
+      put(cap(R*0.98,0.46), hairMat, R*0.02, [1.00,0.52,1.00], -R*0.10);
+      break;
+    }
+    case 12: { // cornrows: ridges front to back
+      put(cap(R*1.00,0.56), hairMat, R*0.07, [1.00,0.62,1.02]);
+      const row = new THREE.CylinderGeometry(R*0.055, R*0.055, R*1.30, 5);
+      for(let i=0;i<5;i++){
+        const m = new THREE.Mesh(row, hairMat);
+        m.position.set((i-2)*R*0.30, R*0.40, 0);
+        m.rotation.x = Math.PI/2; m.rotation.z = (i-2)*0.05;
+        parent.add(m); made.push(m);
+      }
+      break;
+    }
+    default: { // a side parting with a bit of a quiff
+      put(cap(R*1.03,0.58), hairMat, R*0.09, [1.00,0.80,1.02]);
+      const q = new THREE.Mesh(new THREE.SphereGeometry(R*0.44,10,8), hairMat);
+      q.position.set(R*0.22, R*0.40, R*0.52); q.scale.set(1.05, 0.78, 0.72);
+      q.rotation.z = -0.30;
+      parent.add(q); made.push(q);
+    }
   }
   return made;
+}
+
+/* Common cuts common, striking ones rare — the distribution of a real
+   team sheet rather than a uniform roll over everything available. */
+const HAIR_WEIGHTS = [
+  [0, 20], [1, 16], [9, 12], [13, 10], [3, 8], [4, 8], [12, 6],
+  [2, 5], [7, 5], [5, 4], [11, 3], [10, 2], [6, 2], [8, 1],
+];
+const HAIR_TOTAL = HAIR_WEIGHTS.reduce((n, w) => n + w[1], 0);
+/* FACIAL HAIR, of which there was none at all. Twenty-two clean-shaven
+   men is the one thing a football crowd never is. Same idea as the cuts:
+   most players have something, a full beard is common, a moustache on
+   its own is rare and worth a second look. Drawn in the hair colour, so
+   it belongs to the head it is on. */
+function addBeard(parent, style, R, mat){
+  const made = [];
+  if(!style) return made;
+  const jaw = (from, sy, y, sx)=>{
+    const g = new THREE.SphereGeometry(R*1.01, 14, 10, 0, Math.PI*2, from, Math.PI-from);
+    const m = new THREE.Mesh(g, mat);
+    m.position.set(0, y, R*0.02); m.scale.set(sx||1.0, sy, 1.02);
+    parent.add(m); made.push(m); return m;
+  };
+  switch(style){
+    case 1: jaw(Math.PI*0.66, 0.70, -R*0.02, 0.99); break;            // stubble
+    case 2: {                                                          // moustache
+      const m = new THREE.Mesh(new THREE.SphereGeometry(R*0.30,8,6), mat);
+      m.position.set(0, -R*0.14, R*0.78); m.scale.set(1.30,0.40,0.55);
+      parent.add(m); made.push(m); break;
+    }
+    case 3: {                                                          // goatee
+      const m = new THREE.Mesh(new THREE.SphereGeometry(R*0.36,9,7), mat);
+      m.position.set(0, -R*0.50, R*0.58); m.scale.set(0.88,0.98,0.78);
+      parent.add(m); made.push(m);
+      const t = new THREE.Mesh(new THREE.SphereGeometry(R*0.26,8,6), mat);
+      t.position.set(0, -R*0.16, R*0.76); t.scale.set(1.15,0.36,0.52);
+      parent.add(t); made.push(t); break;
+    }
+    default: jaw(Math.PI*0.58, 0.92, -R*0.05, 1.0);                   // full beard
+  }
+  return made;
+}
+const BEARD_WEIGHTS = [[0, 34], [1, 26], [4, 22], [3, 13], [2, 5]];
+const BEARD_TOTAL = BEARD_WEIGHTS.reduce((n, w) => n + w[1], 0);
+function pickBeard(){
+  let r = Math.random()*BEARD_TOTAL;
+  for(const [style, w] of BEARD_WEIGHTS){ r -= w; if(r <= 0) return style; }
+  return 0;
+}
+
+function pickHairStyle(){
+  let r = Math.random()*HAIR_TOTAL;
+  for(const [style, w] of HAIR_WEIGHTS){ r -= w; if(r <= 0) return style; }
+  return 0;
 }
 
 function buildBody(kit, number, opts){
@@ -1679,6 +1799,10 @@ function buildBody(kit, number, opts){
   }
   addHair(headPivot, opts.hairStyle==null?0:opts.hairStyle, H*PROP.headR, hairMat, trimMat)
     .forEach(m=>{ m.position.y += H*0.062; m.castShadow = true; parts.push(m); });
+  if(!lod){
+    addBeard(headPivot, opts.beard||0, H*PROP.headR, hairMat)
+      .forEach(m=>{ m.position.y += H*0.062; parts.push(m); });
+  }
 
   // ---- arms: skin all the way, with a kit sleeve laid over the top ----
   /* The deltoid cap is the load-bearing part of this. Without it the
@@ -1797,7 +1921,7 @@ function makePlayer(team, i){
     height:e.h, build:e.build, name:e.name,
     skin:  SKIN[(Math.random()*SKIN.length)|0],
     hair:  HAIR[(Math.random()*HAIR.length)|0],
-    hairStyle: (Math.random()*7)|0,
+    hairStyle: pickHairStyle(), beard: pickBeard(),
     boot:  BOOTS[(Math.random()*BOOTS.length)|0],
     gloves: isGK
   });
@@ -3592,11 +3716,26 @@ function aiPlayer(p, dt){
         t.y = t.y*(1-show) + sz*show;
       }
     }
-    // and the man the plan says scores gets into the box for it
+    /* AND THE MAN THE PLAN SAYS SCORES GETS INTO THE BOX FOR IT — but
+       not to the same square yard every time. This pushed him forward
+       and squeezed him to the middle, so however varied the finish, the
+       APPROACH was identical: every goal in the game arrived through the
+       centre of the box from the same distance. Finishing variety cannot
+       rescue a build-up that is always the same shape.
+
+       The goal now has a shape of its own, drawn from the pending goal
+       itself so it holds for the whole of that build-up and changes for
+       the next one: straight through the middle, in off the left, in off
+       the right, a late one from deep, or arriving at the back post. */
     if(isScriptScorer(p)){
       const u = 0.4 + scriptUrgency(p.team)*0.6;
-      t.x = THREE.MathUtils.clamp(t.x + dir*14*u, -HALF_L+3, HALF_L-3);
-      t.y *= (1-u*0.55);
+      const g = SCRIPT.pending;
+      const seed = g ? (((g.min|0)*31) + String(g.pid||g.scorer||'').length*7 + ((g.team|0)*13)) : 0;
+      const shape = ((seed % 5) + 5) % 5;
+      const WIDE = [0, -0.60, 0.60, 0.22, -0.86][shape];
+      const DEEP = [1.00, 0.94, 0.94, 0.70, 0.88][shape];
+      t.x = THREE.MathUtils.clamp(t.x + dir*14*u*DEEP, -HALF_L+3, HALF_L-3);
+      t.y = t.y*(1-u*0.55) + WIDE*u*(HALF_W-11);
     }
     want.set(t.x-p.pos.x,t.y-p.pos.y);
     sprint = want.length()>12;
