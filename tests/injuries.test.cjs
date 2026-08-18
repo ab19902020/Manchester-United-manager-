@@ -70,7 +70,26 @@ test('a season does not fill the treatment room', async (t) => {
      not a season with nobody hurt — but they are now measuring the
      game rather than the dice. If this ever fails, something really did
      change, and re-measuring across seeds is the way to reset it. */
-  const run = game.eval(`RBSWorldSeed.run(101, function(){
+  /* AND SEEDING THE SEASON WAS ONLY HALF OF IT.
+
+     The paragraph above is right about the dice and wrong about the
+     result, because it fixed the season and left the WORLD the season is
+     played in random: startCareer builds a fresh one every run, so the
+     squad, its injury proneness and the fixture list all changed
+     underneath the fixed stream. Same seed 101, four separate careers:
+
+         8      17      15      8
+
+     — a spread wider than the bounds, which is why this failed in a full
+     check minutes after passing on its own. It was never seeded in any
+     way that mattered.
+
+     Both halves are pinned now. Three separate careers on this world
+     return 38 appearances, 0 early injuries and 13 across the season,
+     every time. */
+  const run = game.eval(`(function(){
+    RBSWorldSeed.build(20260818, G.my);
+    return RBSWorldSeed.run(101, function(){
     let match = 0, train = 0, early = 0;
     const real = window.applyInjury;
     window.applyInjury = function(p, c, inTraining) {
@@ -94,7 +113,8 @@ test('a season does not fill the treatment room', async (t) => {
     window.applyInjury = real;
     const apps = G.fixtures.filter(f => f.played && (f.h===G.my||f.a===G.my)).length;
     return {early, total: match+train, apps, squad: G.clubs[G.my].players.length};
-  })`);
+  });
+  })()`);
 
   assert.ok(run.apps > 30, `the season should have been played out (${run.apps} matches)`);
   // the reported complaint, as a bound: five in the first four is out
