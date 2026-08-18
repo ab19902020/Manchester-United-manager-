@@ -150,7 +150,8 @@ function buildSquad(t){
       pos:   given.pos ? slotVec(given.pos[0], given.pos[1]) : slotVec(fx, fy),
       h: ph.h, w: ph.w,
       build: THREE.MathUtils.clamp(1 + (bmi-22.4)*0.030, 0.86, 1.15),
-      attrs: given.attrs || rollAttrs(given.slot || slot, T.quality || 12)
+      attrs: given.attrs || rollAttrs(given.slot || slot, T.quality || 12),
+      morale: given.morale, cond: given.cond, sharp: given.sharp
     });
   }
   T.squad = squad;
@@ -271,8 +272,50 @@ function A(p, key){
 }
 /* Stored or derived, 1-20. Everything in the match logic asks through
    here, so a keeper asked for agility answers with his hands. */
+/* =====================================================================
+   ABILITY FIRST, BUT NOT ABILITY ONLY
+   ---------------------------------------------------------------------
+   "ability must always be the main driving factor, but a team that has
+    won five in a row has momentum and positivity ... if they lost four
+    games that should make them not as good. In real football everything
+    means something."
+
+   Only the nineteen attributes crossed into the picture, so a side on a
+   five-match run played exactly like the same side on a four-match
+   losing streak, and a man at 40% condition played like a fresh one.
+
+   Four things move a player off his rating, and all of them are small
+   on purpose, because ability is supposed to decide a football match:
+
+       condition   the biggest of them. A blown player is a worse one
+       morale      a man who is enjoying it plays nearer his ceiling
+       sharpness   match fitness, not the same thing as being rested
+       momentum    his side's last six results, shared by the whole XI
+
+   The whole swing is about a tenth either way, so a 14 plays somewhere
+   between a 12.6 and a 15.4. That is a difference you can see over
+   ninety minutes without a good side ever losing to a bad one because
+   it was in a mood. Worked out once a match and kept, because none of
+   it changes between kick-off and the whistle. */
+function stateMul(p){
+  if(p._stateMul != null) return p._stateMul;
+  const unit = (v, dflt) => (typeof v === 'number' ? THREE.MathUtils.clamp(v/100, 0, 1) : dflt);
+  const cond = unit(p.cond, 0.9);
+  const mor  = unit(p.morale, 0.7);
+  const shp  = unit(p.sharp, 0.7);
+  const mom  = (typeof p.momentum === 'number') ? THREE.MathUtils.clamp(p.momentum, 0, 1) : 0.5;
+  const m = 1
+    + (cond - 0.85)*0.115      /* fully fit +0.017, run into the ground -0.098 */
+    + (mor  - 0.60)*0.075
+    + (shp  - 0.65)*0.055
+    + (mom  - 0.50)*0.055;
+  p._stateMul = THREE.MathUtils.clamp(m, 0.86, 1.09);
+  return p._stateMul;
+}
+
 function effA(p, key){
-  if(p && p.attrs && typeof p.attrs[key] === 'number') return A(p, key);
+  if(p && p.attrs && typeof p.attrs[key] === 'number')
+    return THREE.MathUtils.clamp(A(p, key) * stateMul(p), 1, 20);
   const d = DERIVED[key];
   if(!d) return 10;
   if(p && p._derived && p._derived[key] != null) return p._derived[key];
@@ -1763,6 +1806,7 @@ function makePlayer(team, i){
 
   const p = { team, slot:e.slot, isGK, idx:i, num:e.num, name:e.name, pid:e.pid,
     attrs:e.attrs, _derived:null,
+    morale:e.morale, cond:e.cond, sharp:e.sharp, momentum:(TEAMS[team]||{}).momentum,
     isWide: !!SLOT_WIDE[e.slot], isFwd: !!SLOT_FWD[e.slot], isDef: !!SLOT_DEF[e.slot],
     H:e.h, build:e.build, reach:e.h/1.82,
     home:new THREE.Vector2(e.pos.x, e.pos.y), pos:new THREE.Vector2(0,0), vel:new THREE.Vector2(0,0),
@@ -4431,7 +4475,7 @@ function tick(dt){
         scriptComplete: !SCRIPT.active || !SCRIPT.events.some(e=>!e.fired),
         blocked: SCRIPT.blocked});
       setTimeout(()=>{
-        S.running=false; el('menu').classList.remove('off');
+        S.running=false; showDemoMenu(true);
         el('btnStart').textContent='PLAY AGAIN';
       }, 4500);
     }
@@ -4450,6 +4494,20 @@ function tick(dt){
 }
 
 /* ================== ui ================== */
+/* THE BROADCAST'S OWN FRONT DOOR IS NOT OURS.
+   This file began as a standalone demo, so it carries a menu — half
+   length, tempo, detail, KICK OFF — and puts it back up whenever a match
+   stops. Inside the manager game that is a second main menu appearing
+   over the top of the real one when you come out of a match, offering to
+   restart a friendly between two clubs that do not exist. The game owns
+   the screen here, so the menu stays down and the settings are the ones
+   the director asked for: elite tempo, full detail. */
+function showDemoMenu(on){
+  const m = el('menu'); if(!m) return;
+  if(on && S.embedded) return;              // never, once the game has mounted
+  m.classList[on ? 'remove' : 'add']('off');
+}
+
 function seg(id, cb){
   const e = el(id);
   e.addEventListener('click', ev=>{
@@ -4489,12 +4547,12 @@ function newMatch(){
   emit('kickoff', {home:TEAMS[0].name, away:TEAMS[1].name, pitch:PITCH.cut.id});
 }
 el('btnStart').addEventListener('click', ()=>{
-  el('menu').classList.add('off');
+  showDemoMenu(false);
   if(S.phase==='menu' || S.phase==='end') newMatch();
   S.running=true; last=performance.now();
 });
 el('btnPause').addEventListener('click', ()=>{
-  S.running=false; el('menu').classList.remove('off');
+  S.running=false; showDemoMenu(true);
   el('btnStart').textContent = S.phase==='end' ? 'PLAY AGAIN' : 'RESUME';
 });
 el('btnFull').addEventListener('click', ()=>{
@@ -4510,7 +4568,7 @@ el('btnFull').addEventListener('click', ()=>{
 });
 document.addEventListener('visibilitychange', ()=>{
   if(document.hidden && S.running){
-    S.running=false; el('menu').classList.remove('off');
+    S.running=false; showDemoMenu(true);
     el('btnStart').textContent='RESUME';
   }
 });
@@ -4654,9 +4712,12 @@ window.Matchday = {
     remaining:SCRIPT.events.filter(e=>!e.fired).length,
     events:SCRIPT.events.map(e=>({minute:e.minute, team:e.team, scorer:e.scorer, fired:e.fired}))}; },
   FINISHES: Object.keys(FINISH),
-  start(){ el('menu').classList.add('off'); newMatch(); S.running=true; last=performance.now(); return this; },
+  /* the manager game announces itself here: no demo menu ever again,
+     and elite tempo rather than the demo's PRO default */
+  embed(){ S.embedded = true; S.aiSkill = 1; showDemoMenu(false); return this; },
+  start(){ showDemoMenu(false); newMatch(); S.running=true; last=performance.now(); return this; },
   pause(){ S.running=false; return this; },
-  resume(){ el('menu').classList.add('off'); S.running=true; last=performance.now(); return this; },
+  resume(){ showDemoMenu(false); S.running=true; last=performance.now(); return this; },
   setCamera(m){ S.camMode=m; if(m!=='auto') cutTo(m,1e9); else cutTo('broadcast',1); return this; },
   setSpeed(v){ S.speed = Math.max(0.25, Math.min(8, +v||1)); return this; },
   setHalfLength(sec){ S.halfLen = Math.max(30, +sec||240); return this; },
@@ -4734,8 +4795,11 @@ requestAnimationFrame(frame);
     /* Build it once, into the element the dugout hands us. */
     mount: function (el) {
       if (!el) return null;
+      /* the game is driving: no demo menu, and elite football */
+      try { if (window.Matchday && window.Matchday.embed) window.Matchday.embed(); } catch (e) { /* not booted yet; booted path below embeds */ }
       if (booted) {
         if (host && host.parentNode !== el) el.appendChild(host);
+        try { if (window.Matchday && window.Matchday.embed) window.Matchday.embed(); } catch (e) { /* nothing to embed into */ }
         return window.Matchday || null;
       }
       /* not ready yet is not the same as broken: the dugout calls this

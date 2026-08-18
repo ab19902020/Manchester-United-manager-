@@ -1,6 +1,6 @@
 /* global G, MU, ACTIONS, MatchSim, drawDugout:writable, buildMatchScreen,
    startLoop:writable, stopLoop, skipHalf:writable, trackedTick, onFT,
-   renderTop, renderMCtl, renderStats, fillFeed, shirtNo, surname */
+   renderTop, renderMCtl, renderStats, fillFeed, shirtNo, surname, clubForm */
 
 /* =====================================================================
    THE DUGOUT IS NOW A TELEVISION FEED
@@ -116,7 +116,26 @@
       weightKg: num(p.weightKg, 76),
       /* the nineteen, as stored — no renaming, no rescaling */
       attrs: p.attrs || {},
+      /* AND THE STATE HE IS ACTUALLY IN. Only the nineteen crossed
+         before, so the picture had no idea whether a man was fresh or
+         knackered, flying or in a rut. Ability is still what decides a
+         match — these move it by a few per cent, the way they should. */
+      morale: num(p.morale, 70),
+      cond: num(p.cond, 100),
+      sharp: num(p.sharp, 70),
     };
+  }
+
+  /* How the club is going, from its last six results: 1 is unbeaten and
+     flying, 0 is a side that has lost four on the spin and knows it. */
+  function momentumOf(side) {
+    try {
+      const form = (typeof clubForm === 'function') ? clubForm(side.ci) : null;
+      if (!form || !form.length) return 0.5;
+      let pts = 0;
+      form.slice(-6).forEach((r) => { pts += r === 'W' ? 3 : r === 'D' ? 1 : 0; });
+      return Math.max(0, Math.min(1, pts / (Math.min(6, form.length) * 3)));
+    } catch (error) { return 0.5; }
   }
 
   function squadFor(side) {
@@ -131,6 +150,7 @@
       name: String(club.name || 'CLUB').toUpperCase(),
       abbr: club.short || club.abbr || 'CLB',
       shirt: kit.shirt, trim: kit.trim, shorts: kit.shorts, socks: kit.socks,
+      momentum: momentumOf(side),
       formation: (side.tac && side.tac.formation) || '4-3-3',
       mentality: (side.tac && side.tac.mentality) || 'Balanced',
       players,
