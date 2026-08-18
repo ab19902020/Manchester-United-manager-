@@ -240,7 +240,7 @@ comes back different. And the growth question is open: `log` is 51 entries a pla
 after one season, so a thirty-season career has to be measured before anyone calls
 this settled. 212 kB of headroom is real but it is not unlimited.
 
-## Open finding: `dugout-live` fails about one run in eight
+## ~~Open finding: `dugout-live` fails about one run in eight~~ — my figure was wrong
 
 Measured today, not inferred. The failing assertion is
 
@@ -264,8 +264,23 @@ a **direct call** that should add exactly one goal to side A every time. So
 `'1,0'` is the correct assertion and the flake is not randomness in the match —
 something in the setup is occasionally not ready when the goal is scored.
 
-**Rate:** one failure across roughly eight runs. Seven consecutive passes after
-it, including five back to back.
+**Rate: I published "one in eight" off a single failure, and that was not a
+measurement.** Instrumented and re-run fourteen more times with every candidate
+cause printed — whether VAR was actually disabled, whether the broadcast had
+taken the goal over, whether the match under test was still `MU.m`, whether a
+shooter was found — and it passed all fourteen. With the seven before that, it
+is twenty-one consecutive passes, so the real rate is at most something like one
+in twenty and may well be zero: the one failure landed in the same stretch where
+the working copy was reverting under me and a full check was competing for the
+machine.
+
+The diagnostics confirm the obvious suspect is not it. VAR disallows 6.2% of
+goals, which is close enough to the rate I claimed to be tempting, but the probe
+shows `varInUse: true` with `_varOff: true`, so the condition
+`varInUse(fix) && !pen && !this._varOff` is false and that path never runs.
+
+The probe is committed as `scripts/probe-dugout-flake.cjs` so the next person to
+see it fail gets the cause printed rather than starting where I started.
 
 **Not mine.** Every change I made today is in `src/matchday-engine.js`, the
 broadcast; this assertion runs with `LIVE.on=false`, which is MatchSim with the
