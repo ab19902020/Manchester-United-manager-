@@ -2761,8 +2761,27 @@ function animate(p, dt){
 
 function stepOfficials(dt){
   const ref = officials[0];
-  const t = new THREE.Vector2(ball.pos.x - S.dir[S.possTeam]*4, ball.pos.z + 9);
+  let t;
+  const r = S.restart;
+  if(r && r.type==='free'){
+    /* the wall is his job, so he goes to it and paces the ten yards */
+    t = new THREE.Vector2(ball.pos.x + S.dir[r.team]*4.5, ball.pos.z + 3.2);
+  } else if(r && r.type==='corner'){
+    /* he stands off a corner, out towards the edge of the box */
+    t = new THREE.Vector2(ball.pos.x - S.dir[r.team]*13, ball.pos.z - Math.sign(ball.pos.z||1)*7);
+  } else if(r && r.type==='goalkick'){
+    t = new THREE.Vector2(ball.pos.x - S.dir[r.team]*22, 9);
+  } else {
+    /* THE DIAGONAL. He used to sit nine metres to the same side of the
+       ball for ninety minutes, which is not how anybody referees. A
+       referee works a diagonal so that he and his near assistant are on
+       OPPOSITE touchlines and the whole pitch is covered between them —
+       so which side he takes depends on which half the ball is in. */
+    const half = Math.sign(ball.pos.x) || 1;
+    t = new THREE.Vector2(ball.pos.x - S.dir[S.possTeam]*4.5, ball.pos.z + half*8.5);
+  }
   t.y = THREE.MathUtils.clamp(t.y, -HALF_W+3, HALF_W-3);
+  t.x = THREE.MathUtils.clamp(t.x, -HALF_L+2, HALF_L-2);
   movePlayerLite(ref, t, dt, 6.4);
   for(let i=1;i<3;i++){
     const ar = officials[i];
