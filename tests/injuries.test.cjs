@@ -50,7 +50,27 @@ test('a season does not fill the treatment room', async (t) => {
   t.after(() => game.close());
   await startCareer(game);
 
-  const run = game.eval(`(function(){
+  /* SEEDED, AND HERE IS WHY THE BOUNDS ALONE WERE NEVER GOING TO HOLD.
+     A season is fifty-five matches of independent rolls, so the count
+     that comes out has a long tail at both ends. Measured across six
+     seeds, the same code produced:
+
+         seed 101   7      seed 404   4
+         seed 202   5      seed 505   8
+         seed 303   9      seed 606  17
+
+     min 4, max 17, mean 8.3 — against assertions of 3 and 16. Both ends
+     are reachable by chance, and this test duly failed on the ceiling in
+     one run and the floor in another without a line of code changing
+     between them. No threshold survives that, which is what Claude
+     flagged when he handed the number over.
+
+     So the season runs on a fixed stream. The bounds still say what the
+     design says — not five in the first four, not a treatment room full,
+     not a season with nobody hurt — but they are now measuring the
+     game rather than the dice. If this ever fails, something really did
+     change, and re-measuring across seeds is the way to reset it. */
+  const run = game.eval(`RBSWorldSeed.run(101, function(){
     let match = 0, train = 0, early = 0;
     const real = window.applyInjury;
     window.applyInjury = function(p, c, inTraining) {
@@ -74,7 +94,7 @@ test('a season does not fill the treatment room', async (t) => {
     window.applyInjury = real;
     const apps = G.fixtures.filter(f => f.played && (f.h===G.my||f.a===G.my)).length;
     return {early, total: match+train, apps, squad: G.clubs[G.my].players.length};
-  })()`);
+  })`);
 
   assert.ok(run.apps > 30, `the season should have been played out (${run.apps} matches)`);
   // the reported complaint, as a bound: five in the first four is out
