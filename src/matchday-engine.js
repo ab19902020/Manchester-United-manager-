@@ -2018,9 +2018,22 @@ function substitutePlayer(team, offPid, coming){
   scene.remove(p.mesh); disposeBody(p.body);
   const made = makePlayer(t, idx);
   if(at>=0) players[at] = made; else players.push(made);
-  made.pos.copy(where); made.face = facing; made.stamina = 100;
+  /* HE COMES ON FROM THE TOUCHLINE. The substitute used to appear in
+     the exact spot the man he replaced was standing in, mid-pitch, out
+     of nothing. He now enters at the halfway line by the technical area
+     the way a substitute does, and runs to his position under his own
+     steam like everybody else. */
+  made.pos.set(where.x*0.15 + (t===0 ? -2.5 : 2.5), (HALF_W-0.5));
+  made.face = -Math.PI/2;
+  made.vel.set(0,0);
+  made.stamina = 100;
   if(ball.owner===p) ball.owner = made;
   if(S.lastTouch===p) S.lastTouch = made;
+  /* a pass in the air to a man who has just been taken off would leave
+     nobody going for it, and the reference held a disposed body */
+  if(S.passTo===p) S.passTo = null;
+  if(MARKS && MARKS.map) MARKS.map.clear();
+  void facing;
 
   benchUsed(t);
   lowerThird('SUB', made.name, p.name + '  ·  ' + (TEAMS[t].name||'') + '  ·  ' + clockLabel());
@@ -4080,6 +4093,84 @@ function setCornerBox(team, side){
   return taker;
 }
 
+/* =====================================================================
+   A FREE KICK HAS A WALL, AND A THROW-IN HAS SOMEBODY TO THROW TO
+   ---------------------------------------------------------------------
+   Both did what the corner used to: hand the ball to the nearest man and
+   let open play carry on. No wall was ever built, so a free kick twenty
+   yards out was an unopposed shot; nobody came short for a throw, so it
+   went to whoever happened to be standing there — often an opponent.
+   ===================================================================== */
+function setFreeKick(team, at){
+  const dir = S.dir[team];
+  const gx = dir*HALF_L;
+  const goalD = Math.hypot(gx-at.x, at.y);
+  const att = teamOf(team).filter(p=>!p.isGK);
+  const def = teamOf(1-team).filter(p=>!p.isGK);
+  const shooting = goalD < 30;
+
+  /* THE WALL. Between the ball and the goal, at the ten yards the laws
+     give, and as many men in it as the danger deserves. */
+  if(shooting){
+    const ux = (gx-at.x)/goalD, uy = (0-at.y)/goalD;
+    const wallN = goalD < 22 ? 4 : 3;
+    for(let i=0;i<wallN && i<def.length;i++){
+      const off = (i - (wallN-1)/2)*0.62;
+      def[i].pos.set(at.x + ux*9.15 - uy*off, at.y + uy*9.15 + ux*off);
+      def[i].vel.set(0,0);
+      def[i].face = Math.atan2(at.y-def[i].pos.y, at.x-def[i].pos.x);
+    }
+    /* and the rest pick up the men in the box */
+    const spots = [[gx-dir*5.5, 3.0], [gx-dir*9.0, -1.5], [gx-dir*6.5, -4.5], [gx-dir*13.0, 2.0]];
+    let k=0;
+    for(const p of att){
+      if(k>=spots.length) break;
+      if(Math.hypot(p.pos.x-at.x, p.pos.y-at.y) < 3) continue;   // the taker stays put
+      p.pos.set(spots[k][0]+(Math.random()-.5)*1.4, spots[k][1]+(Math.random()-.5)*1.4);
+      p.vel.set(0,0); k++;
+    }
+    for(let d=wallN; d<def.length; d++){
+      const a = att[d-wallN];
+      if(!a) break;
+      def[d].pos.set(a.pos.x + dir*1.0, a.pos.y + (Math.random()-.5)*0.9);
+      def[d].vel.set(0,0);
+    }
+    const gk = keeperOf(1-team);
+    if(gk){ gk.pos.set(gx - dir*1.6, THREE.MathUtils.clamp(at.y*0.25, -2.4, 2.4)); gk.vel.set(0,0); }
+  }
+  return shooting;
+}
+
+/* A throw-in: the taker steps off the pitch, and two or three come short
+   for it rather than leaving him to find somebody by accident. */
+function setThrowIn(team, at){
+  const dir = S.dir[team];
+  const side = Math.sign(at.y) || 1;
+  const mates = teamOf(team).filter(p=>!p.isGK)
+    .sort((a,b)=> Math.hypot(a.pos.x-at.x,a.pos.y-at.y) - Math.hypot(b.pos.x-at.x,b.pos.y-at.y));
+  const taker = mates[0];
+  if(taker){
+    taker.pos.set(at.x, side*(HALF_W+0.9));      // over the line, as he must be
+    taker.vel.set(0,0);
+    taker.face = Math.atan2(-side, 0);
+  }
+  const shorts = [[at.x + dir*3.5, side*(HALF_W-4.0)],
+                  [at.x - dir*4.5, side*(HALF_W-2.5)],
+                  [at.x + dir*8.0, side*(HALF_W-9.0)]];
+  for(let i=1;i<=3 && i<mates.length;i++){
+    const sp = shorts[i-1];
+    mates[i].pos.set(sp[0], sp[1]); mates[i].vel.set(0,0);
+    mates[i].face = Math.atan2(at.y-mates[i].pos.y, at.x-mates[i].pos.x);
+  }
+  const opp = teamOf(1-team).filter(p=>!p.isGK)
+    .sort((a,b)=> Math.hypot(a.pos.x-at.x,a.pos.y-at.y) - Math.hypot(b.pos.x-at.x,b.pos.y-at.y));
+  for(let i=1;i<=3 && i<mates.length && i-1<opp.length;i++){
+    opp[i-1].pos.set(mates[i].pos.x + dir*1.1, mates[i].pos.y + (Math.random()-.5)*0.8);
+    opp[i-1].vel.set(0,0);
+  }
+  return taker;
+}
+
 /* ================== rules ================== */
 function setRestart(type, team, spot, label){
   S.phase='restart';
@@ -4100,6 +4191,11 @@ function setRestart(type, team, spot, label){
   if(type==='corner'){
     const arranged = setCornerBox(team, Math.sign(spot.y) || 1);
     if(arranged) taker = arranged;
+  } else if(type==='free'){
+    setFreeKick(team, new THREE.Vector2(ball.pos.x, ball.pos.z));
+  } else if(type==='throw'){
+    const t = setThrowIn(team, new THREE.Vector2(ball.pos.x, ball.pos.z));
+    if(t) taker = t;
   }
   S.restart={type,team,taker,t:type==='corner' ? 2.2 : 1.5};
   S.possTeam=team;
@@ -4396,6 +4492,20 @@ function stepRestart(dt){
         if(r.type==='goalkick') clearance(r.taker);
         /* a corner is crossed, not carried */
         else if(r.type==='corner'){ try{ doCross(r.taker); }catch(e){ clearance(r.taker); } }
+        else if(r.type==='free'){
+          /* close enough and he fancies it: a strike. Otherwise it is
+             put into the box for the men who went up for it. */
+          const dir = S.dir[r.taker.team];
+          const gd = Math.hypot(dir*HALF_L-r.taker.pos.x, r.taker.pos.y);
+          try{
+            if(gd < 27 && Math.random() < 0.30 + A01(r.taker,'shooting')*0.55){
+              const bend = (Math.random()<0.5?-1:1)*(0.35 + A01(r.taker,'crossing')*0.4);
+              doShot(r.taker, new THREE.Vector2(0, bend), 0.9, 'curler');
+            } else if(gd < 46) doCross(r.taker);
+            else doPass(r.taker, ZERO, 0.6);
+          }catch(e){ clearance(r.taker); }
+        }
+        else if(r.type==='throw'){ try{ doPass(r.taker, ZERO, 0.35); }catch(e){} }
       }
     }
     S.restart=null;
