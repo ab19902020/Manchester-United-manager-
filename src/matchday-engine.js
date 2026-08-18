@@ -3292,10 +3292,14 @@ function aiPlayer(p, dt){
          that is neither a carry nor a pass falls through to "run at the
          goal", which is carrying by another name, the ball ended up at
          his feet on roughly seven touches in ten. Footballers pass far
-         more than they run with it, at every level. At 0.68 the same
-         side passes about two touches in three, carries one in six, and
-         runs at somebody the rest of the time. */
-      const releases = (0.68 + A01(p,'passing')*0.30 + A01(p,'vision')*0.12
+         more than they run with it, at every level.
+
+         BUT NOT ALL SIDES EQUALLY, and 0.68 was too flat: it put a
+         Championship side and an elite one both at effectively every
+         touch, so a bad team passed like a good one. The base is 0.42
+         with a wide skill term, which puts a National League side near
+         0.58 and an elite one near 0.94 -- a gap you can see. */
+      const releases = (0.42 + A01(p,'passing')*0.36 + A01(p,'vision')*0.12
                      + A01(p,'decisions')*0.10) * possBias(p.team);
 
       /* HE NEVER PASSED, HE JUST RAN WITH IT UNTIL SOMEBODY TOOK IT OFF HIM.
@@ -3317,7 +3321,7 @@ function aiPlayer(p, dt){
       const carry = 0.18 + Amix(p,{dribbling:1.3, pace:0.7, composure:0.5, firstTouch:0.5})*0.42;
       if(nearest>6.0 && goalD>12 && Math.random() < carry){
         /* genuine space, and the feet to use it: carry */
-      } else if(Math.random() < releases*(press>0 ? 1 : 0.90)){
+      } else if(Math.random() < releases*(press>0 ? 1 : 0.88)){
         /* AND HE CAN PASS WITHOUT BEING HARRIED INTO IT. The pass used to
            be gated behind `press>0`, so a man in space neither carried nor
            passed — he fell through and ran at the goal regardless, which
@@ -3330,6 +3334,23 @@ function aiPlayer(p, dt){
         else doPass(p,ZERO,.5);
         animate(p,dt); return;
       }
+    }
+    /* AND A POOR SIDE DOES NOT DRIBBLE OUT OF TROUBLE — IT HITS IT LONG.
+       This is the single thing that most separates a National League
+       match from a Premier League one, and the engine had no version of
+       it: every side that failed to find a pass ran at the goal with the
+       ball, which is a thing good players do and bad ones cannot. Under
+       real pressure a man with poor composure and a poor first touch now
+       clears his lines and hopes, about two times in five; an elite one
+       does it about one time in seven and otherwise keeps it. */
+    let onHim = 0;
+    for(const o of teamOf(1-p.team)){
+      if(Math.hypot(o.pos.x-p.pos.x, o.pos.y-p.pos.y) < 3.4) onHim++;
+    }
+    if(onHim > 0 && !p.isGK && ball.owner === p &&
+       Math.random() < 0.55 - Amix(p,{composure:1.2, firstTouch:1.0, passing:0.8})*0.45){
+      clearance(p, true);
+      animate(p,dt); return;
     }
     const goal = new THREE.Vector2(dir*(HALF_L-4), THREE.MathUtils.clamp(p.pos.y*.4,-14,14));
     want = goal.sub(p.pos).normalize();
