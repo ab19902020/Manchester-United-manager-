@@ -53,7 +53,19 @@
 
   /* Only the sounds the broadcast is already making. Everything else the
      interface plays is left alone. */
-  var DOUBLED = { whistle: 1, kick: 1, card: 1, goal: 1, crowd: 1, post: 1, save: 1 };
+  /* Every sound the match itself makes. The first pass at this held
+     seven of them and missed six, which is why a tackle could still be
+     heard over the broadcast: the list was written from the lines I had
+     read rather than from every `sfx(` in the page. It is now the full
+     set, taken from the source.
+
+     Deliberately NOT held: nav, ok, open, close, tap, swap, cash and the
+     rest of the interface. Those are the game talking to you, not a
+     second commentary on the match. */
+  var DOUBLED = {
+    whistle: 1, kick: 1, card: 1, goal: 1, crowd: 1, post: 1, save: 1,
+    tackle: 1, strike: 1, miss: 1, ooh: 1, cheer: 1, fullTime: 1, paStab: 1,
+  };
 
   var _sfx = W.sfx;
   if (typeof _sfx === 'function') {

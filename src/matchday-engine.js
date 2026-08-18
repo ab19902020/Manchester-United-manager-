@@ -159,7 +159,7 @@ function buildSquad(t){
 
 const S = {
   phase:'menu', clock:0, half:1, halfLen:240, score:[0,0],
-  aiSkill:0.86, offsideOn:true, freeze:0, restart:null,
+  aiSkill:0.86, offsideOn:true, freeze:0, restart:null, passTo:null,
   possTeam:1, lastTouch:null, pendingOffside:null, running:false,
   dir:[1,-1], speed:1, quality:1,
   /* aerial and loose are duels won, which is a real match statistic and
@@ -2618,7 +2618,14 @@ function passError(p,d){
   if(SCRIPT.active && SCRIPT.pending && SCRIPT.pending.team !== p.team)
     skill *= 1 - scriptUrgency(SCRIPT.pending.team)*0.68;
   const range = 0.06 + Math.min(1, d/45)*0.30;      // long balls are harder
-  const wobble = Math.random() < (0.10 - skill*0.075) ? 2.8 : 1;
+  /* The wobble is what reads as "he cannot pass". The base error is
+     fine -- a National League player misses by about a metre and a half
+     over twenty, which is a receivable ball -- but one pass in thirteen
+     was multiplied by 2.8, which at that range is nearly four metres and
+     a giveaway. One in twenty at 2.2 keeps the scruffiness without
+     making every other pass a present. The skill gradient in the line
+     above is untouched, because a poor side is supposed to be poorer. */
+  const wobble = Math.random() < (0.075 - skill*0.058) ? 2.2 : 1;
   return (1-skill*0.94)*range*(Math.random()*2-1)*wobble;
 }
 /* How long each technique takes to execute, and where on the body the
@@ -2720,6 +2727,12 @@ function doPass(p, aimV, power){
   const speed = THREE.MathUtils.clamp(d*1.45+5,8,30)*(.75+power*.4)*(.95+Math.random()*.1);
   to.normalize().rotateAround(ZERO, passError(p,d));
   p.face = Math.atan2(to.y,to.x);
+  /* WHO IT IS FOR. Nothing recorded this, so nobody came to meet a pass:
+     only the man who happened to be nearest the ball chased it, and the
+     intended receiver carried on walking to his slot -- which from the
+     stand looks exactly like a player running away from a ball played to
+     him. He is named now, and `aiPlayer` sends him to it. */
+  S.passTo = best.m; S.passAt = performance.now();
   kick(p,to,speed,.35,0);
 }
 function armOffside(passer, receiver){
@@ -3074,7 +3087,7 @@ function resolvePossession(){
     if(inBox && Math.random() < stop){
       const clean = best.isGK && Math.random() < A01(best,'handling')*0.75;
       if(clean){                                    // gathered, match stops
-        ball.owner = best; ball.vel.set(0,0,0);
+        ball.owner = best; ball.vel.set(0,0,0); S.passTo=null;
         S.possTeam = best.team; S.lastTouch = best; best.gkHold = 1.1;
         event('SAVE', best.name+' holds it');
         return;
@@ -3121,7 +3134,7 @@ function resolvePossession(){
     S.stats.loose[best.team]++;
     if(wasHigh) S.stats.aerial[best.team]++;
   }
-  ball.owner = best; ball.vel.set(0,0,0);
+  ball.owner = best; ball.vel.set(0,0,0); S.passTo=null;
   S.possTeam = best.team; S.lastTouch = best;
   if(best.isGK) best.gkHold = 1.1;
 }
@@ -3275,8 +3288,28 @@ function aiPlayer(p, dt){
       const urge = scriptUrgency(p.team), mine = isScriptScorer(p);
       const range = (15 + A01(p,'shooting')*20) * (1 + urge*(mine?0.7:0.25));
       if(goalD < range && nearest > (goalD<16 ? 1.0 : 1.5)*(1-urge*0.6)){
-        const appetite = (goalD<15 ? .40 : .17)
-          * (0.55 + A01(p,'shooting')*0.75) * (0.8 + A01(p,'composure')*0.4) * ment.shoot
+        /* HOW GOOD IS THE CHANCE? Distance bands alone decided this — a
+           man eight yards out with the goal gaping was no keener than
+           one on the corner of the box with two defenders in front, and
+           for a National League striker inside fifteen metres it came to
+           about 28%, so he passed seven times out of ten. If he has a
+           sight of goal he should take it.
+
+           Three things make a chance: how far, how square, and whether
+           anybody is in the way. A clear one straight on from eight
+           metres now reads near 1; a tight angle from twenty-five with
+           bodies in front reads near 0, which is when passing IS the
+           right answer. */
+        const angleOff = Math.abs(p.pos.y) / Math.max(5, goalD);
+        const mouth = { pos: new THREE.Vector2(dir*HALF_L,
+                        THREE.MathUtils.clamp(p.pos.y*0.3, -3, 3)), team: p.team, isGK:false };
+        const inTheWay = laneRisk(p, mouth);
+        const quality = THREE.MathUtils.clamp(
+          (1 - Math.min(1, goalD/30)) *
+          (1 - Math.min(1, angleOff*1.15)) *
+          (1 - Math.min(1, inTheWay/5.5)), 0, 1);
+        const appetite = (0.22 + quality*0.85)
+          * (0.60 + A01(p,'shooting')*0.60) * (0.85 + A01(p,'composure')*0.30) * ment.shoot
           * (urge>0 ? Math.max(0.85, shotBias(p.team)) : shotBias(p.team))
           * (1 + urge*(mine ? 4.5 : 0.6));
         if(Math.random() < appetite){
@@ -3363,6 +3396,17 @@ function aiPlayer(p, dt){
       want.addScaledVector(new THREE.Vector2(p.pos.x-close.pos.x,p.pos.y-close.pos.y).normalize(),.9).normalize();
     if(p.skill>0) want = skillSteer(p, want);
     movePlayer(p, want, cd>2.2, dt); animate(p,dt); return;
+  }
+
+  /* THE MAN IT WAS PLAYED TO GOES AND GETS IT, whether or not he happens
+     to be the closest. Without this the intended receiver kept walking to
+     his formation slot while the ball ran past him. */
+  if(!ball.owner && S.passTo===p && p.team===S.possTeam){
+    const meet = new THREE.Vector2(
+      ball.pos.x + ball.vel.x*0.22 - p.pos.x,
+      ball.pos.z + ball.vel.z*0.22 - p.pos.y);
+    movePlayer(p, meet.clampLength(0,1), meet.length()>2.5, dt);
+    animate(p,dt); return;
   }
 
   if(!ball.owner && p===nearestToBall(p.team)){
