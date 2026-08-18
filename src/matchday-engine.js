@@ -1426,8 +1426,31 @@ function stepBall(dt){
   ball.vel.y -= 9.81*dt;
   const sp = ball.vel.length();
   if(sp > .01){
+    /* AIR RESISTANCE WAS CUBIC, AND IT WAS EATING THE FOOTBALL.
+       `-drag*dt*sp*.35 - drag*dt` with drag = .0058*sp² makes the second
+       term scale with the CUBE of the speed, and that term dominates
+       everything above walking pace. Measured against a real ball
+       (0.43 kg, 0.11 m, Cd 0.25, so a = 0.0135v²):
+
+           10 m/s    2.6 m/s²  against   1.4    1.9x too much
+           20 m/s   18.6 m/s²  against   5.4    3.4x
+           30 m/s   60.0 m/s²  against  12.2    4.9x
+           40 m/s  139.2 m/s²  against  21.7    6.4x
+
+       Six g of drag on a football. The consequences were everywhere and
+       none of them looked like a bug in the air: a ground pass over 27 m
+       COULD NOT ARRIVE at any strike speed under 60 m/s -- it died in
+       open grass -- so cross-field balls were physically impossible, and
+       an 18 m shot took 1.10 s to reach the goal, which is a shot you
+       can watch travel.
+
+       Only the cubic term goes. The quadratic that remains is a little
+       under a real ball's, and the grass below is untouched, so the
+       weight of the ground game is as it was: a 20 m pass now takes
+       0.97 s instead of 1.80 s, 34 m arrives instead of never, and that
+       same shot takes 0.65 s. */
     const drag = .0058*sp*sp;
-    ball.vel.addScaledVector(ball.vel.clone().normalize(), -drag*dt*sp*.35 - drag*dt);
+    ball.vel.addScaledVector(ball.vel.clone().normalize(), -drag*dt);
   }
   if(Math.abs(ball.spin) > .01){
     const lat = new THREE.Vector3(-ball.vel.z,0,ball.vel.x).normalize();
@@ -2882,7 +2905,11 @@ function passOptions(p){
       if(od<4.5) press += (4.5-od);
     }
     return {m,to,d,press,fwd:(m.pos.x-p.pos.x)*S.dir[p.team]};
-  }).filter(o=>o.d>3 && o.d<42);
+    /* 42 m was never a pass this ball could complete -- even with the
+       drag fixed it is still rolling at 4.9 m/s after 34 m and dying,
+       and a defender walks onto anything longer. Offering it as an
+       option only ever produced a ball that stopped in open grass. */
+  }).filter(o=>o.d>3 && o.d<34);
 }
 /* IS THERE ANYBODY STANDING IN THE WAY?
    Nothing asked this, which is most of why the ball kept being given
@@ -2892,7 +2919,8 @@ function passOptions(p){
    an opponent near the line and between the two ends is a problem, one
    behind the passer or beyond the target is not. */
 function laneRisk(from, target){
-  const dx = target.pos.x - from.pos.x, dz = target.pos.y - from.pos.y;
+  const tp = target.pos ? new THREE.Vector2(target.pos.x, target.pos.y) : target;
+  const dx = tp.x - from.pos.x, dz = tp.y - from.pos.y;
   const len = Math.hypot(dx, dz) || 1;
   const ux = dx/len, uz = dz/len;
   let risk = 0;
@@ -2905,6 +2933,68 @@ function laneRisk(from, target){
     if(off < 2.4) risk += (2.4 - off) * (1 - (along/len)*0.3);
   }
   return risk;
+}
+
+/* =====================================================================
+   PASS IT WHERE HE IS GOING TO BE
+
+   "it's passing it to where a player might have been -- his teammate has
+    moved now. It needs to anticipate where its teammate is running."
+
+   Exactly right, and the arithmetic says how badly. The lead was a flat
+   `vel * 0.35` -- a third of a second of anticipation, whatever the pass
+   was. But a ball does not arrive in a third of a second, and it does
+   not arrive in a fixed time at all: it leaves at a speed set by the
+   distance and then loses that speed to the air and the grass. Measured
+   against this engine's ball, drag now corrected:
+
+       6m  pass  0.53s      14m  0.73s      27m  1.55s
+      10m  pass  0.67s      20m  0.97s
+
+   So a man running at 6 m/s finished up this far past the ball:
+
+       10m pass  1.9m behind him      20m pass  3.7m behind him
+       14m pass  2.3m behind him      27m pass  7.2m behind him
+
+   Which is the pass going behind the runner, every time, and worst for
+   exactly the player you most want to find -- the one making the run.
+
+   The flight is integrated here with the same drag and rolling loss
+   stepBall applies, and the aim point is solved by iteration, because
+   the two depend on each other: leading him further makes the pass
+   longer, which makes the flight longer, which leads him further still.
+   Three passes converge. Checked against the full 3D step with gravity
+   and bounce, the aim point lands within 0.2 m out to twenty metres and
+   within 0.5 m at twenty-seven -- inside a stride, where the old lead
+   was out by two to seven metres.
+   ===================================================================== */
+function passFlight(dist, speed){
+  let v = Math.max(1, speed), x = 0, t = 0;
+  const dt = 1/60;
+  while(x < dist && t < 3){
+    x += v*dt; t += dt;
+    v -= 0.0058*v*v*dt;                // air, as stepBall applies it
+    v *= 1 - 0.62*dt;                  // and the grass, once it is down
+    if(v < 1.2) break;                 // it will not get there rolling
+  }
+  return x >= dist ? t : t + (dist-x)/Math.max(1.2, v);
+}
+/* The speed doPass and doThrough will actually strike it at, so the
+   flight time is the one this pass really has rather than a guess. */
+function passSpeed(d, powerScale){
+  return THREE.MathUtils.clamp(d*1.45+5, 8, 30) * powerScale;
+}
+function passLead(from, m, powerScale, reach){
+  let ax = m.pos.x, az = m.pos.y, t = 0;
+  for(let i=0; i<3; i++){
+    const d = Math.hypot(ax-from.pos.x, az-from.pos.y);
+    t = Math.min(1.6, passFlight(d, passSpeed(d, powerScale)) * (reach==null?1:reach));
+    ax = m.pos.x + m.vel.x*t;
+    az = m.pos.y + m.vel.y*t;
+  }
+  return new THREE.Vector2(
+    THREE.MathUtils.clamp(ax, -HALF_L+1.2, HALF_L-1.2),
+    THREE.MathUtils.clamp(az, -HALF_W+1.0, HALF_W-1.0));
 }
 
 function doPass(p, aimV, power){
@@ -2927,7 +3017,11 @@ function doPass(p, aimV, power){
        Now: a clear lane and a free man come first, distance keeps it
        sensible, and where he is facing is a mild preference rather than
        the whole decision. */
-    const lane = laneRisk(p, o.m);
+    /* the lane that matters is the one to where the ball is going, not
+       to where he is standing -- now that the pass is led, a defender
+       sitting on the arrival point is the one who intercepts it */
+    o.lead = passLead(p, o.m, .75+power*.4);
+    const lane = laneRisk(p, o.lead);
     let sc = o.to.clone().normalize().dot(aim)*26
            - o.d*1.35
            - o.press*11
@@ -2937,10 +3031,11 @@ function doPass(p, aimV, power){
     if(urge > 0 && isScriptScorer(o.m)) sc += (60 + urge*320) * (lane > 1.6 ? 0.35 : 1);
     if(sc>bs){ bs=sc; best=o; }
   }
-  const lead = best.m.vel.clone().multiplyScalar(.35);
-  const to = new THREE.Vector2(best.m.pos.x+lead.x, best.m.pos.y+lead.y).sub(p.pos);
+  /* aimed at where he will be when it gets there, not where he was when
+     it was struck */
+  const to = (best.lead || passLead(p, best.m, .75+power*.4)).clone().sub(p.pos);
   const d = to.length();
-  const speed = THREE.MathUtils.clamp(d*1.45+5,8,30)*(.75+power*.4)*(.95+Math.random()*.1);
+  const speed = passSpeed(d, .75+power*.4)*(.95+Math.random()*.1);
   to.normalize().rotateAround(ZERO, passError(p,d));
   p.face = Math.atan2(to.y,to.x);
   /* WHO IT IS FOR. Nothing recorded this, so nobody came to meet a pass:
@@ -2979,9 +3074,17 @@ function doThrough(p, aimV, power){
     if(sc>bs){ bs=sc; best=o; }
   }
   if(!best){ doPass(p,aimV,power); return; }
+  /* A THROUGH BALL LED SIDEWAYS AND NOT AT ALL DOWN THE PITCH. It took
+     `vel.y*.6` across and then added a flat 4-9 metres forward, so a man
+     sprinting into the channel was served the same yardage as one
+     standing still -- the whole point of the pass, missed. He is led
+     properly now, on both axes and for the flight this ball will really
+     have, and the extra yards on top are what makes it a ball to run on
+     to rather than a ball to his feet. */
+  const run = passLead(p, best.m, .95, 1.15);
   const space = new THREE.Vector2(
-    THREE.MathUtils.clamp(best.m.pos.x + S.dir[p.team]*(4+power*5), -HALF_L+2, HALF_L-2),
-    best.m.pos.y + best.m.vel.y*.6);
+    THREE.MathUtils.clamp(run.x + S.dir[p.team]*(4+power*5), -HALF_L+2, HALF_L-2),
+    THREE.MathUtils.clamp(run.y, -HALF_W+1.5, HALF_W-1.5));
   const to = space.sub(p.pos), d = to.length();
   if(S.offsideOn) armOffside(p, best.m);
   S.passTo = best.m; S.passAt = performance.now();
