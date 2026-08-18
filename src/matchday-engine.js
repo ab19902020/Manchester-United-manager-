@@ -2230,8 +2230,24 @@ function slotWorld(p){
   const bx = ball.pos.x, bz = ball.pos.z;
   let x = p.home.x*(HALF_L*.92)*dir, z = p.home.y*(HALF_W*.95);
   if(!p.isGK){
-    x += bx*.34 + dir*(attacking?7:-4.5);
-    z += bz*(p.isWide ? .16 : .4);
+    /* THE SLOT ITSELF USED TO SLIDE WITH THE BALL, FOR EVERYBODY, BY THE
+       SAME AMOUNT. `bx*.34` and `bz*.4` were constants, so ten men's
+       targets all moved by the same fraction of the same number on the
+       same frame — which is a back four running backwards together no
+       matter what I did to how hard each of them chased. I fixed the
+       blend around this line last time and left the line alone, so the
+       lockstep survived.
+
+       It is his own number now, from how disciplined he is, and it reads
+       the ball HE has seen rather than where the ball truly is. A
+       holding centre-half barely shifts; a forward drifts most of the
+       way with it. */
+    const hold = (typeof styleOf === 'function') ? styleOf(p).holds : 0.5;
+    const see = p.seen;
+    const sx = see ? see.x : bx, sz = see ? see.y : bz;
+    const track = 0.19 + (1-hold)*0.26;
+    x += sx*track + dir*(attacking?7:-4.5);
+    z += sz*(p.isWide ? .16 : .4)*(0.72 + (1-hold)*0.56);
     if(p.isWide && p.isFwd)
       z = Math.sign(p.home.y||1)*Math.max(Math.abs(z), HALF_W-11);
     z = THREE.MathUtils.clamp(z,-HALF_W+2,HALF_W-2);
@@ -2915,17 +2931,29 @@ function doThrough(p, aimV, power){
   const opts = passOptions(p).filter(o=>o.fwd>-2);
   const aim = aimV.lengthSq()>.04 ? aimV.clone().normalize() : new THREE.Vector2(S.dir[p.team],0);
   let best=null, bs=-1e9;
+  /* THE THROUGH BALL WAS THE OLD doPass, AND NOBODY HAD FIXED IT.
+     `dot(aim)*100` again, so it picked whoever was most directly down
+     the pitch; no lane check at all, so it went through defenders; and
+     it deliberately put the ball seven to fourteen metres BEYOND him
+     with the error multiplied by 1.3. For a decent player that is about
+     a third of his releases, and most of them were a present. Same
+     treatment as the ordinary pass: a clear lane and a free man matter,
+     the direction he faces is a preference, and the ball is played a
+     findable distance in front rather than hopefully past everybody. */
   for(const o of opts){
-    const sc = o.to.clone().normalize().dot(aim)*100 + o.fwd*1.2 - o.d*.5;
+    const lane = laneRisk(p, o.m);
+    const sc = o.to.clone().normalize().dot(aim)*30
+             + o.fwd*1.30 - o.d*0.70 - o.press*8 - lane*34;
     if(sc>bs){ bs=sc; best=o; }
   }
   if(!best){ doPass(p,aimV,power); return; }
   const space = new THREE.Vector2(
-    THREE.MathUtils.clamp(best.m.pos.x + S.dir[p.team]*(7+power*7), -HALF_L+2, HALF_L-2),
+    THREE.MathUtils.clamp(best.m.pos.x + S.dir[p.team]*(4+power*5), -HALF_L+2, HALF_L-2),
     best.m.pos.y + best.m.vel.y*.6);
   const to = space.sub(p.pos), d = to.length();
   if(S.offsideOn) armOffside(p, best.m);
-  to.normalize().rotateAround(ZERO, passError(p,d)*1.3);
+  S.passTo = best.m; S.passAt = performance.now();
+  to.normalize().rotateAround(ZERO, passError(p,d)*1.15);
   p.face = Math.atan2(to.y,to.x);
   kick(p,to,THREE.MathUtils.clamp(d*1.5+6,10,30),.8,0);
 }
@@ -4009,8 +4037,25 @@ function checkRules(){
   if(S.phase!=='play') return;
   const b = ball.pos;
   for(const s of [-1,1]){
-    if(s*b.x > HALF_L+CFG.BALL_R*.5 && Math.abs(b.z)<CFG.GOAL_W/2 && b.y<CFG.GOAL_H){
+    /* A SHOT THAT IS NOT GOING TO BE ALLOWED IS STOPPED BEFORE THE LINE,
+       NOT RETRIEVED FROM THE NET.
+       This whole block used to run only once the ball had CROSSED, and a
+       blocked goal then did `ball.pos.x = s*(HALF_L-BALL_R*1.5)` — so the
+       ball went in and was yanked back out to the paint, stopping dead a
+       few millimetres short with the same reaction every time. It read
+       exactly like an invisible wall across the goalmouth, because that
+       is what it was.
+
+       A save is now taken at the keeper's plane, a metre and a half in
+       front of the line, while the ball is still travelling towards it.
+       A goal the plan DOES allow is not touched here at all: it crosses,
+       and it hits the net. */
+    const crossed = s*b.x > HALF_L+CFG.BALL_R*.5;
+    const atKeeper = s*b.x > HALF_L-1.55 && s*ball.vel.x > 1;
+    if((crossed || atKeeper) && Math.abs(b.z)<CFG.GOAL_W/2 && b.y<CFG.GOAL_H){
       const scorer = S.dir[0]===s ? 0 : 1;
+      /* allowed, and not over the line yet — let it go in properly */
+      if(!crossed && scriptAllowsGoal(scorer)) continue;
 
       /* THE GUARANTEE. If the plan does not owe this side a goal, this
          one never happened: it comes back off the keeper or the frame.
@@ -4026,7 +4071,7 @@ function checkRules(){
           ball.vel.set(away*7+Math.random()*3, 2.2, ball.vel.z*0.4 + (Math.random()-.5)*5);
           event('WOODWORK', 'off the frame');
         } else {
-          ball.pos.x = s*(HALF_L-CFG.BALL_R*1.5);
+          ball.pos.x = s*(HALF_L-1.45);
           if(gk){
             /* THE SAVE USED TO HAPPEN AT THE GOAL LINE, NOT AT HIS HANDS.
                The dive animation fired and the ball was pushed back off
