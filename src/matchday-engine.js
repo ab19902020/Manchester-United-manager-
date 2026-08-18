@@ -3151,6 +3151,63 @@ function nearestToBall(team){
   }
   return best;
 }
+/* =====================================================================
+   A BRAIN EACH
+   ---------------------------------------------------------------------
+   "every player on the pitch has his own brain, his own attributes and
+    his own style of playing. Not everyone completely unique, but
+    everyone has their own."
+
+   Attributes were already being read all over this file, but always the
+   same way: the same weighted blend of the same numbers at every
+   decision, so two players with similar ratings made identical choices
+   for ever. What was missing is the bit that is not in the ratings — the
+   twenty-two who are technically alike but do not play alike. One
+   full-back overlaps every time, another never does; one midfielder
+   shoots from thirty yards, the man beside him always squares it.
+
+   So each player gets five leanings, worked out once and kept. Each is
+   mostly his attributes, because a style he has not got the feet for is
+   a lie, plus a small fixed nudge drawn from his own player id. The
+   nudge is +/-0.17: enough that two similar players differ, not enough
+   to make a poor passer into a playmaker. And because it comes from his
+   id rather than from Math.random, he plays the same way in every match
+   he ever appears in, which is what makes him a person rather than a
+   dice roll.
+
+       risk     how ambitious a ball he looks for
+       shoots   how readily he has a go
+       runs     how much he carries it himself
+       presses  how hard he hunts it back
+       holds    how much he stays where he is meant to be
+   ===================================================================== */
+function styleSeed(p){
+  const s = String(p.pid || p.name || p.idx) + ':' + p.team;
+  let h = 2166136261;
+  for(let i=0;i<s.length;i++){ h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return h>>>0;
+}
+function styleRnd(seed, k){
+  let a = (seed + Math.imul(k, 0x9E3779B9))>>>0;
+  a ^= a>>>16; a = Math.imul(a, 2246822507);
+  a ^= a>>>13; a = Math.imul(a, 3266489909); a ^= a>>>16;
+  return (a>>>0)/4294967296;
+}
+function styleOf(p){
+  if(p._style) return p._style;
+  const seed = styleSeed(p);
+  const nudge = k => (styleRnd(seed, k) - 0.5)*0.34;
+  const cl = v => THREE.MathUtils.clamp(v, 0, 1);
+  p._style = {
+    risk:    cl(Amix(p,{vision:1.3, passing:0.9, decisions:0.8, composure:0.5}) + nudge(1)),
+    shoots:  cl(Amix(p,{shooting:1.5, composure:0.8, aggression:0.4})           + nudge(2)),
+    runs:    cl(Amix(p,{dribbling:1.5, pace:0.8, firstTouch:0.6, composure:0.4})+ nudge(3)),
+    presses: cl(Amix(p,{workRate:1.4, aggression:1.0, stamina:0.7})             + nudge(4)),
+    holds:   cl(Amix(p,{positioning:1.3, decisions:1.0, marking:0.8})           + nudge(5)),
+  };
+  return p._style;
+}
+
 /* ---------------------------------------------------------------------
    WHO IS PICKING UP WHOM
    ---------------------------------------------------------------------
@@ -3309,7 +3366,7 @@ function aiPlayer(p, dt){
           (1 - Math.min(1, angleOff*1.15)) *
           (1 - Math.min(1, inTheWay/5.5)), 0, 1);
         const appetite = (0.22 + quality*0.85)
-          * (0.60 + A01(p,'shooting')*0.60) * (0.85 + A01(p,'composure')*0.30) * ment.shoot
+          * (0.55 + styleOf(p).shoots*0.80) * ment.shoot
           * (urge>0 ? Math.max(0.85, shotBias(p.team)) : shotBias(p.team))
           * (1 + urge*(mine ? 4.5 : 0.6));
         if(Math.random() < appetite){
@@ -3351,7 +3408,7 @@ function aiPlayer(p, dt){
          Carrying is now what it is on a pitch — real space, and a man who
          can actually beat somebody. A poor dribbler in space carries about
          three times in ten; a good one about half the time. */
-      const carry = 0.18 + Amix(p,{dribbling:1.3, pace:0.7, composure:0.5, firstTouch:0.5})*0.42;
+      const carry = 0.15 + styleOf(p).runs*0.48;
       if(nearest>6.0 && goalD>12 && Math.random() < carry){
         /* genuine space, and the feet to use it: carry */
       } else if(Math.random() < releases*(press>0 ? 1 : 0.88)){
@@ -3362,7 +3419,7 @@ function aiPlayer(p, dt){
            Unpressured he now releases at a bit over half his normal rate,
            which is a side that moves the ball rather than one that only
            reacts. */
-        const through = 0.14 + A01(p,'vision')*0.36;
+        const through = 0.10 + styleOf(p).risk*0.44;
         if(Math.random() < through*ment.direct*0.7) doThrough(p,new THREE.Vector2(dir,0),.6);
         else doPass(p,ZERO,.5);
         animate(p,dt); return;
@@ -3537,8 +3594,8 @@ function aiPlayer(p, dt){
       const see = p.seen || new THREE.Vector2(ball.pos.x, ball.pos.z);
       const t = slotWorld(p);
 
-      const disc  = Amix(p,{positioning:1.4, decisions:1.0, marking:0.8});
-      const eager = Amix(p,{workRate:1.2, aggression:1.0, offTheBall:0.6});
+      const disc  = styleOf(p).holds;
+      const eager = styleOf(p).presses;
       let pull = THREE.MathUtils.clamp(0.15 + eager*0.44 - disc*0.24, 0.06, 0.64);
       /* the last line holds its shape hardest — a centre-half who chases
          the ball is how a defence is pulled apart */
