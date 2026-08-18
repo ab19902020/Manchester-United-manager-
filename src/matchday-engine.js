@@ -2661,6 +2661,29 @@ function passOptions(p){
     return {m,to,d,press,fwd:(m.pos.x-p.pos.x)*S.dir[p.team]};
   }).filter(o=>o.d>3 && o.d<42);
 }
+/* IS THERE ANYBODY STANDING IN THE WAY?
+   Nothing asked this, which is most of why the ball kept being given
+   away: a defender directly between the passer and the man he picked
+   cost the option nothing at all, so the ball was played straight
+   through him. This walks the lane and reports how blocked it is —
+   an opponent near the line and between the two ends is a problem, one
+   behind the passer or beyond the target is not. */
+function laneRisk(from, target){
+  const dx = target.pos.x - from.pos.x, dz = target.pos.y - from.pos.y;
+  const len = Math.hypot(dx, dz) || 1;
+  const ux = dx/len, uz = dz/len;
+  let risk = 0;
+  for(const o of teamOf(1-from.team)){
+    if(o.isGK) continue;
+    const rx = o.pos.x - from.pos.x, rz = o.pos.y - from.pos.y;
+    const along = rx*ux + rz*uz;
+    if(along < 1.0 || along > len - 0.5) continue;      // not between them
+    const off = Math.abs(rx*uz - rz*ux);                // distance from the line
+    if(off < 2.4) risk += (2.4 - off) * (1 - (along/len)*0.3);
+  }
+  return risk;
+}
+
 function doPass(p, aimV, power){
   const opts = passOptions(p);
   if(!opts.length){ kick(p,new THREE.Vector2(Math.cos(p.face),Math.sin(p.face)),14,.5,0); return; }
@@ -2668,8 +2691,27 @@ function doPass(p, aimV, power){
   let best=null, bs=-1e9;
   const urge = SCRIPT.active ? scriptUrgency(p.team) : 0;
   for(const o of opts){
-    let sc = o.to.clone().normalize().dot(aim)*100 - o.d*.9 - o.press*6 + o.fwd*.4;
-    if(urge > 0 && isScriptScorer(o.m)) sc += 60 + urge*320;   // find him
+    /* THE OLD WEIGHTS PICKED WHOEVER WAS IN FRONT OF HIS NOSE.
+       `dot(aim)*100` against `-press*6` meant the direction he happened
+       to be facing was worth sixteen times more than the man being
+       marked, and `aim` is only ever his facing because every caller
+       passes ZERO — and facing is set from his direction of travel. So
+       he played it wherever he was running, through whoever was there,
+       to whoever was standing behind them. In the National League, with
+       the widest passing error in the game, that is a turnover nearly
+       every time.
+
+       Now: a clear lane and a free man come first, distance keeps it
+       sensible, and where he is facing is a mild preference rather than
+       the whole decision. */
+    const lane = laneRisk(p, o.m);
+    let sc = o.to.clone().normalize().dot(aim)*26
+           - o.d*1.35
+           - o.press*11
+           - lane*38
+           + o.fwd*1.05;
+    /* the plan's scorer is still found, but not through a defender */
+    if(urge > 0 && isScriptScorer(o.m)) sc += (60 + urge*320) * (lane > 1.6 ? 0.35 : 1);
     if(sc>bs){ bs=sc; best=o; }
   }
   const lead = best.m.vel.clone().multiplyScalar(.35);
@@ -3245,11 +3287,44 @@ function aiPlayer(p, dt){
       /* Whether to release it. A good passer under pressure finds a man;
          a poor one holds it too long and gets closed down — which is the
          behaviour the manager game asked for. */
-      const releases = (0.30 + A01(p,'passing')*0.34 + A01(p,'vision')*0.16
-                     + A01(p,'decisions')*0.14) * possBias(p.team);
-      if(nearest>4.2 && goalD>12 && Math.random() > A01(p,'vision')*0.35){
-        /* space ahead: carry it */
-      } else if(press>0 && Math.random() < releases){
+      /* AND HE HAS TO WANT TO PASS IT. The base was 0.30, which for a
+         National League side came out around 0.44 — and because a touch
+         that is neither a carry nor a pass falls through to "run at the
+         goal", which is carrying by another name, the ball ended up at
+         his feet on roughly seven touches in ten. Footballers pass far
+         more than they run with it, at every level. At 0.68 the same
+         side passes about two touches in three, carries one in six, and
+         runs at somebody the rest of the time. */
+      const releases = (0.68 + A01(p,'passing')*0.30 + A01(p,'vision')*0.12
+                     + A01(p,'decisions')*0.10) * possBias(p.team);
+
+      /* HE NEVER PASSED, HE JUST RAN WITH IT UNTIL SOMEBODY TOOK IT OFF HIM.
+         The old line was
+
+             if(nearest>4.2 && goalD>12 && Math.random() > A01(p,'vision')*0.35)
+
+         and a National League player has a vision around 0.25, so the bar
+         was 0.09 and `Math.random() > 0.09` is true NINE TIMES IN TEN. With
+         nobody inside 4.2 metres he carried it, always, and only ever looked
+         for a pass once an opponent was already on him — by which point the
+         pass is a panic and the lane is shut. Worse, it ran the wrong way
+         round: the lower a side's vision the more it dribbled, when a poor
+         side is precisely the one that gets rid of it early.
+
+         Carrying is now what it is on a pitch — real space, and a man who
+         can actually beat somebody. A poor dribbler in space carries about
+         three times in ten; a good one about half the time. */
+      const carry = 0.18 + Amix(p,{dribbling:1.3, pace:0.7, composure:0.5, firstTouch:0.5})*0.42;
+      if(nearest>6.0 && goalD>12 && Math.random() < carry){
+        /* genuine space, and the feet to use it: carry */
+      } else if(Math.random() < releases*(press>0 ? 1 : 0.90)){
+        /* AND HE CAN PASS WITHOUT BEING HARRIED INTO IT. The pass used to
+           be gated behind `press>0`, so a man in space neither carried nor
+           passed — he fell through and ran at the goal regardless, which
+           looked identical to carrying and lost the ball just as often.
+           Unpressured he now releases at a bit over half his normal rate,
+           which is a side that moves the ball rather than one that only
+           reacts. */
         const through = 0.14 + A01(p,'vision')*0.36;
         if(Math.random() < through*ment.direct*0.7) doThrough(p,new THREE.Vector2(dir,0),.6);
         else doPass(p,ZERO,.5);
