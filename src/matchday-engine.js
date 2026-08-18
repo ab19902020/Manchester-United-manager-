@@ -5117,6 +5117,29 @@ window.Matchday = {
      sweep, curler, banger, chip, volley, halfvolley, header,
      divingheader). `stats` is optional and steers rather than clamps. */
   playScript(plan){ loadScript(plan); return this; },
+  /* ONE GOAL, ADDED WHILE THE MATCH IS RUNNING.
+     The save decides results; the picture performs them. But under
+     pacing the save only plays as far as the broadcast clock, so the
+     goals are not known at kick-off and cannot all be handed over in
+     advance. Each one is posted here the moment the save scores it, and
+     the engine manufactures it out of real play the way it does any
+     other scripted goal -- the named man pushed forward, his appetite
+     up, the keeper's hands down. */
+  addGoal(g){
+    if(!g) return this;
+    if(!SCRIPT.active){ SCRIPT.active = true; SCRIPT.events = SCRIPT.events || []; }
+    SCRIPT.events.push({
+      minute: Math.max(0, Math.min(95, +g.minute || 0)),
+      team:   (g.team===1 || g.team==='away') ? 1 : 0,
+      scorer: g.scorer || null,
+      pid:    g.pid != null ? String(g.pid) : null,
+      finish: g.finish || null,
+      own:    !!g.ownGoal,
+      seq:    SCRIPT.events.length, fired:false
+    });
+    SCRIPT.events.sort((a,b)=>a.minute-b.minute);
+    return this;
+  },
   clearScript(){ clearScript(); return this; },
   /* Make a substitution the crowd can see.
 

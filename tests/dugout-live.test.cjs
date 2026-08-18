@@ -1,22 +1,49 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 
 const { createGame, startCareer } = require('./game-harness.cjs');
 
 /* =====================================================================
-   THE INVERSION, TESTED WHERE IT CAN BE TESTED
+   THE RESULT DOES NOT DEPEND ON HOW YOU WATCHED
    ---------------------------------------------------------------------
-   The broadcast needs WebGL and JSDOM has none, so the picture itself
-   cannot run here. What can run — and what actually matters — is the
-   seam the picture drives through: while live mode is on, a goal
-   MatchSim invents for itself must be turned away, and a goal handed in
-   from outside must go through with the scorer it names.
+   "if I watch it in the 2D picture, or the text, or the stats screen, or
+    I simulate it, or I watch it in dugout view, it should all produce
+    the same result. Picking one should not change the result."
 
-   That is the whole of the architecture change: if this holds, the save
-   cannot score a goal the picture did not, and cannot miss one it did.
+   It used to. The broadcast cleared the script and decided the match
+   outright, with the save following it — so skipping a fixture and
+   sitting through it were two different matches settled by two different
+   engines.
+
+   The save decides now, whichever screen you are on, and the picture
+   performs what the save produces. This test guards that direction: a
+   goal MatchSim scores must move the score WHILE THE PICTURE IS LIVE,
+   and it must be posted to the picture so the broadcast shows the same
+   goal to the same man.
+
+   The broadcast needs WebGL and JSDOM has none — `window.THREE` is
+   absent, so the engine bails at its first line and `window.Matchday`
+   never exists here. The picture therefore cannot run in this file. But
+   the seam it is driven through can, so the seam is stood in for and the
+   real engine's half of the contract is checked against its source.
    ===================================================================== */
 
-test('while the picture is driving, the save cannot score a goal of its own',
+test('the engine can be told about a goal after kick-off', () => {
+  /* The save only knows minute 34's goal at minute 34, so the plan handed
+     over at kick-off cannot contain it. `addGoal` is the door that lets a
+     goal in late; without it the picture can only ever perform goals that
+     were known before a ball was kicked. */
+  const engine = fs.readFileSync(
+    path.join(__dirname, '..', 'src', 'matchday-engine.js'), 'utf8');
+  const api = engine.slice(engine.indexOf('window.Matchday = {'));
+  assert.ok(api.length, 'the engine no longer publishes a Matchday API');
+  assert.match(api.slice(0, 4000), /\baddGoal\s*\(/,
+    'the engine must expose addGoal, or the picture can never be told what to perform');
+});
+
+test('the save scores the goals whether or not the picture is running',
   { timeout: 45000 }, async (t) => {
     const game = await createGame();
     t.after(() => game.close());
@@ -41,27 +68,26 @@ test('while the picture is driving, the save cannot score a goal of its own',
     m.goal(A,D,shooter,null,null,false);
     out.offMode=(f.hs-before[0])+','+(f.as-before[1]);
 
-    /* with the picture driving, MatchSim's own goal becomes a chance */
+    /* WITH THE PICTURE LIVE, the save still scores it — that is the
+       whole point of the change — and the goal is posted to the picture
+       so the broadcast performs the same one. */
     api.LIVE.on=true;
     const mid=[f.hs,f.as];
-    const feed0=m.feed.length;
-    m.goal(A,D,shooter,null,null,false);
-    out.suppressed=(f.hs===mid[0] && f.as===mid[1]);
-    out.saidInstead=m.feed.slice(feed0).map(e=>e.text);
-
-    /* and the picture's goal goes through the same door */
     const goals0=shooter.goals;
-    api.injectGoal({team:0, pid:String(shooter.p.id), scorer:shooter.p.name});
-    out.wentThrough=(f.hs+f.as)===(mid[0]+mid[1]+1);
+    /* the real engine needs WebGL, which JSDOM has not got, so the door it
+       would have published is stood in for here. The engine's own half of
+       this contract is checked against its source in the test above. */
+    const hadMd=Object.prototype.hasOwnProperty.call(window,'Matchday');
+    const wasMd=window.Matchday;
+    let posted=null;
+    window.Matchday={ addGoal(g){ posted=g; return this; } };
+    try{ m.goal(A,D,shooter,null,null,false); }
+    finally{ if(hadMd) window.Matchday=wasMd; else delete window.Matchday; }
+    out.liveScored=(f.hs===mid[0]+1 && f.as===mid[1]);
+    out.tallied=shooter.goals===goals0+1;
     out.lastScorer=f.sc.length?String(f.sc[f.sc.length-1].pid):null;
     out.wantScorer=String(shooter.p.id);
-    out.tallied=shooter.goals===goals0+1;
-
-    /* a penalty in the picture is recorded as a penalty in the save */
-    api.LIVE.pen=1;
-    api.injectGoal({team:1, pid:String(D.onfield.find(x=>x.slot!=='GK').p.id)});
-    out.penFlag=!!f.sc[f.sc.length-1].pen;
-    out.awaySide=f.sc[f.sc.length-1].ci===f.a;
+    out.posted=posted ? {pid:String(posted.pid), team:posted.team, min:posted.minute} : null;
 
     api.LIVE.on=false;
     return out;
@@ -69,16 +95,18 @@ test('while the picture is driving, the save cannot score a goal of its own',
 
     assert.equal(result.offMode, '1,0',
       'with no picture the game scores its own goals, as it always did');
-    assert.equal(result.suppressed, true,
-      'with the picture driving, MatchSim may not move the score');
-    assert.equal(result.saidInstead.length, 1,
-      'and it says what happened instead rather than going quiet');
-    assert.match(result.saidInstead[0], /post|wide|keeper|goalkeeper|defender/i);
-    assert.equal(result.wentThrough, true, 'the picture\'s goal does move the score');
-    assert.equal(result.lastScorer, result.wantScorer, 'and it is credited to the man who scored it');
-    assert.equal(result.tallied, true);
-    assert.equal(result.penFlag, true, 'a penalty is recorded as a penalty');
-    assert.equal(result.awaySide, true, 'and team 1 is the away side');
+    assert.equal(result.liveScored, true,
+      'and it scores them with the picture live too — the save owns the result');
+    assert.equal(result.tallied, true, 'the scorer is credited');
+    assert.equal(result.lastScorer, result.wantScorer,
+      'and the fixture records the man who actually scored it');
+    assert.ok(result.posted, 'the goal was not posted to the picture');
+    assert.equal(result.posted.pid, result.wantScorer,
+      'the picture was told to score it through a different player');
+    assert.equal(result.posted.team, 0,
+      'the home side scored it, so the picture must perform it at the home end');
+    assert.equal(typeof result.posted.min, 'number',
+      'the picture needs the minute, or it cannot place the goal in the match');
   });
 
 test('the tab you are on is the tab that is lit', { timeout: 45000 }, async (t) => {
