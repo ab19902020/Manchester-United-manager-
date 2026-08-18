@@ -240,6 +240,48 @@ comes back different. And the growth question is open: `log` is 51 entries a pla
 after one season, so a thirty-season career has to be measured before anyone calls
 this settled. 212 kB of headroom is real but it is not unlimited.
 
+## Open finding: `dugout-live` fails about one run in eight
+
+Measured today, not inferred. The failing assertion is
+
+```js
+assert.equal(result.offMode, '1,0',
+  'with no picture the game scores its own goals, as it always did');
+```
+
+**I was wrong about this twice and both corrections matter.** First I put it
+down to resource contention, because it failed while a full check was running
+alongside it. Then, when it failed again with nothing competing, I called it an
+unseeded stochastic assertion on a scoreline. It is neither. The line under test
+is
+
+```js
+m.goal(A, D, shooter, null, null, false);
+out.offMode = (f.hs-before[0]) + ',' + (f.as-before[1]);
+```
+
+a **direct call** that should add exactly one goal to side A every time. So
+`'1,0'` is the correct assertion and the flake is not randomness in the match —
+something in the setup is occasionally not ready when the goal is scored.
+
+**Rate:** one failure across roughly eight runs. Seven consecutive passes after
+it, including five back to back.
+
+**Not mine.** Every change I made today is in `src/matchday-engine.js`, the
+broadcast; this assertion runs with `LIVE.on=false`, which is MatchSim with the
+picture switched off. It also predates today — I saw it before the engine work
+started.
+
+**What I did not do, deliberately:** patch it. `ACTIONS.kickoff` and
+`ACTIONS.advance` are synchronous, so a timer cannot interleave inside the
+`eval`, which rules out the obvious explanation and means I do not have one.
+Silencing another agent's test with a guess is worse than leaving it flagged,
+and a one-in-eight failure in the release gate is worth someone reproducing
+properly rather than me widening an assertion until it stops complaining.
+
+**Where I would look first:** whether `A.onfield` is populated at the moment
+`shooter` is chosen, and whether `m.goal` no-ops when it is not.
+
 ## Pre-release audit — 16 August 2026
 
 The director is releasing tomorrow and asked for the bugs, not for reassurance.
