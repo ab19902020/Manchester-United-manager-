@@ -3566,7 +3566,18 @@ function aiPlayer(p, dt){
           * (urge>0 ? Math.max(0.85, shotBias(p.team)) : shotBias(p.team))
           * (1 + urge*(mine ? 4.5 : 0.6));
         if(Math.random() < appetite){
-          doShot(p, new THREE.Vector2(0,(Math.random()-.5)*.6), .55+Math.random()*.4);
+          /* WHERE HE AIMS. Every shot was struck at (Math.random()-.5)*.6
+             of the goal's width — a narrow band either side of the
+             keeper, which is why nothing ever went into a corner. A good
+             finisher picks his spot: composure and shooting decide how
+             far off the middle he dares go, so an elite one is genuinely
+             hunting the corner and a poor one hits it where he is
+             facing. */
+          const pick = Amix(p,{shooting:1.3, composure:1.0, decisions:0.5});
+          const corner = (Math.random() < 0.30 + pick*0.45)
+            ? (Math.random()<0.5 ? -1 : 1) * (0.55 + pick*0.40)
+            : (Math.random()-0.5)*0.55;
+          doShot(p, new THREE.Vector2(0, corner), .55+Math.random()*.4);
           animate(p,dt); return;
         }
       }
@@ -3996,6 +4007,79 @@ function possBias(team){
   return THREE.MathUtils.clamp(1 + (t-have)*0.030, 0.62, 1.45);
 }
 
+/* =====================================================================
+   A CORNER IS A SET PIECE, NOT A THROW-IN NEAR THE FLAG
+   ---------------------------------------------------------------------
+   "corners are all over the place. They need to reset the players'
+    positions and actually go into the box. You've got to cross it for
+    headers."
+
+   A corner used to do exactly what a throw-in does: give the ball to the
+   nearest man and let open play resume. Nobody went into the box, the
+   ball was rarely crossed, and twenty-two players stood wherever the
+   move had left them.
+
+   Both boxes are now set the way they are on a Saturday. The attacking
+   side sends its tallest and best headers of a ball to the near post,
+   the spot and the far post, keeps one short and one on the edge for the
+   clearance; the defending side puts a man goal-side of each of them, one
+   on each post, and leaves the keeper his six yards.
+   ===================================================================== */
+function setCornerBox(team, side){
+  const dir = S.dir[team];
+  const gx = dir*HALF_L;
+  const att = teamOf(team).filter(p=>!p.isGK);
+  const def = teamOf(1-team).filter(p=>!p.isGK);
+
+  /* the big men go in: heading and height, which is how a side actually
+     picks who attacks a corner */
+  att.sort((a,b)=> (A01(b,'heading')*1.4 + b.H*0.6) - (A01(a,'heading')*1.4 + a.H*0.6));
+
+  const spots = [
+    [gx - dir*5.5,  side*2.6],    // near post
+    [gx - dir*10.5, side*0.4],    // the spot
+    [gx - dir*6.0, -side*3.6],    // far post
+    [gx - dir*13.5, side*4.5],    // the pull-back
+    [gx - dir*8.0, -side*7.0],    // wide of the far post
+    [gx - dir*19.0, side*1.0],    // the edge, for the second ball
+  ];
+  const taker = att.find(p=>p.isWide) || att[att.length-1];
+
+  let k = 0;
+  for(const p of att){
+    if(p === taker) continue;
+    const sp = spots[Math.min(k, spots.length-1)];
+    p.pos.set(sp[0] + (Math.random()-0.5)*1.2, sp[1] + (Math.random()-0.5)*1.2);
+    p.vel.set(0,0);
+    p.face = Math.atan2(ball.pos.z - p.pos.y, ball.pos.x - p.pos.x);
+    k += 1;
+  }
+
+  /* one defender goal-side of each attacker in the box, then the posts */
+  const inBox = att.filter(p=>p!==taker).slice(0, 4);
+  let d = 0;
+  for(const a of inBox){
+    const m = def[d]; d += 1;
+    if(!m) break;
+    m.pos.set(a.pos.x + dir*1.0, a.pos.y + (Math.random()-0.5)*0.8);
+    m.vel.set(0,0);
+    m.face = Math.atan2(ball.pos.z - m.pos.y, ball.pos.x - m.pos.x);
+  }
+  const posts = [[gx - dir*0.4, CFG.GOAL_W/2 - 0.4], [gx - dir*0.4, -CFG.GOAL_W/2 + 0.4]];
+  for(const post of posts){
+    const m = def[d]; d += 1;
+    if(!m) break;
+    m.pos.set(post[0], post[1]); m.vel.set(0,0);
+  }
+  for(; d < def.length; d += 1){
+    def[d].pos.set(gx - dir*(17 + Math.random()*4), (Math.random()-0.5)*16);
+    def[d].vel.set(0,0);
+  }
+  const gk = keeperOf(1-team);
+  if(gk){ gk.pos.set(gx - dir*3.2, 0); gk.vel.set(0,0); }
+  return taker;
+}
+
 /* ================== rules ================== */
 function setRestart(type, team, spot, label){
   S.phase='restart';
@@ -4013,7 +4097,11 @@ function setRestart(type, team, spot, label){
       if(d<bd){ bd=d; taker=p; }
     }
   }
-  S.restart={type,team,taker,t:1.5};
+  if(type==='corner'){
+    const arranged = setCornerBox(team, Math.sign(spot.y) || 1);
+    if(arranged) taker = arranged;
+  }
+  S.restart={type,team,taker,t:type==='corner' ? 2.2 : 1.5};
   S.possTeam=team;
   if(label && type!=='free') event(label, TEAMS[team].name);
 }
@@ -4097,13 +4185,54 @@ function checkRules(){
 
             const stretched = Math.abs(gap) - Math.abs(got);   // what he could not cover
             ball.pos.z = gk.pos.y + Math.sign(gap || 1) * (0.45 + Math.min(stretched, 1.2));
-            ball.vel.set(away*(7 + stretched*2.4), 2.4 + Math.random()*0.5,
-                         Math.sign(gap || 1) * (3 + stretched*5) + (Math.random()-.5)*4);
+
+            /* AND NOW HE DOES SOMETHING WITH IT, which is the part that
+               was missing. The ball was simply given a velocity away
+               from goal — every save a parry, straight back out, and it
+               would sit up in the six-yard box for a striker to walk in.
+               A keeper catches most of what he reaches, and what he
+               cannot hold he pushes AWAY from the middle, not back into
+               it.
+
+               Three outcomes, decided by how comfortable the save was:
+               how hard it was struck, how far he had to stretch, and how
+               good his hands are.
+
+                 caught   he holds it. The ball is his, play stops, and
+                          he distributes it like any other keeper ball
+                 parried  round the post or wide of it, never straight
+                          back down the middle
+                 spilled  the one a striker feeds on -- rare, and rarer
+                          the better his handling */
+            const power = Math.hypot(ball.vel.x, ball.vel.z);
+            const hands = Amix(gk,{handling:1.6, composure:0.9, reflexes:0.6});
+            const comfort = THREE.MathUtils.clamp(
+              hands - stretched*0.28 - Math.max(0, power-18)*0.026, 0, 1);
+            const roll = Math.random();
+
+            if(roll < 0.30 + comfort*0.55){
+              /* CAUGHT. He has it in his hands and the move is over. */
+              ball.pos.set(gk.pos.x + gdir*0.35, CFG.BALL_R + 0.85, gk.pos.y);
+              ball.vel.set(0,0,0); ball.spin = 0;
+              ball.owner = gk; gk.gkHold = 1.1 + Math.random()*0.7;
+              S.possTeam = gk.team; S.passTo = null;
+              event('SAVE', gk.name + ' gathers it');
+            } else if(roll < 0.80 + comfort*0.17){
+              /* PARRIED, and away from the goal rather than into it. */
+              const side = Math.sign(gap || (Math.random()-0.5));
+              ball.vel.set(away*(6 + stretched*2.0), 2.2 + Math.random()*0.6,
+                           side*(9 + stretched*4) + (Math.random()-.5)*2);
+              event('SAVE', gk.name + ' pushes it wide');
+            } else {
+              /* SPILLED. What the follow-up exists for. */
+              ball.vel.set(away*(4 + Math.random()*3), 1.8,
+                           (Math.random()-.5)*7);
+              event('SAVE', gk.name + ' cannot hold it');
+            }
 
             gk.dive = .85; gk.diveDir = gap>=0 ? 1 : -1;
             gk.diveHigh = b.y > 1.15 ? 1 : 0;
             gk.cool = .4; S.lastTouch = gk;
-            event('SAVE', gk.name+' keeps it out');
             cutTo('save', 1.6);
           } else {
             /* no keeper on the pitch to credit it to — the ball still has
@@ -4265,6 +4394,8 @@ function stepRestart(dt){
       if(d<2.5){
         ball.owner=r.taker; S.possTeam=r.taker.team; S.lastTouch=r.taker;
         if(r.type==='goalkick') clearance(r.taker);
+        /* a corner is crossed, not carried */
+        else if(r.type==='corner'){ try{ doCross(r.taker); }catch(e){ clearance(r.taker); } }
       }
     }
     S.restart=null;
