@@ -284,8 +284,7 @@
     LIVE.hooked = true;
     try {
       md.on('penalty', () => { LIVE.pen = 2; });
-      /* the picture no longer scores into the save — the save scores and
-         the picture is told to show it */
+      md.on('goal', (ev) => injectGoal(ev));
       md.on('fulltime', () => { LIVE.ended = true; drainToFullTime(); });
     } catch (error) { LIVE.hooked = false; }
     void match;
@@ -472,29 +471,7 @@
          half: the save already knew, and only the picture was still
          playing. The match is not written down in advance any more --
          the broadcast plays it, and the save follows. */
-      if (LIVE.want) {
-        /* THE SAVE DECIDES, THE PICTURE PERFORMS IT.
-           This used to clear the script and let the broadcast decide the
-           result outright, with the save following it. That made the
-           scoreline depend on HOW YOU WATCHED: skip a match and MatchSim
-           settled it, sit through it and the picture settled it, and the
-           two disagreed. A result should not care which screen you were
-           on.
-
-           So the save plays it, exactly as it does for a match you skip,
-           and the picture performs what the save produces. An EMPTY but
-           ACTIVE script is what makes that safe: the goal-line guarantee
-           already refuses any goal the script does not owe, so the
-           broadcast cannot invent one. Goals are posted to it as the
-           save scores them, one at a time.
-
-           And it is still paced -- the save only advances as far as the
-           broadcast clock -- so nothing is revealed early. That was the
-           fault the old inversion existed to fix, and pacing fixes it
-           without handing the result to the picture. */
-        md.playScript({ events: [], stats: planFor(fixture, match).stats });
-        liveStart(md, match, fixture);
-      } else {
+      if (LIVE.want) { md.clearScript(); liveStart(md, match, fixture); } else {
         if (!settle(match)) return false;
         md.playScript(planFor(fixture, match));
       }
@@ -694,27 +671,18 @@
   if (typeof MatchSim === 'function' && MatchSim.prototype
       && typeof MatchSim.prototype.goal === 'function') {
     const passGoal = MatchSim.prototype.goal;
-    MatchSim.prototype.goal = function goalTheSaveDecided(A, D, shooter, creator, assister, pen) {
-      /* Every goal is the save's again. It used to be turned into a miss
-         while the picture was driving, because the picture owned the
-         score; now the save owns it and the picture is told to perform
-         each one. */
-      const out = passGoal.apply(this, arguments);
+    MatchSim.prototype.goal = function goalFromThePicture(A, D, shooter) {
+      if (!LIVE.on || LIVE.injecting || this !== (MU && MU.m)) {
+        return passGoal.apply(this, arguments);
+      }
       try {
-        if (LIVE.on && this === (MU && MU.m)) {
-          const md = api();
-          if (md && typeof md.addGoal === 'function') {
-            md.addGoal({
-              minute: num(this.min, 0),
-              team: A === this.sides[0] ? 0 : 1,
-              pid: shooter && shooter.p ? String(shooter.p.id) : null,
-              scorer: shooter && shooter.p ? shortName(shooter.p) : null,
-              finish: pen ? 'sidefoot' : null,
-            });
-          }
+        if (D && D.st) D.st.sv += 1;
+        if (shooter && shooter.p) {
+          const line = MISSES[Math.floor(Math.random() * MISSES.length)];
+          this.say(this.dispMin(), A, shooter.p.name + line, '');
         }
-      } catch (error) { /* the save has its goal either way */ }
-      return out;
+      } catch (error) { /* the match carries on */ }
+      return undefined;
     };
   }
 
