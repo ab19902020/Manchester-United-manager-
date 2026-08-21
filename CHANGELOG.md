@@ -4,6 +4,59 @@
 
 ### Changed
 
+- **The match is the game's again.** The dugout had been made the authority —
+  the broadcast played and the save wrote down what it did — and that was
+  wrong in a way one match cannot show: every other fixture in the league was
+  decided by the manager engine and the one match you actually watched by a
+  ball-physics simulation, so your own results came out of a different game to
+  everybody else's. One league table, two models.
+
+  This is the third arrangement, so all three are recorded in the file: the
+  first played the whole ninety out the instant you walked in (right result,
+  FULL TIME 0–3 over a goalless first half); the second let the picture decide
+  (one clock, wrong game); this one paces the game to the picture and keeps
+  the game in charge. `Matchday.scoreNow()` hands each goal over as it is
+  scored, and the picture is loaded with an **empty** plan — which is not the
+  same as no plan: with a script active and nothing owed, anything else that
+  crosses the line becomes a save or the woodwork. The broadcast can neither
+  invent a goal nor miss one.
+
+  Verified in a watched match, and the verification earned its keep twice:
+
+  - the game scored on **7 minutes** and the picture did not deliver until
+    **16**, because the forcing was written for a plan handed over before
+    kick-off, where a goal names a future minute and open play has until then.
+    A goal handed over live is already late — the commentary has already said
+    so — so it gets a short leash now. Re-measured: **2 minutes**.
+  - **save 0–0, picture 0–1.** `goal()` is not a promise that the score moves:
+    VAR rules one out in about sixteen and does it by returning without
+    touching the scoreboard, and the picture was told to score it anyway. The
+    score itself decides now, before and after.
+
+### Added
+
+- **`scripts/measure-league-history.cjs`** — plays whole seasons through the
+  game's own controller and writes down every division's final table, the cup
+  winners and the golden boot. A football game can look right for ninety
+  minutes and still be wrong over five years.
+
+  Five seasons say the scoring is right and the shape of the competition is
+  not. Goals a game in the Premier League ran **2.83, 2.67, 2.89, 2.85, 2.75**
+  against a real ~2.8, with every division between 2.67 and 2.89, no drift,
+  full fixture lists completing and no page errors. Three different champions
+  in five years in the top flight, four in the Championship, five in each of
+  the divisions below it.
+
+  What it caught: **Premier League champions average 76 points where the real
+  thing is about 87** — one title was won on 69 with eleven defeats — while
+  **Championship champions average 103**, one of them on 115 with a single
+  defeat. A small gap in quality produces near-random results and a large one
+  produces a blowout, which is backwards. And the leading scorer in the whole
+  pyramid was a National League player in all five seasons, with 36 to 45
+  goals. Both are logged rather than quietly left.
+
+### Changed
+
 - **Every attribute now does something, and there is a rig that proves it.**
   "All attributes should make a difference" is a claim you can argue about or
   measure. `scripts/measure-attribute-effect.cjs` measures it: two identical

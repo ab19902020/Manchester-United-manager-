@@ -632,9 +632,20 @@
       && typeof MatchSim.prototype.goal === 'function') {
     const passGoal = MatchSim.prototype.goal;
     MatchSim.prototype.goal = function goalOnTheScreen(A, D, shooter, creator, assister, pen) {
-      /* THE GAME SCORES IT. The picture is told to show it. */
+      /* THE GAME SCORES IT. The picture is told to show it — but only if
+         it was actually given.
+
+         `goal()` is not a promise that the score moves. VAR rules one
+         out in about sixteen, and it does that by returning without
+         touching the scoreboard. Telling the picture to score it anyway
+         put a goal on the screen that the save did not have: caught in
+         a watched match reading save 0-0, picture 0-1. So the score
+         itself is what decides, before and after. */
+      const f = this.fix || {};
+      const before = num(f.hs, 0) + num(f.as, 0);
       const out = passGoal.apply(this, arguments);
       if (!LIVE.on || this !== (MU && MU.m)) return out;
+      if (num(f.hs, 0) + num(f.as, 0) === before) return out;
       try {
         const md = api();
         if (md && typeof md.scoreNow === 'function' && A && shooter && shooter.p) {
