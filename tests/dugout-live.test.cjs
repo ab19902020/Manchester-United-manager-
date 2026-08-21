@@ -4,19 +4,24 @@ const assert = require('node:assert/strict');
 const { createGame, startCareer } = require('./game-harness.cjs');
 
 /* =====================================================================
-   THE INVERSION, TESTED WHERE IT CAN BE TESTED
+   THE SEAM BETWEEN THE GAME AND THE PICTURE
    ---------------------------------------------------------------------
    The broadcast needs WebGL and JSDOM has none, so the picture itself
-   cannot run here. What can run — and what actually matters — is the
-   seam the picture drives through: while live mode is on, a goal
-   MatchSim invents for itself must be turned away, and a goal handed in
-   from outside must go through with the scorer it names.
+   cannot run here. What can run is the seam it is driven through, and
+   that is the part worth protecting: the game plays the match, and
+   every goal it gives — and only a goal it gives — is handed to the
+   broadcast to show.
 
-   That is the whole of the architecture change: if this holds, the save
-   cannot score a goal the picture did not, and cannot miss one it did.
+   The invariant is one sentence: `scoreNow` is called if and only if
+   the score moved. It is written that way rather than as two separate
+   cases because the interesting failure was exactly the gap between
+   them — `goal()` is not a promise that the score changes, since VAR
+   rules one out in about sixteen by returning without touching the
+   scoreboard, and the picture was told to score it anyway. A watched
+   match read save 0-0, picture 0-1.
    ===================================================================== */
 
-test('while the picture is driving, the save cannot score a goal of its own',
+test('the picture is told about a goal if and only if the game gave one',
   { timeout: 45000 }, async (t) => {
     const game = await createGame();
     t.after(() => game.close());
@@ -27,58 +32,74 @@ test('while the picture is driving, the save cannot score a goal of its own',
     UI.view='home';render();ACTIONS.advance();
     ACTIONS.kickoff();
     const api=window.RBSDugoutMatchday, m=MU.m, f=MU.fix;
-    /* VAR rules out one goal in sixteen, which would make this test flaky
-       about something it is not testing */
-    m._varOff=true;
     const A=m.sides[0], D=m.sides[1];
     const shooter=A.onfield.find(x=>x.slot!=='GK');
-    const out={};
 
-    /* with live mode off — no picture, which is this device — the game
-       plays itself exactly as it always has */
+    /* the broadcast cannot boot in JSDOM, so stand in for it and record
+       what it is asked to do */
+    const told=[];
+    const realMatchday=window.Matchday;
+    window.Matchday={ scoreNow:(ev)=>{ told.push(ev); return ev; }, owed:()=>0 };
+
+    const out={ trials:[], offMode:null };
+
+    /* with no picture the game plays exactly as it always has. VAR is
+       off for this one goal only: it rules one out in about sixteen,
+       which would make this half flaky about something it is not
+       testing. It is switched back on for the trials, where a
+       disallowed goal is the whole point. */
     api.LIVE.on=false;
-    const before=[f.hs,f.as];
+    m._varOff=true;
+    const before=f.hs+f.as;
     m.goal(A,D,shooter,null,null,false);
-    out.offMode=(f.hs-before[0])+','+(f.as-before[1]);
+    out.offMode={ scored:(f.hs+f.as)-before, told:told.length };
 
-    /* with the picture driving, MatchSim's own goal becomes a chance */
+    /* now with the picture driving. Every roll of the dice is a trial:
+       whether the goal stood is up to the engine and its VAR, and the
+       invariant has to hold either way. */
     api.LIVE.on=true;
-    const mid=[f.hs,f.as];
-    const feed0=m.feed.length;
-    m.goal(A,D,shooter,null,null,false);
-    out.suppressed=(f.hs===mid[0] && f.as===mid[1]);
-    out.saidInstead=m.feed.slice(feed0).map(e=>e.text);
+    m._varOff=false;
+    const realRandom=Math.random;
+    for(let i=0;i<40;i++){
+      const at=told.length, was=f.hs+f.as;
+      /* half the trials with the dice forced cold, which is where VAR
+         disallows one */
+      if(i%2===0) Math.random=()=>0;
+      try{ m.goal(A,D,shooter,null,null,false); } finally { Math.random=realRandom; }
+      out.trials.push({ scored:(f.hs+f.as)-was, told:told.length-at });
+    }
 
-    /* and the picture's goal goes through the same door */
-    const goals0=shooter.goals;
-    api.injectGoal({team:0, pid:String(shooter.p.id), scorer:shooter.p.name});
-    out.wentThrough=(f.hs+f.as)===(mid[0]+mid[1]+1);
-    out.lastScorer=f.sc.length?String(f.sc[f.sc.length-1].pid):null;
-    out.wantScorer=String(shooter.p.id);
-    out.tallied=shooter.goals===goals0+1;
-
-    /* a penalty in the picture is recorded as a penalty in the save */
-    api.LIVE.pen=1;
-    api.injectGoal({team:1, pid:String(D.onfield.find(x=>x.slot!=='GK').p.id)});
-    out.penFlag=!!f.sc[f.sc.length-1].pen;
-    out.awaySide=f.sc[f.sc.length-1].ci===f.a;
+    /* and the scorer the picture is given is the man who scored */
+    const last=told[told.length-1]||null;
+    out.namedRight = last ? String(last.pid)===String(shooter.p.id) : null;
+    out.teamRight = last ? last.team===0 : null;
 
     api.LIVE.on=false;
+    window.Matchday=realMatchday;
     return out;
   })()`);
 
-    assert.equal(result.offMode, '1,0',
-      'with no picture the game scores its own goals, as it always did');
-    assert.equal(result.suppressed, true,
-      'with the picture driving, MatchSim may not move the score');
-    assert.equal(result.saidInstead.length, 1,
-      'and it says what happened instead rather than going quiet');
-    assert.match(result.saidInstead[0], /post|wide|keeper|goalkeeper|defender/i);
-    assert.equal(result.wentThrough, true, 'the picture\'s goal does move the score');
-    assert.equal(result.lastScorer, result.wantScorer, 'and it is credited to the man who scored it');
-    assert.equal(result.tallied, true);
-    assert.equal(result.penFlag, true, 'a penalty is recorded as a penalty');
-    assert.equal(result.awaySide, true, 'and team 1 is the away side');
+    assert.equal(result.offMode.scored, 1,
+      'with no picture the game still scores its own goals');
+    assert.equal(result.offMode.told, 0,
+      'and says nothing to a broadcast that is not driving');
+
+    /* counted, not deep-equalled: these arrays come back from the game's
+       own realm and never compare reference-equal to one built here */
+    const trials = Array.from(result.trials).map((t2) => ({ scored: t2.scored, told: t2.told }));
+    const disagreed = trials.filter((t2) => t2.scored !== t2.told);
+    assert.equal(disagreed.length, 0,
+      'the picture must be told about a goal exactly when the score moved, but '
+      + disagreed.length + ' of ' + trials.length + ' disagreed: '
+      + JSON.stringify(disagreed.slice(0, 4)));
+
+    /* the trials have to have covered both outcomes, or this proves nothing */
+    assert.ok(trials.some((t2) => t2.scored === 1), 'some goals stood');
+    assert.ok(trials.some((t2) => t2.scored === 0),
+      'and some were turned away, or the interesting half is untested');
+
+    assert.equal(result.namedRight, true, 'the scorer is the man who scored');
+    assert.equal(result.teamRight, true, 'and the side is the side that scored');
   });
 
 test('the tab you are on is the tab that is lit', { timeout: 45000 }, async (t) => {
