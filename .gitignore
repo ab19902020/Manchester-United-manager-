@@ -7,3 +7,5 @@ coverage/
 dist/
 .check*.log
 .div-*.log
+
+/league-history.json

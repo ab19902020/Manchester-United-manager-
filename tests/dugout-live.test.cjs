@@ -27,9 +27,22 @@ test('while the picture is driving, the save cannot score a goal of its own',
     UI.view='home';render();ACTIONS.advance();
     ACTIONS.kickoff();
     const api=window.RBSDugoutMatchday, m=MU.m, f=MU.fix;
-    /* VAR rules out one goal in sixteen, which would make this test flaky
-       about something it is not testing */
+    /* TWO THINGS TURN A GOAL AWAY, AND NEITHER IS WHAT THIS TESTS.
+       VAR rules one out in about sixteen. The goal-rate calibrator
+       (wA3_balance, "how a goal becomes a save") turns a further
+       goalCal(div).trim of them into saves to hold the division's
+       goals-a-game target — six per cent to start with, and it retunes.
+
+       That second one is what the intermittent failure of this test
+       was. scripts/probe-dugout-flake.cjs reproduced it 2 times in 14
+       and printed varOff true before and after, live mode off, the
+       right match, a shooter found, the match not done — every
+       candidate ruled out, and the score simply not moving. It was the
+       calibrator doing its job. m.goal() has never been a promise that
+       the score moves, which is the same fact the seam itself has to
+       respect. */
     m._varOff=true;
+    try{ goalCal(MU.fix.div).trim=0; }catch(e){}
     const A=m.sides[0], D=m.sides[1];
     const shooter=A.onfield.find(x=>x.slot!=='GK');
     const out={};

@@ -4,6 +4,82 @@
 
 ### Changed
 
+- **Winning the league costs what it should.** Premier League champions were
+  averaging 76 points across five measured seasons — one title won on **69
+  with eleven defeats** — against a real ~87.
+
+  The cause was one line. When a goal went in, the side that **conceded** got
+  +5 of momentum and the side that **scored** got +3: conceding was worth more
+  than scoring, a built-in equaliser and a draw factory. Home advantage barely
+  existed alongside it — half a per cent off the away side's attack, with the
+  crowd showing up in possession and nowhere else.
+
+  Measured A/B on one seeded world, four seasons each, so this is the change
+  and not the weather:
+
+  | Premier League | before | after | real |
+  |---|---|---|---|
+  | champion's points | 80.8 | **87.8** | 87 |
+  | 2nd | 76.8 | 80.5 | 80 |
+  | champion's record | 24.3W 8.0D 5.8L | 27.5W 5.3D 5.3L | 28W 3D 7L |
+  | champion is the *n*th best squad | #3.3 | **#2.3** | #2 |
+  | table against squad strength | 2.9 places out | 2.3 | ~3 |
+  | goals a game | 2.7 | 2.7 | 2.8 |
+
+  Goals a game did not move, so none of it was bought by inflating scoring.
+
+  **A correction worth recording.** An earlier measurement reported that the
+  champion was the *thirteenth* best squad in the division and the table
+  finished eight places from squad strength — worse than random — and was
+  read as an engine that ignores quality. That was the rig, not the engine. It
+  looped every pair as `for a { for b { … } }`, which is not a season: each
+  club played nineteen home matches back to back while its opponents played
+  one each, and the clubs sit strongest first, so the best squads burned
+  through their home fixtures against fresh opposition. Played against the
+  game's own Berger round robin, the same engine put United, City and
+  Liverpool top on 87, 80 and 78.
+
+### Added
+
+- **`scripts/measure-title-race.cjs`** — a whole division played with the
+  game's own `quickSim`, pinned to one world seed so two runs can be compared
+  at all. Reports what the champion finished on, whether the table follows
+  squad strength, the home/draw/away split between evenly matched sides, and
+  head-to-heads between the strongest and weakest squads home and away. A
+  season takes seconds instead of the ten minutes a played career needs.
+- **`scripts/measure-league-history.cjs`** — whole careers through the game's
+  own controller, capturing every division's final table, the cup winners and
+  the golden boot inside `endSeason`, which is the last moment the standings
+  still exist.
+
+### Fixed
+
+- **The `dugout-live` flake, found and closed.** The assertion that
+  `m.goal()` moves the score failed about once in fourteen, and two rounds of
+  investigation had ruled out every candidate — VAR off before and after, live
+  mode off, the right match, a shooter found, the match not over, and the score
+  simply not moving.
+
+  It was the **goal-rate calibrator**. `wA3_balance` ("how a goal becomes a
+  save") turns `goalCal(div).trim` of all goals into saves to hold the
+  division's goals-a-game target, and that starts at **6%**. `m.goal()` has
+  never been a promise that the score moves; VAR was only ever half the reason.
+
+  `scripts/probe-dugout-flake.cjs` now prints the trim and, with it set to
+  zero, scores **20 out of 20** in the same page — so the cause is measured
+  rather than argued. The test neutralises the calibrator the same way it
+  already neutralised VAR, which is narrower than widening the assertion.
+
+### Known
+
+- **The bottom of the table is now too weak.** The same change costs the last
+  club three points — 20.8 to 18.0, against a real 24 — because a side that
+  concedes first no longer gets the equalising boost that was propping it up.
+  Top-to-bottom spread is 70 against a real 52.
+- Fourth place comes out on 73.5 where the real number is 69.
+
+### Changed
+
 - **Every attribute now does something, and there is a rig that proves it.**
   "All attributes should make a difference" is a claim you can argue about or
   measure. `scripts/measure-attribute-effect.cjs` measures it: two identical
