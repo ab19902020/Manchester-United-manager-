@@ -52,6 +52,24 @@
   the golden boot inside `endSeason`, which is the last moment the standings
   still exist.
 
+### Fixed
+
+- **The `dugout-live` flake, found and closed.** The assertion that
+  `m.goal()` moves the score failed about once in fourteen, and two rounds of
+  investigation had ruled out every candidate — VAR off before and after, live
+  mode off, the right match, a shooter found, the match not over, and the score
+  simply not moving.
+
+  It was the **goal-rate calibrator**. `wA3_balance` ("how a goal becomes a
+  save") turns `goalCal(div).trim` of all goals into saves to hold the
+  division's goals-a-game target, and that starts at **6%**. `m.goal()` has
+  never been a promise that the score moves; VAR was only ever half the reason.
+
+  `scripts/probe-dugout-flake.cjs` now prints the trim and, with it set to
+  zero, scores **20 out of 20** in the same page — so the cause is measured
+  rather than argued. The test neutralises the calibrator the same way it
+  already neutralised VAR, which is narrower than widening the assertion.
+
 ### Known
 
 - **The bottom of the table is now too weak.** The same change costs the last

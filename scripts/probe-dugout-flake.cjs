@@ -38,6 +38,21 @@ const { createGame, startCareer } = require('/home/user/Manchester-United-manage
       m.goal(A,D,shooter,null,null,false);
       diag.offMode=(f.hs-before[0])+','+(f.as-before[1]);
       diag.varOffAfter=m._varOff;
+      /* THE ANSWER. The goal-rate calibrator (wA3_balance, "how a goal
+         becomes a save") turns this share of goals into saves to hold
+         the division's goals-a-game target. m.goal() has never been a
+         promise that the score moves, and this is the other reason. */
+      try{ const c=goalCal(f.div); diag.trim=Math.round(c.trim*1000)/1000; diag.calN=c.n; }
+      catch(e){ diag.trim='n/a'; }
+      /* and prove it: with the trim at zero it should not happen again */
+      try{ goalCal(f.div).trim=0; }catch(e){}
+      let scored=0;
+      for(let k=0;k<20;k++){
+        const was=f.hs+f.as;
+        m.goal(A,D,shooter,null,null,false);
+        if(f.hs+f.as>was) scored++;
+      }
+      diag.withTrimZero=scored+'/20';
       return diag;
     })()`);
     const ok = out.offMode === '1,0';
