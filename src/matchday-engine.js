@@ -3338,7 +3338,16 @@ function scriptTick(){
   const late = now - due.minute;
   const wait = SCRIPT.penWait || 0;
   SCRIPT.penWait = wait + (1/60);
-  if(!SCRIPT.penAt) SCRIPT.penAt = 5 + Math.random()*5;   // jittered, so the fallback
+  /* A GOAL HANDED OVER LIVE IS ALREADY LATE.
+     A plan given before kick-off names a minute in the future, so open
+     play has until then plus a leisurely five to ten seconds to produce
+     it. `scoreNow` is different: the game has ALREADY scored, the
+     commentary has already said so, and every second the picture takes
+     is a second the score bug disagrees with the text. Measured at the
+     old delay: the save scored on seven minutes and the picture did not
+     deliver until sixteen. Live goals get a short leash. */
+  if(!SCRIPT.penAt) SCRIPT.penAt = due.live ? (1.1 + Math.random()*1.1)
+                                            : (5 + Math.random()*5);
   const limit = S.stoppage > 0 ? 1.5 : SCRIPT.penAt;      // never lands on the same minute
   /* EACH ATTEMPT COMES SOONER THAN THE LAST.
      This used to wait six seconds, award a spot kick, and then reset
@@ -3350,7 +3359,8 @@ function scriptTick(){
      Now only the wait resets, the jittered first delay is kept, and the
      wait shortens with every failed attempt. A missed penalty is a
      setback, not a fresh start. */
-  const need = Math.max(1.2, 6/(1+(SCRIPT.penTries||0)));
+  const need = due.live ? Math.max(0.8, 2.2/(1+(SCRIPT.penTries||0)))
+                       : Math.max(1.2, 6/(1+(SCRIPT.penTries||0)));
   if(late > limit && SCRIPT.penWait > need){
     SCRIPT.penWait = 0; SCRIPT.penTries = (SCRIPT.penTries||0)+1; SCRIPT.forced++;
     const named = due.pid || due.scorer
@@ -4154,6 +4164,40 @@ window.Matchday = {
     if(!spec) return null;
     return substitutePlayer(spec.team, spec.offPid, spec.on || spec.player);
   },
+  /* SCORE THIS, NOW.
+
+       Matchday.scoreNow({ team:0, pid:'123', scorer:'Rashford' })
+
+     The other half of playScript. A plan handed over before kick-off
+     says what will happen and when; this says it as it happens, which
+     is what a manager game that is playing the match itself needs --
+     it decides a goal has gone in and the picture has a few seconds to
+     make one, out of real build-up, through the man who scored it.
+
+     Combined with an empty plan -- playScript({events:[]}) -- it also
+     means the picture cannot score a goal of its own: with the script
+     active and nothing owed, `scriptAllowsGoal` refuses everything that
+     crosses the line. The match on the screen is then the match in the
+     save, in both directions. */
+  scoreNow(ev){
+    if(!ev) return null;
+    if(!SCRIPT.active) loadScript({events:[]});
+    const e = {
+      minute: scriptMinute(),
+      team: (ev.team===1 || ev.team==='away') ? 1 : 0,
+      scorer: ev.scorer || ev.player || null,
+      pid: ev.pid != null ? String(ev.pid) : null,
+      finish: ev.finish || ev.kind || null,
+      own: !!ev.ownGoal, seq: SCRIPT.events.length, fired:false,
+      live: true                       /* already scored, so already late */
+    };
+    SCRIPT.events.push(e);
+    SCRIPT.penWait = 0; SCRIPT.penAt = 0; SCRIPT.penTries = 0;
+    return e;
+  },
+  /* how much the picture still owes the save, which is the one number
+     that says whether the two are in step */
+  owed(){ return SCRIPT.active ? SCRIPT.events.filter(e=>!e.fired).length : 0; },
   /* PLAY A WHOLE MATCH WITHOUT DRAWING IT.
      The frame loop caps at eight sub-steps a frame, so how fast a match
      can run is bound by the frame rate — on a slow renderer ninety

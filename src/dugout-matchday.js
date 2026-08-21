@@ -25,25 +25,38 @@
    worth the name: the squads go across almost as they sit in the save.
 
    ---------------------------------------------------------------------
-   NOTHING IS DECIDED BEFORE YOU WATCH IT
+   WHO DECIDES THE MATCH — AND WHY IT IS THE GAME, NOT THE PICTURE
 
-   The first version of this file played the whole ninety out the moment
-   you walked into the dugout, handed the goals to the picture as a
-   script, and let it perform them. It worked, and it was wrong: the
-   manager screen would sit on FULL TIME 0-3 while the broadcast was
-   still goalless in the first half, because the save already knew and
-   only the picture was still playing.
+   This has been wrong in both directions, so it is worth writing down.
 
-   So the authority is the other way round now.
+   The FIRST version played the whole ninety out the instant you walked
+   into the dugout and handed the goals to the picture as a script. The
+   result was right; the presentation was not. The manager screen would
+   sit on FULL TIME 0-3 while the broadcast was still goalless in the
+   first half, because the save already knew and only the picture was
+   still playing.
 
-       the broadcast plays  ->  the save follows it, minute by minute
+   The SECOND version fixed that by making the broadcast the authority:
+   it played, and the save wrote down what it did. One clock, no
+   contradiction — and a worse game. This engine is a ball-physics
+   simulation; the manager game is years of tuned football economy,
+   form, morale, fatigue, tactics, competition context and scoring
+   rates. Every match in the league was decided by the second model and
+   the one match you actually watched by the first, so your own results
+   came out of a different game to everybody else's.
 
-   The picture decides the result out of the players you picked, and the
-   save records what it did: the score, the scorer, the minute, the
-   commentary, the ratings. Three seams do it — the clock is paced to
-   the picture's minute, every goal comes through the one function that
-   moves the score, and the whistle is the picture's to blow. There is
-   more on each of them further down.
+   THIS version keeps the pacing and gives the authority back:
+
+       the game plays the match  ->  the picture performs it, live
+
+   MatchSim is ticked one minute at a time, only as far as the minute on
+   the broadcast clock, so nothing is decided before you watch it and
+   full time cannot arrive early. When it scores, `Matchday.scoreNow()`
+   hands that goal to the picture, which has a few seconds to build one
+   for the man who scored it. The picture is loaded with an EMPTY plan,
+   which is not the same as no plan: with a script active and nothing
+   owed, anything else that crosses the line becomes a save or the
+   woodwork. So the picture cannot invent a goal, and cannot miss one.
 
    ---------------------------------------------------------------------
    IT IS IN THIS DOCUMENT, NOT AN IFRAME
@@ -229,24 +242,23 @@
   const LIVE = {
     want: true,        /* drive from the picture when there is a picture  */
     on: false,         /* and this is whether it is actually driving      */
-    injecting: false,  /* a goal coming the other way, so let it through  */
-    pen: 0,            /* a penalty was just awarded in the picture       */
     ended: false,
     xi: [null, null],  /* who was on the pitch a moment ago, by side       */
   };
-
-  const MISSES = [
-    ' gets it on target, and the keeper has to be quick to hold it.',
-    ' should score! It comes back off the far post.',
-    ' snatches at the chance and drags it wide of the upright.',
-    ' is denied by a defender who throws himself in the way.',
-    ' gets his header on target, but it is straight at the goalkeeper.',
-  ];
 
   function bState() {
     const md = api();
     if (!md || typeof md.getState !== 'function') return null;
     try { return md.getState(); } catch (error) { return null; }
+  }
+
+  /* How many goals the picture still owes the save. Zero means the two
+     are level; anything else means the broadcast is a few seconds behind
+     a goal the game has already scored, which is the normal state for
+     about four seconds after one goes in. */
+  function owed() {
+    const md = api();
+    try { return (md && typeof md.owed === 'function') ? md.owed() : 0; } catch (error) { return 0; }
   }
 
   /* The HUD clock reads "23'", which is the number this needs. */
@@ -258,54 +270,14 @@
   }
 
   function liveStart(md, match, fixture) {
-    LIVE.on = true; LIVE.ended = false; LIVE.pen = 0; LIVE.xi = [null, null];
+    LIVE.on = true; LIVE.ended = false; LIVE.xi = [null, null];
     state.fixture = fixture;
     if (LIVE.hooked) return;
     LIVE.hooked = true;
     try {
-      md.on('penalty', () => { LIVE.pen = 2; });
-      md.on('goal', (ev) => injectGoal(ev));
       md.on('fulltime', () => { LIVE.ended = true; drainToFullTime(); });
     } catch (error) { LIVE.hooked = false; }
     void match;
-  }
-
-  /* -------------------------------------------------------------------
-     A GOAL IN THE PICTURE IS A GOAL IN THE SAVE
-     ------------------------------------------------------------------- */
-  function sideOf(match, team) { return match.sides[team === 1 ? 1 : 0]; }
-
-  function scorerIn(side, pid) {
-    const on = (side.onfield || []).filter((x) => !x.off);
-    if (pid != null) {
-      const found = on.find((x) => String(x.p.id) === String(pid));
-      if (found) return found;
-    }
-    /* he has been substituted since the picture picked him, or the
-       picture had nobody: the man nearest to being a scorer will do */
-    const rank = (x) => {
-      const a = x.p.attrs || {};
-      const shooting = num(a.shooting, 10) + num(a.finishing, 0);
-      const forward = (x.slot === 'ST' || x.slot === 'AMC' || /^[LR]W$/.test(x.slot)) ? 6 : 0;
-      return shooting + forward;
-    };
-    return on.filter((x) => x.slot !== 'GK').sort((a, b) => rank(b) - rank(a))[0] || null;
-  }
-
-  function injectGoal(ev) {
-    const match = MU && MU.m;
-    if (!LIVE.on || !match || match.done || !ev) return;
-    const team = (ev.team === 1) ? 1 : 0;
-    const A = sideOf(match, team);
-    const D = sideOf(match, 1 - team);
-    const pl = scorerIn(A, ev.pid);
-    if (!A || !D || !pl) return;
-    const pen = LIVE.pen > 0 || ev.finish === 'penalty';
-    LIVE.pen = 0;
-    LIVE.injecting = true;
-    try { match.goal(A, D, pl, null, null, pen); } catch (error) { /* the picture still shows it */ }
-    LIVE.injecting = false;
-    repaint();
   }
 
   /* -------------------------------------------------------------------
@@ -451,7 +423,15 @@
          half: the save already knew, and only the picture was still
          playing. The match is not written down in advance any more --
          the broadcast plays it, and the save follows. */
-      if (LIVE.want) { md.clearScript(); liveStart(md, match, fixture); } else {
+      if (LIVE.want) {
+        /* AN EMPTY PLAN, NOT NO PLAN. With the script active and nothing
+           owed, `scriptAllowsGoal` refuses everything that crosses the
+           line — so the picture cannot invent a goal, and the only goals
+           it ever shows are the ones the game's own engine has just
+           scored and handed over. */
+        md.playScript({ events: [], stats: null });
+        liveStart(md, match, fixture);
+      } else {
         if (!settle(match)) return false;
         md.playScript(planFor(fixture, match));
       }
@@ -651,18 +631,22 @@
   if (typeof MatchSim === 'function' && MatchSim.prototype
       && typeof MatchSim.prototype.goal === 'function') {
     const passGoal = MatchSim.prototype.goal;
-    MatchSim.prototype.goal = function goalFromThePicture(A, D, shooter) {
-      if (!LIVE.on || LIVE.injecting || this !== (MU && MU.m)) {
-        return passGoal.apply(this, arguments);
-      }
+    MatchSim.prototype.goal = function goalOnTheScreen(A, D, shooter, creator, assister, pen) {
+      /* THE GAME SCORES IT. The picture is told to show it. */
+      const out = passGoal.apply(this, arguments);
+      if (!LIVE.on || this !== (MU && MU.m)) return out;
       try {
-        if (D && D.st) D.st.sv += 1;
-        if (shooter && shooter.p) {
-          const line = MISSES[Math.floor(Math.random() * MISSES.length)];
-          this.say(this.dispMin(), A, shooter.p.name + line, '');
+        const md = api();
+        if (md && typeof md.scoreNow === 'function' && A && shooter && shooter.p) {
+          md.scoreNow({
+            team: (A === this.sides[1]) ? 1 : 0,
+            pid: String(shooter.p.id),
+            scorer: shortName(shooter.p),
+            finish: pen ? 'sidefoot' : null,
+          });
         }
-      } catch (error) { /* the match carries on */ }
-      return undefined;
+      } catch (error) { /* the goal still stands in the save */ }
+      return out;
     };
   }
 
@@ -830,7 +814,7 @@
       ACTIONS.kickoff = function kickoffIntoTheBroadcast() {
         /* every match starts out expecting to be watched, whatever the
            last one had to fall back to */
-        LIVE.want = true; LIVE.on = false; LIVE.ended = false; LIVE.pen = 0;
+        LIVE.want = true; LIVE.on = false; LIVE.ended = false;
         LIVE.began = 0; LIVE.xi = [null, null];
         state.started = false; state.failed = false; state.lastSpeed = -1;
         const out = passKick.apply(this, arguments);
@@ -882,7 +866,7 @@
     window.RBSDugoutMatchday = Object.freeze({
       setFull, watching, watchGuard,
       squadFor, planFor, settle, api, FRAME_ID, state,
-      LIVE, injectGoal, bMinute, liveDriving,
+      LIVE, bMinute, liveDriving, owed,
     });
   } catch (error) { /* no window */ }
 }());
