@@ -4,6 +4,67 @@
 
 ### Changed
 
+- **Conceding was worth more than scoring.** In the match engine a goal gave
+  the side that conceded it **+5 of momentum and the side that scored it +3**.
+  Every goal handed the initiative to the team it was scored against — a
+  built-in equaliser, and the reason evenly matched sides drew a third of
+  their meetings against a real 24%. That is what drags a title-winning total
+  down towards sixty-nine. Scoring is worth more than conceding now, and home
+  advantage exists: it used to be half a per cent off the away side's attack
+  and nothing else, where the crowd showed up in possession alone.
+
+  | Premier League | before | after | real |
+  |---|---|---|---|
+  | champion's points | 77 | **85.5** | 87 |
+  | champion's record | 22W 9D 6L | 25.8W 8.3D 4.0L | 28W 3D 7L |
+  | champion is the *n*th best squad | #13 | **#1.8** | #2 |
+  | table against squad strength | 8.5 places out | **2.8** | about 3 |
+  | draws between equal sides | 33% | 28% | 24% |
+  | home wins between equal sides | 38% | 43% | 45% |
+
+  Champions come out Liverpool 91, 86, 84 and Arsenal 81 — the best squad wins
+  it, and there are no sixty-nine point titles. The Championship keeps the big
+  totals it had (champion 102.7) and its home/draw/away split lands exactly on
+  the real one, 46/24/31. The top of the Premier League now pulls away a little
+  too far — fourth on 75 where the real thing is 69, and a top-to-bottom spread
+  of 63 against 52 — which is logged rather than left unsaid.
+
+### Added
+
+- **`scripts/measure-title-race.cjs`** — a whole division played with the
+  game's own `quickSim` and nothing else, so a season takes seconds and a
+  tuning change can be judged immediately. It reports what a league table is
+  judged on: the champion's total, the gap to second and fourth, the spread
+  top to bottom, the home/draw/away split between evenly matched sides, and
+  whether the champion was actually the best squad in the division.
+
+  It is pinned to one world seed, because without that every run generates a
+  different league and two runs cannot be compared — which is worthless for
+  tuning, where the whole job is telling a change apart from the weather.
+
+### Corrected
+
+- **The engine was never quality-blind.** An earlier measurement here reported
+  that the champion was on average the thirteenth best squad in the division
+  and that the table finished eight places away from squad strength — worse
+  than random. That was the rig, not the game. It looped every pair as
+  `for a { for b { … } }`, which is not a season: each club played nineteen
+  home matches back to back while its nineteen opponents played one each, and
+  the clubs sit in the array strongest first, so the best squads burned through
+  their home fixtures exhausted against fresh opposition. Arsenal on 49 points
+  and Sunderland on 74 read exactly like an engine that ignores quality. Played
+  against the game's own Berger round robin the same engine put Manchester
+  United, Manchester City and Liverpool top on 87, 80 and 78.
+
+  Three separate faults in that one rig were found the same way, each of them
+  producing a confident wrong answer first: squads that never recovered
+  condition between seasons (champions falling 77, 57, 41, 40, 38 and half a
+  goal a game), a fixture built by hand with no match context (0.4 goals a game
+  and thirty draws), and squads ranked by a `calcEff` that folds in how tired
+  they happened to be.
+
+### Changed
+
 - **The match is the game's again.** The dugout had been made the authority —
   the broadcast played and the save wrote down what it did — and that was
   wrong in a way one match cannot show: every other fixture in the league was

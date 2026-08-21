@@ -72,6 +72,26 @@ const OUT = path.resolve(__dirname, '..', 'league-history.json');
           });
         });
         snap.boot = best;
+        /* WHY THE CHAMPION'S TOTAL IS LOW. A league-only rig produces
+           champions on 87; a played career produces 76. The difference
+           has to be everything else the season contains, so record it:
+           how many matches each club actually played, and how fresh its
+           squad was by the end. */
+        try {
+          const load = {};
+          (G.fixtures || []).forEach((f) => {
+            if (!f.played) return;
+            [f.h, f.a].forEach((ci) => { load[ci] = (load[ci] || 0) + 1; });
+          });
+          snap.load = (snap.divs.PL || []).slice(0, 20).map((r) => {
+            const c = (G.clubs || []).find((x) => x && x.name === r.club) || {};
+            const men = (c.players || []).filter((p) => !p.injury);
+            return { club: r.club, pts: r.pts,
+              all: load[c.i] || 0, league: r.p,
+              cond: men.length ? Math.round(men.reduce((t, p) => t + p.cond, 0) / men.length) : 0,
+              out: (c.players || []).filter((p) => p.injury).length };
+          });
+        } catch (e) { snap.load = null; }
         const me = G.clubs[G.my] || {};
         const myRows = tableRows(me.league) || [];
         const mine = myRows.findIndex((r) => r.i === G.my);
@@ -103,6 +123,16 @@ const OUT = path.resolve(__dirname, '..', 'league-history.json');
 
   fs.writeFileSync(OUT, JSON.stringify(seasons, null, 1));
   console.log('\n' + seasons.length + ' seasons played; full detail in ' + OUT + '\n');
+
+  const first = seasons[0];
+  if (first && first.load) {
+    console.log('\nWHAT A SEASON COSTS — Premier League, season ' + first.season);
+    console.log('  club                         pts   league   all   squad fresh   out');
+    first.load.forEach((r) => console.log('  ' + r.club.padEnd(26)
+      + String(r.pts).padStart(5) + String(r.league).padStart(9)
+      + String(r.all).padStart(6) + String(r.cond + '%').padStart(13)
+      + String(r.out).padStart(6)));
+  }
 
   const NAMES = { PL: 'Premier League', CH: 'Championship', L1: 'League One',
     L2: 'League Two', NL: 'National League' };
