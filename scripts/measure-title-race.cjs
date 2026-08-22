@@ -216,10 +216,28 @@ const BAL = process.argv[5] ? JSON.parse(process.argv[5]) : null;
          with entirely the wrong football underneath it. */
       const split = { h: 0, d: 0, a: 0 };
       const lines = {};
+      /* WHAT A SEASON LEAVES ON A SQUAD. Reset the squads before every
+         match and this engine draws 25.2% of them and finishes 4.4%
+         goalless; play a season and it draws 27.3% and finishes 9.6%
+         goalless. The difference is not the match engine, it is what
+         the players are carrying by the time they take the field, so
+         measure that against real football: a Premier League squad has
+         about three or four men unavailable at a time. */
+      const wear = { n: 0, out: 0, cond: 0, sharp: 0, morale: 0, men: 0 };
       rounds.forEach((round) => {
         mem.forEach((i) => (G.clubs[i].players || []).forEach((p) => {
           if (!p.injury) p.cond = Math.min(100, p.cond + 6.1 * REST);
         }));
+        mem.forEach((i) => {
+          const ps = G.clubs[i].players || [];
+          wear.n += 1;
+          wear.out += ps.filter((p) => p.injury).length;
+          ps.forEach((p) => {
+            if (p.injury) return;
+            wear.men += 1; wear.cond += p.cond;
+            wear.sharp += p.sharp; wear.morale += p.morale;
+          });
+        });
         round.forEach(([hi, ai]) => {
           const fix = { h: hi, a: ai, div, sc: [], hs: 0, as: 0, r: 0,
             day: 40 + (rounds.indexOf(round) * 7) % 260, played: false };
@@ -242,6 +260,8 @@ const BAL = process.argv[5] ? JSON.parse(process.argv[5]) : null;
       const games = table.reduce((t, r) => t + r.p, 0) / 2;
       runs.push({
         split, lines,
+        wear: { out: wear.out / wear.n, cond: wear.cond / wear.men,
+          sharp: wear.sharp / wear.men, morale: wear.morale / wear.men },
         champ: G.clubs[table[0].i].name,
         pts: table.map((r) => r.pts),
         champW: table[0].w, champD: table[0].d, champL: table[0].l,
@@ -321,6 +341,16 @@ const BAL = process.argv[5] ? JSON.parse(process.argv[5]) : null;
     console.log('    commonest scorelines   ' + top
       .map(([k, v]) => k + ' ' + (v / St * 100).toFixed(1) + '%').join('   '));
   }
+  const W = out.runs.reduce((t, r) => ({ out: t.out + r.wear.out, cond: t.cond + r.wear.cond,
+    sharp: t.sharp + r.wear.sharp, morale: t.morale + r.wear.morale }),
+  { out: 0, cond: 0, sharp: 0, morale: 0 });
+  const wn = out.runs.length || 1;
+  console.log('\n  what a club carries on an average matchday');
+  console.log('    unavailable  ' + (W.out / wn).toFixed(1)
+    + ' players   (real football: about 3 or 4)');
+  console.log('    condition    ' + (W.cond / wn).toFixed(1) + '%');
+  console.log('    sharpness    ' + (W.sharp / wn).toFixed(1) + '%');
+  console.log('    morale       ' + (W.morale / wn).toFixed(1) + '%');
   const even = out.duels['evenly matched'];
   if (even) {
     const t = even.w + even.d + even.l;
