@@ -51,13 +51,25 @@
   open question. The goals are not even over-dispersed: variance over mean is
   0.84, slightly *under*, so nothing is bunching goals into matches.
 
-  Five separate candidates were measured and ruled out, each over 4,560
-  matches or more: two poor squads meeting (4.9% goalless against 4.4%
-  overall); the day-form range (widening it 0.90–1.10 to 0.82–1.18 moved the
-  split half a point); home advantage (it converts away wins into home wins
-  one for one, and away wins are already right); the calendar (five days'
-  recovery between matchdays and seven give identical results — condition
-  saturates by five); and the late-game "park" term, below.
+  **Every mechanism that could plausibly cause it has now been measured and
+  ruled out**, each over 4,560 matches or more, and the draw rate sits between
+  27.3% and 28.2% through all of them: the gate clamps, slopes and
+  multipliers; the squad-average compression; the shot conversion slope; two
+  poor squads meeting (4.9% goalless against 4.4% overall); the day-form range
+  (widening it 0.90–1.10 to 0.82–1.18 moved the split half a point); home
+  advantage; the calendar (five days' recovery between matchdays and seven
+  give identical results — condition saturates by five); the late-game "park"
+  term, below; and the response to conceding, where removing it *entirely*
+  moves draws 27.3% → 27.7% and one-all 11.6% → 11.4% while costing the
+  champion three points. Squad wear is not excessive either: 2.6 players
+  unavailable a club against a real 3 or 4.
+
+  So the draw rate is a structural property of the match model — a per-minute
+  possession contest feeding two gates and a shot — and not of any parameter
+  in it. Closing the last three points needs a change to the model's shape,
+  which is a far larger piece of work than tuning and ought to be a deliberate
+  decision rather than something slipped in. Nothing further should be
+  attempted by turning knobs.
 
 - **A comment that lied about its own code, and the code was right.** In the
   last ten minutes the engine gives one side 5% more defensive resistance.
@@ -159,7 +171,10 @@
   pulled towards the mean, and what playing at home is worth in each of three
   places. They are now one `SPREAD` object with the reasoning written beside
   them, so a tuning run is an argument rather than an edit. **Every value is
-  exactly what it was**; this is instrumentation, not a balance change.
+  exactly what it was**; this is instrumentation, not a balance change, and
+  `tests/balance-constants.test.cjs` reads all nineteen out of the running
+  game and checks them against the literals they replaced, so that claim is
+  verifiable rather than a promise and the numbers cannot drift unnoticed.
 
 ### Fixed
 
