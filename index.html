@@ -858,6 +858,42 @@ function sigmoid(x){return 1/(1+Math.exp(-x))}
 function aiMentality(ci,oppCi,home){const d=G.clubs[ci].rep-G.clubs[oppCi].rep;
  if(d<-1400&&!home)return 'Defensive';if(d<-700)return 'Counter';if(d>900)return 'Attacking';return 'Balanced'}
 
+/* =====================================================================
+   HOW MUCH THE BETTER SIDE IS ALLOWED TO WIN BY
+   ---------------------------------------------------------------------
+   Four numbers decide how far a league table can spread, and all four
+   used to be literals buried in the middle of tickOnce. They are here,
+   named and together, because they are one decision — how much of the
+   gap between two squads survives into the result — and because tuning
+   them meant editing the engine and reloading the browser for every
+   guess. scripts/sweep-balance.cjs now tries a dozen settings of them
+   in one browser session, against one world and one fixture list.
+
+   The name is SPREAD and not the obvious BAL because a later layer
+   already has a `const BAL` for scoreline damping, and two top-level
+   consts of the same name do not shadow each other — they stop the
+   whole script dead before the first function in it is defined.
+
+   `compress` pulls every squad average towards 12 before the gates see
+   it: football is low-scoring and high-variance, and an uncompressed
+   gap turns a mismatch into a rout.
+
+   The three clamps are floors and ceilings on how often a move gets
+   through. They exist so that the worst side in the league still has
+   the ball sometimes and still gets up the pitch sometimes. Set them
+   too tight — which is where they were — and the reverse happens: the
+   best side in the league is capped at barely more possession and
+   barely more chances than the worst, its dominance saturates, and it
+   draws a quarter of its matches against sides it should beat. That is
+   a champion on 81 rather than 87.
+   ===================================================================== */
+const SPREAD={
+ compress:.86,   // squad averages pulled towards 12 by this factor
+ possLo:.40, possHi:.60,   // share of ticks the better side may have the ball
+ buildLo:.58, buildHi:.72, // getting out of your own half
+ chanceLo:.41, chanceHi:.57, // turning possession into a sight of goal
+};
+
 class MatchSim{
  constructor(fix){
   this.fix=fix;this.min=0;this.htAt=45+irnd(0,2);this.ftAt=90+irnd(2,5);this.stage='H1';
@@ -941,7 +977,7 @@ class MatchSim{
     if(Math.random()<.4)this.say(this.dispMin(),s,s.c.short+(want==='Overload'?' throw everything forward!':want==='Defensive'?' shut up shop and see the game out.':' turn up the pressure.'))}});
   // possession contest (spec 3.1): score ratio -> soft probability per tick
   const p0=this.possScore(0),p1=this.possScore(1);
-  const ai=Math.random()<clamp(sigmoid((p0-p1)/(0.22*(p0+p1)+.001)),.40,.60)?0:1;this.poss[ai]++;
+  const ai=Math.random()<clamp(sigmoid((p0-p1)/(0.22*(p0+p1)+.001)),SPREAD.possLo,SPREAD.possHi)?0:1;this.poss[ai]++;
   const A=this.sides[ai],D=this.sides[1-ai];
   // game-state urgency: the chasing side forces the issue late on
   const agf=ai===0?this.fix.hs:this.fix.as,aga=ai===0?this.fix.as:this.fix.hs;
@@ -959,7 +995,7 @@ class MatchSim{
   const pressClash=(D.tac.press==='High'&&A.tac.passStyle==='Short')?.95:(D.tac.press==='High'&&A.tac.passStyle==='Direct')?1.05:1;
   const a1=this.avg(A,['passing','firstTouch','vision'],'all')*A.mm.att*styleB*tempoB*pressClash*urgA*(1+this.mom[ai]*.009)*(A.home?1.04:1);
   const d1=this.avg(D,['positioning','workRate','tackling'],'def')*D.mm.def*parkD*(D.tac.press==='High'?1.07:D.tac.press==='Low'?.94:1);
-  if(Math.random()>clamp(sigmoid((a1-d1)/3.4)*1.22,.58,.72)){
+  if(Math.random()>clamp(sigmoid((a1-d1)/3.4)*1.22,SPREAD.buildLo,SPREAD.buildHi)){
    if(Math.random()<.16){const dp=pick(this.pool(D,'mid'));this.say(this.dispMin(),D,cf(COMM.intercept,{d:dp.p.name,t:D.c.short}));dp.rating+=.05}
    return}
   if(Math.random()<.25){const ap=pick(this.pool(A,'mid'));this.say(this.dispMin(),A,cf(COMM.build,{a:ap.p.name,t:A.c.short}))}
@@ -969,7 +1005,7 @@ class MatchSim{
   const tackB=D.tac.tackling==='Aggressive'?1.06:D.tac.tackling==='Cautious'?.95:1;
   const lineB=D.tac.line==='Deep'?1.05:D.tac.line==='High'?.97:1;
   const d2=this.avg(D,['tackling','decisions','positioning'],'def')*D.mm.def*tackB*lineB*parkD;
-  if(Math.random()>clamp(sigmoid((a2-d2)/3.2)*.70,.41,.57)){
+  if(Math.random()>clamp(sigmoid((a2-d2)/3.2)*.70,SPREAD.chanceLo,SPREAD.chanceHi)){
    const r=Math.random();const dp=pick(this.pool(D,'def'));
    if(r<.19){A.st.cor++;this.say(this.dispMin(),A,cf(COMM.corner,{t:A.c.short,d:dp.p.name}));this.cornerEvent(A,D)}
    else if(r<.30){D.st.fl++;this.foulEvent(D,dp,A,false)}
@@ -5859,7 +5895,7 @@ renderHdr=function(){
 const _avgCompress=MatchSim.prototype.avg;
 MatchSim.prototype.avg=function(side,attrs,group){
  const v=_avgCompress.call(this,side,attrs,group);
- return 12+(v-12)*.86};
+ return 12+(v-12)*SPREAD.compress};
 /* The longer you camp in their half, the deeper they sit and the harder
    the chances get. Equally, a side starved of the ball gets the odd
    clear sight of goal on the break. This is what stops every mismatch

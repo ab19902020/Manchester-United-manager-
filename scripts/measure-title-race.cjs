@@ -13,12 +13,21 @@
  * finished on, what the gap to second and to fourth was, and how tight
  * the whole thing is. Real English football, for reference:
  *
- *   Premier League   champion 87   2nd 80   4th 69   17th 36   spread 52
- *   Championship     champion 95   2nd 90   6th 78   21st 46   spread 55
+ *   Premier League   champion 87.6   2nd 80.5   4th 70   17th 38   20th 21
+ *   Championship     champion 95     2nd 90     6th 78   21st 46
  *
- * The Premier League number is the one that has been wrong: five
- * measured seasons averaged a champion on 76, one of them on 69 with
- * eleven defeats.
+ * WHERE THE BOTTOM NUMBER CAME FROM, AND WHY IT CHANGED. This rig used
+ * to carry 24 for the bottom club and 52 for the spread, and both were
+ * wrong. The club that finishes bottom of the Premier League has
+ * averaged about 21 over the last ten seasons — 17, 24, 31, 16, 21, 23,
+ * 22, 25, 16, 12 — so the spread from first to last is about 67, not
+ * 52. That mistake mattered: it made the game's bottom club, on 20.3,
+ * look four points too weak when it was already right, and it hid where
+ * the real fault is. The top figures are the ones to trust — the
+ * champion's 87.6 is the average of the thirty Premier League seasons
+ * before 2025-26 and second's 80.5 is the same measure; fourth has
+ * averaged about 70 over the last decade and the survival line, 18th
+ * plus one, about 36.
  */
 const CHROME = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
 const { chromium } = require('/opt/node22/lib/node_modules/playwright');
