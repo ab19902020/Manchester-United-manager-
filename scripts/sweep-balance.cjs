@@ -16,6 +16,18 @@
  * same starting condition, so a difference in the table is a difference
  * in the numbers and not a difference in the weather.
  *
+ * "The same seasons" has to mean the same coin flips too. The world is
+ * seeded but MatchSim is not: it calls Math.random for the possession
+ * contest, for every gate, every shot and every save. The first two
+ * runs of this rig proved how much that matters by accident — the
+ * identical shipped code, on the identical world, returned a champion
+ * on 84.7 and then on 79.7. Three seasons carry about five points of
+ * noise on a champion's total, which is larger than any difference
+ * worth tuning, so the whole match stream is seeded and season s uses
+ * the same seed for every candidate. The last row of the table is the
+ * control run a second time; if the rig is honest it prints the
+ * control's numbers exactly, and the report says so in as many words.
+ *
  * The reference column is real English football. The champion's average
  * over the thirty Premier League seasons before 2025-26 is 87.6 and
  * second is 80.5 (Opta/premierleague.com); fourth has averaged about 70
@@ -61,6 +73,11 @@ const CANDIDATES = [
   /* the best of the first sweep, carried forward so the two are
      compared on the same seasons rather than across runs */
   { name: 'first sweep best', bal: { compress: .94, buildLo: .52, buildHi: .78, chanceLo: .35, chanceHi: .63 } },
+  /* THE RIG PROVING ITSELF. This is the control again, with nothing
+     changed, and it must print the control's row to the last decimal.
+     If it does not, the seasons are not paired and no other row in the
+     table means anything. */
+  { name: 'shipped (repeat)', bal: {} },
 ];
 
 (async () => {
@@ -112,7 +129,25 @@ const CANDIDATES = [
     const shippedBal = Object.assign({}, SPREAD);
     const shippedDay = { lo: DAY_LO, range: DAY_RANGE };
 
-    const playSeason = () => {
+    /* EVERY CANDIDATE PLAYS THE SAME SEASON, NOT JUST THE SAME FIXTURES.
+       The world is seeded but the match engine is not: MatchSim calls
+       Math.random for the possession contest, every gate, every shot
+       and every save. Three seasons of that is about five points of
+       noise on a champion's total, which is larger than any difference
+       worth tuning — the first two sweeps ran the identical shipped
+       code twice and got 84.7 and 79.7, and a reader comparing rows
+       across those two runs would have concluded almost anything.
+
+       So the whole match stream is seeded here, and season s uses the
+       same seed for every candidate. Each candidate then plays the
+       literal same season — same coin flips, same injuries, same
+       weather — and a difference in the table is the parameter and
+       nothing else. Paired like this, three seasons say more than
+       thirty unpaired ones. */
+    const mul = window.RBSWorldSeed.mulberry32;
+    const trueRandom = Math.random;
+    const playSeason = (seasonSeed) => {
+      Math.random = mul(seasonSeed >>> 0);
       freshen();
       const row = {};
       mem.forEach((i) => { row[i] = { i, p: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, pts: 0 }; });
@@ -143,7 +178,7 @@ const CANDIDATES = [
       DAY_LO = (cand.day && cand.day.lo != null) ? cand.day.lo : shippedDay.lo;
       DAY_RANGE = (cand.day && cand.day.range != null) ? cand.day.range : shippedDay.range;
       const tables = [];
-      for (let s = 0; s < seasons; s += 1) tables.push(playSeason());
+      for (let s = 0; s < seasons; s += 1) tables.push(playSeason(seed + 1013 * s));
       const at = (k) => tables.reduce((t, tb) => t + tb[k].pts, 0) / tables.length;
       const champ = tables.map((tb) => tb[0]);
       const gpg = tables.reduce((t, tb) => {
@@ -166,12 +201,16 @@ const CANDIDATES = [
           tb.forEach((r, ix) => { sum += Math.abs(ix - byStrength.indexOf(r.i)); });
           return t + sum / tb.length;
         }, 0) / tables.length,
+        /* season by season, so a reader can see whether an average is
+           three seasons agreeing or three seasons disagreeing */
+        champs: tables.map((tb) => tb[0].pts),
       });
       console.log('[sweep] ' + cand.name + ' done');
     });
     /* leave the page as we found it */
     Object.assign(SPREAD, shippedBal);
     DAY_LO = shippedDay.lo; DAY_RANGE = shippedDay.range;
+    Math.random = trueRandom;
     return { results, clubs: mem.length };
   }, { seasons: SEASONS, div: DIV, seed: SEED, cands: CANDIDATES });
 
@@ -189,8 +228,18 @@ const CANDIDATES = [
     console.log('  ' + r.name.padEnd(24)
       + cols.map((c) => r[c].toFixed(1).padStart(7)).join('')
       + '   ' + (r.W.toFixed(0) + 'W ' + r.D.toFixed(0) + 'D ' + r.L.toFixed(0) + 'L').padEnd(11)
-      + ('#' + r.rank.toFixed(1)).padStart(5) + r.rho.toFixed(1).padStart(6));
+      + ('#' + r.rank.toFixed(1)).padStart(5) + r.rho.toFixed(1).padStart(6)
+      + '   ' + r.champs.join(' '));
   });
+  /* the rig proving itself: the control and its repeat must agree */
+  const a = out.results[0], z = out.results[out.results.length - 1];
+  if (a && z && /repeat/.test(z.name)) {
+    const same = a.champs.join(',') === z.champs.join(',');
+    console.log('\n  paired: ' + (same
+      ? 'yes — the control and its repeat played identical seasons'
+      : 'NO. ' + a.champs.join(' ') + ' against ' + z.champs.join(' ')
+        + ' — the seasons are not paired and no row above is a comparison'));
+  }
   console.log('\npage errors: ' + (errors.length ? errors.slice(0, 2).join(' | ') : 'none'));
   await browser.close();
 })();
