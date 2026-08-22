@@ -62,7 +62,14 @@ const BAL = process.argv[5] ? JSON.parse(process.argv[5]) : null;
   await page.waitForTimeout(2500);
 
   const out = await page.evaluate(({ seasons, div, seed, bal }) => {
-    if (bal) Object.assign(SPREAD, bal);
+    if (bal) {
+      /* the day-form range is not part of SPREAD — it is a pair of
+         top-level lets — but it is the other half of the same question,
+         so the override argument takes it under the same names */
+      if (bal.DAY_LO != null) { DAY_LO = bal.DAY_LO; delete bal.DAY_LO; }
+      if (bal.DAY_RANGE != null) { DAY_RANGE = bal.DAY_RANGE; delete bal.DAY_RANGE; }
+      Object.assign(SPREAD, bal);
+    }
     const clear = () => ['startScreen', 'frontScreen', 'introScreen', 'splash']
       .forEach((id) => { const el = document.getElementById(id); if (el) el.remove(); });
     /* THE SAME WORLD EVERY RUN. Without this each measurement generates
