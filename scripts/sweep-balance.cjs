@@ -56,26 +56,33 @@ const SEED = +(process.argv[4] || 20260821);
    those runs appeared to show about ceilings, floors or compression
    was inside their own noise, so the candidates below are the same
    questions asked again of a rig that can answer them. */
-const WIDE = { buildLo: .50, buildHi: .80, chanceLo: .33, chanceHi: .65, possLo: .34, possHi: .66 };
+/* A FACTORIAL, NOT A LIST OF HUNCHES.
+   The scattergun sweeps found the shape of the problem — the clamps do
+   nothing the goal-rate controller does not undo, and the slopes do
+   something — but they could not rank their own candidates, because
+   REPEATS matches per fixture leaves each fixture's probability with a
+   standard error of about 0.5/sqrt(REPEATS). At four repeats that is
+   0.25 a fixture, and a club's expected total sums 38 of them: roughly
+   two points of noise per club, which is why "steeper shot" read
+   better at .60 than at the harder .78. Drawing the table three
+   thousand times does not help — every draw reuses the same estimated
+   probabilities, so it removes the season's noise and not the
+   measurement's.
+
+   So: two changes, crossed, and enough repeats to tell them apart.
+   `shotK` is how much of a finisher's advantage over a goalkeeper
+   survives into the ball going in; `compress` is how much of the gap
+   between two squads survives into the gates at all. If they add, the
+   pair is worth more than either. */
 const CANDIDATES = [
   { name: 'shipped', bal: {} },
-  /* the clamps alone, for the record: raising the ceilings is what the
-     earlier runs kept pointing at, and it is worth having one honest
-     measurement of it */
-  { name: 'ceilings', bal: { buildHi: .78, chanceHi: .63 } },
-  /* the slopes, which is the real question. Steeper gates move the
-     good side up and the poor side down about the same mean, so the
-     goal-rate controller has nothing to take back. */
-  { name: 'steeper gates', bal: Object.assign({ buildK: 2.4, chanceK: 2.3 }, WIDE) },
-  { name: 'steeper gates, hard', bal: Object.assign({ buildK: 1.8, chanceK: 1.7 }, WIDE) },
-  { name: 'steeper shot', bal: { shotK: .60 } },
-  { name: 'steeper shot, hard', bal: { shotK: .78 } },
-  { name: 'gates + shot', bal: Object.assign({ buildK: 2.4, chanceK: 2.3, shotK: .60 }, WIDE) },
-  { name: 'gates + shot + poss', bal: Object.assign({ buildK: 2.4, chanceK: 2.3, shotK: .60, possK: .14 }, WIDE) },
+  { name: 'sharper finishing', bal: { shotK: .60 } },
+  { name: 'less compression', bal: { compress: .96 } },
+  { name: 'both', bal: { shotK: .60, compress: .96 } },
   /* THE RIG PROVING ITSELF. This is the control again, with nothing
-     changed, and it must print the control's row to the last decimal.
-     If it does not, the seasons are not paired and no other row in the
-     table means anything. */
+     changed, and it must reproduce the control's row exactly. If it
+     does not, something is carrying between candidates and no other
+     row in the table means anything. */
   { name: 'shipped (repeat)', bal: {} },
 ];
 
