@@ -4,6 +4,50 @@
 
 ### Changed
 
+- **The league table measures right, and the entry below overstates its own
+  precision.** Thirty seasons of the shipped engine, played on one world seed
+  with the match stream seeded so the run repeats:
+
+  | Premier League | measured | real |
+  |---|---|---|
+  | champion | 85.3 | 87.6 |
+  | 2nd | 80.0 | 80.5 |
+  | 4th | 71.8 | 70.1 |
+  | mid-table | 48.7 | ~49 |
+  | bottom club | 21.5 | 20.7 |
+  | goals a game | 2.7 | 2.8 |
+  | champion is the *n*th best squad | #2.7 | #2 |
+  | table against squad strength | 2.6 places out | ~3 |
+
+  Thirty seasons produced eight different champions. Two things follow from
+  that table, and both are corrections.
+
+  The first is that the entry below quotes before-and-after numbers to one
+  decimal from four seasons of a rig that seeded the world but not the
+  football. MatchSim calls `Math.random` for the possession contest, every
+  gate, every shot and every save, so two runs of identical code play
+  different seasons: the same settings measured twice returned a champion on
+  84.7 and then on 79.7. The change it describes is real and the direction is
+  right, but four unpaired seasons cannot support one-decimal precision and
+  those figures should be read as "about eighty, then about eighty-seven".
+
+  The second is that a claim made after it — that the champion was six points
+  short and the top of the table would not separate — came from the same
+  four-season measurement and is simply wrong. Measured properly the champion
+  is within two points of real football and second, fourth, mid-table and the
+  bottom club are within one or two. **No balance value has been changed on
+  account of it.**
+
+  What is wrong is narrower, and now measured across 7,600 league matches: the
+  game finishes **28.7%** of matches drawn against a real 24%, and the whole
+  surplus is goalless and one-all draws — 11.0% and 11.6% against a real ~8%
+  and ~9%. An independent-Poisson model on the game's own scoring rate
+  predicts 6.7% goalless, so there are far too many matches in which neither
+  side does anything. Home advantage was measured as a possible cause and
+  ruled out: raising it converts away wins into home wins one for one, and
+  away wins are already right at 31.4% against a real 31%. So is the day-form
+  range, which moved the division's split by half a point.
+
 - **Winning the league costs what it should.** Premier League champions were
   averaging 76 points across five measured seasons — one title won on **69
   with eleven defeats** — against a real ~87.
@@ -51,6 +95,37 @@
   own controller, capturing every division's final table, the cup winners and
   the golden boot inside `endSeason`, which is the last moment the standings
   still exist.
+- **`scripts/sweep-balance.cjs`** — what the table *would* look like under
+  different balance settings, several settings a run, one browser and one
+  seeded world. It does not play seasons: three seasons a candidate carries
+  about five points of noise on a champion's total and every difference worth
+  arguing about is smaller than that. Instead it plays each of the 380
+  fixtures several times, counts its win/draw/loss probabilities, and then
+  draws the table three thousand times from those in arithmetic — which
+  removes the noise rather than averaging over it. The last row of every
+  report is the control measured a second time, and the report says in words
+  whether it reproduced.
+
+  It also reports what the strongest and weakest squads score and concede as a
+  multiple of the division's average, which is where real football gives a
+  target that is not an average of averages: a champion scores about 1.70
+  times its division's average and concedes about 0.62 times it.
+
+  What it deliberately leaves out is everything a season does to a squad over
+  its length — fatigue, injuries, suspensions, form — so a setting it likes is
+  played out in `measure-title-race.cjs`, which now takes balance overrides as
+  a fifth argument, before anyone believes it. Comparing the two says the
+  played season spreads noticeably wider at both ends.
+- **Named balance constants.** The numbers that decide how much of the gap
+  between two squads survives into the result were literals scattered through
+  `tickOnce` and one patch layer: the clamps on possession, on getting out of
+  your own half and on turning possession into a sight of goal, the slopes
+  under each of those sigmoids, the multipliers over them, how much a
+  finisher's advantage over a goalkeeper counts, how far squad averages are
+  pulled towards the mean, and what playing at home is worth in each of three
+  places. They are now one `SPREAD` object with the reasoning written beside
+  them, so a tuning run is an argument rather than an edit. **Every value is
+  exactly what it was**; this is instrumentation, not a balance change.
 
 ### Fixed
 
