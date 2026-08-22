@@ -74,11 +74,11 @@ const SEED = +(process.argv[4] || 20260821);
    survives into the ball going in; `compress` is how much of the gap
    between two squads survives into the gates at all. If they add, the
    pair is worth more than either. */
+const WIDE = { buildLo: .50, buildHi: .80, chanceLo: .33, chanceHi: .65, possLo: .34, possHi: .66 };
 const CANDIDATES = [
   { name: 'shipped', bal: {} },
   { name: 'sharper finishing', bal: { shotK: .60 } },
-  { name: 'less compression', bal: { compress: .96 } },
-  { name: 'both', bal: { shotK: .60, compress: .96 } },
+  { name: 'steeper gates', bal: Object.assign({ buildK: 1.8, chanceK: 1.7 }, WIDE) },
   /* THE RIG PROVING ITSELF. This is the control again, with nothing
      changed, and it must reproduce the control's row exactly. If it
      does not, something is carrying between candidates and no other
@@ -187,29 +187,71 @@ const CANDIDATES = [
        chooses is checked afterwards against real played seasons in
        measure-title-race.cjs before it goes anywhere near the game.
        ================================================================= */
+    const one = (hi, ai, ri) => {
+      /* every repeat starts from the same rested squads, so what is
+         being measured is the fixture and not the fixture plus whatever
+         the previous repeat did to the players */
+      freshen();
+      const fix = { h: hi, a: ai, div, sc: [], hs: 0, as: 0, r: 0,
+        day: 40 + (ri * 7) % 260, played: false };
+      buildContext(fix);
+      quickSim(fix);
+      return fix;
+    };
+
     const playFixtures = (streamSeed, reps) => {
       Math.random = mul(streamSeed >>> 0);
-      const pr = [];   // per ordered fixture: [pHome, pDraw, pAway]
+      /* LET THE CONTROLLER SETTLE, THEN HOLD IT STILL. The goal-rate
+         controller re-solves its trim every 120 league matches, so a
+         measurement of six thousand matches is fifty re-solves long and
+         the fixtures played early are not judged by the same standard
+         as the ones played late. Worse, how far it has drifted depends
+         on how many repeats were asked for, which made the four-repeat
+         and sixteen-repeat runs answer different questions.
+
+         So: a warm-up long enough for it to converge on this candidate's
+         football, and then its counter is pushed far enough below the
+         window that it cannot re-solve again while the measurement
+         runs. What gets measured is the steady state, which is the only
+         state a season is ever actually played in. */
+      for (let k = 0; k < 700; k += 1) {
+        const r = rounds[k % rounds.length];
+        const f = r[k % r.length];
+        one(f[0], f[1], k % rounds.length);
+      }
+      goalCal(div).n = -1e9;
+
+      const pr = [];   // per ordered fixture: win/draw/loss and goals
       let goals = 0, played = 0;
+      const gf = {}, ga = {};
+      mem.forEach((i) => { gf[i] = 0; ga[i] = 0; });
       rounds.forEach((round, ri) => {
         round.forEach(([hi, ai]) => {
           let w = 0, d = 0, l = 0;
           for (let k = 0; k < reps; k += 1) {
-            /* every repeat starts from the same rested squads, so what
-               is being measured is the fixture and not the fixture plus
-               whatever the previous repeat did to the players */
-            freshen();
-            const fix = { h: hi, a: ai, div, sc: [], hs: 0, as: 0, r: 0,
-              day: 40 + (ri * 7) % 260, played: false };
-            buildContext(fix);
-            quickSim(fix);
+            const fix = one(hi, ai, ri);
             goals += fix.hs + fix.as; played += 1;
+            gf[hi] += fix.hs; ga[hi] += fix.as;
+            gf[ai] += fix.as; ga[ai] += fix.hs;
             if (fix.hs > fix.as) w += 1; else if (fix.hs === fix.as) d += 1; else l += 1;
           }
           pr.push({ h: hi, a: ai, w: w / reps, d: d / reps, l: l / reps });
         });
       });
-      return { pr, gpg: goals / played };
+      /* WHAT A LEAGUE TABLE IS MADE OF. Points are downstream of goal
+         difference, and goal difference is where real football gives
+         unambiguous targets: over the last decade a Premier League
+         champion has scored about 1.7 times the division's average and
+         conceded about 0.6 times it, and the club finishing bottom has
+         been the mirror of that. If the game's best squad is nearer the
+         average than that, no amount of tuning the points will help,
+         because the matches themselves are too close. */
+      const per = (i) => ({ gf: gf[i] / (38 * reps), ga: ga[i] / (38 * reps) });
+      const avg = goals / played / 2;
+      const top = per(byStrength[0]), bot = per(byStrength[byStrength.length - 1]);
+      return { pr, gpg: goals / played,
+        topGf: top.gf / avg, topGa: top.ga / avg,
+        botGf: bot.gf / avg, botGa: bot.ga / avg };
     };
 
     /* the table those probabilities imply, drawn many times over */
@@ -266,20 +308,16 @@ const CANDIDATES = [
       Object.assign(SPREAD, shippedBal, cand.bal || {});
       DAY_LO = (cand.day && cand.day.lo != null) ? cand.day.lo : shippedDay.lo;
       DAY_RANGE = (cand.day && cand.day.range != null) ? cand.day.range : shippedDay.range;
-      const { pr, gpg } = playFixtures(seed, seasons);
+      const m = playFixtures(seed, seasons);
+      const { pr, gpg } = m;
       const t = tableFrom(pr, 3000, seed ^ 0x2c9f);
-      /* the strongest side's home record against the weakest, straight
-         off the measured probabilities: the single number that says
-         whether dominance is allowed to exist at all */
-      const top = byStrength[0], bot = byStrength[byStrength.length - 1];
-      const duel = pr.find((x) => x.h === top && x.a === bot) || { w: 0, d: 0, l: 0 };
       results.push({
         name: cand.name,
         first: t.at(0), second: t.at(1), fourth: t.at(3),
         mid: t.at(Math.floor(mem.length / 2)),
         seventeenth: t.at(mem.length - 4), last: t.at(mem.length - 1),
         gpg, W: t.W, D: t.D, L: t.L, rank: t.rank, rho: t.rho,
-        best: Math.round(duel.w * 100),
+        topGf: m.topGf, topGa: m.topGa, botGf: m.botGf, botGa: m.botGa,
         /* WHY GOALS A GAME BARELY MOVES BETWEEN CANDIDATES. It is held
            there on purpose: the goal-rate controller turns a share of
            goals into saves to hit 2.80. That share is reported here,
@@ -305,17 +343,32 @@ const CANDIDATES = [
     + '\n  every fixture played ' + SEASONS + ' times, the table drawn 3000 times'
     + ' from what those matches measured\n');
   console.log('  ' + 'candidate'.padEnd(24) + head.map((h) => h.padStart(7)).join('')
-    + '   champion     best  table   best v worst');
+    + '   champion     best  table');
   console.log('  ' + 'real football'.padEnd(24)
     + cols.map((c) => REAL[c].toFixed(1).padStart(7)).join('')
-    + '   27W 6D 5L      #2    ~3          ~75%');
+    + '   27W 6D 5L      #2    ~3');
   out.results.forEach((r) => {
     console.log('  ' + r.name.padEnd(24)
       + cols.map((c) => r[c].toFixed(1).padStart(7)).join('')
       + '   ' + (r.W.toFixed(0) + 'W ' + r.D.toFixed(0) + 'D ' + r.L.toFixed(0) + 'L').padEnd(11)
       + ('#' + r.rank.toFixed(1)).padStart(6) + r.rho.toFixed(1).padStart(6)
-      + '  trim ' + r.trim.toFixed(3)
-      + String(r.best + '%').padStart(7));
+      + '  trim ' + r.trim.toFixed(3));
+  });
+
+  /* THE MEASUREMENT THAT SAYS WHY. Points are downstream of goal
+     difference, and this is the one place real football gives a target
+     that is not an average of averages. */
+  console.log('\n  scoring and conceding, as a multiple of the division\'s average');
+  console.log('  ' + 'candidate'.padEnd(24)
+    + 'best squad GF'.padStart(15) + 'GA'.padStart(7)
+    + 'worst squad GF'.padStart(17) + 'GA'.padStart(7));
+  console.log('  ' + 'real football'.padEnd(24)
+    + '1.70'.padStart(15) + '0.62'.padStart(7)
+    + '0.62'.padStart(17) + '1.70'.padStart(7));
+  out.results.forEach((r) => {
+    console.log('  ' + r.name.padEnd(24)
+      + r.topGf.toFixed(2).padStart(15) + r.topGa.toFixed(2).padStart(7)
+      + r.botGf.toFixed(2).padStart(17) + r.botGa.toFixed(2).padStart(7));
   });
   /* the rig proving itself: the control and its repeat must agree */
   const a = out.results[0], z = out.results[out.results.length - 1];
