@@ -914,6 +914,15 @@ const SPREAD={
     already at zero trim and no way to put a goal back. These two put
     the volume back without flattening the slope again. */
  buildMul:1.22, chanceMul:.70,
+ /* PLAYING AT HOME. Measured across 4,560 league matches the game
+    splits 39.5 home wins, 28.2 draws and 32.3 away wins in a hundred,
+    against real English football's 45, 24 and 31. Away wins are
+    already right; the home wins that are missing are turning up as
+    draws, so the surplus of draws and the shortage of home wins are
+    one fault rather than two. Its size lives here: what the crowd is
+    worth to keeping the ball, to getting out of your own half, and to
+    the shot at the end of it. */
+ homePoss:1.02, homeBuild:1.04, homeShot:1.03,
  /* the same question at the shot: how much of a finisher's advantage
     over a goalkeeper survives into whether the ball goes in */
  shotK:.42,
@@ -960,7 +969,7 @@ class MatchSim{
  possScore(i){const s=this.sides[i];
   const styleP=s.tac.passStyle==='Short'?1.05:s.tac.passStyle==='Direct'?.95:1;
   const lineP=s.tac.line==='High'?1.03:s.tac.line==='Deep'?.96:1;
-  const crowd=s.home?(1.02+Math.min(.035,(s.c.cap||30000)/2.4e6)):1;
+  const crowd=s.home?(SPREAD.homePoss+Math.min(.035,(s.c.cap||30000)/2.4e6)):1;
   return this.avg(s,['passing','vision','workRate'],'mid')*s.mm.poss*crowd*styleP*lineP*(1+this.mom[i]*.014)*(.9+Math.random()*.2)}
  tickOnce(){
   if(this.done)return;
@@ -1018,7 +1027,7 @@ class MatchSim{
   const styleB=A.tac.passStyle==='Short'?1.05:A.tac.passStyle==='Direct'?.95:1;
   const tempoB=A.tac.tempo==='Fast'?.96:A.tac.tempo==='Slow'?1.03:1;
   const pressClash=(D.tac.press==='High'&&A.tac.passStyle==='Short')?.95:(D.tac.press==='High'&&A.tac.passStyle==='Direct')?1.05:1;
-  const a1=this.avg(A,['passing','firstTouch','vision'],'all')*A.mm.att*styleB*tempoB*pressClash*urgA*(1+this.mom[ai]*.009)*(A.home?1.04:1);
+  const a1=this.avg(A,['passing','firstTouch','vision'],'all')*A.mm.att*styleB*tempoB*pressClash*urgA*(1+this.mom[ai]*.009)*(A.home?SPREAD.homeBuild:1);
   const d1=this.avg(D,['positioning','workRate','tackling'],'def')*D.mm.def*parkD*(D.tac.press==='High'?1.07:D.tac.press==='Low'?.94:1);
   if(Math.random()>clamp(sigmoid((a1-d1)/SPREAD.buildK)*SPREAD.buildMul,SPREAD.buildLo,SPREAD.buildHi)){
    if(Math.random()<.16){const dp=pick(this.pool(D,'mid'));this.say(this.dispMin(),D,cf(COMM.intercept,{d:dp.p.name,t:D.c.short}));dp.rating+=.05}
@@ -1059,7 +1068,7 @@ class MatchSim{
   const g=this.gk(D);
   const rawS=(this.effA(shooter,'shooting')+this.effA(shooter,fromCorner?'heading':'composure'))/2;
   const rawK=(this.effA(g,'positioning')+this.effA(g,'agility'))/2;
-  let shot=(10+(rawS-10)*SPREAD.shotK)*(.85+Math.random()*.35)*A.mm.att*(A.home?1.03:1)*(hasTrait(shooter,'Finisher')?1.04:1)*(creator&&hasTrait(creator,'Playmaker')?1.03:1);
+  let shot=(10+(rawS-10)*SPREAD.shotK)*(.85+Math.random()*.35)*A.mm.att*(A.home?SPREAD.homeShot:1)*(hasTrait(shooter,'Finisher')?1.04:1)*(creator&&hasTrait(creator,'Playmaker')?1.03:1);
   if(shooter.goals>=1)shot*=.9;if(shooter.goals>=2)shot*=.82; // defences key on the man in form
   const save=((10+(rawK-10)*SPREAD.shotK)*(.79+Math.random()*.43)+.92)*(hasTrait(g,'Wall')?1.045:1);
   const model=(typeof RBSMatchModel!=='undefined'&&RBSMatchModel)||null;
