@@ -38,15 +38,41 @@
   bottom club are within one or two. **No balance value has been changed on
   account of it.**
 
-  What is wrong is narrower, and now measured across 7,600 league matches: the
-  game finishes **28.7%** of matches drawn against a real 24%, and the whole
-  surplus is goalless and one-all draws — 11.0% and 11.6% against a real ~8%
-  and ~9%. An independent-Poisson model on the game's own scoring rate
-  predicts 6.7% goalless, so there are far too many matches in which neither
-  side does anything. Home advantage was measured as a possible cause and
-  ruled out: raising it converts away wins into home wins one for one, and
-  away wins are already right at 31.4% against a real 31%. So is the day-form
-  range, which moved the division's split by half a point.
+  What is wrong is narrower: the game draws **27.3%** of league matches
+  against a real 24%, finishes 0-0 in 9.6% against a real ~8%, and wins at
+  home 40.9% of the time against a real 45%. Away wins are already right, at
+  31.7% against 31%.
+
+  The cause is not the match engine. Played with squads reset to full
+  condition, morale and fitness before every match, the same engine draws
+  25.2% and finishes only **4.4%** goalless, scoring 2.92 a game on 14.7 shots
+  a side. The surplus arrives with what a season leaves on a squad —
+  injuries, morale, sharpness — and whether the game over-models those is the
+  open question. The goals are not even over-dispersed: variance over mean is
+  0.84, slightly *under*, so nothing is bunching goals into matches.
+
+  Five separate candidates were measured and ruled out, each over 4,560
+  matches or more: two poor squads meeting (4.9% goalless against 4.4%
+  overall); the day-form range (widening it 0.90–1.10 to 0.82–1.18 moved the
+  split half a point); home advantage (it converts away wins into home wins
+  one for one, and away wins are already right); the calendar (five days'
+  recovery between matchdays and seven give identical results — condition
+  saturates by five); and the late-game "park" term, below.
+
+- **A comment that lied about its own code, and the code was right.** In the
+  last ten minutes the engine gives one side 5% more defensive resistance.
+  `agf` is the goals of the side with the ball, so the condition `aga<agf`
+  fires when the side *defending* is losing — a team a goal down digs in while
+  it chases. The comment beside it said "leading side digs in", the exact
+  opposite, and it read like a one-character typo.
+
+  It was measured before being touched. Swapping the condition to match the
+  comment made every headline number worse over twelve seasons: home wins
+  40.9% → 39.0% against a real 45%, draws 27.3% → 28.2% against a real 24%,
+  the champion 84.5 → 82.3, and the table followed squad quality *less*
+  closely, the champion falling from the 2.3rd best squad to the 3.5th. The
+  engine has been balanced around the behaviour it actually has, so the code
+  stands and the comment was corrected to describe it.
 
 - **Winning the league costs what it should.** Premier League champions were
   averaging 76 points across five measured seasons — one title won on **69
@@ -116,6 +142,14 @@
   played out in `measure-title-race.cjs`, which now takes balance overrides as
   a fifth argument, before anyone believes it. Comparing the two says the
   played season spreads noticeably wider at both ends.
+- **`scripts/measure-scoreline-shape.cjs`** — what is underneath the
+  scoreline. For thousands of matches it records how many shots each side had
+  and how many went in, and reports the shot count and its spread, how often a
+  side fails to score, the variance of the match's goal total against its mean
+  (Poisson has them equal, so anything above 1.0 is goals bunching into
+  matches), and all of it split by whether the two squads are both good, both
+  poor, or mismatched. It is what established that this game's draw surplus is
+  not in the match engine at all.
 - **Named balance constants.** The numbers that decide how much of the gap
   between two squads survives into the result were literals scattered through
   `tickOnce` and one patch layer: the clamps on possession, on getting out of

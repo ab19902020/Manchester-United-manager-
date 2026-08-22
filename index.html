@@ -923,6 +923,8 @@ const SPREAD={
     worth to keeping the ball, to getting out of your own half, and to
     the shot at the end of it. */
  homePoss:1.02, homeBuild:1.04, homeShot:1.03,
+ /* what a side in front is worth defensively in the last ten minutes */
+ park:1.05,
  /* the same question at the shot: how much of a finisher's advantage
     over a goalkeeper survives into whether the ball goes in */
  shotK:.42,
@@ -1016,7 +1018,25 @@ class MatchSim{
   // game-state urgency: the chasing side forces the issue late on
   const agf=ai===0?this.fix.hs:this.fix.as,aga=ai===0?this.fix.as:this.fix.hs;
   const urgA=(agf<aga&&m>=70)?1.07:(agf<aga&&m>=55)?1.035:1;
-  const parkD=(aga<agf&&m>=80)?1.05:1; // leading side digs in
+  /* THE SIDE THAT IS BEHIND DEFENDS HARDER, AND THAT IS DELIBERATE —
+     whatever the old comment here claimed. `agf` is the goals of the
+     side with the ball and `aga` the goals of the side defending, so
+     `aga<agf` fires when the DEFENDING side is losing: a team a goal
+     down in the last ten minutes stops the game getting away from it
+     while it chases. The comment used to say "leading side digs in",
+     which is the opposite, and the obvious conclusion was that one of
+     them was a typo.
+
+     Swapping the condition to match the comment was measured over
+     twelve seasons and made everything worse: home wins fell 40.9% to
+     39.0% against a real 45%, draws rose 27.3% to 28.2% against a real
+     24%, away wins rose further past real, and the champion fell 84.5
+     to 82.3. It also made the table follow squad quality less closely
+     — the champion was the 3.5th best squad rather than the 2.3rd.
+     Whatever the intent once was, the engine has been balanced around
+     this behaviour, so the code stays and the comment is the thing
+     that was wrong. */
+  const parkD=(aga<agf&&m>=80)?SPREAD.park:1;
   // ball over the top — punish a high line with pace
   if(D.tac.line==='High'&&Math.random()<.018){
    const sp=this.weighted(A,x=>this.effA(x,'pace')*1.2+(x.slot==='ST'?6:ATTPOS.includes(x.slot)?4:0));
