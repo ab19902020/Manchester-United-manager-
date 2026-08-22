@@ -188,6 +188,15 @@ const BAL = process.argv[5] ? JSON.parse(process.argv[5]) : null;
          and between matchdays everybody recovers the way the game
          recovers them: about six a day, three days a match. */
       const rounds = rrPairs(mem);
+      /* EVERY LEAGUE MATCH, NOT A SELECTED PAIR OF THEM. The duels above
+         ask about two named clubs; this asks about the division. Real
+         English football splits 45 home wins, 24 draws and 31 away wins
+         in every hundred league matches, and the scoreline histogram
+         says whether the goals are spread the way football spreads them
+         or bunched into 1-1s. A league can arrive at the right champion
+         with entirely the wrong football underneath it. */
+      const split = { h: 0, d: 0, a: 0 };
+      const lines = {};
       rounds.forEach((round) => {
         mem.forEach((i) => (G.clubs[i].players || []).forEach((p) => {
           if (!p.injury) p.cond = Math.min(100, p.cond + 6.1 * 3);
@@ -200,9 +209,11 @@ const BAL = process.argv[5] ? JSON.parse(process.argv[5]) : null;
           const H = row[hi], A = row[ai];
           H.p += 1; A.p += 1;
           H.gf += fix.hs; H.ga += fix.as; A.gf += fix.as; A.ga += fix.hs;
-          if (fix.hs > fix.as) { H.w += 1; A.l += 1; H.pts += 3; }
-          else if (fix.hs < fix.as) { A.w += 1; H.l += 1; A.pts += 3; }
-          else { H.d += 1; A.d += 1; H.pts += 1; A.pts += 1; }
+          if (fix.hs > fix.as) { H.w += 1; A.l += 1; H.pts += 3; split.h += 1; }
+          else if (fix.hs < fix.as) { A.w += 1; H.l += 1; A.pts += 3; split.a += 1; }
+          else { H.d += 1; A.d += 1; H.pts += 1; A.pts += 1; split.d += 1; }
+          const key = Math.min(fix.hs, 5) + '-' + Math.min(fix.as, 5);
+          lines[key] = (lines[key] || 0) + 1;
         });
       });
 
@@ -211,6 +222,7 @@ const BAL = process.argv[5] ? JSON.parse(process.argv[5]) : null;
       const goals = table.reduce((t, r) => t + r.gf, 0);
       const games = table.reduce((t, r) => t + r.p, 0) / 2;
       runs.push({
+        split, lines,
         champ: G.clubs[table[0].i].name,
         pts: table.map((r) => r.pts),
         champW: table[0].w, champD: table[0].d, champL: table[0].l,
@@ -270,6 +282,26 @@ const BAL = process.argv[5] ? JSON.parse(process.argv[5]) : null;
     + ' strongest squad   (real football: about #2)');
   console.log('  table vs strength   ' + avg((r) => r.rho).toFixed(1)
     + ' places out on average   (real football: about 3)');
+  /* the division as a whole, across every league match played */
+  const S = out.runs.reduce((t, r) => ({ h: t.h + r.split.h, d: t.d + r.split.d, a: t.a + r.split.a }),
+    { h: 0, d: 0, a: 0 });
+  const St = S.h + S.d + S.a;
+  if (St) {
+    console.log('\n  every league match, ' + St + ' of them');
+    console.log('    home wins  ' + (S.h / St * 100).toFixed(1) + '%   (real 45%)');
+    console.log('    draws      ' + (S.d / St * 100).toFixed(1) + '%   (real 24%)');
+    console.log('    away wins  ' + (S.a / St * 100).toFixed(1) + '%   (real 31%)');
+    const L = {};
+    out.runs.forEach((r) => Object.entries(r.lines)
+      .forEach(([k, v]) => { L[k] = (L[k] || 0) + v; }));
+    /* the ten commonest scorelines. Real English football, in order:
+       1-0, 2-1, 1-1, 0-0, 2-0, 0-1, 1-2, 3-1, 3-0, 2-2 — roughly 10, 9,
+       9, 8, 8, 6, 5, 4, 4, 4 in every hundred. If a game draws too many
+       matches, this says whether that is 0-0s or 1-1s. */
+    const top = Object.entries(L).sort((x, y) => y[1] - x[1]).slice(0, 10);
+    console.log('    commonest scorelines   ' + top
+      .map(([k, v]) => k + ' ' + (v / St * 100).toFixed(1) + '%').join('   '));
+  }
   const even = out.duels['evenly matched'];
   if (even) {
     const t = even.w + even.d + even.l;
