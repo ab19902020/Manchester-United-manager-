@@ -39,6 +39,17 @@ const path = require('path');
 const SEASONS = +(process.argv[2] || 6);
 const DIV = process.argv[3] || 'PL';
 const SEED = +(process.argv[4] || 20260821);
+/* A FIFTH ARGUMENT: overrides for SPREAD, as JSON, e.g.
+     node scripts/measure-title-race.cjs 8 PL 20260821 '{"chanceK":1.7}'
+   sweep-balance.cjs chooses settings against measured fixture
+   probabilities, which is precise but deliberately leaves out
+   everything a season does to a squad across its length — fatigue,
+   injuries, suspensions, a run of form. Those are exactly what this rig
+   has and that one does not, and comparing the two says the played
+   season spreads wider at both ends. So a setting is not accepted until
+   it has been played, and it can be played here without editing the
+   game. */
+const BAL = process.argv[5] ? JSON.parse(process.argv[5]) : null;
 
 (async () => {
   const browser = await chromium.launch({
@@ -50,7 +61,8 @@ const SEED = +(process.argv[4] || 20260821);
   await page.goto('file://' + path.resolve(__dirname, '..', 'index.html'));
   await page.waitForTimeout(2500);
 
-  const out = await page.evaluate(({ seasons, div, seed }) => {
+  const out = await page.evaluate(({ seasons, div, seed, bal }) => {
+    if (bal) Object.assign(SPREAD, bal);
     const clear = () => ['startScreen', 'frontScreen', 'introScreen', 'splash']
       .forEach((id) => { const el = document.getElementById(id); if (el) el.remove(); });
     /* THE SAME WORLD EVERY RUN. Without this each measurement generates
@@ -230,7 +242,7 @@ const SEED = +(process.argv[4] || 20260821);
       pts: lastTable.byClub[i],
     }));
     return { runs, clubs: mem.length, duels, dump };
-  }, { seasons: SEASONS, div: DIV, seed: SEED });
+  }, { seasons: SEASONS, div: DIV, seed: SEED, bal: BAL });
 
   const avg = (f) => out.runs.reduce((t, r) => t + f(r), 0) / out.runs.length;
   const n = out.clubs;
