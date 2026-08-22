@@ -892,6 +892,24 @@ const SPREAD={
  possLo:.40, possHi:.60,   // share of ticks the better side may have the ball
  buildLo:.58, buildHi:.72, // getting out of your own half
  chanceLo:.41, chanceHi:.57, // turning possession into a sight of goal
+ /* AND HOW STEEPLY EACH ONE ANSWERS THE GAP. The clamps say how far a
+    gate may travel; these say how quickly it gets there. They are the
+    divisors under each sigmoid, so a smaller number means the same
+    difference in quality moves the gate further.
+
+    The slopes matter more than the clamps, and for a reason that is
+    not obvious: the goal-rate controller. It holds every division at
+    2.80 goals a game by turning a share of goals into saves, so any
+    change that simply creates more chances is given back — measured,
+    raising the ceilings put the trim up from 0.000 to 0.132 and left
+    the table FLATTER than before, because trimming goals uniformly
+    turns wins into draws. A steeper slope does not raise the total. It
+    moves the good side up and the poor side down about the mean, which
+    is the shape a league table is missing rather than the volume. */
+ possK:.22, buildK:3.4, chanceK:3.2,
+ /* the same question at the shot: how much of a finisher's advantage
+    over a goalkeeper survives into whether the ball goes in */
+ shotK:.42,
 };
 
 class MatchSim{
@@ -977,7 +995,7 @@ class MatchSim{
     if(Math.random()<.4)this.say(this.dispMin(),s,s.c.short+(want==='Overload'?' throw everything forward!':want==='Defensive'?' shut up shop and see the game out.':' turn up the pressure.'))}});
   // possession contest (spec 3.1): score ratio -> soft probability per tick
   const p0=this.possScore(0),p1=this.possScore(1);
-  const ai=Math.random()<clamp(sigmoid((p0-p1)/(0.22*(p0+p1)+.001)),SPREAD.possLo,SPREAD.possHi)?0:1;this.poss[ai]++;
+  const ai=Math.random()<clamp(sigmoid((p0-p1)/(SPREAD.possK*(p0+p1)+.001)),SPREAD.possLo,SPREAD.possHi)?0:1;this.poss[ai]++;
   const A=this.sides[ai],D=this.sides[1-ai];
   // game-state urgency: the chasing side forces the issue late on
   const agf=ai===0?this.fix.hs:this.fix.as,aga=ai===0?this.fix.as:this.fix.hs;
@@ -995,7 +1013,7 @@ class MatchSim{
   const pressClash=(D.tac.press==='High'&&A.tac.passStyle==='Short')?.95:(D.tac.press==='High'&&A.tac.passStyle==='Direct')?1.05:1;
   const a1=this.avg(A,['passing','firstTouch','vision'],'all')*A.mm.att*styleB*tempoB*pressClash*urgA*(1+this.mom[ai]*.009)*(A.home?1.04:1);
   const d1=this.avg(D,['positioning','workRate','tackling'],'def')*D.mm.def*parkD*(D.tac.press==='High'?1.07:D.tac.press==='Low'?.94:1);
-  if(Math.random()>clamp(sigmoid((a1-d1)/3.4)*1.22,SPREAD.buildLo,SPREAD.buildHi)){
+  if(Math.random()>clamp(sigmoid((a1-d1)/SPREAD.buildK)*1.22,SPREAD.buildLo,SPREAD.buildHi)){
    if(Math.random()<.16){const dp=pick(this.pool(D,'mid'));this.say(this.dispMin(),D,cf(COMM.intercept,{d:dp.p.name,t:D.c.short}));dp.rating+=.05}
    return}
   if(Math.random()<.25){const ap=pick(this.pool(A,'mid'));this.say(this.dispMin(),A,cf(COMM.build,{a:ap.p.name,t:A.c.short}))}
@@ -1005,7 +1023,7 @@ class MatchSim{
   const tackB=D.tac.tackling==='Aggressive'?1.06:D.tac.tackling==='Cautious'?.95:1;
   const lineB=D.tac.line==='Deep'?1.05:D.tac.line==='High'?.97:1;
   const d2=this.avg(D,['tackling','decisions','positioning'],'def')*D.mm.def*tackB*lineB*parkD;
-  if(Math.random()>clamp(sigmoid((a2-d2)/3.2)*.70,SPREAD.chanceLo,SPREAD.chanceHi)){
+  if(Math.random()>clamp(sigmoid((a2-d2)/SPREAD.chanceK)*.70,SPREAD.chanceLo,SPREAD.chanceHi)){
    const r=Math.random();const dp=pick(this.pool(D,'def'));
    if(r<.19){A.st.cor++;this.say(this.dispMin(),A,cf(COMM.corner,{t:A.c.short,d:dp.p.name}));this.cornerEvent(A,D)}
    else if(r<.30){D.st.fl++;this.foulEvent(D,dp,A,false)}
@@ -1034,9 +1052,9 @@ class MatchSim{
   const g=this.gk(D);
   const rawS=(this.effA(shooter,'shooting')+this.effA(shooter,fromCorner?'heading':'composure'))/2;
   const rawK=(this.effA(g,'positioning')+this.effA(g,'agility'))/2;
-  let shot=(10+(rawS-10)*0.42)*(.85+Math.random()*.35)*A.mm.att*(A.home?1.03:1)*(hasTrait(shooter,'Finisher')?1.04:1)*(creator&&hasTrait(creator,'Playmaker')?1.03:1);
+  let shot=(10+(rawS-10)*SPREAD.shotK)*(.85+Math.random()*.35)*A.mm.att*(A.home?1.03:1)*(hasTrait(shooter,'Finisher')?1.04:1)*(creator&&hasTrait(creator,'Playmaker')?1.03:1);
   if(shooter.goals>=1)shot*=.9;if(shooter.goals>=2)shot*=.82; // defences key on the man in form
-  const save=((10+(rawK-10)*.42)*(.79+Math.random()*.43)+.92)*(hasTrait(g,'Wall')?1.045:1);
+  const save=((10+(rawK-10)*SPREAD.shotK)*(.79+Math.random()*.43)+.92)*(hasTrait(g,'Wall')?1.045:1);
   const model=(typeof RBSMatchModel!=='undefined'&&RBSMatchModel)||null;
   const ratio=shot/Math.max(.01,save);
   const xg=model?model.shotXg(ratio):clamp(.13*ratio,.02,.75);

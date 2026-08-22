@@ -56,16 +56,22 @@ const SEED = +(process.argv[4] || 20260821);
    those runs appeared to show about ceilings, floors or compression
    was inside their own noise, so the candidates below are the same
    questions asked again of a rig that can answer them. */
+const WIDE = { buildLo: .50, buildHi: .80, chanceLo: .33, chanceHi: .65, possLo: .34, possHi: .66 };
 const CANDIDATES = [
   { name: 'shipped', bal: {} },
+  /* the clamps alone, for the record: raising the ceilings is what the
+     earlier runs kept pointing at, and it is worth having one honest
+     measurement of it */
   { name: 'ceilings', bal: { buildHi: .78, chanceHi: .63 } },
-  { name: 'ceilings, higher', bal: { buildHi: .82, chanceHi: .66 } },
-  { name: 'ceilings + poss', bal: { buildHi: .78, chanceHi: .63, possHi: .66 } },
-  { name: 'ceilings + less compress', bal: { compress: .94, buildHi: .78, chanceHi: .63 } },
-  { name: 'higher + poss + compress', bal: { compress: .94, buildHi: .82, chanceHi: .66, possHi: .66 } },
-  /* the best of the first sweep, carried forward so the two are
-     compared on the same seasons rather than across runs */
-  { name: 'first sweep best', bal: { compress: .94, buildLo: .52, buildHi: .78, chanceLo: .35, chanceHi: .63 } },
+  /* the slopes, which is the real question. Steeper gates move the
+     good side up and the poor side down about the same mean, so the
+     goal-rate controller has nothing to take back. */
+  { name: 'steeper gates', bal: Object.assign({ buildK: 2.4, chanceK: 2.3 }, WIDE) },
+  { name: 'steeper gates, hard', bal: Object.assign({ buildK: 1.8, chanceK: 1.7 }, WIDE) },
+  { name: 'steeper shot', bal: { shotK: .60 } },
+  { name: 'steeper shot, hard', bal: { shotK: .78 } },
+  { name: 'gates + shot', bal: Object.assign({ buildK: 2.4, chanceK: 2.3, shotK: .60 }, WIDE) },
+  { name: 'gates + shot + poss', bal: Object.assign({ buildK: 2.4, chanceK: 2.3, shotK: .60, possK: .14 }, WIDE) },
   /* THE RIG PROVING ITSELF. This is the control again, with nothing
      changed, and it must print the control's row to the last decimal.
      If it does not, the seasons are not paired and no other row in the
