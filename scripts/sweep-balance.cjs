@@ -2,31 +2,31 @@
 /* eslint-disable */
 /* Which balance numbers produce a real league table?
  *
- *   node scripts/sweep-balance.cjs [seasons-per-candidate]
+ *   node scripts/sweep-balance.cjs [repeats-per-fixture]
  *
  * measure-title-race.cjs answers "what does the table look like now".
- * This answers "what would it look like if". It builds the seeded world
- * once, then plays a full division under each candidate setting of SPREAD
- * — the clamps and the compression that decide how much of the gap
- * between two squads survives into the result — and prints them side by
- * side.
+ * This answers "what would it look like if". It rebuilds the seeded
+ * world for each candidate setting of SPREAD — the clamps and the
+ * compression that decide how much of the gap between two squads
+ * survives into the result — measures what that setting does to
+ * football, and prints the candidates side by side.
  *
- * One browser, one world, one fixture list, one difference at a time.
- * Every candidate plays the SAME seasons in the same order from the
- * same starting condition, so a difference in the table is a difference
- * in the numbers and not a difference in the weather.
+ * It does not play seasons. Playing seasons is how the first two runs
+ * of this script wasted an hour: three seasons a candidate carries
+ * about five points of noise on a champion's total, the identical
+ * shipped settings returned 84.7 and then 79.7, and every difference
+ * worth arguing about is smaller than that. Seeding the match stream
+ * fixes repeatability but not comparability — the moment a parameter
+ * changes one gate, every later draw shifts and the two seasons are
+ * independent again.
  *
- * "The same seasons" has to mean the same coin flips too. The world is
- * seeded but MatchSim is not: it calls Math.random for the possession
- * contest, for every gate, every shot and every save. The first two
- * runs of this rig proved how much that matters by accident — the
- * identical shipped code, on the identical world, returned a champion
- * on 84.7 and then on 79.7. Three seasons carry about five points of
- * noise on a champion's total, which is larger than any difference
- * worth tuning, so the whole match stream is seeded and season s uses
- * the same seed for every candidate. The last row of the table is the
- * control run a second time; if the rig is honest it prints the
- * control's numbers exactly, and the report says so in as many words.
+ * So it measures the fixture rather than the season. Every one of the
+ * 380 fixtures is played REPEATS times and its win/draw/loss
+ * probabilities are counted; the table is then drawn three thousand
+ * times from those probabilities in arithmetic, which costs nothing and
+ * removes the noise instead of averaging over it. The last row of the
+ * report is the control measured a second time, and the report says in
+ * words whether it reproduced.
  *
  * The reference column is real English football. The champion's average
  * over the thirty Premier League seasons before 2025-26 is 87.6 and
@@ -49,20 +49,13 @@ const SEED = +(process.argv[4] || 20260821);
    leaves every shipped value alone — and every other row is one stated
    difference from it.
 
-   WHAT THE FIRST SWEEP SETTLED. Widening the gates at both ends lifts
-   the champion (84.7 to 87.7 with the compression eased as well, which
-   is real football's 87.6) but it costs two things: seventeenth falls
-   from 33.7 to 30 against a real 37.8, and goals a game falls from 2.7
-   to 2.5. The second cost is the serious one, because the goal-rate
-   calibrator can only turn goals into saves — it has no way to put a
-   goal back, so a division that arrives under its target stays under
-   it. Lowering the floors is what does the damage: it is the weak
-   side's share of the ball, and taking it away subtracts matches from
-   the bottom of the table and shots from the whole division.
-
-   So this sweep raises the ceilings and leaves the floors alone. The
-   best side gets to dominate more without the worst side being made
-   worse. */
+   NOTHING IS CARRIED FORWARD FROM THE FIRST TWO RUNS OF THIS SCRIPT.
+   They played three seasons a candidate and read the champion off the
+   end of them, which turned out to be a measurement of the weather:
+   the identical shipped settings returned 84.7 and then 79.7. Whatever
+   those runs appeared to show about ceilings, floors or compression
+   was inside their own noise, so the candidates below are the same
+   questions asked again of a rig that can answer them. */
 const CANDIDATES = [
   { name: 'shipped', bal: {} },
   { name: 'ceilings', bal: { buildHi: .78, chanceHi: .63 } },
@@ -146,30 +139,100 @@ const CANDIDATES = [
        thirty unpaired ones. */
     const mul = window.RBSWorldSeed.mulberry32;
     const trueRandom = Math.random;
-    const playSeason = (seasonSeed) => {
-      Math.random = mul(seasonSeed >>> 0);
-      freshen();
-      const row = {};
-      mem.forEach((i) => { row[i] = { i, p: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, pts: 0 }; });
+
+    /* =================================================================
+       WHY THIS DOES NOT PLAY SEASONS ANY MORE
+       -----------------------------------------------------------------
+       Seeding the match stream made a run repeatable, which it badly
+       needed to be. What it could not do is make two DIFFERENT settings
+       comparable. The moment one parameter changes a single gate, that
+       draw is consumed differently, every draw after it shifts, and the
+       two seasons are independent again. The pairing only survives
+       while the candidates behave identically, which is exactly when
+       there is nothing to measure. Three seasons of the shipped
+       settings came out 85, 83 and 79 — six points of spread with
+       nothing changed at all — so no three-season comparison can see a
+       difference smaller than about five points, and the differences
+       worth arguing about are smaller than that.
+
+       So measure the thing that is actually being changed. A league
+       table is not a fact about football, it is arithmetic on 380
+       results, and each of those results is a draw from one fixture's
+       win/draw/loss probabilities. Those probabilities are what the
+       parameters move, and they can be measured as precisely as you are
+       willing to pay for: play every fixture REPS times and count.
+
+       Then the table follows without any further football. Draw three
+       thousand seasons from those probabilities in arithmetic — which
+       costs nothing — and read off what first, fourth and last average.
+       That average is the same quantity a played season estimates, with
+       the noise of a played season removed rather than averaged over.
+
+       What this deliberately leaves out is everything a season does to
+       a squad across its length: fatigue, injuries, suspensions, a run
+       of form. Those matter and they are not free — so the setting this
+       chooses is checked afterwards against real played seasons in
+       measure-title-race.cjs before it goes anywhere near the game.
+       ================================================================= */
+    const playFixtures = (streamSeed, reps) => {
+      Math.random = mul(streamSeed >>> 0);
+      const pr = [];   // per ordered fixture: [pHome, pDraw, pAway]
+      let goals = 0, played = 0;
       rounds.forEach((round, ri) => {
-        mem.forEach((i) => (G.clubs[i].players || []).forEach((p) => {
-          if (!p.injury) p.cond = Math.min(100, p.cond + 6.1 * 3);
-        }));
         round.forEach(([hi, ai]) => {
-          const fix = { h: hi, a: ai, div, sc: [], hs: 0, as: 0, r: 0,
-            day: 40 + (ri * 7) % 260, played: false };
-          buildContext(fix);
-          quickSim(fix);
-          const H = row[hi], A = row[ai];
-          H.p += 1; A.p += 1;
-          H.gf += fix.hs; H.ga += fix.as; A.gf += fix.as; A.ga += fix.hs;
-          if (fix.hs > fix.as) { H.w += 1; A.l += 1; H.pts += 3; }
-          else if (fix.hs < fix.as) { A.w += 1; H.l += 1; A.pts += 3; }
-          else { H.d += 1; A.d += 1; H.pts += 1; A.pts += 1; }
+          let w = 0, d = 0, l = 0;
+          for (let k = 0; k < reps; k += 1) {
+            /* every repeat starts from the same rested squads, so what
+               is being measured is the fixture and not the fixture plus
+               whatever the previous repeat did to the players */
+            freshen();
+            const fix = { h: hi, a: ai, div, sc: [], hs: 0, as: 0, r: 0,
+              day: 40 + (ri * 7) % 260, played: false };
+            buildContext(fix);
+            quickSim(fix);
+            goals += fix.hs + fix.as; played += 1;
+            if (fix.hs > fix.as) w += 1; else if (fix.hs === fix.as) d += 1; else l += 1;
+          }
+          pr.push({ h: hi, a: ai, w: w / reps, d: d / reps, l: l / reps });
         });
       });
-      return mem.map((i) => row[i]).sort((x, y) => y.pts - x.pts
-        || (y.gf - y.ga) - (x.gf - x.ga) || y.gf - x.gf);
+      return { pr, gpg: goals / played };
+    };
+
+    /* the table those probabilities imply, drawn many times over */
+    const tableFrom = (pr, draws, tableSeed) => {
+      const rnd = mul(tableSeed >>> 0);
+      const n = mem.length;
+      const slot = {};
+      mem.forEach((i, ix) => { slot[i] = ix; });
+      const sumAt = new Float64Array(n);
+      const champRank = [];
+      let rhoSum = 0;
+      let cw = 0, cd = 0, cl = 0;
+      for (let s = 0; s < draws; s += 1) {
+        const pts = new Float64Array(n);
+        const W = new Int32Array(n), D = new Int32Array(n), L = new Int32Array(n);
+        for (let f = 0; f < pr.length; f += 1) {
+          const r = rnd(), x = pr[f];
+          if (r < x.w) { pts[slot[x.h]] += 3; W[slot[x.h]] += 1; L[slot[x.a]] += 1; }
+          else if (r < x.w + x.d) {
+            pts[slot[x.h]] += 1; pts[slot[x.a]] += 1;
+            D[slot[x.h]] += 1; D[slot[x.a]] += 1;
+          } else { pts[slot[x.a]] += 3; W[slot[x.a]] += 1; L[slot[x.h]] += 1; }
+        }
+        const order = mem.slice().sort((p, q) => pts[slot[q]] - pts[slot[p]]);
+        order.forEach((ci, ix) => { sumAt[ix] += pts[slot[ci]]; });
+        const top = slot[order[0]];
+        cw += W[top]; cd += D[top]; cl += L[top];
+        champRank.push(byStrength.indexOf(order[0]) + 1);
+        let off = 0;
+        order.forEach((ci, ix) => { off += Math.abs(ix - byStrength.indexOf(ci)); });
+        rhoSum += off / n;
+      }
+      return { at: (k) => sumAt[k] / draws,
+        W: cw / draws, D: cd / draws, L: cl / draws,
+        rank: champRank.reduce((t, v) => t + v, 0) / champRank.length,
+        rho: rhoSum / draws };
     };
 
     const results = [];
@@ -190,33 +253,20 @@ const CANDIDATES = [
       Object.assign(SPREAD, shippedBal, cand.bal || {});
       DAY_LO = (cand.day && cand.day.lo != null) ? cand.day.lo : shippedDay.lo;
       DAY_RANGE = (cand.day && cand.day.range != null) ? cand.day.range : shippedDay.range;
-      const tables = [];
-      for (let s = 0; s < seasons; s += 1) tables.push(playSeason(seed + 1013 * s));
-      const at = (k) => tables.reduce((t, tb) => t + tb[k].pts, 0) / tables.length;
-      const champ = tables.map((tb) => tb[0]);
-      const gpg = tables.reduce((t, tb) => {
-        const g = tb.reduce((u, r) => u + r.gf, 0);
-        const p = tb.reduce((u, r) => u + r.p, 0) / 2;
-        return t + g / p;
-      }, 0) / tables.length;
+      const { pr, gpg } = playFixtures(seed, seasons);
+      const t = tableFrom(pr, 3000, seed ^ 0x2c9f);
+      /* the strongest side's home record against the weakest, straight
+         off the measured probabilities: the single number that says
+         whether dominance is allowed to exist at all */
+      const top = byStrength[0], bot = byStrength[byStrength.length - 1];
+      const duel = pr.find((x) => x.h === top && x.a === bot) || { w: 0, d: 0, l: 0 };
       results.push({
         name: cand.name,
-        first: at(0), second: at(1), fourth: at(3),
-        mid: at(Math.floor(mem.length / 2)),
-        seventeenth: at(mem.length - 4), last: at(mem.length - 1),
-        gpg,
-        W: champ.reduce((t, r) => t + r.w, 0) / champ.length,
-        D: champ.reduce((t, r) => t + r.d, 0) / champ.length,
-        L: champ.reduce((t, r) => t + r.l, 0) / champ.length,
-        rank: tables.reduce((t, tb) => t + byStrength.indexOf(tb[0].i) + 1, 0) / tables.length,
-        rho: tables.reduce((t, tb) => {
-          let sum = 0;
-          tb.forEach((r, ix) => { sum += Math.abs(ix - byStrength.indexOf(r.i)); });
-          return t + sum / tb.length;
-        }, 0) / tables.length,
-        /* season by season, so a reader can see whether an average is
-           three seasons agreeing or three seasons disagreeing */
-        champs: tables.map((tb) => tb[0].pts),
+        first: t.at(0), second: t.at(1), fourth: t.at(3),
+        mid: t.at(Math.floor(mem.length / 2)),
+        seventeenth: t.at(mem.length - 4), last: t.at(mem.length - 1),
+        gpg, W: t.W, D: t.D, L: t.L, rank: t.rank, rho: t.rho,
+        best: Math.round(duel.w * 100),
         /* WHY GOALS A GAME BARELY MOVES BETWEEN CANDIDATES. It is held
            there on purpose: the goal-rate controller turns a share of
            goals into saves to hit 2.80. That share is reported here,
@@ -238,29 +288,31 @@ const CANDIDATES = [
   const REAL = { first: 87.6, second: 80.5, fourth: 70.1, mid: 49, seventeenth: 37.8, last: 20.7, gpg: 2.8 };
   const cols = ['first', 'second', 'fourth', 'mid', 'seventeenth', 'last', 'gpg'];
   const head = ['1st', '2nd', '4th', 'mid', '17th', '20th', 'g/g'];
-  console.log('\n' + DIV + ', ' + out.clubs + ' clubs, ' + SEASONS
-    + ' seasons a candidate, world seed ' + SEED + '\n');
+  console.log('\n' + DIV + ', ' + out.clubs + ' clubs, world seed ' + SEED
+    + '\n  every fixture played ' + SEASONS + ' times, the table drawn 3000 times'
+    + ' from what those matches measured\n');
   console.log('  ' + 'candidate'.padEnd(24) + head.map((h) => h.padStart(7)).join('')
-    + '   champion  best  table');
+    + '   champion     best  table   best v worst');
   console.log('  ' + 'real football'.padEnd(24)
     + cols.map((c) => REAL[c].toFixed(1).padStart(7)).join('')
-    + '   27W 6D 5L    #2    ~3');
+    + '   27W 6D 5L      #2    ~3          ~75%');
   out.results.forEach((r) => {
     console.log('  ' + r.name.padEnd(24)
       + cols.map((c) => r[c].toFixed(1).padStart(7)).join('')
       + '   ' + (r.W.toFixed(0) + 'W ' + r.D.toFixed(0) + 'D ' + r.L.toFixed(0) + 'L').padEnd(11)
-      + ('#' + r.rank.toFixed(1)).padStart(5) + r.rho.toFixed(1).padStart(6)
+      + ('#' + r.rank.toFixed(1)).padStart(6) + r.rho.toFixed(1).padStart(6)
       + '  trim ' + r.trim.toFixed(3)
-      + '   ' + r.champs.join(' '));
+      + String(r.best + '%').padStart(7));
   });
   /* the rig proving itself: the control and its repeat must agree */
   const a = out.results[0], z = out.results[out.results.length - 1];
   if (a && z && /repeat/.test(z.name)) {
-    const same = a.champs.join(',') === z.champs.join(',');
-    console.log('\n  paired: ' + (same
-      ? 'yes — the control and its repeat played identical seasons'
-      : 'NO. ' + a.champs.join(' ') + ' against ' + z.champs.join(' ')
-        + ' — the seasons are not paired and no row above is a comparison'));
+    const same = Math.abs(a.first - z.first) < 1e-9 && Math.abs(a.last - z.last) < 1e-9;
+    console.log('\n  repeatable: ' + (same
+      ? 'yes — the control and its repeat measured the same football'
+      : 'NO. ' + a.first.toFixed(2) + '/' + a.last.toFixed(2) + ' against '
+        + z.first.toFixed(2) + '/' + z.last.toFixed(2)
+        + ' — something carries between candidates and no row above is a comparison'));
   }
   console.log('\npage errors: ' + (errors.length ? errors.slice(0, 2).join(' | ') : 'none'));
   await browser.close();
