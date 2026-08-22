@@ -925,6 +925,14 @@ const SPREAD={
  homePoss:1.02, homeBuild:1.04, homeShot:1.03,
  /* what a side in front is worth defensively in the last ten minutes */
  park:1.05,
+ /* WHAT A GOAL DOES TO THE NEXT TEN MINUTES. The side that scored
+    gets the initiative and the side that conceded responds; the
+    question is how hard. On a realistic calendar the game's goalless
+    rate is close to right, 9.6% against a real 8%, and the draw
+    surplus is concentrated in one-all: 11.6% against a real 9%. Too
+    many matches in which both sides score exactly once is what an
+    over-strong response to conceding looks like. */
+ momScore:4, momConcede:2.6,
  /* the same question at the shot: how much of a finisher's advantage
     over a goalkeeper survives into whether the ball goes in */
  shotK:.42,
@@ -1146,8 +1154,8 @@ class MatchSim{
      24%, and that is what drags a title-winning total down towards
      sixty-nine. A side that concedes does respond; it just does not
      respond harder than the side in front is playing. */
-  this.mom[1-aIx]=Math.min(8,this.mom[1-aIx]+2.6); // the response
-  this.mom[aIx]=Math.min(9,this.mom[aIx]+4);
+  this.mom[1-aIx]=Math.min(8,this.mom[1-aIx]+SPREAD.momConcede); // the response
+  this.mom[aIx]=Math.min(9,this.mom[aIx]+SPREAD.momScore);
   this._drama=this.dispMin()>=87?'LATE DRAMA! ':wasBehind&&nowAhead?'WHAT A TURNAROUND! ':level&&wasBehind?'They\u2019ve hauled themselves level! ':'';
   shooter.goals++;shooter.rating+=1.0;shooter.p.morale=clamp(shooter.p.morale+4,1,100);
   let asst=null;
