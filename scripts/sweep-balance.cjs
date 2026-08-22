@@ -74,11 +74,27 @@ const SEED = +(process.argv[4] || 20260821);
    survives into the ball going in; `compress` is how much of the gap
    between two squads survives into the gates at all. If they add, the
    pair is worth more than either. */
-const WIDE = { buildLo: .50, buildHi: .80, chanceLo: .33, chanceHi: .65, possLo: .34, possHi: .66 };
+/* WHAT THE DIAGNOSTIC SAID. Measured as a multiple of the division's
+   average, the shipped game gives its best squad 1.27 goals for and
+   0.87 against where real football gives a champion 1.70 and 0.62. Its
+   worst squad is close to right going forward (0.64 against 0.62) and
+   far too hard to score against (1.30 against 1.70). The game models
+   being bad; it does not model being good. That is the missing six
+   points, and it is why tuning the points directly went nowhere.
+
+   Steepening the gates fixes most of the shape — 1.44 and 0.72 — but
+   costs volume, because the good side's extra is capped by the ceiling
+   while the poor side's loss is not: 2.5 goals a game against a target
+   of 2.8, with the controller already at zero trim and no way to put a
+   goal back. So the slope and the volume have to move together, which
+   is what the gate multipliers are for. */
+const STEEP = { buildK: 1.8, chanceK: 1.7, buildHi: .80, chanceHi: .65 };
 const CANDIDATES = [
   { name: 'shipped', bal: {} },
-  { name: 'sharper finishing', bal: { shotK: .60 } },
-  { name: 'steeper gates', bal: Object.assign({ buildK: 1.8, chanceK: 1.7 }, WIDE) },
+  { name: 'steep, ceilings only', bal: Object.assign({}, STEEP) },
+  { name: 'steep + volume', bal: Object.assign({ chanceMul: .80, buildMul: 1.30 }, STEEP) },
+  { name: 'steep + more volume', bal: Object.assign({ chanceMul: .90, buildMul: 1.38 }, STEEP) },
+  { name: 'steep + volume + floors', bal: Object.assign({ chanceMul: .80, buildMul: 1.30, buildLo: .52, chanceLo: .36 }, STEEP) },
   /* THE RIG PROVING ITSELF. This is the control again, with nothing
      changed, and it must reproduce the control's row exactly. If it
      does not, something is carrying between candidates and no other

@@ -907,6 +907,13 @@ const SPREAD={
     moves the good side up and the poor side down about the mean, which
     is the shape a league table is missing rather than the volume. */
  possK:.22, buildK:3.4, chanceK:3.2,
+ /* and how much football there is to spread in the first place. A
+    steeper slope on its own costs volume — the good side's extra is
+    capped by the ceiling while the poor side's loss is not, so the
+    division ends up under its goals-a-game target with a controller
+    already at zero trim and no way to put a goal back. These two put
+    the volume back without flattening the slope again. */
+ buildMul:1.22, chanceMul:.70,
  /* the same question at the shot: how much of a finisher's advantage
     over a goalkeeper survives into whether the ball goes in */
  shotK:.42,
@@ -1013,7 +1020,7 @@ class MatchSim{
   const pressClash=(D.tac.press==='High'&&A.tac.passStyle==='Short')?.95:(D.tac.press==='High'&&A.tac.passStyle==='Direct')?1.05:1;
   const a1=this.avg(A,['passing','firstTouch','vision'],'all')*A.mm.att*styleB*tempoB*pressClash*urgA*(1+this.mom[ai]*.009)*(A.home?1.04:1);
   const d1=this.avg(D,['positioning','workRate','tackling'],'def')*D.mm.def*parkD*(D.tac.press==='High'?1.07:D.tac.press==='Low'?.94:1);
-  if(Math.random()>clamp(sigmoid((a1-d1)/SPREAD.buildK)*1.22,SPREAD.buildLo,SPREAD.buildHi)){
+  if(Math.random()>clamp(sigmoid((a1-d1)/SPREAD.buildK)*SPREAD.buildMul,SPREAD.buildLo,SPREAD.buildHi)){
    if(Math.random()<.16){const dp=pick(this.pool(D,'mid'));this.say(this.dispMin(),D,cf(COMM.intercept,{d:dp.p.name,t:D.c.short}));dp.rating+=.05}
    return}
   if(Math.random()<.25){const ap=pick(this.pool(A,'mid'));this.say(this.dispMin(),A,cf(COMM.build,{a:ap.p.name,t:A.c.short}))}
@@ -1023,7 +1030,7 @@ class MatchSim{
   const tackB=D.tac.tackling==='Aggressive'?1.06:D.tac.tackling==='Cautious'?.95:1;
   const lineB=D.tac.line==='Deep'?1.05:D.tac.line==='High'?.97:1;
   const d2=this.avg(D,['tackling','decisions','positioning'],'def')*D.mm.def*tackB*lineB*parkD;
-  if(Math.random()>clamp(sigmoid((a2-d2)/SPREAD.chanceK)*.70,SPREAD.chanceLo,SPREAD.chanceHi)){
+  if(Math.random()>clamp(sigmoid((a2-d2)/SPREAD.chanceK)*SPREAD.chanceMul,SPREAD.chanceLo,SPREAD.chanceHi)){
    const r=Math.random();const dp=pick(this.pool(D,'def'));
    if(r<.19){A.st.cor++;this.say(this.dispMin(),A,cf(COMM.corner,{t:A.c.short,d:dp.p.name}));this.cornerEvent(A,D)}
    else if(r<.30){D.st.fl++;this.foulEvent(D,dp,A,false)}
