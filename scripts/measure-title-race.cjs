@@ -62,10 +62,22 @@ const BAL = process.argv[5] ? JSON.parse(process.argv[5]) : null;
   await page.waitForTimeout(2500);
 
   const out = await page.evaluate(({ seasons, div, seed, bal }) => {
+    /* HOW LONG BETWEEN MATCHDAYS, IN DAYS OF RECOVERY. This rig has
+       always assumed three, which is the congested end of a real
+       calendar: 38 league matches across a nine-month season average
+       nearer seven days apart even allowing for cup ties. It matters
+       more than it looks. Played with rested squads the engine finishes
+       4.4% of matches goalless and scores 2.92 a game; played through a
+       season on three days' rest it finishes 11% goalless and scores
+       2.7. That difference is fatigue, so a rig that gets the schedule
+       wrong reports the game's scoring and its draw rate wrong, and
+       both were being read as faults in the match engine. */
+    let REST = 3;
     if (bal) {
       /* the day-form range is not part of SPREAD — it is a pair of
          top-level lets — but it is the other half of the same question,
          so the override argument takes it under the same names */
+      if (bal.REST != null) { REST = bal.REST; delete bal.REST; }
       if (bal.DAY_LO != null) { DAY_LO = bal.DAY_LO; delete bal.DAY_LO; }
       if (bal.DAY_RANGE != null) { DAY_RANGE = bal.DAY_RANGE; delete bal.DAY_RANGE; }
       Object.assign(SPREAD, bal);
@@ -206,7 +218,7 @@ const BAL = process.argv[5] ? JSON.parse(process.argv[5]) : null;
       const lines = {};
       rounds.forEach((round) => {
         mem.forEach((i) => (G.clubs[i].players || []).forEach((p) => {
-          if (!p.injury) p.cond = Math.min(100, p.cond + 6.1 * 3);
+          if (!p.injury) p.cond = Math.min(100, p.cond + 6.1 * REST);
         }));
         round.forEach(([hi, ai]) => {
           const fix = { h: hi, a: ai, div, sc: [], hs: 0, as: 0, r: 0,
