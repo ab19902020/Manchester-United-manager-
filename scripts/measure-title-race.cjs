@@ -7,7 +7,10 @@
  * A whole season of a division, played with the game's own quickSim and
  * nothing else -- no days advancing, no transfers, no cups -- so a
  * season takes seconds rather than minutes and a tuning change can be
- * judged straight away.
+ * judged straight away. The world and the match stream are both seeded,
+ * so the same arguments produce the same football every time; two runs
+ * of this script can be compared to each other, which before they could
+ * not be.
  *
  * It reports the numbers a league table is judged on: what the champion
  * finished on, what the gap to second and to fourth was, and how tight
@@ -113,6 +116,9 @@ const SEED = +(process.argv[4] || 20260821);
       return { w, d, l, gf: gf / n, ga: ga / n,
         hi: Math.round(strength(hi) * 10) / 10, lo: Math.round(strength(lo) * 10) / 10 };
     };
+    /* the duels are seeded too, on a stream of their own, so the head
+       to heads are repeatable without borrowing the seasons' numbers */
+    Math.random = window.RBSWorldSeed.mulberry32((seed ^ 0x5f37) >>> 0);
     const weakest = byStrength[byStrength.length - 1];
     const mid = byStrength[Math.floor(mem.length / 2)];
     const duels = {
@@ -134,6 +140,17 @@ const SEED = +(process.argv[4] || 20260821);
 
     const runs = [];
     for (let s = 0; s < seasons; s += 1) {
+      /* THE SAME SEASON EVERY RUN, not just the same world. MatchSim
+         calls Math.random for the possession contest, every gate, every
+         shot and every save, so two runs of identical code play
+         different football: this rig, run twice on this seed with
+         nothing changed, reported champions on 84.7 and on 79.7. Four
+         seasons carry roughly five points of noise on a champion's
+         total, which is bigger than most changes worth making, and any
+         before/after taken as two separate runs of this script was
+         measuring that noise as much as the change. Seeding the match
+         stream makes a run repeatable and a comparison real. */
+      Math.random = window.RBSWorldSeed.mulberry32((seed + 1013 * s) >>> 0);
       /* PRE-SEASON. Without this the squads never recover: condition
          drains match by match and is only ever restored by the day
          loop, so a rig that plays season after season back to back had

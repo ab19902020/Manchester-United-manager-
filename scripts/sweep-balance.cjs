@@ -174,6 +174,19 @@ const CANDIDATES = [
 
     const results = [];
     cands.forEach((cand) => {
+      /* A CLEAN WORLD FOR EVERY CANDIDATE. Seeding the match stream was
+         not enough and the self-check below said so: the control and
+         its repeat still played different seasons. Freshening the
+         squads does not undo everything a season leaves behind, and the
+         one that matters is G.gcal — the goal-rate controller, which
+         re-solves its trim every 120 league matches and therefore ends
+         each candidate holding a number shaped by that candidate's
+         scoring. The next candidate then started from it. Rebuilding
+         the world from the same seed puts every candidate back on the
+         same squads, the same fixtures and the same untouched trim. */
+      Math.random = trueRandom;
+      window.RBSWorldSeed.build(seed, 'MUN');
+      clear();
       Object.assign(SPREAD, shippedBal, cand.bal || {});
       DAY_LO = (cand.day && cand.day.lo != null) ? cand.day.lo : shippedDay.lo;
       DAY_RANGE = (cand.day && cand.day.range != null) ? cand.day.range : shippedDay.range;
@@ -204,6 +217,14 @@ const CANDIDATES = [
         /* season by season, so a reader can see whether an average is
            three seasons agreeing or three seasons disagreeing */
         champs: tables.map((tb) => tb[0].pts),
+        /* WHY GOALS A GAME BARELY MOVES BETWEEN CANDIDATES. It is held
+           there on purpose: the goal-rate controller turns a share of
+           goals into saves to hit 2.80. That share is reported here,
+           because a controller sitting at zero is a controller out of
+           room — it can take goals away and has no way to put one back,
+           so a candidate that drives raw scoring under the target
+           simply stays under it. */
+        trim: goalCal(div).trim,
       });
       console.log('[sweep] ' + cand.name + ' done');
     });
@@ -229,6 +250,7 @@ const CANDIDATES = [
       + cols.map((c) => r[c].toFixed(1).padStart(7)).join('')
       + '   ' + (r.W.toFixed(0) + 'W ' + r.D.toFixed(0) + 'D ' + r.L.toFixed(0) + 'L').padEnd(11)
       + ('#' + r.rank.toFixed(1)).padStart(5) + r.rho.toFixed(1).padStart(6)
+      + '  trim ' + r.trim.toFixed(3)
       + '   ' + r.champs.join(' '));
   });
   /* the rig proving itself: the control and its repeat must agree */
