@@ -4993,22 +4993,35 @@ function tick(dt){
   /* the last few seconds of live play, kept so a goal can be shown again */
   replayRecord(dt);
   scriptTick();
+  /* A referee plays added time, and so does this. If the plan is still
+     owed a goal we keep going — with urgency at its highest — rather
+     than blowing the whistle on a scoreline that disagrees with the
+     save file. Capped, so a plan that can never be satisfied still ends
+     the match.
+
+     AND THE FOOTBALL CARRIES ON WHILE IT DOES, which it did not. This
+     block used to `return` as soon as it had added a slice of stoppage,
+     and every line that plays the match -- aiPlayer, resolvePossession,
+     stepBall, checkRules -- sits below it. So the added time invented to
+     let an owed goal be scored was added time in which nobody moved:
+     the clock ran, the scoreboard updated, twenty-two men stood still,
+     and the goal could not possibly arrive. The match then blew up on
+     the safety cap with the plan unpaid.
+
+     Measured before and after, twelve matches each: goals the save
+     recorded after the 87th minute were never shown, and the only way
+     to get them on screen was to post them a full ten minutes early.
+     With the football actually being played in stoppage they arrive at
+     the minute they happened. */
+  let addedTime = false;
   if(S.clock >= S.halfLen){
-    /* A referee plays added time, and so does this. If the plan is still
-       owed a goal we keep going — with urgency at its highest — rather
-       than blowing the whistle on a scoreline that disagrees with the
-       save file. Capped, so a plan that can never be satisfied still
-       ends the match. */
-    if(S.half===2 && SCRIPT.active && SCRIPT.events.some(e=>!e.fired)){
+    if(S.half===2 && SCRIPT.active && SCRIPT.events.some(e=>!e.fired)
+       && (S.stoppage||0) < S.halfLen*2.0){
       S.stoppage = (S.stoppage||0) + dt;
-      /* WAS 0.30 OF A HALF, WHICH RAN OUT. The referee here keeps the
-         match alive until the plan is paid, because ending on a
-         scoreline that disagrees with the save is the one thing this
-         mode exists to prevent. Two halves' worth is a safety net for a
-         plan that genuinely cannot be satisfied -- with the escalating
-         spot kick above, it is never reached in practice. */
-      if(S.stoppage < S.halfLen*2.0){ const c=el('clock'); if(c) c.textContent = fmtClock(); return; }
+      addedTime = true;
     }
+  }
+  if(S.clock >= S.halfLen && !addedTime){
     if(S.half===1){
       S.phase='half'; S.freeze=6;   /* long enough to actually walk off */
       lowerThird('HT', S.score[0]+' — '+S.score[1], TEAMS[0].abbr+' v '+TEAMS[1].abbr);

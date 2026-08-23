@@ -150,6 +150,76 @@ test('every goal the save scores is handed to the picture once, and only once',
       'a stoppage-time goal reads "45+2" in the commentary and must still be a number here');
   });
 
+/* =====================================================================
+   A GOAL THE CALIBRATOR TURNS DOWN IS NEVER SHOWN EITHER
+   ---------------------------------------------------------------------
+   The goal-rate calibrator turns a share of goals into saves to hold
+   each division at 2.80 a game. Under the old arrangement that was a
+   visible fault: the broadcast scored, the picture showed it going in,
+   and then the save turned it down — measured at 4.3% of them, about
+   one goal in twenty-three that you watched hit the net and never
+   appeared on the scoreboard.
+
+   It cannot happen now, and the reason is worth pinning down. The
+   calibrator returns BEFORE the underlying goal() runs, so nothing is
+   recorded: the score does not move, no scorer is written into the
+   fixture, and it says a save instead. A goal is not taken back — one
+   was never scored. And because the picture is only ever told about
+   goals that are already in the fixture, it never hears about this one
+   at all.
+   ===================================================================== */
+test('a goal the calibrator turns down never reaches the score or the picture',
+  { timeout: 45000 }, async (t) => {
+    const game = await createGame();
+    t.after(() => game.close());
+    await startCareer(game, 'Trimmed Goals');
+
+    const result = game.eval(`(()=>{
+    G.day=nextUserFixture().day;
+    UI.view='home';render();ACTIONS.advance();
+    ACTIONS.kickoff();
+    const api=window.RBSDugoutMatchday, m=MU.m, f=MU.fix;
+    m._varOff=true;
+    api.LIVE.on=true; api.LIVE.posted=0;
+    const seen=[];
+    const md={ addGoal(g){ seen.push(g); return md } };
+    const A=m.sides[0], D=m.sides[1];
+    const shooter=A.onfield.find(x=>x.slot!=='GK');
+    const out={};
+
+    /* every goal turned down: the division is scoring far too freely */
+    goalCal(f.div).trim=1;
+    const feed0=m.feed.length;
+    for(let i=0;i<20;i++) m.goal(A,D,shooter,null,null,false);
+    api.postGoals(md,f);
+    out.score=f.hs+','+f.as;
+    out.scorers=f.sc.length;
+    out.postedToPicture=seen.length;
+    out.saidSomething=m.feed.length>feed0;
+    out.saves=D.st.sv;
+
+    /* none turned down: they all count, and all reach the picture */
+    goalCal(f.div).trim=0;
+    for(let i=0;i<5;i++) m.goal(A,D,shooter,null,null,false);
+    api.postGoals(md,f);
+    out.scoreAfter=f.hs+','+f.as;
+    out.postedAfter=seen.length;
+
+    api.LIVE.on=false;
+    return out;
+  })()`);
+
+    assert.equal(result.score, '0,0',
+      'a goal the calibrator turns down never moves the score');
+    assert.equal(result.scorers, 0, 'and nobody is credited with it');
+    assert.equal(result.postedToPicture, 0,
+      'and the picture is never told about it, so it cannot show a goal the save does not have');
+    assert.equal(result.saidSomething, true, 'the commentary says a save rather than going quiet');
+    assert.ok(result.saves >= 20, 'and the goalkeeper is credited with the saves');
+    assert.equal(result.scoreAfter, '5,0', 'with the calibrator idle every goal counts');
+    assert.equal(result.postedAfter, 5, 'and every one of them reaches the picture');
+  });
+
 test('the tab you are on is the tab that is lit', { timeout: 45000 }, async (t) => {
   const game = await createGame();
   t.after(() => game.close());

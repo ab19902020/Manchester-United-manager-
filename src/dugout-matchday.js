@@ -72,8 +72,15 @@
   /* how far ahead of the broadcast the save is allowed to run, in match
      minutes, so a goal is known before the picture is asked to show it */
   const LEAD = 2;
-  /* the latest minute a goal may be posted for: see `postGoals` */
-  const LATE_CAP = 80;
+  /* THE LATEST MINUTE A GOAL MAY BE POSTED FOR.
+     This was 80, which showed a 90th-minute winner on the broadcast
+     clock at 80' while the commentary read "90+2" — a ten-minute lie,
+     and the only way to get late goals on screen at all while the
+     engine's added time was time in which nobody played. With that
+     fixed the picture can be told the truth: 90 leaves a stoppage-time
+     goal falling due in stoppage, which is where it happened, and the
+     engine now plays football there. */
+  const LATE_CAP = 90;
 
   const state = {
     fixture: null,      /* the fixture the frame is currently showing   */
@@ -691,7 +698,9 @@
              whistle, a stoppage-time winner falls due while there is
              still football left to score it in, and the engine's own
              urgency -- and its spot kick, if open play will not oblige
-             -- has room to work. */
+             -- has room to work. The cap is 90 rather than the 80 it
+             needed before the engine played football in added time, so
+             a stoppage-time winner is shown in stoppage time. */
           minute: Math.min(LATE_CAP, num(parseFloat(String(goal.min)), 0)),
           team: goal.ci === fixture.h ? 0 : 1,
           pid: goal.pid != null ? String(goal.pid) : null,
