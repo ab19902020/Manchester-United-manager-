@@ -81,6 +81,16 @@ const SEED = +(process.argv[3] || 20260821);
     if (!md || !dug) return { fatal: 'the broadcast never loaded' };
     if (typeof md.simulateMatch !== 'function') return { fatal: 'no headless mode' };
 
+    /* SEEDED, BECAUSE THE FIRST VERSION OF THIS COMPARED NOISE.
+       The world is seeded but neither MatchSim nor the broadcast is, and
+       the broadcast leans on Math.random for every duel, every shot and
+       every save. Run twice with identical settings this rig reported
+       goals 1.57 minutes late with 38% of them from the spot, and then
+       3.38 minutes late with 54% — so the differences between candidate
+       settings it was being used to choose between were inside its own
+       spread. Seeding the stream makes a setting reproducible and two
+       settings comparable. */
+    Math.random = window.RBSWorldSeed.mulberry32(0x51ee0 >>> 0);
     const mem = G.clubs.filter((c) => c.league === 'PL').map((c) => c.i);
     const rows = [];
     for (let n = 0; n < want; n += 1) {
@@ -104,7 +114,24 @@ const SEED = +(process.argv[3] || 20260821);
       dug.postGoals(stub, fix);
 
       md.setHalfLength(240);
+      /* WHEN THE PICTURE ACTUALLY SHOWS IT. The commentary, the 2D
+         pitch and the scoreboard all read MatchSim's minute, so the
+         minute a goal was posted for IS the minute the rest of the game
+         says it happened. This records the broadcast's own clock at the
+         moment the goal goes in, which is the minute the Dugout says it
+         happened. The difference between the two is the only thing that
+         can make the same goal look like it arrived at two different
+         times. */
+      const shown = [];
+      const onGoal = () => {
+        try {
+          const m2 = parseFloat(String(md.getState().minute));
+          shown.push(Number.isFinite(m2) ? m2 : null);
+        } catch (e) { shown.push(null); }
+      };
+      md.on('goal', onGoal);
       const st = md.simulateMatch({ maxTicks: 400000 });
+      md.off('goal', onGoal);
       const sc = md.scriptState();
       rows.push({
         save: [fix.hs, fix.as],
@@ -112,11 +139,19 @@ const SEED = +(process.argv[3] || 20260821);
         completed: !!st.completed,
         owed: sc.remaining,
         refused: sc.blocked,
+        forced: sc.forced || 0,
         scorers: (fix.sc || []).map((g) => String(g.name)),
         performed: sc.events.filter((e) => e.fired).length,
         /* which minutes were asked for, and which of them arrived */
         mins: sc.events.map((e) => e.minute + (e.fired ? '' : '!')).join(' '),
         ftAt: m.ftAt,
+        shown,
+        /* against the minute the SAVE recorded, which is what the
+           commentary, the 2D pitch and the scoreboard all show — not
+           against the minute the picture was asked for, which is
+           deliberately earlier */
+        lag: (fix.sc || []).map((g, k) => (shown[k] == null ? null
+          : shown[k] - parseFloat(String(g.min)))).filter((v) => v != null),
       });
     }
     return { rows };
@@ -125,20 +160,40 @@ const SEED = +(process.argv[3] || 20260821);
   if (out.fatal) { console.log(out.fatal); await browser.close(); return; }
 
   console.log('\n  match      save   picture   agree   owed   refused   goal minutes (! = never shown)');
-  let agree = 0, refused = 0, owed = 0;
+  let agree = 0, refused = 0, owed = 0, forced = 0, goals = 0;
   out.rows.forEach((r, i) => {
     const ok = r.picture[0] === r.save[0] && r.picture[1] === r.save[1] && r.owed === 0;
     if (ok) agree += 1;
-    refused += r.refused; owed += r.owed;
+    refused += r.refused; owed += r.owed; forced += r.forced;
+    goals += r.save[0] + r.save[1];
     console.log('  ' + String(i + 1).padStart(5)
       + r.save.join('-').padStart(10) + r.picture.join('-').padStart(10)
       + (ok ? '     yes' : '      NO').padStart(8)
       + String(r.owed).padStart(7) + String(r.refused).padStart(10)
       + '   ' + r.mins.padEnd(18) + '  ft ' + r.ftAt + (r.completed ? '' : '   NEVER REACHED THE WHISTLE'));
   });
+  /* how far apart the two clocks are when the same goal lands */
+  const lags = [];
+  out.rows.forEach((r) => (r.lag || []).forEach((v) => lags.push(v)));
+  if (lags.length) {
+    lags.sort((a, b) => a - b);
+    const mean = lags.reduce((t, v) => t + v, 0) / lags.length;
+    const pick = (q) => lags[Math.min(lags.length - 1, Math.floor(lags.length * q))];
+    console.log('\n  HOW LATE THE PICTURE IS, in match minutes, against the minute the');
+    console.log('  commentary and the scoreboard give the same goal — ' + lags.length + ' goals');
+    console.log('    average ' + mean.toFixed(2)
+      + '    median ' + pick(0.5).toFixed(2)
+      + '    9 in 10 within ' + pick(0.9).toFixed(2)
+      + '    worst ' + lags[lags.length - 1].toFixed(2));
+    const same = lags.filter((v) => Math.abs(v) < 1).length;
+    console.log('    ' + Math.round(same / lags.length * 100)
+      + '% land inside the same match minute');
+  }
   console.log('\n  ' + agree + ' of ' + out.rows.length
     + ' matches ended with the picture showing exactly the score the save recorded');
   console.log('  ' + owed + ' goals were still owed at the whistle across all of them');
+  console.log('  ' + forced + ' of ' + goals + ' goals had to be manufactured with a spot kick'
+    + (goals ? '   (' + Math.round(forced / goals * 100) + '% of them)' : ''));
   console.log('  ' + refused + ' goals the picture would have scored on its own were refused'
     + (refused ? '' : '   — WITHOUT ANY REFUSALS THIS RUN PROVES NOTHING'));
   console.log('\npage errors: ' + (errors.length ? errors.slice(0, 3).join(' | ') : 'none'));

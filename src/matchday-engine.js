@@ -5292,6 +5292,10 @@ window.Matchday = {
     return out;
   },
   scriptState(){ return {active:SCRIPT.active, blocked:SCRIPT.blocked,
+    /* how many owed goals the spot-kick fallback had to manufacture,
+       because open play would not oblige in time. A high number is a
+       picture full of penalties, which is its own kind of wrong. */
+    forced:SCRIPT.forced,
     remaining:SCRIPT.events.filter(e=>!e.fired).length,
     events:SCRIPT.events.map(e=>({minute:e.minute, team:e.team, scorer:e.scorer, fired:e.fired}))}; },
   FINISHES: Object.keys(FINISH),
