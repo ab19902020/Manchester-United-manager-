@@ -4083,7 +4083,15 @@ function scriptTick(){
   const late = now - due.minute;
   const wait = SCRIPT.penWait || 0;
   SCRIPT.penWait = wait + (1/60);
-  if(!SCRIPT.penAt) SCRIPT.penAt = 5 + Math.random()*5;   // jittered, so the fallback
+  /* THE SPOT KICK IS A LAST RESORT AGAIN. It used to fire five minutes
+     after a goal fell due, which beat open play to about half of them —
+     measured, and a picture where half the goals are penalties is not
+     football. It only had to be that quick because the goal had a
+     minute to hit; it does not any more. Whatever minute the picture
+     lands on becomes the minute, so the only real deadline is the
+     whistle, and the referee already plays on past that while a goal is
+     owed. Twelve minutes and up to six more lets the move come off. */
+  if(!SCRIPT.penAt) SCRIPT.penAt = 12 + Math.random()*6;   // jittered, so the fallback
   const limit = S.stoppage > 0 ? 1.5 : SCRIPT.penAt;      // never lands on the same minute
   /* EACH ATTEMPT COMES SOONER THAN THE LAST.
      This used to wait six seconds, award a spot kick, and then reset

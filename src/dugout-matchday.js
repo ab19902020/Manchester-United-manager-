@@ -263,6 +263,7 @@
     on: false,         /* and this is whether it is actually driving      */
     ended: false,
     posted: 0,         /* goals already handed to the picture             */
+    waiting: [],       /* scored by the save, not yet shown by the picture */
     xi: [null, null],  /* who was on the pitch a moment ago, by side       */
   };
 
@@ -282,7 +283,7 @@
 
   function liveStart(md, match, fixture) {
     LIVE.on = true; LIVE.ended = false; LIVE.xi = [null, null];
-    LIVE.posted = 0;
+    LIVE.posted = 0; LIVE.waiting = [];
     state.fixture = fixture;
     if (LIVE.hooked) return;
     LIVE.hooked = true;
@@ -291,6 +292,11 @@
          goal, and that used to be what moved the score. Now it is the
          picture catching up with a goal the save has already scored, so
          there is nothing for the save to do about it. */
+      /* THE PICTURE HAS JUST SCORED ONE OF OURS. Not a goal of its own —
+         an armed script refuses those — so this is the save's oldest
+         unshown goal for that side arriving, and the minute it arrived
+         on is the minute it happened. */
+      md.on('goal', (ev) => stampMinute(md, ev));
       md.on('fulltime', () => { LIVE.ended = true; drainToFullTime(); });
     } catch (error) { LIVE.hooked = false; }
     void match;
@@ -675,7 +681,99 @@
      The one thing lost is that the picture can no longer surprise the
      save. That was the point of the old arrangement and it is the thing
      that had to go: a view of a match cannot also be the match.
+
+     ---------------------------------------------------------------------
+     AND THE MINUTE IS THE PICTURE'S TO CHOOSE
+
+     MatchSim decides THAT a goal happens and WHO scores it. It does not
+     decide WHEN it is seen to happen, because it cannot: the broadcast
+     needs a few minutes of pressure to build a goal out of open play,
+     and a minute chosen in advance is a minute the picture then has to
+     hit. Measured, it could not: goals arrived a few minutes late and
+     about half of them had to be manufactured with a spot kick, because
+     the fallback beat the football to it.
+
+     So the save's goal is held the moment it is scored, the picture is
+     asked for it with no deadline beyond the whistle, and when the
+     picture scores it the save's record is stamped with the minute the
+     picture put on it. One minute exists rather than two, so the
+     commentary, the report and the Dugout cannot disagree about it —
+     and with no minute to hit, the picture has as long as it needs and
+     the spot kick goes back to being a last resort.
+
+     The score, the scorer, the penalty flag, the ratings, the morale
+     and the stats are all still MatchSim's, decided at the moment
+     MatchSim decided them. Only the timestamp is the picture's.
      ===================================================================== */
+
+  /* WHAT THE SAVE JUST SCORED, WAITING TO BE SEEN.
+     MatchSim's goal() is called, in full, at the moment MatchSim decides
+     it — so the score, the scorer, the ratings, the morale, the stats
+     and the goal-rate calibrator all happen exactly as they do in every
+     other view. This only remembers where the record went, so the
+     minute on it can be corrected to the picture's when the picture
+     gets there. A goal the calibrator turns down never reaches here,
+     because nothing was written. */
+  if (typeof MatchSim === 'function' && MatchSim.prototype
+      && typeof MatchSim.prototype.goal === 'function') {
+    const passGoal = MatchSim.prototype.goal;
+    MatchSim.prototype.goal = function goalAwaitingThePicture(A) {
+      const fixture = this.fix;
+      if (!LIVE.on || this !== (MU && MU.m) || !fixture || !fixture.sc) {
+        return passGoal.apply(this, arguments);
+      }
+      const before = fixture.sc.length;
+      const feedBefore = (this.feed || []).length;
+      const out = passGoal.apply(this, arguments);
+      try {
+        if (fixture.sc.length > before) {
+          const entry = fixture.sc[fixture.sc.length - 1];
+          /* the commentary line carries the same minute and has to move
+             with it, or the feed and the report disagree instead */
+          let line = null;
+          for (let i = (this.feed || []).length - 1; i >= feedBefore; i -= 1) {
+            if (this.feed[i] && this.feed[i].cls === 'goal') { line = this.feed[i]; break; }
+          }
+          LIVE.waiting.push({
+            team: entry.ci === fixture.h ? 0 : 1, entry, line,
+          });
+        }
+      } catch (error) { /* the goal stands; only its timestamp is at risk */ }
+      void A;
+      return out;
+    };
+  }
+
+  /* the picture has shown one: give the save its minute */
+  function stampMinute(md, ev) {
+    if (!LIVE.on || !LIVE.waiting.length) return;
+    const team = (ev && ev.team === 1) ? 1 : 0;
+    let ix = LIVE.waiting.findIndex((w) => w.team === team);
+    /* the broadcast names a side for every goal, but if it ever did not
+       the oldest unshown one is still the right answer */
+    if (ix < 0) ix = 0;
+    const w = LIVE.waiting.splice(ix, 1)[0];
+    /* the event carries the clock at the instant the ball crossed the
+       line, which is a truer answer than asking afterwards */
+    const min = (ev && ev.minute)
+      ? String(ev.minute).replace(/[^0-9+]/g, '') : pictureMinute(md);
+    if (!min) return;
+    try {
+      if (w.entry) w.entry.min = min;
+      if (w.line) w.line.min = min;
+      repaint();
+    } catch (error) { /* the minute stays as the save had it */ }
+  }
+
+  /* THE MINUTE THE PICTURE PUT ON IT. The broadcast's clock reads "46'"
+     or "90+2'"; the save's minute is the same shape, so this is mostly
+     a matter of dropping the apostrophe. */
+  function pictureMinute(md) {
+    try {
+      const raw = String(md.getState().minute || '').replace(/[^0-9+]/g, '');
+      return raw || null;
+    } catch (error) { return null; }
+  }
 
   /* Every goal the save has already handed to the broadcast, so the same
      one is never posted twice. */
@@ -701,7 +799,23 @@
              -- has room to work. The cap is 90 rather than the 80 it
              needed before the engine played football in added time, so
              a stoppage-time winner is shown in stoppage time. */
-          minute: Math.min(LATE_CAP, num(parseFloat(String(goal.min)), 0)),
+          /* DUE AS SOON AS THE PICTURE HEARS OF IT, which is where its
+             clock already is: the save runs LEAD minutes ahead, so the
+             minute it scored one is LEAD minutes past the picture's own.
+             It is not chasing a timestamp any more — whatever minute it
+             lands on becomes the minute, so the only deadline is the
+             whistle, and it may take as long as the football takes.
+
+             Deriving this from the save's minute rather than reading the
+             broadcast's clock keeps it honest when the two are not in
+             lockstep — the clock is only correct at the instant a live
+             frame is being paced, and a rig, a stall or a tab change can
+             all call this at some other moment. LATE_CAP keeps a goal
+             the save records deep in its own added time inside the
+             broadcast's clock, which reaches 90 and a stoppage of its
+             own. */
+          minute: Math.max(0, Math.min(LATE_CAP,
+            num(parseFloat(String(goal.min)), 0) - LEAD)),
           team: goal.ci === fixture.h ? 0 : 1,
           pid: goal.pid != null ? String(goal.pid) : null,
           scorer: goal.name ? shortName({ name: goal.name }) : null,
@@ -876,7 +990,8 @@
       ACTIONS.kickoff = function kickoffIntoTheBroadcast() {
         /* every match starts out expecting to be watched, whatever the
            last one had to fall back to */
-        LIVE.want = true; LIVE.on = false; LIVE.ended = false; LIVE.posted = 0;
+        LIVE.want = true; LIVE.on = false; LIVE.ended = false;
+        LIVE.posted = 0; LIVE.waiting = [];
         LIVE.began = 0; LIVE.xi = [null, null];
         state.started = false; state.failed = false; state.lastSpeed = -1;
         const out = passKick.apply(this, arguments);
@@ -928,7 +1043,7 @@
     window.RBSDugoutMatchday = Object.freeze({
       setFull, watching, watchGuard,
       squadFor, planFor, settle, api, FRAME_ID, state,
-      LIVE, postGoals, bMinute, liveDriving,
+      LIVE, postGoals, stampMinute, pictureMinute, bMinute, liveDriving,
     });
   } catch (error) { /* no window */ }
 }());

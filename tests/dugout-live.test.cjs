@@ -220,6 +220,67 @@ test('a goal the calibrator turns down never reaches the score or the picture',
     assert.equal(result.postedAfter, 5, 'and every one of them reaches the picture');
   });
 
+/* =====================================================================
+   ONE MINUTE EXISTS, NOT TWO
+   ---------------------------------------------------------------------
+   MatchSim decides THAT a goal happens and WHO scores it. It cannot
+   decide WHEN it is seen to happen, because the broadcast needs a few
+   minutes of pressure to build a goal out of open play. So the save's
+   record is stamped with the minute the picture put on it, and the
+   commentary line moves with it — otherwise the feed and the report
+   disagree with each other as well as with the Dugout.
+   ===================================================================== */
+test('the minute in the save is the minute the picture gave it',
+  { timeout: 45000 }, async (t) => {
+    const game = await createGame();
+    t.after(() => game.close());
+    await startCareer(game, 'One Minute');
+
+    const result = game.eval(`(()=>{
+    G.day=nextUserFixture().day;
+    UI.view='home';render();ACTIONS.advance();
+    ACTIONS.kickoff();
+    const api=window.RBSDugoutMatchday, m=MU.m, f=MU.fix;
+    m._varOff=true;
+    try{ goalCal(f.div).trim=0; }catch(e){}
+    api.LIVE.on=true; api.LIVE.posted=0; api.LIVE.waiting=[];
+    const home=m.sides[0], away=m.sides[1];
+    const hs=home.onfield.find(x=>x.slot!=='GK');
+    const as=away.onfield.find(x=>x.slot!=='GK');
+    const out={};
+
+    m.goal(home,away,hs,null,null,false);
+    m.goal(away,home,as,null,null,false);
+    out.queued=api.LIVE.waiting.length;
+    out.asScored=f.sc.map(g=>String(g.min)).join(',');
+
+    /* the picture gets there, away side first — it may build them in a
+       different order from the one the save scored them in */
+    const feedMin=()=>m.feed.filter(e=>e.cls==='goal').map(e=>String(e.min)).join(',');
+    api.stampMinute({getState:()=>({minute:"71'"})},{team:1,minute:"71'"});
+    api.stampMinute({getState:()=>({minute:"78'"})},{team:0,minute:"78'"});
+    out.left=api.LIVE.waiting.length;
+    out.stamped=f.sc.map(g=>String(g.min)).join(',');
+    out.feed=feedMin();
+
+    /* a goal nobody is waiting for must not rewrite anything */
+    api.stampMinute({getState:()=>({minute:"90'"})},{team:0,minute:"90'"});
+    out.after=f.sc.map(g=>String(g.min)).join(',');
+
+    api.LIVE.on=false;
+    return out;
+  })()`);
+
+    assert.equal(result.queued, 2, 'both goals wait for the picture to place them');
+    assert.equal(result.stamped, '78,71',
+      'the home goal takes the minute the picture gave the home goal, and the away goal its own');
+    assert.equal(result.feed, '78,71',
+      'and the commentary line moves with it, so the feed and the report agree');
+    assert.equal(result.left, 0, 'nothing is left waiting');
+    assert.equal(result.after, '78,71',
+      'a goal nobody was waiting for changes nothing — the picture cannot invent one');
+  });
+
 test('the tab you are on is the tab that is lit', { timeout: 45000 }, async (t) => {
   const game = await createGame();
   t.after(() => game.close());
