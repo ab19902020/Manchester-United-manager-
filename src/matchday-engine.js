@@ -4083,7 +4083,15 @@ function scriptTick(){
   const late = now - due.minute;
   const wait = SCRIPT.penWait || 0;
   SCRIPT.penWait = wait + (1/60);
-  if(!SCRIPT.penAt) SCRIPT.penAt = 5 + Math.random()*5;   // jittered, so the fallback
+  /* THE SPOT KICK IS A LAST RESORT AGAIN. It used to fire five minutes
+     after a goal fell due, which beat open play to about half of them —
+     measured, and a picture where half the goals are penalties is not
+     football. It only had to be that quick because the goal had a
+     minute to hit; it does not any more. Whatever minute the picture
+     lands on becomes the minute, so the only real deadline is the
+     whistle, and the referee already plays on past that while a goal is
+     owed. Twelve minutes and up to six more lets the move come off. */
+  if(!SCRIPT.penAt) SCRIPT.penAt = 12 + Math.random()*6;   // jittered, so the fallback
   const limit = S.stoppage > 0 ? 1.5 : SCRIPT.penAt;      // never lands on the same minute
   /* EACH ATTEMPT COMES SOONER THAN THE LAST.
      This used to wait six seconds, award a spot kick, and then reset
@@ -4993,22 +5001,35 @@ function tick(dt){
   /* the last few seconds of live play, kept so a goal can be shown again */
   replayRecord(dt);
   scriptTick();
+  /* A referee plays added time, and so does this. If the plan is still
+     owed a goal we keep going — with urgency at its highest — rather
+     than blowing the whistle on a scoreline that disagrees with the
+     save file. Capped, so a plan that can never be satisfied still ends
+     the match.
+
+     AND THE FOOTBALL CARRIES ON WHILE IT DOES, which it did not. This
+     block used to `return` as soon as it had added a slice of stoppage,
+     and every line that plays the match -- aiPlayer, resolvePossession,
+     stepBall, checkRules -- sits below it. So the added time invented to
+     let an owed goal be scored was added time in which nobody moved:
+     the clock ran, the scoreboard updated, twenty-two men stood still,
+     and the goal could not possibly arrive. The match then blew up on
+     the safety cap with the plan unpaid.
+
+     Measured before and after, twelve matches each: goals the save
+     recorded after the 87th minute were never shown, and the only way
+     to get them on screen was to post them a full ten minutes early.
+     With the football actually being played in stoppage they arrive at
+     the minute they happened. */
+  let addedTime = false;
   if(S.clock >= S.halfLen){
-    /* A referee plays added time, and so does this. If the plan is still
-       owed a goal we keep going — with urgency at its highest — rather
-       than blowing the whistle on a scoreline that disagrees with the
-       save file. Capped, so a plan that can never be satisfied still
-       ends the match. */
-    if(S.half===2 && SCRIPT.active && SCRIPT.events.some(e=>!e.fired)){
+    if(S.half===2 && SCRIPT.active && SCRIPT.events.some(e=>!e.fired)
+       && (S.stoppage||0) < S.halfLen*2.0){
       S.stoppage = (S.stoppage||0) + dt;
-      /* WAS 0.30 OF A HALF, WHICH RAN OUT. The referee here keeps the
-         match alive until the plan is paid, because ending on a
-         scoreline that disagrees with the save is the one thing this
-         mode exists to prevent. Two halves' worth is a safety net for a
-         plan that genuinely cannot be satisfied -- with the escalating
-         spot kick above, it is never reached in practice. */
-      if(S.stoppage < S.halfLen*2.0){ const c=el('clock'); if(c) c.textContent = fmtClock(); return; }
+      addedTime = true;
     }
+  }
+  if(S.clock >= S.halfLen && !addedTime){
     if(S.half===1){
       S.phase='half'; S.freeze=6;   /* long enough to actually walk off */
       lowerThird('HT', S.score[0]+' — '+S.score[1], TEAMS[0].abbr+' v '+TEAMS[1].abbr);
@@ -5279,6 +5300,10 @@ window.Matchday = {
     return out;
   },
   scriptState(){ return {active:SCRIPT.active, blocked:SCRIPT.blocked,
+    /* how many owed goals the spot-kick fallback had to manufacture,
+       because open play would not oblige in time. A high number is a
+       picture full of penalties, which is its own kind of wrong. */
+    forced:SCRIPT.forced,
     remaining:SCRIPT.events.filter(e=>!e.fired).length,
     events:SCRIPT.events.map(e=>({minute:e.minute, team:e.team, scorer:e.scorer, fired:e.fired}))}; },
   FINISHES: Object.keys(FINISH),

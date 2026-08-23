@@ -4,6 +4,132 @@
 
 ### Changed
 
+- **The Dugout is a view of the match again, not the match.** Watching in the
+  Dugout was a different game from watching the same match on the Pitch tab,
+  reading it as rolling text, or simulating it. While the broadcast was
+  driving, a goal MatchSim scored for itself was turned into "a chance that
+  did not quite come off" and the goals that counted were the ones the picture
+  scored. No season measurement could ever have caught it, because every one
+  of them runs through `quickSim`.
+
+  **MatchSim decides in every view now**, and the broadcast performs what it
+  decided. Two mechanisms hold it: each goal is posted to the picture through
+  the engine's own `addGoal` as the save scores it, and the script is armed
+  empty at kick-off so an active script refuses every goal the picture is not
+  owed. Across forty matches it refused 473 of its own.
+
+  **And the minute is the picture's to choose.** MatchSim decides *that* a
+  goal happens and *who* scores it; it cannot decide *when* it is seen,
+  because the broadcast needs a few minutes of pressure to build one out of
+  open play, and a minute fixed in advance is a minute the picture then has to
+  hit — measured, it could not. So the save's record, and the commentary line
+  with it, takes the minute the picture put on it. One minute exists rather
+  than two. The score, the scorer, the penalty flag, the ratings, the morale
+  and the stats are all still MatchSim's.
+
+  Verified over forty matches with real squads, through the engine's own
+  headless mode:
+
+  | | |
+  |---|---|
+  | picture showed exactly the score the save recorded | **40 of 40** |
+  | every goal's minute agreed, save against picture | **40 of 40** |
+  | goals still owed at the whistle | **0** |
+
+  The cost, stated plainly: the picture takes about six match minutes to build
+  a goal, so one the engine simulated at 40' is recorded at about 46'. The
+  result is untouched; the timestamp is the broadcast's.
+
+- **Added time in which nobody played.** The broadcast engine kept a match
+  alive while a goal was still owed — but the `return` that added the stoppage
+  sat above every line that plays the match, so the added time invented to let
+  that goal be scored was added time in which the clock ran, the scoreboard
+  updated and twenty-two men stood still. The goal could not arrive and the
+  match blew up on its safety cap with the plan unpaid. It was why goals the
+  save recorded after the 87th minute were never shown at all.
+
+- **The league table measures right, and the entry below overstates its own
+  precision.** Thirty seasons of the shipped engine, played on one world seed
+  with the match stream seeded so the run repeats:
+
+  | Premier League | measured | real |
+  |---|---|---|
+  | champion | 85.3 | 87.6 |
+  | 2nd | 80.0 | 80.5 |
+  | 4th | 71.8 | 70.1 |
+  | mid-table | 48.7 | ~49 |
+  | bottom club | 21.5 | 20.7 |
+  | goals a game | 2.7 | 2.8 |
+  | champion is the *n*th best squad | #2.7 | #2 |
+  | table against squad strength | 2.6 places out | ~3 |
+
+  Thirty seasons produced eight different champions. Two things follow from
+  that table, and both are corrections.
+
+  The first is that the entry below quotes before-and-after numbers to one
+  decimal from four seasons of a rig that seeded the world but not the
+  football. MatchSim calls `Math.random` for the possession contest, every
+  gate, every shot and every save, so two runs of identical code play
+  different seasons: the same settings measured twice returned a champion on
+  84.7 and then on 79.7. The change it describes is real and the direction is
+  right, but four unpaired seasons cannot support one-decimal precision and
+  those figures should be read as "about eighty, then about eighty-seven".
+
+  The second is that a claim made after it — that the champion was six points
+  short and the top of the table would not separate — came from the same
+  four-season measurement and is simply wrong. Measured properly the champion
+  is within two points of real football and second, fourth, mid-table and the
+  bottom club are within one or two. **No balance value has been changed on
+  account of it.**
+
+  What is wrong is narrower: the game draws **27.3%** of league matches
+  against a real 24%, finishes 0-0 in 9.6% against a real ~8%, and wins at
+  home 40.9% of the time against a real 45%. Away wins are already right, at
+  31.7% against 31%.
+
+  The cause is not the match engine. Played with squads reset to full
+  condition, morale and fitness before every match, the same engine draws
+  25.2% and finishes only **4.4%** goalless, scoring 2.92 a game on 14.7 shots
+  a side. The surplus arrives with what a season leaves on a squad —
+  injuries, morale, sharpness — and whether the game over-models those is the
+  open question. The goals are not even over-dispersed: variance over mean is
+  0.84, slightly *under*, so nothing is bunching goals into matches.
+
+  **Every mechanism that could plausibly cause it has now been measured and
+  ruled out**, each over 4,560 matches or more, and the draw rate sits between
+  27.3% and 28.2% through all of them: the gate clamps, slopes and
+  multipliers; the squad-average compression; the shot conversion slope; two
+  poor squads meeting (4.9% goalless against 4.4% overall); the day-form range
+  (widening it 0.90–1.10 to 0.82–1.18 moved the split half a point); home
+  advantage; the calendar (five days' recovery between matchdays and seven
+  give identical results — condition saturates by five); the late-game "park"
+  term, below; and the response to conceding, where removing it *entirely*
+  moves draws 27.3% → 27.7% and one-all 11.6% → 11.4% while costing the
+  champion three points. Squad wear is not excessive either: 2.6 players
+  unavailable a club against a real 3 or 4.
+
+  So the draw rate is a structural property of the match model — a per-minute
+  possession contest feeding two gates and a shot — and not of any parameter
+  in it. Closing the last three points needs a change to the model's shape,
+  which is a far larger piece of work than tuning and ought to be a deliberate
+  decision rather than something slipped in. Nothing further should be
+  attempted by turning knobs.
+
+- **A comment that lied about its own code, and the code was right.** In the
+  last ten minutes the engine gives one side 5% more defensive resistance.
+  `agf` is the goals of the side with the ball, so the condition `aga<agf`
+  fires when the side *defending* is losing — a team a goal down digs in while
+  it chases. The comment beside it said "leading side digs in", the exact
+  opposite, and it read like a one-character typo.
+
+  It was measured before being touched. Swapping the condition to match the
+  comment made every headline number worse over twelve seasons: home wins
+  40.9% → 39.0% against a real 45%, draws 27.3% → 28.2% against a real 24%,
+  the champion 84.5 → 82.3, and the table followed squad quality *less*
+  closely, the champion falling from the 2.3rd best squad to the 3.5th. The
+  engine has been balanced around the behaviour it actually has, so the code
+  stands and the comment was corrected to describe it.
+
 - **Winning the league costs what it should.** Premier League champions were
   averaging 76 points across five measured seasons — one title won on **69
   with eleven defeats** — against a real ~87.
@@ -51,6 +177,48 @@
   own controller, capturing every division's final table, the cup winners and
   the golden boot inside `endSeason`, which is the last moment the standings
   still exist.
+- **`scripts/sweep-balance.cjs`** — what the table *would* look like under
+  different balance settings, several settings a run, one browser and one
+  seeded world. It does not play seasons: three seasons a candidate carries
+  about five points of noise on a champion's total and every difference worth
+  arguing about is smaller than that. Instead it plays each of the 380
+  fixtures several times, counts its win/draw/loss probabilities, and then
+  draws the table three thousand times from those in arithmetic — which
+  removes the noise rather than averaging over it. The last row of every
+  report is the control measured a second time, and the report says in words
+  whether it reproduced.
+
+  It also reports what the strongest and weakest squads score and concede as a
+  multiple of the division's average, which is where real football gives a
+  target that is not an average of averages: a champion scores about 1.70
+  times its division's average and concedes about 0.62 times it.
+
+  What it deliberately leaves out is everything a season does to a squad over
+  its length — fatigue, injuries, suspensions, form — so a setting it likes is
+  played out in `measure-title-race.cjs`, which now takes balance overrides as
+  a fifth argument, before anyone believes it. Comparing the two says the
+  played season spreads noticeably wider at both ends.
+- **`scripts/measure-scoreline-shape.cjs`** — what is underneath the
+  scoreline. For thousands of matches it records how many shots each side had
+  and how many went in, and reports the shot count and its spread, how often a
+  side fails to score, the variance of the match's goal total against its mean
+  (Poisson has them equal, so anything above 1.0 is goals bunching into
+  matches), and all of it split by whether the two squads are both good, both
+  poor, or mismatched. It is what established that this game's draw surplus is
+  not in the match engine at all.
+- **Named balance constants.** The numbers that decide how much of the gap
+  between two squads survives into the result were literals scattered through
+  `tickOnce` and one patch layer: the clamps on possession, on getting out of
+  your own half and on turning possession into a sight of goal, the slopes
+  under each of those sigmoids, the multipliers over them, how much a
+  finisher's advantage over a goalkeeper counts, how far squad averages are
+  pulled towards the mean, and what playing at home is worth in each of three
+  places. They are now one `SPREAD` object with the reasoning written beside
+  them, so a tuning run is an argument rather than an edit. **Every value is
+  exactly what it was**; this is instrumentation, not a balance change, and
+  `tests/balance-constants.test.cjs` reads all nineteen out of the running
+  game and checks them against the literals they replaced, so that claim is
+  verifiable rather than a promise and the numbers cannot drift unnoticed.
 
 ### Fixed
 

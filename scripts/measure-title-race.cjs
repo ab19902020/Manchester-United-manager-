@@ -7,18 +7,30 @@
  * A whole season of a division, played with the game's own quickSim and
  * nothing else -- no days advancing, no transfers, no cups -- so a
  * season takes seconds rather than minutes and a tuning change can be
- * judged straight away.
+ * judged straight away. The world and the match stream are both seeded,
+ * so the same arguments produce the same football every time; two runs
+ * of this script can be compared to each other, which before they could
+ * not be.
  *
  * It reports the numbers a league table is judged on: what the champion
  * finished on, what the gap to second and to fourth was, and how tight
  * the whole thing is. Real English football, for reference:
  *
- *   Premier League   champion 87   2nd 80   4th 69   17th 36   spread 52
- *   Championship     champion 95   2nd 90   6th 78   21st 46   spread 55
+ *   Premier League   champion 87.6   2nd 80.5   4th 70   17th 38   20th 21
+ *   Championship     champion 95     2nd 90     6th 78   21st 46
  *
- * The Premier League number is the one that has been wrong: five
- * measured seasons averaged a champion on 76, one of them on 69 with
- * eleven defeats.
+ * WHERE THE BOTTOM NUMBER CAME FROM, AND WHY IT CHANGED. This rig used
+ * to carry 24 for the bottom club and 52 for the spread, and both were
+ * wrong. The club that finishes bottom of the Premier League has
+ * averaged about 21 over the last ten seasons — 17, 24, 31, 16, 21, 23,
+ * 22, 25, 16, 12 — so the spread from first to last is about 67, not
+ * 52. That mistake mattered: it made the game's bottom club, on 20.3,
+ * look four points too weak when it was already right, and it hid where
+ * the real fault is. The top figures are the ones to trust — the
+ * champion's 87.6 is the average of the thirty Premier League seasons
+ * before 2025-26 and second's 80.5 is the same measure; fourth has
+ * averaged about 70 over the last decade and the survival line, 18th
+ * plus one, about 36.
  */
 const CHROME = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
 const { chromium } = require('/opt/node22/lib/node_modules/playwright');
@@ -27,6 +39,17 @@ const path = require('path');
 const SEASONS = +(process.argv[2] || 6);
 const DIV = process.argv[3] || 'PL';
 const SEED = +(process.argv[4] || 20260821);
+/* A FIFTH ARGUMENT: overrides for SPREAD, as JSON, e.g.
+     node scripts/measure-title-race.cjs 8 PL 20260821 '{"chanceK":1.7}'
+   sweep-balance.cjs chooses settings against measured fixture
+   probabilities, which is precise but deliberately leaves out
+   everything a season does to a squad across its length — fatigue,
+   injuries, suspensions, a run of form. Those are exactly what this rig
+   has and that one does not, and comparing the two says the played
+   season spreads wider at both ends. So a setting is not accepted until
+   it has been played, and it can be played here without editing the
+   game. */
+const BAL = process.argv[5] ? JSON.parse(process.argv[5]) : null;
 
 (async () => {
   const browser = await chromium.launch({
@@ -38,7 +61,27 @@ const SEED = +(process.argv[4] || 20260821);
   await page.goto('file://' + path.resolve(__dirname, '..', 'index.html'));
   await page.waitForTimeout(2500);
 
-  const out = await page.evaluate(({ seasons, div, seed }) => {
+  const out = await page.evaluate(({ seasons, div, seed, bal }) => {
+    /* HOW LONG BETWEEN MATCHDAYS, IN DAYS OF RECOVERY. This rig has
+       always assumed three, which is the congested end of a real
+       calendar: 38 league matches across a nine-month season average
+       nearer seven days apart even allowing for cup ties. It matters
+       more than it looks. Played with rested squads the engine finishes
+       4.4% of matches goalless and scores 2.92 a game; played through a
+       season on three days' rest it finishes 11% goalless and scores
+       2.7. That difference is fatigue, so a rig that gets the schedule
+       wrong reports the game's scoring and its draw rate wrong, and
+       both were being read as faults in the match engine. */
+    let REST = 3;
+    if (bal) {
+      /* the day-form range is not part of SPREAD — it is a pair of
+         top-level lets — but it is the other half of the same question,
+         so the override argument takes it under the same names */
+      if (bal.REST != null) { REST = bal.REST; delete bal.REST; }
+      if (bal.DAY_LO != null) { DAY_LO = bal.DAY_LO; delete bal.DAY_LO; }
+      if (bal.DAY_RANGE != null) { DAY_RANGE = bal.DAY_RANGE; delete bal.DAY_RANGE; }
+      Object.assign(SPREAD, bal);
+    }
     const clear = () => ['startScreen', 'frontScreen', 'introScreen', 'splash']
       .forEach((id) => { const el = document.getElementById(id); if (el) el.remove(); });
     /* THE SAME WORLD EVERY RUN. Without this each measurement generates
@@ -104,6 +147,9 @@ const SEED = +(process.argv[4] || 20260821);
       return { w, d, l, gf: gf / n, ga: ga / n,
         hi: Math.round(strength(hi) * 10) / 10, lo: Math.round(strength(lo) * 10) / 10 };
     };
+    /* the duels are seeded too, on a stream of their own, so the head
+       to heads are repeatable without borrowing the seasons' numbers */
+    Math.random = window.RBSWorldSeed.mulberry32((seed ^ 0x5f37) >>> 0);
     const weakest = byStrength[byStrength.length - 1];
     const mid = byStrength[Math.floor(mem.length / 2)];
     const duels = {
@@ -125,6 +171,17 @@ const SEED = +(process.argv[4] || 20260821);
 
     const runs = [];
     for (let s = 0; s < seasons; s += 1) {
+      /* THE SAME SEASON EVERY RUN, not just the same world. MatchSim
+         calls Math.random for the possession contest, every gate, every
+         shot and every save, so two runs of identical code play
+         different football: this rig, run twice on this seed with
+         nothing changed, reported champions on 84.7 and on 79.7. Four
+         seasons carry roughly five points of noise on a champion's
+         total, which is bigger than most changes worth making, and any
+         before/after taken as two separate runs of this script was
+         measuring that noise as much as the change. Seeding the match
+         stream makes a run repeatable and a comparison real. */
+      Math.random = window.RBSWorldSeed.mulberry32((seed + 1013 * s) >>> 0);
       /* PRE-SEASON. Without this the squads never recover: condition
          drains match by match and is only ever restored by the day
          loop, so a rig that plays season after season back to back had
@@ -150,10 +207,37 @@ const SEED = +(process.argv[4] || 20260821);
          and between matchdays everybody recovers the way the game
          recovers them: about six a day, three days a match. */
       const rounds = rrPairs(mem);
+      /* EVERY LEAGUE MATCH, NOT A SELECTED PAIR OF THEM. The duels above
+         ask about two named clubs; this asks about the division. Real
+         English football splits 45 home wins, 24 draws and 31 away wins
+         in every hundred league matches, and the scoreline histogram
+         says whether the goals are spread the way football spreads them
+         or bunched into 1-1s. A league can arrive at the right champion
+         with entirely the wrong football underneath it. */
+      const split = { h: 0, d: 0, a: 0 };
+      const lines = {};
+      /* WHAT A SEASON LEAVES ON A SQUAD. Reset the squads before every
+         match and this engine draws 25.2% of them and finishes 4.4%
+         goalless; play a season and it draws 27.3% and finishes 9.6%
+         goalless. The difference is not the match engine, it is what
+         the players are carrying by the time they take the field, so
+         measure that against real football: a Premier League squad has
+         about three or four men unavailable at a time. */
+      const wear = { n: 0, out: 0, cond: 0, sharp: 0, morale: 0, men: 0 };
       rounds.forEach((round) => {
         mem.forEach((i) => (G.clubs[i].players || []).forEach((p) => {
-          if (!p.injury) p.cond = Math.min(100, p.cond + 6.1 * 3);
+          if (!p.injury) p.cond = Math.min(100, p.cond + 6.1 * REST);
         }));
+        mem.forEach((i) => {
+          const ps = G.clubs[i].players || [];
+          wear.n += 1;
+          wear.out += ps.filter((p) => p.injury).length;
+          ps.forEach((p) => {
+            if (p.injury) return;
+            wear.men += 1; wear.cond += p.cond;
+            wear.sharp += p.sharp; wear.morale += p.morale;
+          });
+        });
         round.forEach(([hi, ai]) => {
           const fix = { h: hi, a: ai, div, sc: [], hs: 0, as: 0, r: 0,
             day: 40 + (rounds.indexOf(round) * 7) % 260, played: false };
@@ -162,9 +246,11 @@ const SEED = +(process.argv[4] || 20260821);
           const H = row[hi], A = row[ai];
           H.p += 1; A.p += 1;
           H.gf += fix.hs; H.ga += fix.as; A.gf += fix.as; A.ga += fix.hs;
-          if (fix.hs > fix.as) { H.w += 1; A.l += 1; H.pts += 3; }
-          else if (fix.hs < fix.as) { A.w += 1; H.l += 1; A.pts += 3; }
-          else { H.d += 1; A.d += 1; H.pts += 1; A.pts += 1; }
+          if (fix.hs > fix.as) { H.w += 1; A.l += 1; H.pts += 3; split.h += 1; }
+          else if (fix.hs < fix.as) { A.w += 1; H.l += 1; A.pts += 3; split.a += 1; }
+          else { H.d += 1; A.d += 1; H.pts += 1; A.pts += 1; split.d += 1; }
+          const key = Math.min(fix.hs, 5) + '-' + Math.min(fix.as, 5);
+          lines[key] = (lines[key] || 0) + 1;
         });
       });
 
@@ -173,6 +259,9 @@ const SEED = +(process.argv[4] || 20260821);
       const goals = table.reduce((t, r) => t + r.gf, 0);
       const games = table.reduce((t, r) => t + r.p, 0) / 2;
       runs.push({
+        split, lines,
+        wear: { out: wear.out / wear.n, cond: wear.cond / wear.men,
+          sharp: wear.sharp / wear.men, morale: wear.morale / wear.men },
         champ: G.clubs[table[0].i].name,
         pts: table.map((r) => r.pts),
         champW: table[0].w, champD: table[0].d, champL: table[0].l,
@@ -204,7 +293,7 @@ const SEED = +(process.argv[4] || 20260821);
       pts: lastTable.byClub[i],
     }));
     return { runs, clubs: mem.length, duels, dump };
-  }, { seasons: SEASONS, div: DIV, seed: SEED });
+  }, { seasons: SEASONS, div: DIV, seed: SEED, bal: BAL });
 
   const avg = (f) => out.runs.reduce((t, r) => t + f(r), 0) / out.runs.length;
   const n = out.clubs;
@@ -232,6 +321,36 @@ const SEED = +(process.argv[4] || 20260821);
     + ' strongest squad   (real football: about #2)');
   console.log('  table vs strength   ' + avg((r) => r.rho).toFixed(1)
     + ' places out on average   (real football: about 3)');
+  /* the division as a whole, across every league match played */
+  const S = out.runs.reduce((t, r) => ({ h: t.h + r.split.h, d: t.d + r.split.d, a: t.a + r.split.a }),
+    { h: 0, d: 0, a: 0 });
+  const St = S.h + S.d + S.a;
+  if (St) {
+    console.log('\n  every league match, ' + St + ' of them');
+    console.log('    home wins  ' + (S.h / St * 100).toFixed(1) + '%   (real 45%)');
+    console.log('    draws      ' + (S.d / St * 100).toFixed(1) + '%   (real 24%)');
+    console.log('    away wins  ' + (S.a / St * 100).toFixed(1) + '%   (real 31%)');
+    const L = {};
+    out.runs.forEach((r) => Object.entries(r.lines)
+      .forEach(([k, v]) => { L[k] = (L[k] || 0) + v; }));
+    /* the ten commonest scorelines. Real English football, in order:
+       1-0, 2-1, 1-1, 0-0, 2-0, 0-1, 1-2, 3-1, 3-0, 2-2 — roughly 10, 9,
+       9, 8, 8, 6, 5, 4, 4, 4 in every hundred. If a game draws too many
+       matches, this says whether that is 0-0s or 1-1s. */
+    const top = Object.entries(L).sort((x, y) => y[1] - x[1]).slice(0, 10);
+    console.log('    commonest scorelines   ' + top
+      .map(([k, v]) => k + ' ' + (v / St * 100).toFixed(1) + '%').join('   '));
+  }
+  const W = out.runs.reduce((t, r) => ({ out: t.out + r.wear.out, cond: t.cond + r.wear.cond,
+    sharp: t.sharp + r.wear.sharp, morale: t.morale + r.wear.morale }),
+  { out: 0, cond: 0, sharp: 0, morale: 0 });
+  const wn = out.runs.length || 1;
+  console.log('\n  what a club carries on an average matchday');
+  console.log('    unavailable  ' + (W.out / wn).toFixed(1)
+    + ' players   (real football: about 3 or 4)');
+  console.log('    condition    ' + (W.cond / wn).toFixed(1) + '%');
+  console.log('    sharpness    ' + (W.sharp / wn).toFixed(1) + '%');
+  console.log('    morale       ' + (W.morale / wn).toFixed(1) + '%');
   const even = out.duels['evenly matched'];
   if (even) {
     const t = even.w + even.d + even.l;
