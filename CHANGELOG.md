@@ -4,6 +4,50 @@
 
 ### Changed
 
+- **The Dugout is a view of the match again, not the match.** Watching in the
+  Dugout was a different game from watching the same match on the Pitch tab,
+  reading it as rolling text, or simulating it. While the broadcast was
+  driving, a goal MatchSim scored for itself was turned into "a chance that
+  did not quite come off" and the goals that counted were the ones the picture
+  scored. No season measurement could ever have caught it, because every one
+  of them runs through `quickSim`.
+
+  **MatchSim decides in every view now**, and the broadcast performs what it
+  decided. Two mechanisms hold it: each goal is posted to the picture through
+  the engine's own `addGoal` as the save scores it, and the script is armed
+  empty at kick-off so an active script refuses every goal the picture is not
+  owed. Across forty matches it refused 473 of its own.
+
+  **And the minute is the picture's to choose.** MatchSim decides *that* a
+  goal happens and *who* scores it; it cannot decide *when* it is seen,
+  because the broadcast needs a few minutes of pressure to build one out of
+  open play, and a minute fixed in advance is a minute the picture then has to
+  hit — measured, it could not. So the save's record, and the commentary line
+  with it, takes the minute the picture put on it. One minute exists rather
+  than two. The score, the scorer, the penalty flag, the ratings, the morale
+  and the stats are all still MatchSim's.
+
+  Verified over forty matches with real squads, through the engine's own
+  headless mode:
+
+  | | |
+  |---|---|
+  | picture showed exactly the score the save recorded | **40 of 40** |
+  | every goal's minute agreed, save against picture | **40 of 40** |
+  | goals still owed at the whistle | **0** |
+
+  The cost, stated plainly: the picture takes about six match minutes to build
+  a goal, so one the engine simulated at 40' is recorded at about 46'. The
+  result is untouched; the timestamp is the broadcast's.
+
+- **Added time in which nobody played.** The broadcast engine kept a match
+  alive while a goal was still owed — but the `return` that added the stoppage
+  sat above every line that plays the match, so the added time invented to let
+  that goal be scored was added time in which the clock ran, the scoreboard
+  updated and twenty-two men stood still. The goal could not arrive and the
+  match blew up on its safety cap with the plan unpaid. It was why goals the
+  save recorded after the 87th minute were never shown at all.
+
 - **The league table measures right, and the entry below overstates its own
   precision.** Thirty seasons of the shipped engine, played on one world seed
   with the match stream seeded so the run repeats:
