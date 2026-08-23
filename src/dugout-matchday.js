@@ -356,6 +356,7 @@
   function repaint() {
     try {
       if (typeof renderTop === 'function') renderTop();
+      paintSeenScore();
       if (typeof fillFeed !== 'function') return;
       if (MU.tab === 'comm') fillFeed(document.getElementById('commList'), 200);
       else if (MU.tab === 'stats') { if (typeof renderStats === 'function') renderStats(); }
@@ -372,6 +373,7 @@
     const match = MU && MU.m;
     if (!match || match.done) return;
     LIVE.on = false;
+    releaseHeld();
     let guard = 0;
     while (!match.done && guard < 400) {
       if (match.stage === 'HT') match.tickOnce(); else match.tickOnce();
@@ -730,12 +732,28 @@
           const entry = fixture.sc[fixture.sc.length - 1];
           /* the commentary line carries the same minute and has to move
              with it, or the feed and the report disagree instead */
+          /* HELD, NOT REWRITTEN. Changing the minute on a line already
+             in the feed puts the commentary out of order: fillFeed
+             renders the feed in the order it was written and rebuilds
+             the whole thing from scratch on every tab change, so a goal
+             restamped from 40 to 46 reads 40', 41', 46' GOAL, 42'. The
+             line is lifted out here and put back when the picture
+             scores, which is the only moment the game knows what minute
+             to give it. Nothing after it exists yet -- this runs inside
+             the tick that scored it -- so removing it cannot disturb
+             anything already written. */
           let line = null;
           for (let i = (this.feed || []).length - 1; i >= feedBefore; i -= 1) {
-            if (this.feed[i] && this.feed[i].cls === 'goal') { line = this.feed[i]; break; }
+            if (this.feed[i] && this.feed[i].cls === 'goal') {
+              line = this.feed.splice(i, 1)[0];
+              break;
+            }
+          }
+          if (typeof MU === 'object' && MU && MU.lastFeed > this.feed.length) {
+            MU.lastFeed = this.feed.length;
           }
           LIVE.waiting.push({
-            team: entry.ci === fixture.h ? 0 : 1, entry, line,
+            team: entry.ci === fixture.h ? 0 : 1, entry, line, feed: this.feed,
           });
         }
       } catch (error) { /* the goal stands; only its timestamp is at risk */ }
@@ -760,9 +778,37 @@
     if (!min) return;
     try {
       if (w.entry) w.entry.min = min;
-      if (w.line) w.line.min = min;
+      /* and the commentary gets its line now, in its place, with the
+         minute the picture gave it */
+      if (w.line && w.feed) { w.line.min = min; w.feed.push(w.line); }
       repaint();
     } catch (error) { /* the minute stays as the save had it */ }
+  }
+
+  /* THE WHISTLE RELEASES ANYTHING STILL WAITING. A goal the picture
+     never got round to showing still happened -- the save has the score
+     and the scorer -- so its line goes back into the commentary with the
+     minute the save gave it rather than being lost. */
+  function releaseHeld() {
+    while (LIVE.waiting.length) {
+      const w = LIVE.waiting.shift();
+      try { if (w.line && w.feed) w.feed.push(w.line); } catch (error) { /* gone */ }
+    }
+  }
+
+  /* WHAT THE SCOREBOARD SAYS WHILE A GOAL IS WAITING. The save has
+     already counted it; the picture has not shown it yet. For those few
+     minutes the header shows what has been seen, so it cannot read 1-0
+     over a goalless picture. The save's own score is untouched -- this
+     is the header's text and nothing else. */
+  function paintSeenScore() {
+    if (!LIVE.on || !LIVE.waiting.length) return;
+    const f = MU && MU.fix;
+    const el = document.getElementById('mScore');
+    if (!f || !el) return;
+    let h = num(f.hs, 0), a = num(f.as, 0);
+    LIVE.waiting.forEach((w) => { if (w.team === 1) a -= 1; else h -= 1; });
+    el.textContent = Math.max(0, h) + '\u2013' + Math.max(0, a);
   }
 
   /* THE MINUTE THE PICTURE PUT ON IT. The broadcast's clock reads "46'"
@@ -1043,7 +1089,7 @@
     window.RBSDugoutMatchday = Object.freeze({
       setFull, watching, watchGuard,
       squadFor, planFor, settle, api, FRAME_ID, state,
-      LIVE, postGoals, stampMinute, pictureMinute, bMinute, liveDriving,
+      LIVE, postGoals, stampMinute, releaseHeld, pictureMinute, bMinute, liveDriving,
     });
   } catch (error) { /* no window */ }
 }());

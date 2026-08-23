@@ -249,19 +249,30 @@ test('the minute in the save is the minute the picture gave it',
     const as=away.onfield.find(x=>x.slot!=='GK');
     const out={};
 
+    const feedMin=()=>m.feed.filter(e=>e.cls==='goal').map(e=>String(e.min)).join(',');
     m.goal(home,away,hs,null,null,false);
     m.goal(away,home,as,null,null,false);
     out.queued=api.LIVE.waiting.length;
     out.asScored=f.sc.map(g=>String(g.min)).join(',');
+    /* the commentary has not been told yet: the picture has not shown
+       them, and a line written now would have to be rewritten later,
+       which is what put the feed out of order */
+    out.feedWhileWaiting=feedMin();
 
     /* the picture gets there, away side first — it may build them in a
        different order from the one the save scored them in */
-    const feedMin=()=>m.feed.filter(e=>e.cls==='goal').map(e=>String(e.min)).join(',');
     api.stampMinute({getState:()=>({minute:"71'"})},{team:1,minute:"71'"});
     api.stampMinute({getState:()=>({minute:"78'"})},{team:0,minute:"78'"});
     out.left=api.LIVE.waiting.length;
     out.stamped=f.sc.map(g=>String(g.min)).join(',');
     out.feed=feedMin();
+    /* and the feed is in the order the picture showed them, which is
+       the order a viewer saw them */
+    out.feedOrdered=(()=>{
+      const mins=m.feed.map(e=>parseFloat(String(e.min))).filter(v=>isFinite(v));
+      for(let i=1;i<mins.length;i++) if(mins[i]<mins[i-1]) return false;
+      return true;
+    })();
 
     /* a goal nobody is waiting for must not rewrite anything */
     api.stampMinute({getState:()=>({minute:"90'"})},{team:0,minute:"90'"});
@@ -272,10 +283,14 @@ test('the minute in the save is the minute the picture gave it',
   })()`);
 
     assert.equal(result.queued, 2, 'both goals wait for the picture to place them');
+    assert.equal(result.feedWhileWaiting, '',
+      'the commentary says nothing about a goal the picture has not shown yet');
     assert.equal(result.stamped, '78,71',
       'the home goal takes the minute the picture gave the home goal, and the away goal its own');
-    assert.equal(result.feed, '78,71',
-      'and the commentary line moves with it, so the feed and the report agree');
+    assert.equal(result.feed, '71,78',
+      'and the commentary carries both, in the order the picture showed them');
+    assert.equal(result.feedOrdered, true,
+      'so the minutes down the commentary never go backwards');
     assert.equal(result.left, 0, 'nothing is left waiting');
     assert.equal(result.after, '78,71',
       'a goal nobody was waiting for changes nothing — the picture cannot invent one');
