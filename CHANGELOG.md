@@ -4,6 +4,82 @@
 
 ### Changed
 
+- **A goal at forty reads forty everywhere, and the clock is what waits.**
+  "The forty minute goal can't be reading us forty six. It has to be all
+  correct no matter what."
+
+  Measured first, on the shipped build: **none of sixty goals** was recorded at
+  the minute the save scored it, average drift 9.3 minutes and worst 17. That
+  also corrects a claim I made earlier in this changelog — that live timing was
+  fine — which came from watching two goals rather than measuring sixty.
+
+  The cause is arithmetic, not a bug. A half in the Dugout is 150 seconds, so a
+  match minute is three and a third seconds of football, and no side can build a
+  goal out of open play inside one. The first attempt let the picture choose:
+  whatever minute the broadcast landed on became the minute in the save, so all
+  four views agreed with each other — and the goal was recorded at fifty-five.
+
+  So the save's minute is the minute, and the **clock waits**. While a goal is
+  owed the match keeps being played — twenty-two men, a real move, a real
+  finish — but the broadcast's clock stops on the minute the goal belongs to,
+  and the save is held on the same minute. The goal is scored at forty on the
+  broadcast, written down as forty in the commentary and recorded as forty in
+  the report, because all three are the same number.
+
+  Keeping the wait short is a ladder, and it replaced one that could not work
+  any more: it used to escalate on how many match minutes late a goal was, and
+  a stopped clock never gets later. It runs on seconds of football now — the
+  ball broken to the man who is owed the goal after a second, again every
+  second or so and closer to goal each time, a set piece for every third
+  attempt, and a spot kick only after forty-five seconds. Measured at nine
+  seconds, 42% of the picture's goals were being put away from the spot, which
+  is not football; at forty-five it is 11–13%, against about 10% in the real
+  game.
+
+  Measured over ninety watched matches with a real renderer, on three seeds:
+  **every one of 221 goals recorded at the minute the save scored it, and all
+  ninety scorelines agreeing.** The price is the stopped clock — twenty-six to
+  twenty-eight seconds a goal, about a sixth of a match — spent watching a side
+  lay siege rather than watching nothing. `scripts/measure-goal-minute.cjs`.
+
+  One caveat on the measuring: run to run, the same seed and the same code
+  produce a different number of goals (72, 77, 99 across runs), so the timings
+  above are ranges rather than figures. The two invariants — every minute and
+  every scoreline — held in every run.
+
+  Three real faults were found on the way and fixed:
+
+  - **The picture's whistle went before the save's.** The broadcast blows on
+    ninety; MatchSim plays to ninety plus two to five and adds more for goals
+    and injuries. Those minutes were played out after the broadcast had
+    stopped, so a goal in them could never be shown. The save can now ask the
+    picture to keep playing (`holdWhistle`), and it does until the save has
+    played its last minute.
+  - **A stoppage-time goal was posted as a first-minute goal.** The record
+    writes them the way a scoreboard does — `"45+3"` — and `+"45+3"` is NaN,
+    which fell through to a default of 1. On the non-live path (walking into the
+    Dugout on a match already under way) seven of thirty-six goals were being
+    shown inside the opening seconds. That path now measures 12 of 12 matches
+    agreeing on the score and on every minute.
+  - **The save could run past its own goal.** It scored at 1' and ticked on to
+    2' in the same pass, so the goal was written down against the minute it had
+    reached rather than the minute it happened.
+  - **The first half had no stoppage of its own,** so a goal at "45+2" was shown
+    in the opening seconds of the second half. It now plays added time as well —
+    but only while the goal it is waiting for belongs in that stoppage, or a
+    match handed its whole plan up front would wait at half-time for ever on a
+    goal at sixty.
+  - **Stoppage time carried over the interval.** `S.stoppage` was not reset at
+    the restart, so after a first half that played any added time the whole
+    second half ran under the urgency and the short spot-kick fuse that belong
+    to the last minutes of a match.
+
+  `scripts/watch-dugout-match.cjs` had quietly stopped measuring anything —
+  under the held-goal seam every goal sat in the queue, the fixture stayed 0-0,
+  and it reported twelve goalless draws that both sides agreed on. Agreement
+  about nothing is not agreement. It now covers the non-live path, which is a
+  real path and was the one carrying the stoppage-time bug.
+
 - **The Golden Boot is a top-flight award.** It was picked from every senior
   player in the world, and the lower a division is the more freely it scores,
   so the fifth tier kept winning it — across three played seasons it went to a

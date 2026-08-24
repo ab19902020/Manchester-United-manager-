@@ -59,11 +59,18 @@ test('with the Dugout driving, the save scores its own goals exactly as it does 
     m.goal(A,D,shooter,null,null,false);
     out.offMode=(f.hs-before[0])+','+(f.as-before[1]);
 
-    /* live mode on — the Dugout. Same function, same result. It is the
-       same match either way, which is the entire change. */
+    /* live mode on — the Dugout. Same function, same result. The one
+       difference is WHEN it lands: the goal is held out of the record
+       until the picture has shown it, so that the minute the save writes
+       down is the minute the goal was scored in and not the minute the
+       broadcast happened to finish building the move. Release it and the
+       match is identical. */
     api.LIVE.on=true;
     const mid=[f.hs,f.as];
     m.goal(A,D,shooter,null,null,false);
+    out.heldNotScored=(f.hs-mid[0])+','+(f.as-mid[1]);
+    out.waiting=api.LIVE.waiting.length;
+    api.releaseHeld();
     out.onMode=(f.hs-mid[0])+','+(f.as-mid[1]);
     out.tallied=shooter.goals===goals0+2;
     out.lastScorer=f.sc.length?String(f.sc[f.sc.length-1].pid):null;
@@ -72,16 +79,20 @@ test('with the Dugout driving, the save scores its own goals exactly as it does 
     /* and a penalty the save recorded is a penalty in the save */
     const pens0=f.sc.filter(x=>x.pen).length;
     m.goal(A,D,shooter,null,null,true);
+    api.releaseHeld();
     out.penFlag=f.sc.filter(x=>x.pen).length===pens0+1;
 
-    api.LIVE.on=false;
+    api.LIVE.on=false; api.LIVE.waiting=[];
     return out;
   })()`);
 
     assert.equal(result.offMode, '1,0',
       'with no picture the save scores its own goals, as it always did');
+    assert.equal(result.heldNotScored, '0,0',
+      'with the picture watching, the goal waits until the picture has shown it');
+    assert.equal(result.waiting, 1, 'and it is waiting, not lost');
     assert.equal(result.onMode, '1,0',
-      'and with the picture watching it scores them exactly the same way');
+      'and when it is shown it scores exactly the same way');
     assert.equal(result.tallied, true, 'both are credited to the man who scored them');
     assert.equal(result.lastScorer, result.wantScorer);
     assert.equal(result.penFlag, true, 'a penalty is recorded as a penalty');
@@ -93,6 +104,14 @@ test('every goal the save scores is handed to the picture once, and only once',
     t.after(() => game.close());
     await startCareer(game, 'Posted Goals');
 
+    /* The handover used to be a poll: postGoals compared the fixture's
+       list of scorers against a running count and told the picture about
+       anything new. It is the goal seam itself now — a goal is queued and
+       posted in the same breath it is scored in — so what has to be true
+       is that the queue carries each goal exactly once, on the right
+       side, with the right man and the right minute on it. That is the
+       thing the picture is handed, and a goal queued twice is a goal the
+       picture scores twice. */
     const result = game.eval(`(()=>{
     G.day=nextUserFixture().day;
     UI.view='home';render();ACTIONS.advance();
@@ -100,54 +119,60 @@ test('every goal the save scores is handed to the picture once, and only once',
     const api=window.RBSDugoutMatchday, m=MU.m, f=MU.fix;
     m._varOff=true;
     try{ goalCal(MU.fix.div).trim=0; }catch(e){}
-    api.LIVE.on=true; api.LIVE.posted=0;
-
-    /* a stand-in for the broadcast: all postGoals wants of it is
-       addGoal, and what it was told is the thing under test */
-    const seen=[];
-    const md={ addGoal(g){ seen.push(g); return md } };
+    api.LIVE.on=true; api.LIVE.posted=0; api.LIVE.waiting=[];
 
     const home=m.sides[0], away=m.sides[1];
     const hs=home.onfield.find(x=>x.slot!=='GK');
     const as=away.onfield.find(x=>x.slot!=='GK');
     const out={};
 
-    /* nothing scored yet, so nothing is owed */
-    api.postGoals(md,f);
-    out.beforeAnyGoal=seen.length;
+    out.beforeAnyGoal=api.LIVE.waiting.length;
 
+    m.min=33; m.stage='H2';
     m.goal(home,away,hs,null,null,false);
-    api.postGoals(md,f);
-    out.afterOne=seen.length;
+    out.afterOne=api.LIVE.waiting.length;
 
-    /* called again with nothing new: the picture must not be told twice,
-       or it owes two goals and manufactures one out of nowhere */
-    api.postGoals(md,f);
-    out.afterRepeat=seen.length;
-
+    m.min=67;
     m.goal(away,home,as,null,null,true);
-    api.postGoals(md,f);
-    out.afterTwo=seen.length;
+    out.afterTwo=api.LIVE.waiting.length;
 
-    out.teams=seen.map(g=>g.team).join(',');
-    out.pids=seen.map(g=>String(g.pid)).join(',');
+    const q=api.LIVE.waiting;
+    out.teams=q.map(w=>w.team).join(',');
+    out.pids=q.map(w=>String(w.shooter.p.id)).join(',');
     out.wantPids=String(hs.p.id)+','+String(as.p.id);
-    out.finishes=seen.map(g=>String(g.finish)).join(',');
-    out.minutesAreNumbers=seen.every(g=>typeof g.minute==='number'&&isFinite(g.minute));
-    api.LIVE.on=false;
+    out.pens=q.map(w=>String(!!w.pen)).join(',');
+    out.minutes=q.map(w=>w.minute).join(',');
+    out.minutesAreNumbers=q.every(w=>typeof w.minute==='number'&&isFinite(w.minute));
+
+    /* showing one of them takes it off the queue and leaves the other */
+    api.stampMinute({getState:()=>({minute:"33'"})},{team:0,minute:"33'"});
+    out.afterShowingOne=api.LIVE.waiting.length;
+    out.scoreAfterOne=f.hs+','+f.as;
+    api.releaseHeld();
+    out.left=api.LIVE.waiting.length;
+    out.score=f.hs+','+f.as;
+    out.recorded=f.sc.map(g=>String(g.min)).join(',');
+
+    api.LIVE.on=false; api.LIVE.waiting=[];
     return out;
   })()`);
 
     assert.equal(result.beforeAnyGoal, 0, 'a goalless match owes the picture nothing');
     assert.equal(result.afterOne, 1);
-    assert.equal(result.afterRepeat, 1,
-      'the same goal is never handed over twice — the picture would score it twice');
     assert.equal(result.afterTwo, 2);
     assert.equal(result.teams, '0,1', 'the home goal is team 0 and the away goal team 1');
     assert.equal(result.pids, result.wantPids, 'each goal names the man who actually scored it');
-    assert.equal(result.finishes, 'null,sidefoot', 'a penalty is struck, not headed');
+    assert.equal(result.pens, 'false,true', 'and a penalty is carried as a penalty');
+    assert.equal(result.minutes, '33,67', 'each carries the minute it was scored in');
     assert.equal(result.minutesAreNumbers, true,
       'a stoppage-time goal reads "45+2" in the commentary and must still be a number here');
+    assert.equal(result.afterShowingOne, 1,
+      'showing one goal takes that goal off the queue and no other');
+    assert.equal(result.scoreAfterOne, '1,0');
+    assert.equal(result.left, 0, 'and the whistle clears whatever is still waiting');
+    assert.equal(result.score, '1,1');
+    assert.equal(result.recorded, '33,67',
+      'both are in the record at the minutes they were scored in');
   });
 
 /* =====================================================================
@@ -194,18 +219,20 @@ test('a goal the calibrator turns down never reaches the score or the picture',
     api.postGoals(md,f);
     out.score=f.hs+','+f.as;
     out.scorers=f.sc.length;
-    out.postedToPicture=seen.length;
+    out.postedToPicture=api.LIVE.waiting.length;
     out.saidSomething=m.feed.length>feed0;
     out.saves=D.st.sv;
 
     /* none turned down: they all count, and all reach the picture */
     goalCal(f.div).trim=0;
     for(let i=0;i<5;i++) m.goal(A,D,shooter,null,null,false);
+    out.heldAfter=api.LIVE.waiting.length;
+    api.releaseHeld();
     api.postGoals(md,f);
     out.scoreAfter=f.hs+','+f.as;
-    out.postedAfter=seen.length;
+    out.postedAfter=api.LIVE.posted;
 
-    api.LIVE.on=false;
+    api.LIVE.on=false; api.LIVE.waiting=[];
     return out;
   })()`);
 
@@ -214,6 +241,8 @@ test('a goal the calibrator turns down never reaches the score or the picture',
     assert.equal(result.scorers, 0, 'and nobody is credited with it');
     assert.equal(result.postedToPicture, 0,
       'and the picture is never told about it, so it cannot show a goal the save does not have');
+    assert.equal(result.heldAfter, 5,
+      'a goal the calibrator allows is held for the picture, not thrown away');
     assert.equal(result.saidSomething, true, 'the commentary says a save rather than going quiet');
     assert.ok(result.saves >= 20, 'and the goalkeeper is credited with the saves');
     assert.equal(result.scoreAfter, '5,0', 'with the calibrator idle every goal counts');
@@ -223,14 +252,34 @@ test('a goal the calibrator turns down never reaches the score or the picture',
 /* =====================================================================
    ONE MINUTE EXISTS, NOT TWO
    ---------------------------------------------------------------------
-   MatchSim decides THAT a goal happens and WHO scores it. It cannot
-   decide WHEN it is seen to happen, because the broadcast needs a few
-   minutes of pressure to build a goal out of open play. So the save's
-   record is stamped with the minute the picture put on it, and the
-   commentary line moves with it — otherwise the feed and the report
-   disagree with each other as well as with the Dugout.
+   "The forty minute goal can't be reading us forty six. It has to be
+    all correct no matter what."
+
+   It reads forty everywhere now, and the way that is arranged is worth
+   pinning down, because the obvious arrangement was tried first and it
+   was wrong. The obvious one lets the picture choose: the save scores at
+   forty, the broadcast takes a dozen match minutes to build the move out
+   of open play, and whatever minute it lands on is written into the
+   save. Every view then agrees with every other -- and the goal is
+   recorded at fifty-five.
+
+   So the save's minute is the minute, and the CLOCK waits instead. While
+   a goal is owed the broadcast keeps playing football but its clock
+   stops on the minute the goal belongs to (scriptClockCap, in
+   src/matchday-engine.js), and the save is held on the same minute here.
+   The goal is scored at forty on the broadcast, written down as forty in
+   the commentary, and recorded as forty in the report.
+
+   Measured over thirty watched matches with a real renderer: every one
+   of seventy-nine goals recorded at the minute the save scored it, and
+   every scoreline agreeing. scripts/measure-goal-minute.cjs.
+
+   The clock itself needs WebGL and cannot run in JSDOM. What runs here
+   is the half either side of it: a goal is held out of the record until
+   the picture shows it, and when it is applied it takes the save's
+   minute and not the picture's.
    ===================================================================== */
-test('the minute in the save is the minute the picture gave it',
+test('a held goal is recorded at the minute the save scored it, whatever the picture says',
   { timeout: 45000 }, async (t) => {
     const game = await createGame();
     t.after(() => game.close());
@@ -248,26 +297,33 @@ test('the minute in the save is the minute the picture gave it',
     const hs=home.onfield.find(x=>x.slot!=='GK');
     const as=away.onfield.find(x=>x.slot!=='GK');
     const out={};
-
     const feedMin=()=>m.feed.filter(e=>e.cls==='goal').map(e=>String(e.min)).join(',');
+
+    /* the fortieth minute, and the home side score */
+    m.min=40; m.stage='H2';
     m.goal(home,away,hs,null,null,false);
-    m.goal(away,home,as,null,null,false);
     out.queued=api.LIVE.waiting.length;
+    out.floor=api.heldFloor();
+    /* nothing in the record and nothing in the commentary: the picture
+       has not shown it, and a line written now would have to be moved
+       later, which is what put the feed out of order */
     out.asScored=f.sc.map(g=>String(g.min)).join(',');
-    /* the commentary has not been told yet: the picture has not shown
-       them, and a line written now would have to be rewritten later,
-       which is what put the feed out of order */
     out.feedWhileWaiting=feedMin();
 
-    /* the picture gets there, away side first — it may build them in a
-       different order from the one the save scored them in */
-    api.stampMinute({getState:()=>({minute:"71'"})},{team:1,minute:"71'"});
+    /* the picture gets there. It claims the seventy-eighth minute --
+       which it never would, because its clock is stopped on the fortieth
+       waiting for exactly this, but the record must not depend on that */
     api.stampMinute({getState:()=>({minute:"78'"})},{team:0,minute:"78'"});
     out.left=api.LIVE.waiting.length;
     out.stamped=f.sc.map(g=>String(g.min)).join(',');
     out.feed=feedMin();
-    /* and the feed is in the order the picture showed them, which is
-       the order a viewer saw them */
+
+    /* a second goal, at a different minute, to the other side */
+    m.min=55;
+    m.goal(away,home,as,null,null,false);
+    out.floor2=api.heldFloor();
+    api.stampMinute({getState:()=>({minute:"90'"})},{team:1,minute:"90'"});
+    out.both=f.sc.map(g=>String(g.min)).join(',');
     out.feedOrdered=(()=>{
       const mins=m.feed.map(e=>parseFloat(String(e.min))).filter(v=>isFinite(v));
       for(let i=1;i<mins.length;i++) if(mins[i]<mins[i-1]) return false;
@@ -278,21 +334,27 @@ test('the minute in the save is the minute the picture gave it',
     api.stampMinute({getState:()=>({minute:"90'"})},{team:0,minute:"90'"});
     out.after=f.sc.map(g=>String(g.min)).join(',');
 
-    api.LIVE.on=false;
+    api.LIVE.on=false; api.LIVE.waiting=[];
     return out;
   })()`);
 
-    assert.equal(result.queued, 2, 'both goals wait for the picture to place them');
+    assert.equal(result.queued, 1, 'the goal waits for the picture to show it');
+    assert.equal(result.asScored, '',
+      'and until it does, the save has no goal at all — not one at the wrong minute');
     assert.equal(result.feedWhileWaiting, '',
       'the commentary says nothing about a goal the picture has not shown yet');
-    assert.equal(result.stamped, '78,71',
-      'the home goal takes the minute the picture gave the home goal, and the away goal its own');
-    assert.equal(result.feed, '71,78',
-      'and the commentary carries both, in the order the picture showed them');
+    assert.equal(result.floor, 40,
+      'and the save is not allowed past the minute the goal belongs to');
+    assert.equal(result.stamped, '40',
+      'the goal is recorded at forty, which is when it happened — not at the '
+      + 'seventy-eight the picture claimed');
+    assert.equal(result.feed, '40', 'and the commentary says forty as well');
+    assert.equal(result.left, 0, 'nothing is left waiting');
+    assert.equal(result.floor2, 55, 'the second goal holds the save on its own minute');
+    assert.equal(result.both, '40,55', 'each goal keeps the minute it was scored in');
     assert.equal(result.feedOrdered, true,
       'so the minutes down the commentary never go backwards');
-    assert.equal(result.left, 0, 'nothing is left waiting');
-    assert.equal(result.after, '78,71',
+    assert.equal(result.after, '40,55',
       'a goal nobody was waiting for changes nothing — the picture cannot invent one');
   });
 

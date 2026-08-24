@@ -1,6 +1,7 @@
 /* global G, MU, ACTIONS, MatchSim, drawDugout:writable, buildMatchScreen,
    startLoop:writable, stopLoop, skipHalf:writable, trackedTick, onFT,
-   renderTop, renderMCtl, renderStats, fillFeed, shirtNo, surname, clubForm */
+   renderTop, renderMCtl, renderStats, fillFeed, shirtNo, surname, clubForm,
+   goalIsTrimmed, goalBecameASave, varRulesItOut */
 
 /* =====================================================================
    THE DUGOUT IS NOW A TELEVISION FEED
@@ -72,15 +73,6 @@
   /* how far ahead of the broadcast the save is allowed to run, in match
      minutes, so a goal is known before the picture is asked to show it */
   const LEAD = 2;
-  /* THE LATEST MINUTE A GOAL MAY BE POSTED FOR.
-     This was 80, which showed a 90th-minute winner on the broadcast
-     clock at 80' while the commentary read "90+2" — a ten-minute lie,
-     and the only way to get late goals on screen at all while the
-     engine's added time was time in which nobody played. With that
-     fixed the picture can be told the truth: 90 leaves a stoppage-time
-     goal falling due in stoppage, which is where it happened, and the
-     engine now plays football there. */
-  const LATE_CAP = 90;
 
   const state = {
     fixture: null,      /* the fixture the frame is currently showing   */
@@ -176,9 +168,26 @@
      is all `playScript` wants. `ci` is a club index, so it becomes 0 for
      the home side and 1 for the away side.
      ------------------------------------------------------------------- */
+  /* "45+3" IS THE FORTY-EIGHTH MINUTE, NOT THE FIRST.
+     The record writes stoppage-time goals the way a scoreboard does, and
+     `+"45+3"` is NaN, which fell through to the default of 1 -- so on the
+     non-live path every goal in first-half or second-half stoppage was
+     handed to the picture as a first-minute goal and shown inside the
+     opening seconds. Measured over twelve watched matches: seven of the
+     thirty-six goals, and the reason half of them appeared to arrive
+     seven minutes early. */
+  function minuteOf(v, d) {
+    if (v == null) return d;
+    const parts = String(v).split('+');
+    const base = parseFloat(parts[0]);
+    if (!Number.isFinite(base)) return d;
+    const extra = parts.length > 1 ? parseFloat(parts[1]) : 0;
+    return base + (Number.isFinite(extra) ? extra : 0);
+  }
+
   function planFor(fixture, match) {
     const events = (fixture.sc || []).map((goal) => ({
-      minute: num(goal.min, 1),
+      minute: minuteOf(goal.min, 1),
       team: goal.ci === fixture.h ? 0 : 1,
       pid: goal.pid != null ? String(goal.pid) : null,
       scorer: goal.name ? shortName({ name: goal.name }) : null,
@@ -273,12 +282,36 @@
     try { return md.getState(); } catch (error) { return null; }
   }
 
-  /* The HUD clock reads "23'", which is the number this needs. */
+  /* Where the broadcast's clock has actually got to. `elapsed` is the
+     number; `minute` is the HUD label, which reads "45+2" in stoppage and
+     parses back to 45, and pacing off that stalls the save for two
+     minutes at the end of each half. An older broadcast has only the
+     label, so it is still the fallback. */
   function bMinute(st) {
     const s = st || bState();
     if (!s) return 0;
+    if (Number.isFinite(s.elapsed)) return s.elapsed;
     const n = parseFloat(String(s.minute));
     return Number.isFinite(n) ? n : 0;
+  }
+
+  /* The minute of the oldest goal the picture still owes, or infinity.
+     The save is not allowed past it: the broadcast's clock is stopped
+     there waiting to show that goal, and a save that ran on would apply
+     it against a later minute. */
+  function heldFloor() {
+    let m = Infinity;
+    LIVE.waiting.forEach((w) => { if (num(w.minute, Infinity) < m) m = num(w.minute, Infinity); });
+    return m;
+  }
+
+  /* The referee's watch belongs to the save. An older broadcast has no
+     `holdWhistle`, and a match watched on one simply blows on ninety as
+     it always did. */
+  function holdWhistle(on) {
+    const md = api();
+    if (!md || typeof md.holdWhistle !== 'function') return;
+    try { md.holdWhistle(!!on); } catch (error) { /* it blows on ninety */ }
   }
 
   function liveStart(md, match, fixture) {
@@ -349,6 +382,11 @@
       else if (typeof trackedTick === 'function') trackedTick();
       else match.tickOnce();
       ticks += 1;
+      /* AND IT STOPS DEAD ON A GOAL. Without this the save can score at
+         1' and carry on to 2' in the same pass, and the goal is then
+         applied -- and written down -- against the minute it reached
+         rather than the minute it happened. */
+      if (LIVE.on && LIVE.waiting.length) break;
     }
     return ticks;
   }
@@ -356,7 +394,6 @@
   function repaint() {
     try {
       if (typeof renderTop === 'function') renderTop();
-      paintSeenScore();
       if (typeof fillFeed !== 'function') return;
       if (MU.tab === 'comm') fillFeed(document.getElementById('commList'), 200);
       else if (MU.tab === 'stats') { if (typeof renderStats === 'function') renderStats(); }
@@ -364,19 +401,27 @@
     } catch (error) { /* the next tick paints it */ }
   }
 
-  /* When the picture blows for full time the save catches up and stops.
+  /* THE PICTURE'S WHISTLE IS THE WHISTLE.
+     Held in added time until the save has played its last minute, the
+     broadcast now blows with nothing left to play, so what follows is
+     the finishing tick and nothing else: MatchSim blows on the tick
+     AFTER its full-time minute, which is a tick in which no football
+     happens. Anything held is released first, at the minute it was
+     scored, because there is no picture left to show it on.
+
      A cup tie still level after ninety is the one case the broadcast
-     cannot show, so extra time is played out by MatchSim on its own --
-     with live mode off, because from there it is the only match there
-     is. */
+     cannot show. That is the loop below: extra time played out by
+     MatchSim on its own, with live mode off, because from there it is
+     the only match there is. */
   function drainToFullTime() {
     const match = MU && MU.m;
+    holdWhistle(false);
     if (!match || match.done) return;
     LIVE.on = false;
     releaseHeld();
     let guard = 0;
     while (!match.done && guard < 400) {
-      if (match.stage === 'HT') match.tickOnce(); else match.tickOnce();
+      match.tickOnce();
       guard += 1;
     }
     if (!match.done) { try { match.finish(); } catch (error) { /* it stands */ } }
@@ -590,6 +635,7 @@
         const late = LIVE.began && Date.now() - LIVE.began > PATIENCE * 2;
         if (state.failed || late) {
           LIVE.want = false; LIVE.on = false;
+          holdWhistle(false);
           /* AND THIS MATCH IS THE 2D RENDERER'S NOW.
              Without this the dugout would still take the broadcast if
              you walked into it later — down the non-live path, which
@@ -611,9 +657,21 @@
       const st = bState();
       if (!st || !st.running) return;
 
-      /* one minute short of the whistle: the save is not allowed to
-         finish the match before the picture does */
-      const ceiling = Math.max(0, num(match.ftAt, 90) - (LIVE.ended ? 0 : 1));
+      /* EVERY MINUTE THE SAVE HAS, PLAYED WHILE THE PICTURE IS STILL ON.
+         The ceiling used to sit one minute short of the whistle so the
+         save could not finish first, and the last minutes were then
+         played out by the drain with the broadcast already dark. That
+         is a goal at 90+3 that no watcher can ever see, and a save file
+         that disagrees with the scoreboard it was just watching.
+
+         So the ceiling is now the save's own full-time minute -- the
+         last minute in which football is played, since MatchSim blows
+         on the tick after it -- and the picture is held in added time
+         until the save gets there. The save still cannot finish first:
+         it stops ON ftAt and the finishing tick belongs to the drain,
+         which is also what keeps a level cup tie out of extra time
+         until the broadcast has stopped. */
+      const ceiling = Math.max(0, num(match.ftAt, 90));
       /* A COUPLE OF MINUTES AHEAD, ON PURPOSE. The save has to score a
          goal before the broadcast can be asked to show it, so if the
          save were held exactly level with the picture every goal would
@@ -621,11 +679,23 @@
          at worst with the spot kick it keeps for that. Two minutes of
          lead, about seven seconds at normal speed, is enough for the
          picture to build the goal out of real play and arrive with it
-         roughly on time. The ceiling still holds the save short of the
-         whistle, so this never becomes "the save has finished and the
-         picture has not". */
-      const target = Math.min(bMinute(st) + LEAD, ceiling);
+         roughly on time. The ceiling still holds the save short of its
+         finishing tick, so this never becomes "the save has finished and
+         the picture has not". */
+      /* AND IT WAITS AT A GOAL THE PICTURE HAS NOT SHOWN. The broadcast
+         clock stops at the minute of a goal it still owes; the save has
+         to stop on the same minute, or the goal is applied against a
+         later one and forty is written down as forty-two. */
+      const target = Math.min(bMinute(st) + LEAD, ceiling, heldFloor());
       const ticks = tickTo(match, target);
+      /* AND THE WHISTLE WAITS FOR IT. The broadcast's second half runs
+         to ninety; the save runs to ninety plus two to five, and adds
+         more for every goal and injury. Held here until the save has
+         played its last minute, the picture keeps playing football
+         instead of blowing early -- so a goal in the fourth minute of
+         stoppage is shown in the fourth minute of stoppage rather than
+         being scored in the dark after the broadcast has stopped. */
+      holdWhistle(match.min < ceiling && !match.done);
       /* THE PICTURE IS TOLD WHAT THE SAVE JUST DID. Not inside
          `if (ticks)`: a goal posted a moment ago may still be unowed if
          the broadcast was mid-restart when it went in. */
@@ -649,6 +719,7 @@
       skipHalf = function skipPastTheBroadcast() {
         if (!liveDriving()) return passSkip.apply(this, arguments);
         LIVE.on = false; LIVE.want = false;
+        holdWhistle(false);
         try { const md = api(); if (md && typeof md.pause === 'function') md.pause(); } catch (error) { /* ignore */ }
         stopLoop();
         return passSkip.apply(this, arguments);
@@ -708,61 +779,112 @@
      MatchSim decided them. Only the timestamp is the picture's.
      ===================================================================== */
 
-  /* WHAT THE SAVE JUST SCORED, WAITING TO BE SEEN.
-     MatchSim's goal() is called, in full, at the moment MatchSim decides
-     it — so the score, the scorer, the ratings, the morale, the stats
-     and the goal-rate calibrator all happen exactly as they do in every
-     other view. This only remembers where the record went, so the
-     minute on it can be corrected to the picture's when the picture
-     gets there. A goal the calibrator turns down never reaches here,
-     because nothing was written. */
+  /* =====================================================================
+     THE GOAL HAPPENS WHEN THE PICTURE SCORES IT
+     ---------------------------------------------------------------------
+     "the forty minute goal can't be reading us forty six. It has to be
+      all correct no matter what."
+
+     It used to score in the save at MatchSim's minute and then have its
+     timestamp corrected to the broadcast's once the picture caught up.
+     That is a lie with a tidy finish. Measured over sixty goals under
+     the real live pacing, the picture was 9.28 minutes behind on
+     average and 17 at worst, and not one goal was recorded at the
+     minute the save scored it: the broadcast needs several minutes to
+     build a goal out of open play, so it can never hit a minute chosen
+     for it in advance.
+
+     So the minute is not chosen in advance. MatchSim decides THAT a
+     goal happens and WHO scores it; the goal itself is held here, the
+     picture is asked for it, and it is applied to the save at the
+     moment the ball crosses the line on screen. One event, one minute —
+     the commentary, the report, the header and the broadcast carry the
+     same number because they are the same goal.
+
+     The goal-rate controller has its say when the goal is DECIDED
+     rather than when it is applied, so a goal a player has just watched
+     go in can never be taken off him afterwards.
+
+     What it costs is that the goal's momentum, and the AI's reaction to
+     the scoreline, arrive when the goal does rather than a few minutes
+     earlier. That is the price of the picture and the save being the
+     same match.
+     ===================================================================== */
   if (typeof MatchSim === 'function' && MatchSim.prototype
       && typeof MatchSim.prototype.goal === 'function') {
     const passGoal = MatchSim.prototype.goal;
-    MatchSim.prototype.goal = function goalAwaitingThePicture(A) {
-      const fixture = this.fix;
-      if (!LIVE.on || this !== (MU && MU.m) || !fixture || !fixture.sc) {
+    MatchSim.prototype.goal = function goalHeldForThePicture(A, D, shooter, creator, assister, pen) {
+      if (!LIVE.on || LIVE.applying || this !== (MU && MU.m)) {
         return passGoal.apply(this, arguments);
       }
-      const before = fixture.sc.length;
-      const feedBefore = (this.feed || []).length;
-      const out = passGoal.apply(this, arguments);
+      /* EVERY REASON THIS GOAL MIGHT NOT STAND, SETTLED NOW. There are
+         two of them in the whole chain and both are asked here, because
+         asking either one after the picture has shown the goal would
+         take it off a player who watched it go in. Measured with only
+         the controller moved up here, four matches in twenty finished
+         with the picture and the save on different scores — every one
+         of them VAR ruling out a goal the broadcast had already put in
+         the net. */
       try {
-        if (fixture.sc.length > before) {
-          const entry = fixture.sc[fixture.sc.length - 1];
-          /* the commentary line carries the same minute and has to move
-             with it, or the feed and the report disagree instead */
-          /* HELD, NOT REWRITTEN. Changing the minute on a line already
-             in the feed puts the commentary out of order: fillFeed
-             renders the feed in the order it was written and rebuilds
-             the whole thing from scratch on every tab change, so a goal
-             restamped from 40 to 46 reads 40', 41', 46' GOAL, 42'. The
-             line is lifted out here and put back when the picture
-             scores, which is the only moment the game knows what minute
-             to give it. Nothing after it exists yet -- this runs inside
-             the tick that scored it -- so removing it cannot disturb
-             anything already written. */
-          let line = null;
-          for (let i = (this.feed || []).length - 1; i >= feedBefore; i -= 1) {
-            if (this.feed[i] && this.feed[i].cls === 'goal') {
-              line = this.feed.splice(i, 1)[0];
-              break;
-            }
-          }
-          if (typeof MU === 'object' && MU && MU.lastFeed > this.feed.length) {
-            MU.lastFeed = this.feed.length;
-          }
-          LIVE.waiting.push({
-            team: entry.ci === fixture.h ? 0 : 1, entry, line, feed: this.feed,
+        if (typeof goalIsTrimmed === 'function' && goalIsTrimmed(this, A, D, pen)) {
+          if (typeof goalBecameASave === 'function') goalBecameASave(this, A, D, shooter);
+          return undefined;
+        }
+      } catch (error) { /* let it stand as a goal */ }
+      try {
+        if (typeof varRulesItOut === 'function' && varRulesItOut(this, A, shooter, pen)) {
+          return undefined;
+        }
+      } catch (error) { /* the referee lets it go */ }
+      const team = (A === this.sides[0]) ? 0 : 1;
+      LIVE.waiting.push({ team, match: this, A, D, shooter, creator, assister,
+        pen: !!pen, minute: num(this.min, 0) });
+      try {
+        const md = api();
+        if (md && typeof md.addGoal === 'function') {
+          md.addGoal({
+            /* THE SAVE'S OWN MINUTE, not what the clock displays. dispMin
+               reads "45+2" in stoppage, and the picture parses that back
+               to 45 -- so a goal in first-half stoppage was posted two
+               minutes early and the clock waited for a minute that had
+               already gone. */
+            minute: num(this.min, 0),
+            team,
+            pid: shooter && shooter.p ? String(shooter.p.id) : null,
+            scorer: shooter && shooter.p ? shortName(shooter.p) : null,
+            finish: pen ? 'sidefoot' : null,
           });
         }
-      } catch (error) { /* the goal stands; only its timestamp is at risk */ }
-      void A;
-      return out;
+      } catch (error) { /* the whistle applies it even unshown */ }
+      return undefined;
     };
   }
 
-  /* the picture has shown one: give the save its minute */
+  /* THE BALL HAS CROSSED THE LINE ON SCREEN, so it crosses it in the
+     save -- at the minute it was scored in, which is the minute the
+     broadcast's clock has been waiting on. */
+  function applyHeld(w) {
+    if (!w || !w.match) return;
+    LIVE.applying = true;
+    /* both vetoes had their say when the goal was decided; neither gets
+       a second one now that it is on the screen */
+    try { w.match._calDone = true; w.match._varDone = true; } catch (error) { /* ignore */ }
+    /* AND THE CLOCK GOES BACK TO WHERE IT WAS. MatchSim stamps the goal
+       with whatever minute it is on when goal() runs, and the loop holds
+       it on the scoring minute precisely so that reads right -- but the
+       whistle releases whatever is still waiting, and there the save has
+       moved on. Winding it back for the length of one call is what makes
+       "the minute it happened" true even then. */
+    const was = w.match.min;
+    try { if (w.minute != null) w.match.min = num(w.minute, was); } catch (error) { /* ignore */ }
+    try { w.match.goal(w.A, w.D, w.shooter, w.creator, w.assister, w.pen); }
+    catch (error) { /* the match carries on */ }
+    try { w.match.min = was; } catch (error) { /* ignore */ }
+    try { delete w.match._calDone; delete w.match._varDone; } catch (error) { /* ignore */ }
+    LIVE.applying = false;
+  }
+
+  /* the picture scored one: whichever of ours it was, it happens now */
   function stampMinute(md, ev) {
     if (!LIVE.on || !LIVE.waiting.length) return;
     const team = (ev && ev.team === 1) ? 1 : 0;
@@ -770,106 +892,27 @@
     /* the broadcast names a side for every goal, but if it ever did not
        the oldest unshown one is still the right answer */
     if (ix < 0) ix = 0;
-    const w = LIVE.waiting.splice(ix, 1)[0];
-    /* the event carries the clock at the instant the ball crossed the
-       line, which is a truer answer than asking afterwards */
-    const min = (ev && ev.minute)
-      ? String(ev.minute).replace(/[^0-9+]/g, '') : pictureMinute(md);
-    if (!min) return;
-    try {
-      if (w.entry) w.entry.min = min;
-      /* and the commentary gets its line now, in its place, with the
-         minute the picture gave it */
-      if (w.line && w.feed) { w.line.min = min; w.feed.push(w.line); }
-      repaint();
-    } catch (error) { /* the minute stays as the save had it */ }
+    applyHeld(LIVE.waiting.splice(ix, 1)[0]);
+    repaint();
+    void md;
   }
 
-  /* THE WHISTLE RELEASES ANYTHING STILL WAITING. A goal the picture
-     never got round to showing still happened -- the save has the score
-     and the scorer -- so its line goes back into the commentary with the
-     minute the save gave it rather than being lost. */
+  /* THE WHISTLE APPLIES ANYTHING THE PICTURE NEVER GOT TO. The save
+     decided these goals and they are owed to it, so a broadcast that
+     ran out of match before it could show one must not cost a goal. */
   function releaseHeld() {
-    while (LIVE.waiting.length) {
-      const w = LIVE.waiting.shift();
-      try { if (w.line && w.feed) w.feed.push(w.line); } catch (error) { /* gone */ }
-    }
+    while (LIVE.waiting.length) applyHeld(LIVE.waiting.shift());
+    repaint();
   }
 
-  /* WHAT THE SCOREBOARD SAYS WHILE A GOAL IS WAITING. The save has
-     already counted it; the picture has not shown it yet. For those few
-     minutes the header shows what has been seen, so it cannot read 1-0
-     over a goalless picture. The save's own score is untouched -- this
-     is the header's text and nothing else. */
-  function paintSeenScore() {
-    if (!LIVE.on || !LIVE.waiting.length) return;
-    const f = MU && MU.fix;
-    const el = document.getElementById('mScore');
-    if (!f || !el) return;
-    let h = num(f.hs, 0), a = num(f.as, 0);
-    LIVE.waiting.forEach((w) => { if (w.team === 1) a -= 1; else h -= 1; });
-    el.textContent = Math.max(0, h) + '\u2013' + Math.max(0, a);
-  }
-
-  /* THE MINUTE THE PICTURE PUT ON IT. The broadcast's clock reads "46'"
-     or "90+2'"; the save's minute is the same shape, so this is mostly
-     a matter of dropping the apostrophe. */
-  function pictureMinute(md) {
-    try {
-      const raw = String(md.getState().minute || '').replace(/[^0-9+]/g, '');
-      return raw || null;
-    } catch (error) { return null; }
-  }
-
-  /* Every goal the save has already handed to the broadcast, so the same
-     one is never posted twice. */
+  /* POSTING HAPPENS AT THE MOMENT OF SCORING NOW, in the wrapper above,
+     because a held goal has to reach the picture in the same breath it
+     is decided. This stays so a caller that still walks the fixture
+     cannot double-post: anything in `fix.sc` has already been shown, or
+     it would not be there. */
   function postGoals(md, fixture) {
-    const sc = (fixture && fixture.sc) || [];
-    if (sc.length <= LIVE.posted) return;
-    for (let i = LIVE.posted; i < sc.length; i += 1) {
-      const goal = sc[i];
-      try {
-        md.addGoal({
-          /* `min` is what the commentary shows, so it can read "45+2"
-             and parseFloat gives the 45. The cap is the important part.
-             MatchSim plays to a full time of its own — 90 plus two to
-             five — while the broadcast's clock reaches 90 and then a
-             short stoppage of its own, so a goal the save records in
-             added time has nowhere on the picture's clock to land and
-             is simply never shown. Measured across twelve matches, that
-             was every goal the picture failed to deliver and nothing
-             else: 90, 85, 88, 87, 87. Capped a little short of the
-             whistle, a stoppage-time winner falls due while there is
-             still football left to score it in, and the engine's own
-             urgency -- and its spot kick, if open play will not oblige
-             -- has room to work. The cap is 90 rather than the 80 it
-             needed before the engine played football in added time, so
-             a stoppage-time winner is shown in stoppage time. */
-          /* DUE AS SOON AS THE PICTURE HEARS OF IT, which is where its
-             clock already is: the save runs LEAD minutes ahead, so the
-             minute it scored one is LEAD minutes past the picture's own.
-             It is not chasing a timestamp any more — whatever minute it
-             lands on becomes the minute, so the only deadline is the
-             whistle, and it may take as long as the football takes.
-
-             Deriving this from the save's minute rather than reading the
-             broadcast's clock keeps it honest when the two are not in
-             lockstep — the clock is only correct at the instant a live
-             frame is being paced, and a rig, a stall or a tab change can
-             all call this at some other moment. LATE_CAP keeps a goal
-             the save records deep in its own added time inside the
-             broadcast's clock, which reaches 90 and a stoppage of its
-             own. */
-          minute: Math.max(0, Math.min(LATE_CAP,
-            num(parseFloat(String(goal.min)), 0) - LEAD)),
-          team: goal.ci === fixture.h ? 0 : 1,
-          pid: goal.pid != null ? String(goal.pid) : null,
-          scorer: goal.name ? shortName({ name: goal.name }) : null,
-          finish: goal.pen ? 'sidefoot' : null,
-        });
-      } catch (error) { /* the save still has it; only the picture misses */ }
-    }
-    LIVE.posted = sc.length;
+    LIVE.posted = ((fixture && fixture.sc) || []).length;
+    void md;
   }
 
   /* -------------------------------------------------------------------
@@ -1089,7 +1132,8 @@
     window.RBSDugoutMatchday = Object.freeze({
       setFull, watching, watchGuard,
       squadFor, planFor, settle, api, FRAME_ID, state,
-      LIVE, postGoals, stampMinute, releaseHeld, pictureMinute, bMinute, liveDriving,
+      LIVE, postGoals, stampMinute, releaseHeld, applyHeld, bMinute, liveDriving,
+      holdWhistle, heldFloor, minuteOf,
     });
   } catch (error) { /* no window */ }
 }());

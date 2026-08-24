@@ -167,7 +167,7 @@ const S = {
      also the only way to measure whether an attribute does anything: a
      scoreline gives you one number a match, duels give you hundreds. */
   stats:{ poss:[0,0], shots:[0,0], onTarget:[0,0], corners:[0,0],
-          aerial:[0,0], loose:[0,0] }, stoppage:0,
+          aerial:[0,0], loose:[0,0] }, stoppage:0, holdFT:false, held:false, penLive:false,
   camMode:'auto', camShot:'broadcast', camHold:0, focus:null,
   org:[0.5,0.5]        /* how well each side is led — see teamOrg() */
 };
@@ -4014,12 +4014,56 @@ const SCRIPT = {
 function clearScript(){
   SCRIPT.active=false; SCRIPT.events=[]; SCRIPT.stats=null;
   SCRIPT.pending=null; SCRIPT.blocked=0; SCRIPT.forced=0; SCRIPT.penWait=0;
-  SCRIPT.penTries=0;
+  SCRIPT.penTries=0; SCRIPT.setWait=0; SCRIPT.setTries=0; SCRIPT.dueFor=0;
+  SCRIPT.pressed=0; SCRIPT.setPiece=0; SCRIPT.hold=true;
 }
 /* Minutes elapsed on the 90-minute clock the HUD shows. */
 function scriptMinute(){
   const total = S.halfLen*2 || 1;
   return ((S.half-1)*S.halfLen + S.clock)/total*90;
+}
+/* THE CLOCK CANNOT RUN PAST A GOAL IT HAS NOT SHOWN YET.
+   ---------------------------------------------------------------------
+   "The forty minute goal can't be reading us forty six."
+
+   A half here is a hundred and fifty seconds, so a match minute is three
+   and a third seconds of football, and no side can be asked to build a
+   goal inside one. Everything else was tried: posting the goal early,
+   letting the picture stamp its own minute on it, giving the owed side
+   two minutes of warning. All of them produce the same thing in the end,
+   which is a goal the save scored at forty appearing on the clock at
+   fifty-five, and a save file that disagrees with the match the manager
+   just watched.
+
+   So the clock waits. While a goal is owed the match keeps being played
+   -- twenty-two men, a real move, a real finish -- but the minute stops
+   at the one the goal belongs to, and it starts again when the ball is
+   in the net. The goal is then scored at forty on the broadcast, written
+   down as forty in the commentary, and recorded as forty in the report,
+   because all three are now the same number and there is nowhere left
+   for them to disagree.
+
+   The ladder in scriptTick is what keeps the wait short: the ball broken
+   to the man who is owed it after a second, again every second or so and
+   closer to goal each time, a set piece for every third attempt, and a
+   spot kick only after forty-five seconds. Measured over ninety watched
+   matches on three seeds: every one of two hundred and twenty-one goals
+   recorded at the minute the save scored it, every scoreline agreeing,
+   the clock holding for twenty-six to twenty-eight seconds a goal --
+   about a sixth of a match -- and eleven to thirteen per cent of the
+   picture's goals coming from the spot, against about ten in the real
+   game.
+
+   Returns the value S.clock is not allowed to pass, or null. */
+function scriptClockCap(){
+  if(!SCRIPT.active || SCRIPT.hold === false) return null;
+  let m = null;
+  for(const e of SCRIPT.events){
+    if(e.fired) continue;
+    if(m === null || e.minute < m) m = e.minute;
+  }
+  if(m === null) return null;
+  return m/90*(S.halfLen*2) - (S.half-1)*S.halfLen;
 }
 function loadScript(plan){
   clearScript();
@@ -4059,8 +4103,138 @@ function markGoalScored(team){
   if(!SCRIPT.active) return null;
   const e = nextGoal(team);
   if(e){ e.fired = true; if(SCRIPT.pending===e) SCRIPT.pending=null; }
-  SCRIPT.penWait = 0; SCRIPT.penAt = 0; SCRIPT.penTries = 0;
+  SCRIPT.penWait = 0; SCRIPT.penTries = 0;
+  SCRIPT.setWait = 0; SCRIPT.setTries = 0; SCRIPT.dueFor = 0;
   return e;
+}
+
+/* THE BALL GOES WHERE THE GOAL IS OWED.
+   ---------------------------------------------------------------------
+   A goal falling due is not enough on its own. A half is a hundred and
+   fifty seconds here, so a match minute is three and a third seconds of
+   football, and a side starting from its own half cannot build anything
+   inside one. So the picture used to wait, and wait, and then take the
+   spot kick: measured over twenty matches, goals arrived a little over
+   twelve minutes after the save scored them and forty-eight penalties
+   were awarded to force seventy-four goals.
+
+   Two answers, in order of how often they are reached. The ball breaking
+   to the man who is owed it, which costs nothing and is below; and, for
+   every third attempt, a set piece in a dangerous area -- a corner, a
+   free kick on the edge of the box, a long throw into the corner -- for
+   when everybody is behind the ball and there is nobody to break to.
+   Both are football rather than a scoreline appearing, both escalate the
+   way a siege does, and both leave the spot kick where it belongs, which
+   is last.
+   ---------------------------------------------------------------------
+   THE BALL BREAKS TO THE MAN WHO IS OWED THE GOAL.
+   The cheapest honest way to make a chance, and the one that costs no
+   time at all: the side that needs a goal wins it high, and it drops to
+   whoever is furthest forward. Nobody is moved and no whistle is blown —
+   possession changes hands in the attacking third, which is a thing that
+   happens in every match ever played, and with urgency already at its
+   highest the shot follows within a second.
+
+   Measured against the set-piece ladder alone: a corner or a free kick
+   costs a second and a half of restart before anybody can even touch the
+   ball, and the delivery is cleared more often than not. Four of them in
+   a row is nine seconds of held clock and no goal, which is how the spot
+   kick ended up scoring a third of them. This gets it in one or two.
+
+   Returns false when there is nobody far enough up the pitch to make it
+   look like anything, and the set piece is then the fallback. */
+function pressureChance(team){
+  const s = S.dir[team];
+  let best = null;
+  for(const p of teamOf(team)){
+    if(p.isGK) continue;
+    if(s*p.pos.x < 8) continue;                    // not out of their own half
+    if(!best || s*p.pos.x > s*best.pos.x) best = p;
+  }
+  if(!best) return false;
+  const named = SCRIPT.pending ? teamOf(team).find(q => isScriptScorer(q)) : null;
+  /* the named man if he is up the pitch at all, otherwise whoever is */
+  const take = (named && s*named.pos.x > 4) ? named : best;
+
+  /* PLAYED INTO HIS PATH, not laid on his foot. Handing the ball to a
+     striker standing thirty metres out buys a shot from thirty metres,
+     which the keeper saves, and the whole thing goes round again --
+     measured at twenty-one seconds of held clock a goal. A ball rolled
+     into the space in front of him is the same event a yard better: he
+     runs onto it inside the box and finishes from ten. It is only
+     allowed where he is genuinely the nearest man to it, so it stays a
+     pass he could have been played rather than a defence teleporting
+     out of the way. */
+  const goalX = s*HALF_L;
+  /* THE LONGER IT REFUSES TO COME, THE BETTER THE CHANCE GETS. The first
+     ball is played to the edge of the box; by the fifth it is a cut-back
+     across the six-yard line. A siege that tightens is what a siege looks
+     like, and it is a far better answer than reaching for the spot kick. */
+  const floor = Math.max(5, 12 - (SCRIPT.setTries||0)*1.4);
+  let px = take.pos.x, pz = take.pos.y;
+  for(let ahead = 16; ahead >= 0; ahead -= 2){
+    const gap = Math.abs(goalX - take.pos.x);
+    const step = Math.min(ahead, Math.max(0, gap - floor));
+    const tx = take.pos.x + s*step, tz = take.pos.y*(1 - step/Math.max(step+18, 1));
+    let mine = Math.hypot(take.pos.x-tx, take.pos.y-tz), free = true;
+    for(const q of players){
+      if(q === take || q.team === team) continue;
+      if(Math.hypot(q.pos.x-tx, q.pos.y-tz) < mine + 1.2){ free = false; break; }
+    }
+    if(free){ px = tx; pz = tz; break; }
+  }
+
+  ball.pos.set(px, CFG.BALL_R, pz);
+  ball.spin = 0; ball.cool = 0;
+  if(px === take.pos.x && pz === take.pos.y){
+    ball.pos.x += s*0.45;
+    ball.vel.set(0,0,0);
+    ball.owner = take;
+  } else {
+    /* still rolling, so it reads as a pass rather than an appearance */
+    ball.vel.set(s*2.2, 0, 0);
+    ball.owner = null;
+  }
+  /* AND HE HAS HALF A YARD. Whoever is marking him is caught leaning
+     the wrong way for a moment -- the same device the engine already
+     uses when a defender is sold by a skill move, and the difference
+     between a chance and a challenge. Without it the ball arrives and
+     is taken off his toe, and it took seven or eight of these to
+     produce one goal. */
+  for(const q of players){
+    if(q.team === team || q.isGK) continue;
+    if(Math.hypot(q.pos.x-ball.pos.x, q.pos.y-ball.pos.z) < 5.5)
+      q.cool = Math.max(q.cool, 0.4 + Math.min(0.4, (SCRIPT.setTries||0)*0.06));
+  }
+  S.possTeam = team; S.passTo = null; S.lastTouch = take;
+  S.pendingOffside = null; S.liveShot = null;
+  return true;
+}
+
+function pressureRestart(team){
+  const s = S.dir[team];
+  const side = Math.random() < 0.5 ? 1 : -1;
+  SCRIPT.pressed = (SCRIPT.pressed||0) + 1;
+  /* two chances out of every three, a set piece for the third: enough
+     variety that a siege does not become the same picture over and over,
+     and the set piece is the one that works when everybody is behind the
+     ball and there is nobody to break to */
+  if(SCRIPT.pressed % 3 !== 0 && pressureChance(team)) return;
+  SCRIPT.setPiece = (SCRIPT.setPiece||0) + 1;
+  switch(SCRIPT.setPiece % 3){
+    case 1:
+      setRestart('corner', team,
+        {x: s*(HALF_L-0.3), y: side*(HALF_W-0.3)}, 'CORNER');
+      break;
+    case 2:
+      setRestart('free', team,
+        {x: s*(HALF_L-19-Math.random()*7), y: side*(1+Math.random()*11)},
+        'FREE KICK');
+      break;
+    default:
+      setRestart('throw', team,
+        {x: s*(HALF_L-11-Math.random()*9), y: side*(HALF_W-0.2)}, 'THROW-IN');
+  }
 }
 /* Each tick: work out whether a goal is due, and if it is overdue push
    the side that is owed it. */
@@ -4074,25 +4248,38 @@ function scriptTick(){
   }
   SCRIPT.pending = due;
 
-  /* Open play will not always oblige. Once a goal is badly overdue the
-     owed side gets a spot kick — a legitimate way to score that looks
-     like football, rather than a goal appearing out of nowhere. The
-     alternative is a scoreline that disagrees with the save file, which
-     is the one outcome this mode exists to prevent. */
+  /* Open play will not always oblige. Once a goal is overdue the owed
+     side gets first a set piece and then, in the end, a spot kick —
+     legitimate ways to score that look like football, rather than a goal
+     appearing out of nowhere. The alternative is a scoreline that
+     disagrees with the save file, which is the one outcome this mode
+     exists to prevent.
+
+     THE LADDER IS MEASURED IN SECONDS, NOT IN MINUTES OF THE MATCH.
+     It used to key off how many match minutes late the goal was, which
+     stopped working the moment the clock started waiting for it: a held
+     clock never gets any later, so nothing would ever escalate and the
+     picture would siege the same goal for ever. Seconds of football
+     since it fell due is the honest measure of "this is not coming off
+     on its own", and it is the same measure whether the clock is running
+     or holding. */
   if(!due || S.phase!=='play') return;
-  const late = now - due.minute;
-  const wait = SCRIPT.penWait || 0;
-  SCRIPT.penWait = wait + (1/60);
-  /* THE SPOT KICK IS A LAST RESORT AGAIN. It used to fire five minutes
-     after a goal fell due, which beat open play to about half of them —
-     measured, and a picture where half the goals are penalties is not
-     football. It only had to be that quick because the goal had a
-     minute to hit; it does not any more. Whatever minute the picture
-     lands on becomes the minute, so the only real deadline is the
-     whistle, and the referee already plays on past that while a goal is
-     owed. Twelve minutes and up to six more lets the move come off. */
-  if(!SCRIPT.penAt) SCRIPT.penAt = 12 + Math.random()*6;   // jittered, so the fallback
-  const limit = S.stoppage > 0 ? 1.5 : SCRIPT.penAt;      // never lands on the same minute
+  SCRIPT.dueFor = (SCRIPT.dueFor || 0) + (1/60);
+  SCRIPT.penWait = (SCRIPT.penWait || 0) + (1/60);
+  SCRIPT.setWait = (SCRIPT.setWait || 0) + (1/60);
+
+  /* the pressure first, and often -- see pressureRestart */
+  if(SCRIPT.dueFor > 1.1 && SCRIPT.setWait > Math.max(0.9, 1.8/(1+(SCRIPT.setTries||0)))){
+    SCRIPT.setWait = 0; SCRIPT.setTries = (SCRIPT.setTries||0)+1;
+    pressureRestart(due.team);
+    return;
+  }
+  /* THE SPOT KICK IS STILL LAST, AND IT IS NOW GENUINELY RARE.
+     Measured at nine seconds, forty-two per cent of the picture's goals
+     were being put away from the spot, which is not football. At
+     forty-five it is eleven to thirteen per cent and the siege scores
+     the rest; the price is a few more seconds of held clock a goal. */
+  const limit = S.stoppage > 0 ? 16 : 45;
   /* EACH ATTEMPT COMES SOONER THAN THE LAST.
      This used to wait six seconds, award a spot kick, and then reset
      BOTH counters -- so a saved penalty put the whole thing back to the
@@ -4100,11 +4287,10 @@ function scriptTick(){
      of stoppage time. Measured: a save recording Hull 1-4 finished on
      screen as 0-4, because Hull's 82nd minute never arrived while they
      managed two shots to United's thirty-five.
-     Now only the wait resets, the jittered first delay is kept, and the
-     wait shortens with every failed attempt. A missed penalty is a
-     setback, not a fresh start. */
+     Now only the wait resets and the wait shortens with every failed
+     attempt. A missed penalty is a setback, not a fresh start. */
   const need = Math.max(1.2, 6/(1+(SCRIPT.penTries||0)));
-  if(late > limit && SCRIPT.penWait > need){
+  if(SCRIPT.dueFor > limit && SCRIPT.penWait > need){
     SCRIPT.penWait = 0; SCRIPT.penTries = (SCRIPT.penTries||0)+1; SCRIPT.forced++;
     const named = due.pid || due.scorer
       ? teamOf(due.team).find(q => (due.pid && String(q.pid)===due.pid) ||
@@ -4118,6 +4304,7 @@ function scriptTick(){
 function scriptUrgency(team){
   if(!SCRIPT.active || !SCRIPT.pending || SCRIPT.pending.team!==team) return 0;
   if(S.stoppage > 0) return 1;                       // added time: get it done
+  if(S.held) return 1;                               // and so is a held clock
   return THREE.MathUtils.clamp((scriptMinute() - SCRIPT.pending.minute + 1.5)/3, 0, 1);
 }
 /* Is this the man the plan says scores it? */
@@ -4303,7 +4490,7 @@ function setThrowIn(team, at){
 
 /* ================== rules ================== */
 function setRestart(type, team, spot, label){
-  S.phase='restart';
+  S.phase='restart'; S.penLive=false;
   ball.owner=null; ball.vel.set(0,0,0); ball.spin=0;
   ball.pos.set(THREE.MathUtils.clamp(spot.x,-HALF_L+.4,HALF_L-.4), CFG.BALL_R,
                THREE.MathUtils.clamp(spot.y,-HALF_W+.4,HALF_W-.4));
@@ -4333,7 +4520,7 @@ function setRestart(type, team, spot, label){
 }
 function kickoff(team){
   ball.owner=null; ball.vel.set(0,0,0); ball.spin=0; ball.pos.set(0,CFG.BALL_R,0);
-  S.possTeam=team; S.pendingOffside=null;
+  S.possTeam=team; S.pendingOffside=null; S.penLive=false;
   for(const p of players){
     const dir=S.dir[p.team];
     let x=p.home.x*(HALF_L*.92)*dir, z=p.home.y*(HALF_W*.95);
@@ -4515,7 +4702,11 @@ function checkRules(){
       if(who){ who.celeb=4; for(const m of teamOf(scorer)) m.celeb=Math.max(m.celeb,2.2); }
       S.phase='goal'; S.freeze=5.2; S.goalSide=s; S.scorer=who; S.shake=1;
       emit('goal', {team:scorer, scorer:who?who.name:null, pid:who?who.pid:null,
-                    finish:how, score:S.score.slice(), minute:clockLabel()});
+                    finish:how, score:S.score.slice(), minute:clockLabel(),
+                    /* whether the picture put it away from the spot, which is
+                       the number that says how often the fallback is doing the
+                       work the football is supposed to do */
+                    fromPen: !!S.penLive});
       cutTo('celebration', 5.0);
       return;
     }
@@ -4552,7 +4743,7 @@ function awardPenalty(team, taker, reason){
   ball.owner=null; ball.vel.set(0,0,0); ball.spin=0;
   ball.pos.set(spot.x, CFG.BALL_R, 0);
   S.pendingOffside=null; S.liveShot=null; S.possTeam=team;
-  S.restart={type:'penalty', team, taker:t, t:2.6};
+  S.restart={type:'penalty', team, taker:t, t:2.6}; S.penLive=true;
   lowerThird('PENALTY', t?t.name:TEAMS[team].name, TEAMS[team].name+'  ·  '+clockLabel());
   event('PENALTY', reason || (TEAMS[team].name+' — spot kick'));
   cutTo('goal', 3.4);
@@ -4930,6 +5121,10 @@ function tick(dt){
   /* one number a frame, so the marking assignment is built once for the
      defending side and read eleven times rather than built eleven times */
   S.frameId = (S.frameId|0) + 1;
+  /* cleared here rather than beside the clamp: a celebration, a replay
+     and half time all return before the clamp is reached, and the flag
+     would otherwise stay stuck on through them */
+  S.held = false;
   if(S.phase==='goal'){
     S.freeze -= dt;
     for(const p of players){
@@ -4975,7 +5170,12 @@ function tick(dt){
       animate(p,dt);
     }
     if(S.freeze<=0){
-      S.half=2; S.clock=0; S.dir=[S.dir[0]*-1,S.dir[1]*-1];
+      /* and the second half starts on nought, stoppage included: added
+         time played at the end of the first half is not added time in
+         the second, and leaving it standing put every second-half minute
+         under the urgency and the short spot-kick fuse that belong to
+         the last minutes of a match */
+      S.half=2; S.clock=0; S.stoppage=0; S.dir=[S.dir[0]*-1,S.dir[1]*-1];
       /* THE SECOND HALF USED TO START WHEREVER THE FIRST ONE STOPPED.
          `el()` returns null while the host is detached — the note above
          says so, and paintBug() has guarded against it for months — and
@@ -4998,6 +5198,9 @@ function tick(dt){
   }
 
   S.clock += dt;
+  /* and it stops at a goal it has not shown yet -- see scriptClockCap */
+  { const cap = scriptClockCap();
+    if(cap != null && S.clock > cap){ S.clock = Math.max(0, cap); S.held = true; } }
   /* the last few seconds of live play, kept so a goal can be shown again */
   replayRecord(dt);
   scriptTick();
@@ -5020,11 +5223,31 @@ function tick(dt){
      recorded after the 87th minute were never shown, and the only way
      to get them on screen was to post them a full ten minutes early.
      With the football actually being played in stoppage they arrive at
-     the minute they happened. */
+     the minute they happened.
+
+     AND THE SAVE CAN ASK FOR THE SAME THING. `holdWhistle(true)` keeps
+     the second half in added time whether or not a goal is owed yet,
+     and the Dugout holds it until the save has played its last minute.
+     Without that the picture blows on ninety while the save still has
+     two to five minutes of stoppage to play, those minutes are played
+     out with nobody watching, and a goal in one of them can never be
+     shown -- which is the whole fault this exists to remove.
+
+     THE FIRST HALF PLAYS ITS STOPPAGE TOO, but only for a goal that
+     belongs in it. A goal the save records at "45+2" used to have
+     nowhere to go: the half ended on forty-five, and the picture showed
+     it in the opening seconds of the second half. So the first half is
+     extended as well -- but only while the goal it is waiting for lands
+     inside a plausible stoppage, or a match handed its whole plan up
+     front would sit at half-time for ever waiting on a goal at sixty. */
   let addedTime = false;
   if(S.clock >= S.halfLen){
-    if(S.half===2 && SCRIPT.active && SCRIPT.events.some(e=>!e.fired)
-       && (S.stoppage||0) < S.halfLen*2.0){
+    const owed = SCRIPT.active && SCRIPT.events.some(e=>!e.fired);
+    const cap = scriptClockCap();
+    const keep = S.half===2
+      ? (S.holdFT || owed)
+      : (owed && cap != null && cap < S.halfLen*1.25);
+    if(keep && (S.stoppage||0) < S.halfLen*2.0){
       S.stoppage = (S.stoppage||0) + dt;
       addedTime = true;
     }
@@ -5108,7 +5331,8 @@ function newMatch(){
   S.org = [teamOrg(0), teamOrg(1)];        /* who is leading whom, this match */
   for(const e of SCRIPT.events) e.fired = false;
   SCRIPT.blocked=0; SCRIPT.forced=0; SCRIPT.pending=null; SCRIPT.penWait=0;
-  SCRIPT.penTries=0; S.stoppage=0;
+  SCRIPT.penTries=0; SCRIPT.setWait=0; SCRIPT.setTries=0; SCRIPT.dueFor=0;
+  S.stoppage=0; S.holdFT=false; S.held=false;
   { const p1 = el('period'); if(p1) p1.textContent='1ST'; } updateBoard(); paintBoard();
   kickoff(0); cutTo('broadcast',1);
   event('KICK OFF', TEAMS[0].name+' v '+TEAMS[1].name);
@@ -5299,6 +5523,36 @@ window.Matchday = {
     S.running = wasRunning;
     return out;
   },
+  /* THE MATCH, A FEW SECONDS AT A TIME, WITH NO PICTURES.
+     simulateMatch runs a whole match in one call, which cannot model
+     the way the game actually feeds it: under live pacing the save runs
+     a couple of minutes ahead of the broadcast and posts each goal as
+     it scores it, so the picture learns about a goal while the match is
+     already running. A rig that hands over every goal before kick-off
+     is measuring something the player never sees — it was that rig that
+     reported goals arriving six minutes late, when a watched match
+     showed them on the minute.
+
+     So this steps the same tick() the live match steps, for a bounded
+     slice of match time, and hands control back. A caller can then
+     advance the save, post what it scored, and step again — the live
+     loop exactly, at the speed of arithmetic rather than of a renderer.
+
+     `beginMatch` is `start` without the frame loop, for the same
+     reason: the caller is doing the stepping. */
+  beginMatch(){ showDemoMenu(false); newMatch(); S.running=false; return this.getState(); },
+  stepMatch(seconds){
+    const n = Math.max(1, Math.round((+seconds||0)/CFG.DT));
+    const was = S.running;
+    S.running = false;                       // the frame loop must not also step it
+    let i = 0;
+    for(; i<n && S.phase!=='end'; i++) tick(CFG.DT);
+    S.running = was;
+    const out = this.getState();
+    out.stepped = i;
+    out.ended = S.phase === 'end';
+    return out;
+  },
   scriptState(){ return {active:SCRIPT.active, blocked:SCRIPT.blocked,
     /* how many owed goals the spot-kick fallback had to manufacture,
        because open play would not oblige in time. A high number is a
@@ -5316,6 +5570,12 @@ window.Matchday = {
   setCamera(m){ S.camMode=m; if(m!=='auto') cutTo(m,1e9); else cutTo('broadcast',1); return this; },
   setSpeed(v){ S.speed = Math.max(0.25, Math.min(8, +v||1)); return this; },
   setHalfLength(sec){ S.halfLen = Math.max(30, +sec||240); return this; },
+  /* KEEP PLAYING. The referee's watch belongs to whoever is running the
+     match, and when this is a view of a save file that is the save. Held
+     on, the second half runs in added time -- real football, not a frozen
+     clock -- until it is released, subject to the same safety cap as an
+     owed goal. Released, the whistle goes at the next opportunity. */
+  holdWhistle(on){ S.holdFT = !!on; return this; },
   setQuality(q){ S.quality = q?1:0; renderer.shadowMap.enabled = !!q;
                  renderer.setPixelRatio(q?Math.min(devicePixelRatio||1,2):1);
                  autoTuned = true; return this; },
@@ -5340,6 +5600,9 @@ window.Matchday = {
   getState(){
     const t = S.stats.poss[0]+S.stats.poss[1] || 1;
     return { phase:S.phase, running:S.running, half:S.half, minute:clockLabel(),
+      /* the clock as a number, and whether it is currently waiting for a
+         goal it has not shown yet -- see scriptClockCap */
+      elapsed:scriptMinute(), held:!!S.held,
       score:S.score.slice(),
       teams:[TEAMS[0].name, TEAMS[1].name],
       possession:[Math.round(S.stats.poss[0]/t*100), Math.round(S.stats.poss[1]/t*100)],

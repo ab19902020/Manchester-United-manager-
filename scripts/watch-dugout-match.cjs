@@ -25,6 +25,19 @@
  *      goal line — and the count of those refusals is reported, because
  *      a run where it refused nothing is a run that proves nothing.
  *
+ * THIS IS THE NON-LIVE PATH, and that is now the whole of what it
+ * covers. There are two ways into the Dugout: kicking off in it, where
+ * the save runs a couple of minutes ahead and each goal is handed over
+ * as it is scored (scripts/measure-goal-minute.cjs measures that one,
+ * including whether the minutes agree), and walking into it on a match
+ * that is already under way, where the save settles the result first and
+ * the picture is handed the whole plan before it kicks off. That second
+ * one is this. It used to drive the first one too, and stopped being
+ * able to the moment goals started being held for the picture rather
+ * than recorded and posted: every goal sat in the queue, the fixture
+ * stayed 0-0, and twelve matches in a row reported a goalless draw that
+ * both sides agreed on. Agreement about nothing is not agreement.
+ *
  * It uses the engine's own headless mode, which runs the identical
  * tick() the watched match runs with no rendering and no camera. That
  * matters for a duller reason too: under software rendering a watched
@@ -108,7 +121,10 @@ const SEED = +(process.argv[3] || 20260821);
          what puts each goal into the queue waiting for a minute */
       const m = new MatchSim(fix);
       MU.fix = fix; MU.m = m;
-      dug.LIVE.on = true; dug.LIVE.posted = 0; dug.LIVE.waiting = [];
+      /* live mode OFF: the save plays the match out and records it, the
+         way it does when you walk into the Dugout on a match already
+         under way */
+      dug.LIVE.on = false; dug.LIVE.posted = 0; dug.LIVE.waiting = [];
       let guard = 0;
       while (!m.done && guard++ < 600) m.tickOnce();
       if (!m.done) { try { m.finish(); } catch (e) { /* it stands */ } }
@@ -118,9 +134,7 @@ const SEED = +(process.argv[3] || 20260821);
 
       /* now hand that match to the picture the way the live path does */
       md.loadSquads({ home: dug.squadFor(m.sides[0]), away: dug.squadFor(m.sides[1]) });
-      md.playScript({ events: [], stats: null });
-      const stub = { addGoal: (g) => { md.addGoal(g); return stub; } };
-      dug.postGoals(stub, fix);
+      md.playScript(dug.planFor(fix, m));
 
       md.setHalfLength(240);
       /* WHEN THE PICTURE ACTUALLY SHOWS IT. The commentary, the 2D
@@ -139,14 +153,16 @@ const SEED = +(process.argv[3] || 20260821);
          each one was finished. */
       let pens = 0;
       const onGoal = (ev) => {
-        if (ev && /pen/i.test(String(ev.finish || ''))) pens += 1;
+        if (ev && ev.fromPen) pens += 1;
         try {
-          const m2 = parseFloat(String(md.getState().minute));
-          shown.push(Number.isFinite(m2) ? m2 : null);
+          /* `elapsed` and not `minute`: the HUD label reads "90+3" and
+             parses back to 90, which quietly hides three minutes */
+          const m2 = md.getState().elapsed;
+          shown.push(Number.isFinite(m2) ? Math.round(m2) : null);
         } catch (e) { shown.push(null); }
-        /* and the save takes the picture's minute, which is the whole
-           point: one minute exists rather than two */
-        try { dug.stampMinute(md, ev); } catch (e) { /* it keeps its own */ }
+        /* nothing to stamp: on this path the save recorded the match
+           before the picture ever saw it, and the picture's clock waits
+           on each goal's minute rather than putting its own on it */
       };
       md.on('goal', onGoal);
       const st = md.simulateMatch({ maxTicks: 400000 });
@@ -175,16 +191,22 @@ const SEED = +(process.argv[3] || 20260821);
            stamped 3-3 disagreed, which was the check being wrong rather
            than the football. */
         agreeMin: (() => {
-          const mine = (fix.sc || []).map((g) => parseFloat(String(g.min)))
-            .filter((v) => Number.isFinite(v)).sort((x, y) => x - y).join(',');
+          const mine = (fix.sc || []).map((g) => {
+            const parts = String(g.min).split('+');
+            return (parseFloat(parts[0]) || 0) + (parts[1] ? parseFloat(parts[1]) || 0 : 0);
+          }).filter((v) => Number.isFinite(v)).sort((x, y) => x - y).join(',');
           const theirs = shown.filter((v) => v != null)
             .slice().sort((x, y) => x - y).join(',');
           return mine === theirs;
         })(),
         /* and how long the picture took, against the minute the save
            originally had — a quality number, not a correctness one */
-        lag: asScored.map((was, i) => (shown[i] == null ? null
-          : shown[i] - parseFloat(was))).filter((v) => v != null),
+        lag: asScored.map((was, i) => {
+          if (shown[i] == null) return null;
+          const parts = String(was).split('+');
+          const w = (parseFloat(parts[0]) || 0) + (parts[1] ? parseFloat(parts[1]) || 0 : 0);
+          return shown[i] - w;
+        }).filter((v) => v != null),
       });
     }
     return { rows };
@@ -214,8 +236,9 @@ const SEED = +(process.argv[3] || 20260821);
     const mean = lags.reduce((t, v) => t + v, 0) / lags.length;
     const pick = (q) => lags[Math.min(lags.length - 1, Math.floor(lags.length * q))];
     console.log('\n  HOW LONG THE PICTURE TOOK, in match minutes, against the minute');
-    console.log('  the save first had it — ' + lags.length + ' goals. The save is then');
-    console.log('  stamped with the picture\'s minute, so nothing disagrees either way.');
+    console.log('  the save first had it — ' + lags.length + ' goals. On this path the');
+    console.log('  save recorded the match before the picture saw it, so the clock waits');
+    console.log('  on each of these minutes rather than putting one of its own on a goal.');
     console.log('    average ' + mean.toFixed(2)
       + '    median ' + pick(0.5).toFixed(2)
       + '    9 in 10 within ' + pick(0.9).toFixed(2)
@@ -224,8 +247,12 @@ const SEED = +(process.argv[3] || 20260821);
     console.log('    every goal\'s minute agrees between the save and the picture in '
       + agreed + ' of ' + out.rows.length + ' matches');
   }
-  console.log('\n  ' + agree + ' of ' + out.rows.length
+  const scoreOk = out.rows.filter((r) =>
+    r.picture[0] === r.save[0] && r.picture[1] === r.save[1]).length;
+  console.log('\n  ' + scoreOk + ' of ' + out.rows.length
     + ' matches ended with the picture showing exactly the score the save recorded');
+  console.log('  ' + agree + ' of ' + out.rows.length
+    + ' agreed on the score AND on every minute AND owed nothing at the whistle');
   console.log('  ' + owed + ' goals were still owed at the whistle across all of them');
   console.log('  ' + pens + ' of ' + goals + ' goals were converted from the penalty spot'
     + (goals ? '   (' + Math.round(pens / goals * 100) + '%, real football about 10%)' : '')
