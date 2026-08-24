@@ -400,6 +400,32 @@ const BAL = process.argv[5] ? JSON.parse(process.argv[5]) : null;
     const top = Object.entries(L).sort((x, y) => y[1] - x[1]).slice(0, 10);
     console.log('    commonest scorelines   ' + top
       .map(([k, v]) => k + ' ' + (v / St * 100).toFixed(1) + '%').join('   '));
+
+    /* HOW OFTEN A SIDE FAILS TO SCORE AT ALL, against how often two
+       independent Poisson sides on the same means would.
+       -----------------------------------------------------------------
+       This is the line that found the draw problem. Every constant in
+       SPREAD was swept and none of them moved the draw rate off 28%, and
+       the reason is that the excess is not spread across the drawn
+       scorelines at all: 1-1 measures right, 2-2 measures right, and the
+       whole of it is 0-0. A goalless game is two blanks in the same
+       match, so the question is not "why so many draws" but "why do so
+       many sides fail to score", and that is a different fault with a
+       different fix. */
+    let blanks = 0, hb = 0, ab = 0;
+    Object.entries(L).forEach(([k, v]) => {
+      const [h, a] = k.split('-').map(Number);
+      if (h === 0) { blanks += v; hb += v; }
+      if (a === 0) { blanks += v; ab += v; }
+    });
+    const p0 = (m) => Math.exp(-m);
+    console.log('    a side fails to score in ' + (blanks / (St * 2) * 100).toFixed(1)
+      + '% of team-innings   (Poisson on these means: '
+      + ((p0(mh) + p0(ma)) / 2 * 100).toFixed(1) + '%)');
+    console.log('    goalless matches ' + ((L['0-0'] || 0) / St * 100).toFixed(1)
+      + '%   (Poisson would give ' + (p0(mh) * p0(ma) * 100).toFixed(1)
+      + '%, real football about 8%)');
+    void hb; void ab;
   }
   const W = out.runs.reduce((t, r) => ({ out: t.out + r.wear.out, cond: t.cond + r.wear.cond,
     sharp: t.sharp + r.wear.sharp, morale: t.morale + r.wear.morale }),

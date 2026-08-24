@@ -315,6 +315,85 @@
 
 ### Added
 
+- **The draw rate has a name now: it is the goalless games.** Two new lines in
+  `scripts/measure-title-race.cjs`, and between them they turn a symptom nobody
+  could shift into a fault with an address.
+
+  The ask was to get draws from 28% closer to 23%. Twenty more settings were
+  measured on top of the ten from the last pass — home advantage in three
+  places, the parking bonus, momentum for and against, the shot-count steering,
+  the squad compression, all three sigmoid bands and their slopes and
+  multipliers, and the chance/finishing split. **None of them moves it.** The
+  whole sweep sits between 27% and 29%, and the two that looked like they had
+  found something were both noise: `compress: 0.95` read 26.4% over eight
+  seasons and 27.95% over twenty-four on two seeds, which is exactly the
+  baseline.
+
+  So the thing to measure was not the draws. What the new lines report:
+
+      a side fails to score in 30.1% of team-innings   (Poisson on these means: 26.2%)
+      goalless matches 10.9%   (Poisson would give 6.8%, real football about 8%)
+
+  1-1 measures right at 11.4% and 2-2 right at 5.1%. **Every point of the draw
+  excess is 0-0s.** The question was never "why so many draws" — it is "why do
+  so many sides fail to score at all", and that is a different fault needing a
+  different fix.
+
+  Two suspects were killed outright, which is worth as much as the diagnosis:
+
+  * **Momentum is not the cause.** Turned off entirely — `momScore: 0,
+    momConcede: 0`, no feedback at all from scoring or conceding — the blank
+    rate is 30.5% and goalless games 11.3%. Unchanged.
+  * **Nor is chance quality versus chance count.** The obvious reading of the
+    blank rate is that a strong defence suppresses how *many* chances you get
+    where it should suppress how *good* they are, so weight was moved out of
+    the chance sigmoid and into finishing (`chanceK` 3.2 → 1.6, `shotK` 0.42 →
+    0.85). Blanks got worse, at 31.9%, and goalless games worse at 11.5%.
+
+  And the trap that makes this look tunable when it is not: every route to
+  fewer blanks inside these constants works by making matches more even, which
+  adds draws as fast as it removes them. Compressing all three bands cut blanks
+  to 28.2% and pushed draws *up* to 29.7%, with the champion collapsing from
+  85.9 to 80.5.
+
+  The arithmetic that bounds the whole thing, since it was never written down:
+  two independent Poisson sides on the real Premier League means, 1.53 and
+  1.27, draw 25.0% and the home side wins 43.4%. Real football draws 23–24%, so
+  it sits *below* independent Poisson; this game sits 2.2 points *above* it. No
+  constant in `SPREAD` crosses that gap, because the gap is the shape of the
+  scoring distribution rather than its level.
+
+- **`scripts/audit-menus.cjs` — can you click on everything, and does anything
+  happen?** Walks all 19 screens, clicks every one of 488 controls one at a
+  time from a restored starting state, and reports three things: which threw,
+  which changed nothing at all, and which elements are dressed as controls
+  without being wired to anything.
+
+  The result on the shipped build is **0 threw, 0 dead, 0 inert-but-clickable**,
+  and statically all 294 `data-action` values in the markup have handlers. Every
+  finding it produced along the way was the instrument rather than the game, and
+  each is now fixed in the rig, which is the only reason the clean run means
+  anything:
+
+  * it compared the first and last 400 characters of a screen, so the entire
+    Tactics screen read as dead — every chip on it moves an `on` class in the
+    middle of the markup and leaves both ends identical. It hashes the whole
+    screen now.
+  * it counted clicking the tab you are already on as a dead control, which
+    buried the handful that mattered under twenty that did not.
+  * it snapshotted synchronously, so the three save-slot buttons — which await
+    the store before they write — all read as dead.
+  * it ignored `#toast`, which is one element that changes its text, so
+    "⬇️ Save file exported" counted as no response.
+  * it treated `.kpi` and `.row` layout tiles as buttons and produced 146
+    phantom rows. What the browser says the cursor is over an element IS the
+    test for "a player will try pressing this", and it uses that now.
+
+  What it does not yet cover is the depth behind the doors — modal sheets and
+  the match screen. The first attempt at crawling those ran unbounded and hung;
+  it has a time budget and per-sheet caps now, but no clean run has come out of
+  it, so that half is not claimed.
+
 - **`SPREAD.trimTilt`, shipped at 0 and changing nothing.** The goal-rate
   controller holds a division at 2.80 by trimming every side's goals alike,
   which keeps the *ratio* between a good attack and a poor one but shrinks the
