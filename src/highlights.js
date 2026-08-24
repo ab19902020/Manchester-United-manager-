@@ -79,6 +79,23 @@
       document.querySelectorAll('#matchScreen [data-action="mtab"][data-v="dugout"]')
         .forEach((b) => b.remove());
       if (MU && MU.tab === 'dugout') MU.tab = 'pitch';
+      /* AND SOMETHING HAS TO BE LIT. The bar records which tab was
+         selected at the moment it was built, so taking the Dugout chip
+         off a bar that was built while the Dugout was selected leaves
+         three chips and none of them on -- measured in JSDOM: tab
+         "pitch", chips pitch/comm/stats, not one of them lit. Rather
+         than depend on which layer rebuilds last, the lamp is set from
+         MU.tab here, every time. */
+      const chips = [...document.querySelectorAll('#matchScreen [data-action="mtab"]')];
+      if (!chips.length) return;
+      const want = (MU && MU.tab) || 'pitch';
+      let hit = false;
+      chips.forEach((b) => {
+        const on = b.dataset.v === want;
+        b.classList.toggle('on', on);
+        if (on) hit = true;
+      });
+      if (!hit) { chips[0].classList.add('on'); if (MU) MU.tab = chips[0].dataset.v; }
     } catch (error) { /* ignore */ }
   }
 
@@ -358,7 +375,40 @@
      show. A goalless draw gets no button rather than a button that opens
      an empty reel.
      ------------------------------------------------------------------- */
+  /* THE REEL IS THE END OF THE MATCH, so it does not wait to be found.
+     -------------------------------------------------------------------
+     "the highlight of goals should be after the match has finished"
+
+     It was a button first, and the button could not be placed. Full time
+     hands the controls to the dressing-room panel, whose `.dr-wrap` is
+     `height:100%` of #mCtl; a button at the top of #mCtl, a button
+     appended inside the wrap, and a button floated over the match screen
+     were all measured as present, visible and 366x46 -- and all three
+     had `.dr-grp-b` answering at their centre. Three attempts at the
+     same wrong idea.
+
+     The right one is simpler and is what was actually asked for: when
+     the whistle goes and there were goals, the goals play. Closing the
+     reel puts the manager in the dressing room, which is where full time
+     was always going to leave him. */
+  let played = null;
+
+  function autoPlayAtFullTime() {
+    try {
+      if (!MU || !MU.m || !MU.m.done || !MU.fix) return;
+      if (played === MU.fix) return;
+      if (!reelFor(MU.fix).length) return;
+      played = MU.fix;
+      /* a beat, so the full-time whistle and the score land first */
+      setTimeout(() => {
+        try { if (MU && MU.m && MU.m.done && MU.fix === played) play(MU.fix, MU.m); }
+        catch (error) { /* the report is still there */ }
+      }, 900);
+    } catch (error) { /* ignore */ }
+  }
+
   function offerAtFullTime() {
+    autoPlayAtFullTime();
     try {
       const ctl = document.getElementById('mCtl');
       if (!ctl) return;
@@ -368,10 +418,28 @@
       const b = document.createElement('button');
       b.id = 'hlBtn';
       b.className = 'btn btn-block';
-      b.style.cssText = 'margin-bottom:8px';
+      b.style.cssText = 'margin:8px 0 0';
       b.setAttribute('data-action', 'hlPlay');
       b.textContent = '\ud83c\udfa5 Watch the highlights';
-      ctl.insertBefore(b, ctl.firstChild);
+      /* ABOVE THE DRESSING ROOM, NOT IN IT. Full time hands the controls
+         to the dressing-room panel, whose `.dr-wrap` is `height:100%` of
+         #mCtl -- so a button placed at the top of #mCtl, and a button
+         appended inside the wrap, are both laid out in the same box and
+         covered by it. Measured twice: present, visible, 366x46, and
+         what answered at its centre was `.dr-grp-b` both times. A
+         control the player cannot press is not a control.
+
+         So it stops competing for that box. Anchored to the match screen
+         just above the panel, on its own layer, it is the first thing
+         under the scoreboard when the whistle goes. */
+      b.style.cssText = 'position:absolute;left:12px;right:12px;z-index:12;'
+        + 'margin:0;box-shadow:0 6px 20px rgba(0,0,0,.55)';
+      const screen = document.getElementById('matchScreen') || ctl.parentElement;
+      const anchor = ctl.getBoundingClientRect();
+      const host = screen.getBoundingClientRect();
+      b.style.top = Math.max(8, Math.round(anchor.top - host.top - 54)) + 'px';
+      if (getComputedStyle(screen).position === 'static') screen.style.position = 'relative';
+      screen.appendChild(b);
     } catch (error) { /* the report is still there */ }
   }
 
@@ -394,6 +462,6 @@
 
   window.RBSHighlights = Object.freeze({
     standDown, offTheBar, reelFor, minuteOf, dug, api, num,
-    play, next, close, REEL, offerAtFullTime,
+    play, next, close, REEL, offerAtFullTime, autoPlayAtFullTime,
   });
 }());

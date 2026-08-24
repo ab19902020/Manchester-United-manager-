@@ -358,29 +358,86 @@ test('a held goal is recorded at the minute the save scored it, whatever the pic
       'a goal nobody was waiting for changes nothing — the picture cannot invent one');
   });
 
-test('the tab you are on is the tab that is lit', { timeout: 45000 }, async (t) => {
+test('the match opens on the Pitch, and the Dugout tab is gone', { timeout: 45000 }, async (t) => {
   const game = await createGame();
   t.after(() => game.close());
   await startCareer(game, 'Match Tabs');
 
+  /* THE DUGOUT WAS A LIVE VIEW AND IS NOW THE HIGHLIGHTS.
+     It used to be the tab a match opened on. Watching live meant the
+     broadcast had to score a named man's goal inside a named minute
+     while the save ran beside it, and at 150 seconds a half there is no
+     room to build one out of open play -- so it forced them, measured at
+     42% of the picture's goals put away from the penalty spot. Live play
+     is the three views that have always agreed with each other, and the
+     goals are played back when the match is over. */
   const lit = game.eval(`(()=>{
     G.day=nextUserFixture().day;
     UI.view='home';render();ACTIONS.advance();
     ACTIONS.kickoff();
     const read=()=>[...document.querySelectorAll('#matchScreen .mtabs [data-action="mtab"]')]
       .filter(b=>b.classList.contains('on')).map(b=>b.dataset.v).join(',');
-    const out={atKickoff:read(), after:{}};
-    ['comm','stats','pitch','dugout'].forEach(v=>{
+    const all=()=>[...document.querySelectorAll('#matchScreen .mtabs [data-action="mtab"]')]
+      .map(b=>b.dataset.v).join(',');
+    const out={atKickoff:read(), tabs:all(), after:{}};
+    ['comm','stats','pitch'].forEach(v=>{
       ACTIONS.mtab(document.querySelector('.mtabs [data-v="'+v+'"]'));
       out.after[v]=read();
     });
+    const d=window.RBSDugoutMatchday;
+    out.liveWant=d.LIVE.want; out.liveOn=d.LIVE.on; out.standDown=d.state.failed;
     return out;
   })()`);
 
-  /* kick-off opens on the football, not on the 2D pitch */
-  assert.equal(lit.atKickoff, 'dugout');
+  assert.equal(lit.tabs, 'pitch,comm,stats',
+    'three views, all of them the same engine — and no Dugout among them');
+  assert.equal(lit.atKickoff, 'pitch', 'a match opens on the football');
   assert.equal(lit.after.comm, 'comm');
   assert.equal(lit.after.stats, 'stats');
   assert.equal(lit.after.pitch, 'pitch');
-  assert.equal(lit.after.dugout, 'dugout');
+  assert.equal(lit.liveWant, false, 'the live driver is never armed');
+  assert.equal(lit.liveOn, false);
+  assert.equal(lit.standDown, true,
+    'and it is stood down, so it cannot take a match even if something asks it to');
 });
+
+test('the reel is built from the record, and says what the record says',
+  { timeout: 45000 }, async (t) => {
+    const game = await createGame();
+    t.after(() => game.close());
+    await startCareer(game, 'The Reel');
+
+    const out = game.eval(`(()=>{
+    G.day=nextUserFixture().day;
+    UI.view='home';render();ACTIONS.advance();
+    ACTIONS.kickoff();
+    const m=MU.m,f=MU.fix;
+    m._varOff=true;
+    try{ goalCal(f.div).trim=0; }catch(e){}
+    const home=m.sides[0],away=m.sides[1];
+    const hs=home.onfield.find(x=>x.slot!=='GK');
+    const as=away.onfield.find(x=>x.slot!=='GK');
+    m.min=40; m.stage='H2'; m.goal(home,away,hs,null,null,false);
+    m.min=68; m.goal(away,home,as,null,null,true);
+    const reel=window.RBSHighlights.reelFor(f);
+    return {
+      recorded:f.sc.map(g=>String(g.min)).join(','),
+      minutes:reel.map(r=>r.label).join(','),
+      teams:reel.map(r=>r.team).join(','),
+      pens:reel.map(r=>String(r.pen)).join(','),
+      who:reel.map(r=>r.who).join('|'),
+      wantWho:hs.p.name+'|'+as.p.name,
+      empty:window.RBSHighlights.reelFor({h:f.h,a:f.a,sc:[]}).length,
+      stoppage:window.RBSHighlights.minuteOf('45+3',0)
+    };
+  })()`);
+
+    assert.equal(out.recorded, '40,68', 'the save recorded both goals at their minutes');
+    assert.equal(out.minutes, '40,68',
+      'and the reel carries those minutes — there is nothing to race, so nothing to move');
+    assert.equal(out.teams, '0,1', 'the home goal is team 0 and the away goal team 1');
+    assert.equal(out.pens, 'false,true', 'a penalty is carried as a penalty');
+    assert.equal(out.who, out.wantWho, 'each moment names the man who actually scored it');
+    assert.equal(out.empty, 0, 'a goalless match has no reel, so nothing is offered');
+    assert.equal(out.stoppage, 48, '"45+3" is the forty-eighth minute, not the forty-fifth');
+  });

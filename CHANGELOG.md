@@ -364,6 +364,18 @@
   Nothing is deleted. `src/dugout-matchday.js` stays where it is, because its
   squad conversion, kit conversion and mount are exactly what the reel needs.
 
+  **The reel plays when the whistle goes, not when a button is found.** It was
+  a button first, and the button could not be placed: full time hands the
+  controls to the dressing-room panel, whose `.dr-wrap` is `height:100%` of
+  `#mCtl`. A button at the top of `#mCtl`, a button appended inside the wrap,
+  and a button floated over the match screen were all measured as present,
+  visible and 366x46 — and all three had `.dr-grp-b` answering at their centre.
+  Three attempts at the same wrong idea. What was asked for was simpler: when
+  the match finishes and there were goals, the goals play. Closing the reel
+  leaves the manager in the dressing room, which is where full time was always
+  going to put him. Verified through a real match played by the game's own
+  timer, both halves, to `stage: FT` — the reel opens by itself.
+
   **What is not verified:** how the reel looks at real speed. Under headless
   software rendering the engine gets about one frame a second, so on-screen
   playback here is measuring SwiftShader rather than the reel. The staging logic
