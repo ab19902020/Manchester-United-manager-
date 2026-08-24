@@ -46,6 +46,20 @@ const SHIPPED = {
   homePoss: 1.02, homeBuild: 1.04, homeShot: 1.03,
   park: 1.05,
   momScore: 4, momConcede: 2.6,
+  /* how hard a side is steered back towards thirteen shots a match.
+     Named while chasing the draw rate: steering the shots steers the
+     goals, so it was the first suspect. It was not the cause — per-side
+     goals measured 1.08 and 1.09 of variance over mean, slightly ABOVE
+     Poisson rather than below — and the value is untouched. */
+  shotPull: 0.017,
+  /* HOW MUCH OF THE GOAL-RATE TRIM FALLS ON THE WEAKER ATTACK. Zero
+     trims every side alike, which is what shipped and what this pins.
+     Above zero a mismatch moves apart while the division still lands on
+     its goals-a-game target: measured at 0.10 it puts the champion on
+     86.9 and second on 81.6 against real 87.6 and 80.5. It is off
+     because the table already measured right, and because it moves the
+     draw rate only 0.6 points, which is inside the noise. */
+  trimTilt: 0,
 };
 
 test('the balance constants hold the values they shipped with',

@@ -156,8 +156,19 @@ const OUT = path.resolve(__dirname, '..', 'league-history.json');
       }
       const goals = rows.reduce((t, r) => t + r.gf, 0);
       const played = rows.reduce((t, r) => t + r.p, 0) / 2;
+      /* THE DRAW RATE OUT OF A PLAYED CAREER, which is the only place it
+         can be read honestly. A league-only rig plays every club on
+         every matchday in lockstep, so a whole division is tired at the
+         same time — and two equally tired sides draw. A real season
+         staggers it with cup ties, European nights and midweek games,
+         so this number and the league-only rig's need not agree, and
+         where they differ this one is the game. Real English football
+         draws 24 in every hundred. */
+      const drawn = rows.reduce((t, r) => t + r.d, 0);
+      const allP = rows.reduce((t, r) => t + r.p, 0);
       console.log('  ' + rows.length + ' clubs, ' + played + ' matches, '
-        + (played ? (goals / played).toFixed(2) : '0') + ' goals a game');
+        + (played ? (goals / played).toFixed(2) : '0') + ' goals a game, '
+        + (allP ? (drawn / allP * 100).toFixed(1) : '0') + '% drawn  (real 24%)');
     }
     console.log('\n  cups   League Cup: ' + (s.cups.LC || '—')
       + '   FA Cup: ' + (s.cups.FA || '—') + '   Europe: ' + (s.cups.CL || '—'));

@@ -214,7 +214,7 @@ const BAL = process.argv[5] ? JSON.parse(process.argv[5]) : null;
          says whether the goals are spread the way football spreads them
          or bunched into 1-1s. A league can arrive at the right champion
          with entirely the wrong football underneath it. */
-      const split = { h: 0, d: 0, a: 0 };
+      const split = { h: 0, d: 0, a: 0, hg: 0, ag: 0, hh: 0, aa: 0, ha: 0 };
       const lines = {};
       /* WHAT A SEASON LEAVES ON A SQUAD. Reset the squads before every
          match and this engine draws 25.2% of them and finishes 4.4%
@@ -249,6 +249,23 @@ const BAL = process.argv[5] ? JSON.parse(process.argv[5]) : null;
           if (fix.hs > fix.as) { H.w += 1; A.l += 1; H.pts += 3; split.h += 1; }
           else if (fix.hs < fix.as) { A.w += 1; H.l += 1; A.pts += 3; split.a += 1; }
           else { H.d += 1; A.d += 1; H.pts += 1; A.pts += 1; split.d += 1; }
+          /* HOW THE GOALS SPLIT BETWEEN THE TWO ENDS. Real football
+             scores about 1.53 at home and 1.27 away out of its 2.8, and
+             that gap is a large part of why only 24% of matches finish
+             level: two unequal averages produce fewer identical scores
+             than two equal ones. A game whose home and away sides score
+             alike will draw more than football does however its win
+             percentages are arranged. */
+          split.hg += fix.hs; split.ag += fix.as;
+          /* AND HOW SPREAD OUT EACH SIDE'S GOALS ARE. Draws are
+             P(home - away = 0), so they are set by the variance of the
+             difference: Var(H) + Var(A) - 2Cov. If each side's goals
+             are under-dispersed -- more predictable than Poisson --
+             both scores cluster near their means, the means are close
+             together, and the two land on the same number far too
+             often. Football's per-side variance over mean is about 1. */
+          split.hh += fix.hs * fix.hs; split.aa += fix.as * fix.as;
+          split.ha += fix.hs * fix.as;
           const key = Math.min(fix.hs, 5) + '-' + Math.min(fix.as, 5);
           lines[key] = (lines[key] || 0) + 1;
         });
@@ -260,6 +277,25 @@ const BAL = process.argv[5] ? JSON.parse(process.argv[5]) : null;
       const games = table.reduce((t, r) => t + r.p, 0) / 2;
       runs.push({
         split, lines,
+        /* WHAT BEING GOOD IS WORTH, which is the number the draw rate
+           is downstream of. A real champion scores about 1.70 times its
+           division's average and concedes about 0.62 times it; the club
+           that finishes bottom is close to the mirror. If the two ends
+           of the league sit nearer the middle than that, every matchup
+           is nearer even than football's and near-even matches draw. */
+        spread: (() => {
+          const byI = {};
+          table.forEach((r) => { byI[r.i] = r; });
+          const totG = table.reduce((t, r) => t + r.gf, 0);
+          const totP = table.reduce((t, r) => t + r.p, 0);
+          const mean = totP ? totG / totP : 1;
+          const at = (ci) => {
+            const r = byI[ci];
+            if (!r || !r.p || !mean) return null;
+            return { gf: (r.gf / r.p) / mean, ga: (r.ga / r.p) / mean };
+          };
+          return { top: at(byStrength[0]), bot: at(byStrength[byStrength.length - 1]) };
+        })(),
         wear: { out: wear.out / wear.n, cond: wear.cond / wear.men,
           sharp: wear.sharp / wear.men, morale: wear.morale / wear.men },
         champ: G.clubs[table[0].i].name,
@@ -322,14 +358,38 @@ const BAL = process.argv[5] ? JSON.parse(process.argv[5]) : null;
   console.log('  table vs strength   ' + avg((r) => r.rho).toFixed(1)
     + ' places out on average   (real football: about 3)');
   /* the division as a whole, across every league match played */
-  const S = out.runs.reduce((t, r) => ({ h: t.h + r.split.h, d: t.d + r.split.d, a: t.a + r.split.a }),
-    { h: 0, d: 0, a: 0 });
+  const S = out.runs.reduce((t, r) => ({ h: t.h + r.split.h, d: t.d + r.split.d, a: t.a + r.split.a,
+    hg: t.hg + r.split.hg, ag: t.ag + r.split.ag, hh: t.hh + r.split.hh,
+    aa: t.aa + r.split.aa, ha: t.ha + r.split.ha }),
+  { h: 0, d: 0, a: 0, hg: 0, ag: 0, hh: 0, aa: 0, ha: 0 });
   const St = S.h + S.d + S.a;
   if (St) {
     console.log('\n  every league match, ' + St + ' of them');
     console.log('    home wins  ' + (S.h / St * 100).toFixed(1) + '%   (real 45%)');
     console.log('    draws      ' + (S.d / St * 100).toFixed(1) + '%   (real 24%)');
     console.log('    away wins  ' + (S.a / St * 100).toFixed(1) + '%   (real 31%)');
+    console.log('    goals      ' + (S.hg / St).toFixed(2) + ' at home, '
+      + (S.ag / St).toFixed(2) + ' away   (real 1.53 and 1.27)');
+    /* what an independent-Poisson model would draw at those two means,
+       which is the floor a low-scoring sport is arguing with */
+    const pois = (m, n) => {
+      let p = 0;
+      for (let k = 0; k < 12; k += 1) {
+        const f = (x) => (x <= 1 ? 1 : x * f(x - 1));
+        p += (Math.exp(-m) * (m ** k) / f(k)) * (Math.exp(-n) * (n ** k) / f(k));
+      }
+      return p;
+    };
+    const mh = S.hg / St, ma = S.ag / St;
+    const vh = S.hh / St - mh * mh, va = S.aa / St - ma * ma;
+    const cov = S.ha / St - mh * ma;
+    console.log('    spread     ' + (vh / mh).toFixed(2) + ' at home and '
+      + (va / ma).toFixed(2) + ' away, variance over mean   (football about 1.00)');
+    console.log('    the goal difference varies by ' + (vh + va - 2 * cov).toFixed(2)
+      + '; Poisson on these means would give ' + (mh + ma).toFixed(2)
+      + '   (lower means more draws)');
+    console.log('    if those two were Poisson it would draw '
+      + (pois(S.hg / St, S.ag / St) * 100).toFixed(1) + '% of them');
     const L = {};
     out.runs.forEach((r) => Object.entries(r.lines)
       .forEach(([k, v]) => { L[k] = (L[k] || 0) + v; }));
@@ -351,6 +411,16 @@ const BAL = process.argv[5] ? JSON.parse(process.argv[5]) : null;
   console.log('    condition    ' + (W.cond / wn).toFixed(1) + '%');
   console.log('    sharpness    ' + (W.sharp / wn).toFixed(1) + '%');
   console.log('    morale       ' + (W.morale / wn).toFixed(1) + '%');
+  /* the two ends of the league, against what real football gives them */
+  const sp = out.runs.map((r) => r.spread).filter((x) => x && x.top && x.bot);
+  if (sp.length) {
+    const m = (f) => sp.reduce((t, x) => t + f(x), 0) / sp.length;
+    console.log('\n  what being good is worth, as a multiple of the division average');
+    console.log('    best squad    ' + m((x) => x.top.gf).toFixed(2) + ' scored, '
+      + m((x) => x.top.ga).toFixed(2) + ' conceded   (real champion 1.70 and 0.62)');
+    console.log('    worst squad   ' + m((x) => x.bot.gf).toFixed(2) + ' scored, '
+      + m((x) => x.bot.ga).toFixed(2) + ' conceded   (real bottom 0.62 and 1.70)');
+  }
   const even = out.duels['evenly matched'];
   if (even) {
     const t = even.w + even.d + even.l;
