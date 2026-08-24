@@ -25,6 +25,34 @@
   have won it before. The English divisions still report 34, 29, 33, 42 and 36
   down the pyramid.
 
+- **The draw rate: ten mechanisms measured, none of which moves it.** The
+  target itself was worth checking before tuning against it — the last ten
+  Premier League seasons average about **23%** drawn rather than 24%, and the
+  competition has produced 31.3% (1996-97), an all-time low of 18.7%
+  (2018-19) and 26% (2025-26). So the gap is real, about four points against
+  the modern rate, but it is not a fixed number.
+
+  Already right: 2.80 goals a game, per-side dispersion 1.08 (football is
+  about the same), away wins 32% against a real 31%, the bottom club and
+  mid-table. Wrong: home wins 41% against a real 45% — and those four missing
+  home wins are exactly the four points of surplus draws.
+
+  Tested and rejected, each over 4,560 matches or more: the gate clamps,
+  slopes, multipliers and squad compression (absorbed by the goal-rate
+  controller); home advantage (trades away wins for home wins, and away wins
+  are already right); the day-form range both widened *and removed entirely*
+  (dispersion unchanged at 1.08, draws rose to 28.0%); the calendar; the
+  late-game "park" term; momentum for conceding and for scoring, both removed
+  (draws rose to 27.7%); a level game given a reason to break (27.3, 26.2,
+  27.5 for pushes of nothing, 6% and 14% — non-monotonic and inside one
+  standard error); tilting the goal-rate trim by the quality of the matchup;
+  and widening conversion (draws rose, because it raises dispersion and more
+  dispersion means more goalless draws).
+
+  The conclusion is that the draw rate is a property of how the match model
+  generates a result rather than of any parameter inside it, and closing it is
+  a redesign rather than a tuning pass.
+
 - **The draw rate is 27.7%, and the reason is not what I twice thought it
   was.** Five played seasons, 1,900 Premier League matches, standard error
   0.7, on 2.80 goals a game which is exactly real. Real football draws 24%.
@@ -211,6 +239,19 @@
 
 ### Added
 
+- **`SPREAD.trimTilt`, shipped at 0 and changing nothing.** The goal-rate
+  controller holds a division at 2.80 by trimming every side's goals alike,
+  which keeps the *ratio* between a good attack and a poor one but shrinks the
+  *difference* — and the difference is what decides whether a match finishes
+  level. Set above 0 the trim is tilted by the strength of the attack against
+  the defence it faces, so a mismatch moves apart while the division still
+  lands on its target. Measured over 9,120 matches it puts the champion on
+  86.9 and second on 81.6 against real 87.6 and 80.5, and moves the draw rate
+  0.6 points, which is inside the noise. It is off because the table already
+  measured right and the draw rate is what was being asked for.
+- **`src/golden-boot.js`** — every division's top scorer, and the Golden Boot
+  itself restricted to the top flight of a country, counted across every
+  competition.
 - **`scripts/measure-title-race.cjs`** — a whole division played with the
   game's own `quickSim`, pinned to one world seed so two runs can be compared
   at all. Reports what the champion finished on, whether the table follows
