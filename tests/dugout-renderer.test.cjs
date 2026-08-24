@@ -40,57 +40,62 @@ test('engine commentary maps onto actions the renderer can show', () => {
   assert.equal(renderer.classifyEvent('A quiet spell in midfield.', ''), null);
 });
 
-test('the extracted Dugout renderer owns the live frame and receives engine events', { timeout: 45000 }, async (t) => {
-  const game = await createGame();
-  t.after(() => game.close());
-  await startCareer(game, 'Dugout Regression');
+test('the Dugout is retired, and the broadcast is kept for the highlights',
+  { timeout: 45000 }, async (t) => {
+    const game = await createGame();
+    t.after(() => game.close());
+    await startCareer(game, 'Dugout Retired');
 
-  const result = game.eval(`(()=>{
+    /* WHAT THIS TEST USED TO PROVE no longer exists. It selected the
+       Dugout tab, drew the 2D renderer into it and checked that the
+       renderer picked up engine events -- the fallback path for a device
+       that could not bring the broadcast up.
+
+       There is no Dugout tab to select now. Watching a match live meant
+       the broadcast had to score a named man's goal inside a named
+       minute while the save ran beside it, and at 150 seconds a half
+       there is no room to build one out of open play, so it forced them:
+       42% of the picture's goals were put away from the penalty spot.
+       Live play is Pitch, Text and Stats, and the goals are played back
+       once the match is over.
+
+       So what matters here is that the retirement is complete and that
+       nothing needed for the reel was thrown away with it. */
+    const result = game.eval(`(()=>{
     G.day=nextUserFixture().day;
     UI.view='home';render();ACTIONS.advance();
     ACTIONS.kickoff();
-    ACTIONS.mtab(document.querySelector('.mtabs [data-action="mtab"][data-v="dugout"]'));
-    drawDugout();
-    const before=window.RBSDugoutRenderer.scene.frame;
-    const side=MU.m.sides[0];
-    const player=side.onfield.find(x=>x.slot!=='GK');
-    MU.m.say(MU.m.dispMin(),side,player.p.name+' completes a pass through midfield.','');
-    drawDugout();
-    const event=window.RBSDugoutRenderer.scene.event;
-    /* THE 3D DUGOUT IS GONE. It was replaced by the Matchday broadcast,
-       which runs in its own frame -- so what this test now checks is the
-       thing that still matters here: the 2D renderer is what draws while
-       that frame is coming up, and for good if it never does. In JSDOM
-       it never does, which is exactly the fallback case. */
-    const canvasPresent=!!document.getElementById('dugCanvas');
-    ACTIONS.mtab(document.querySelector('.mtabs [data-action="mtab"][data-v="pitch"]'));
+    const d=window.RBSDugoutMatchday;
     return {
-      installed:window.RBSDugoutRenderer.installed,
+      /* the tab is gone, and nothing can reach it */
+      dugoutTab:!!document.querySelector('#matchScreen .mtabs [data-v="dugout"]'),
+      tabs:[...document.querySelectorAll('#matchScreen .mtabs [data-action="mtab"]')]
+        .map(b=>b.dataset.v).join(','),
+      lit:[...document.querySelectorAll('#matchScreen .mtabs [data-action="mtab"]')]
+        .filter(b=>b.classList.contains('on')).map(b=>b.dataset.v).join(','),
+      /* the live driver is stood down and cannot take a match */
+      liveWant:d.LIVE.want, liveOn:d.LIVE.on, standDown:d.state.failed,
+      /* and everything the reel runs on is still here */
       broadcastLoaded:!!window.RBSDugoutMatchday,
-      broadcastStarted:!!(window.RBSDugoutMatchday&&window.RBSDugoutMatchday.state.started),
-      frames:window.RBSDugoutRenderer.scene.frame,
-      advanced:window.RBSDugoutRenderer.scene.frame>before,
-      event:event&&event.type,
-
-      actor:event&&event.primary&&event.primary.p.name,
-      canvas:canvasPresent,
-      pitchTabSelected:document.querySelector('.mtabs [data-v="pitch"]').classList.contains('on'),
-      dugoutTabSelected:document.querySelector('.mtabs [data-v="dugout"]').classList.contains('on'),
-      error:window.RBSDugoutRenderer.scene.lastError&&String(window.RBSDugoutRenderer.scene.lastError)
+      squadFor:typeof d.squadFor==='function',
+      highlights:!!window.RBSHighlights,
+      reelFor:typeof window.RBSHighlights.reelFor==='function',
+      rendererInstalled:window.RBSDugoutRenderer.installed
     };
   })()`);
 
-  assert.equal(result.installed, true);
-  assert.equal(result.broadcastLoaded, true,
-    'the broadcast driver is installed');
-  assert.equal(result.broadcastStarted, false,
-    'and in JSDOM the frame never comes up, which is the fallback case');
-  assert.equal(result.canvas, true);
-  assert.equal(result.pitchTabSelected, true);
-  assert.equal(result.dugoutTabSelected, false);
-  assert.equal(result.advanced, true);
-  assert.ok(result.frames >= 2);
-  assert.equal(result.event, 'pass');
-  assert.ok(result.actor);
-  assert.equal(result.error, null);
-});
+    assert.equal(result.dugoutTab, false, 'there is no Dugout tab to select');
+    assert.equal(result.tabs, 'pitch,comm,stats');
+    assert.equal(result.lit, 'pitch', 'and a match opens on the football');
+    assert.equal(result.liveWant, false, 'the live driver is never armed');
+    assert.equal(result.liveOn, false);
+    assert.equal(result.standDown, true,
+      'and it is stood down, so it cannot take a match even if asked');
+    assert.equal(result.broadcastLoaded, true,
+      'the broadcast driver stays — the reel is built on its squad and kit conversion');
+    assert.equal(result.squadFor, true);
+    assert.equal(result.highlights, true, 'and the reel itself is installed');
+    assert.equal(result.reelFor, true);
+    assert.equal(result.rendererInstalled, true,
+      'the 2D renderer is left alone rather than deleted');
+  });

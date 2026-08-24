@@ -5576,6 +5576,51 @@ window.Matchday = {
      clock -- until it is released, subject to the same safety cap as an
      owed goal. Released, the whistle goes at the next opportunity. */
   holdWhistle(on){ S.holdFT = !!on; return this; },
+  /* THE CLOCK WAITING FOR AN OWED GOAL IS A LIVE-MATCH DEVICE. A
+     highlights reel has no clock to keep honest -- the minute on the
+     caption comes out of the save, because the goal already happened --
+     so the reel turns it off and lets the football run. */
+  holdClock(on){ SCRIPT.hold = !!on; return this; },
+  /* PUT THE BALL WHERE THE GOAL IS OWED, NOW.
+     Inside a live match this is the escalation the referee reaches for
+     when a goal is overdue, and it waits its turn. A highlight has no
+     time to wait: the whole clip is the ball breaking to the man who
+     scored and the finish that followed, so the reel asks for it
+     directly and asks again until the ball is in the net. Measured
+     without it, a staged moment took eight to thirty seconds to come off
+     and some never did. */
+  stageChance(team, close){
+    if(S.phase!=='play') return false;
+    const t = team===1?1:0;
+    if(!close) return pressureChance(t);
+    /* THE CLIP BEGINS IN THE BOX. Working the ball up from the halfway
+       line took a median of twelve seconds a moment, which is not a
+       highlight, it is a match. A highlight of a goal that has already
+       been scored can start where the goal started: the man who scored
+       it, on the ball, inside the area, with his marker a yard off.
+       Moving him there is invisible because the clip begins on it. */
+    const s = S.dir[t];
+    const named = teamOf(t).find(q => isScriptScorer(q))
+      || teamOf(t).find(q => q.isFwd && !q.isGK)
+      || teamOf(t).find(q => !q.isGK);
+    if(!named) return false;
+    named.pos.set(s*(HALF_L - (9 + Math.random()*7)), (Math.random()-0.5)*15);
+    named.vel.set(0,0);
+    named.face = s>0 ? 0 : Math.PI;
+    named.cool = 0;
+    ball.pos.set(named.pos.x + s*0.45, CFG.BALL_R, named.pos.y);
+    ball.vel.set(0,0,0); ball.spin = 0; ball.cool = 0;
+    ball.owner = named;
+    S.possTeam = t; S.passTo = null; S.lastTouch = named;
+    S.pendingOffside = null; S.liveShot = null;
+    for(const q of players){
+      if(q.team===t) continue;
+      const d = Math.hypot(q.pos.x-ball.pos.x, q.pos.y-ball.pos.z);
+      if(q.isGK) continue;
+      if(d < 7) q.cool = Math.max(q.cool, 0.55);
+    }
+    return true;
+  },
   setQuality(q){ S.quality = q?1:0; renderer.shadowMap.enabled = !!q;
                  renderer.setPixelRatio(q?Math.min(devicePixelRatio||1,2):1);
                  autoTuned = true; return this; },

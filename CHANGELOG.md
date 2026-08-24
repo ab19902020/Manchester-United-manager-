@@ -315,6 +315,72 @@
 
 ### Changed
 
+- **The Dugout stops being a live view and becomes the highlights.** "Remove
+  dugout mode. It's just not working. It's just forcing penalties for the goals.
+  I think we should use that visual engine to create highlights at the end of
+  the game."
+
+  He is right, and every measurement in this changelog agrees with him. Watching
+  live meant the broadcast had to score a named man's goal inside a named minute
+  while a save file ran alongside it — and a half in the Dugout is 150 seconds,
+  so a match minute is three and a third seconds of football. Nobody builds a
+  goal out of open play in that. Every bridge built over the gap cost something:
+  posting the goal early moved the record (the save took the picture's minute,
+  so a 40th-minute goal was written down as the 55th); holding the clock made
+  the minutes exact — 221 of 221 — and stopped the clock for thirty seconds a
+  goal; the escalation ladder put **42% of the picture's goals away from the
+  penalty spot**, and pushing the spot kick out to forty-five seconds only
+  brought that to 11%.
+
+  All of it was the price of one constraint: the picture and the save agreeing
+  *while both are running*. Removing the constraint removes every one of those
+  problems at once.
+
+  **Live play is now Pitch, Text and Stats** — the same engine in all three, as
+  it has always been, with nothing to force and nothing to disagree about.
+  Verified: kicking off gives tabs `pitch, comm, stats`, the live driver can
+  never take a match (`LIVE.want` false, `state.failed` true), and a played
+  match records its goals with **zero penalties** among them.
+
+  **The reel plays afterwards.** Each goal is handed to the broadcast on its
+  own, as a plan of exactly one event, and the caption carries the minute out of
+  the save — because the goal has already happened, there is nothing to race.
+  The engine's own five-second celebration, which a live match never had time
+  for, is what plays after the ball goes in.
+
+  Getting a moment to come off quickly was measured rather than guessed, over
+  thirty goals from ten matches, headless at full speed:
+
+  | staging | landed | median |
+  |---|---|---|
+  | wait for the siege | 24 of 25 | 12.0s |
+  | ball to the scorer in the box, every tick | 10 of 26 | 13.0s |
+  | staged once, retried after three seconds of nothing | **27 of 30** | **4.5s** |
+
+  The middle row is the interesting one: re-staging every tick took the ball off
+  his foot before he could hit it. Staged once and left alone, a moment comes
+  off in four and a half seconds and **no moment in any run was a penalty**.
+
+  Nothing is deleted. `src/dugout-matchday.js` stays where it is, because its
+  squad conversion, kit conversion and mount are exactly what the reel needs.
+
+  **The reel plays when the whistle goes, not when a button is found.** It was
+  a button first, and the button could not be placed: full time hands the
+  controls to the dressing-room panel, whose `.dr-wrap` is `height:100%` of
+  `#mCtl`. A button at the top of `#mCtl`, a button appended inside the wrap,
+  and a button floated over the match screen were all measured as present,
+  visible and 366x46 — and all three had `.dr-grp-b` answering at their centre.
+  Three attempts at the same wrong idea. What was asked for was simpler: when
+  the match finishes and there were goals, the goals play. Closing the reel
+  leaves the manager in the dressing room, which is where full time was always
+  going to put him. Verified through a real match played by the game's own
+  timer, both halves, to `stage: FT` — the reel opens by itself.
+
+  **What is not verified:** how the reel looks at real speed. Under headless
+  software rendering the engine gets about one frame a second, so on-screen
+  playback here is measuring SwiftShader rather than the reel. The staging logic
+  is measured at full speed; the picture needs a device with a GPU to judge.
+
 - **Four layout faults fixed, one diagnosed and left alone.** "improve the
   visual layout but keep all functionality" — so nothing here changes what a
   control does or what a screen contains. `src/layout-polish.js` is all pixels.
