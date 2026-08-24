@@ -214,7 +214,7 @@ const BAL = process.argv[5] ? JSON.parse(process.argv[5]) : null;
          says whether the goals are spread the way football spreads them
          or bunched into 1-1s. A league can arrive at the right champion
          with entirely the wrong football underneath it. */
-      const split = { h: 0, d: 0, a: 0, hg: 0, ag: 0 };
+      const split = { h: 0, d: 0, a: 0, hg: 0, ag: 0, hh: 0, aa: 0, ha: 0 };
       const lines = {};
       /* WHAT A SEASON LEAVES ON A SQUAD. Reset the squads before every
          match and this engine draws 25.2% of them and finishes 4.4%
@@ -257,6 +257,15 @@ const BAL = process.argv[5] ? JSON.parse(process.argv[5]) : null;
              alike will draw more than football does however its win
              percentages are arranged. */
           split.hg += fix.hs; split.ag += fix.as;
+          /* AND HOW SPREAD OUT EACH SIDE'S GOALS ARE. Draws are
+             P(home - away = 0), so they are set by the variance of the
+             difference: Var(H) + Var(A) - 2Cov. If each side's goals
+             are under-dispersed -- more predictable than Poisson --
+             both scores cluster near their means, the means are close
+             together, and the two land on the same number far too
+             often. Football's per-side variance over mean is about 1. */
+          split.hh += fix.hs * fix.hs; split.aa += fix.as * fix.as;
+          split.ha += fix.hs * fix.as;
           const key = Math.min(fix.hs, 5) + '-' + Math.min(fix.as, 5);
           lines[key] = (lines[key] || 0) + 1;
         });
@@ -331,7 +340,9 @@ const BAL = process.argv[5] ? JSON.parse(process.argv[5]) : null;
     + ' places out on average   (real football: about 3)');
   /* the division as a whole, across every league match played */
   const S = out.runs.reduce((t, r) => ({ h: t.h + r.split.h, d: t.d + r.split.d, a: t.a + r.split.a,
-    hg: t.hg + r.split.hg, ag: t.ag + r.split.ag }), { h: 0, d: 0, a: 0, hg: 0, ag: 0 });
+    hg: t.hg + r.split.hg, ag: t.ag + r.split.ag, hh: t.hh + r.split.hh,
+    aa: t.aa + r.split.aa, ha: t.ha + r.split.ha }),
+  { h: 0, d: 0, a: 0, hg: 0, ag: 0, hh: 0, aa: 0, ha: 0 });
   const St = S.h + S.d + S.a;
   if (St) {
     console.log('\n  every league match, ' + St + ' of them');
@@ -350,6 +361,14 @@ const BAL = process.argv[5] ? JSON.parse(process.argv[5]) : null;
       }
       return p;
     };
+    const mh = S.hg / St, ma = S.ag / St;
+    const vh = S.hh / St - mh * mh, va = S.aa / St - ma * ma;
+    const cov = S.ha / St - mh * ma;
+    console.log('    spread     ' + (vh / mh).toFixed(2) + ' at home and '
+      + (va / ma).toFixed(2) + ' away, variance over mean   (football about 1.00)');
+    console.log('    the goal difference varies by ' + (vh + va - 2 * cov).toFixed(2)
+      + '; Poisson on these means would give ' + (mh + ma).toFixed(2)
+      + '   (lower means more draws)');
     console.log('    if those two were Poisson it would draw '
       + (pois(S.hg / St, S.ag / St) * 100).toFixed(1) + '% of them');
     const L = {};

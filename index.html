@@ -925,6 +925,8 @@ const SPREAD={
  homePoss:1.02, homeBuild:1.04, homeShot:1.03,
  /* what a side in front is worth defensively in the last ten minutes */
  park:1.05,
+ /* how hard a side is steered back towards thirteen shots a match */
+ shotPull:.017,
  /* WHAT A GOAL DOES TO THE NEXT TEN MINUTES. The side that scored
     gets the initiative and the side that conceded responds; the
     question is how hard. On a realistic calendar the game's goalless
@@ -5979,8 +5981,19 @@ MatchSim.prototype._side=function(ci,home){
  return s};
 const _shotCompress=MatchSim.prototype.shotEvent;
 MatchSim.prototype.shotEvent=function(A,D,shooter,creator,fromCorner){
+ /* HOW HARD A SIDE IS STEERED BACK TOWARDS THIRTEEN SHOTS.
+    This exists so a match does not finish 2 shots to 30, and it works.
+    What it also does is make every side's goal count more predictable
+    than football's: steer the shots and you steer the goals, and a
+    team that always takes about thirteen always scores about one and a
+    half. Under-dispersed scores cluster on the same number as each
+    other, which is a draw — measured, the game draws 27.7% of matches
+    against real football's 24%, with 1-1 at 11.6% against 9 and 2-2 at
+    4.9% against 4, while the match total's variance over its mean is
+    0.84 where football's is about 1. Fewer than Poisson would give.
+    The pull is named so it can be argued with. */
  const exp=13*clamp(this.min/90,.05,1.2); // shots you would expect by now
- const f=clamp(1+(exp-A.st.sh)*.017,.80,1.09);
+ const f=clamp(1+(exp-A.st.sh)*SPREAD.shotPull,.80,1.09);
  const old=A.mm.att;
  A.mm={poss:A.mm.poss,att:old*f,def:A.mm.def};
  try{return _shotCompress.call(this,A,D,shooter,creator,fromCorner)}

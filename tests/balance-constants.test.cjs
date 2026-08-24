@@ -46,6 +46,12 @@ const SHIPPED = {
   homePoss: 1.02, homeBuild: 1.04, homeShot: 1.03,
   park: 1.05,
   momScore: 4, momConcede: 2.6,
+  /* how hard a side is steered back towards thirteen shots a match.
+     Named while chasing the draw rate: steering the shots steers the
+     goals, so it was the first suspect. It was not the cause — per-side
+     goals measured 1.08 and 1.09 of variance over mean, slightly ABOVE
+     Poisson rather than below — and the value is untouched. */
+  shotPull: 0.017,
 };
 
 test('the balance constants hold the values they shipped with',
