@@ -4,6 +4,50 @@
 
 ### Changed
 
+- **The Golden Boot is a top-flight award.** It was picked from every senior
+  player in the world, and the lower a division is the more freely it scores,
+  so the fifth tier kept winning it — across three played seasons it went to a
+  National League striker on 38 and a League One striker on 31, with a Premier
+  League player taking it once.
+
+  Two separate things now. Every division keeps its **own top scorer**, fifth
+  tier included. And the **Golden Boot itself can only be won out of the top
+  flight of a country** — twenty first divisions across twenty countries, so a
+  La Liga striker wins it if he scores most.
+
+  "Across all competitions" needed no building, only correcting: `stats.goals`
+  is totalled in `MatchSim.finish()`, which the league, the FA Cup, the League
+  Cup and Europe all run through. The old mail called them "league goals" and
+  they never were.
+
+  Measured on a played season, the award goes to Nacho Ruiz of Arsenal on 30
+  while the leading scorer in the world is a League Two man on 42 — who would
+  have won it before. The English divisions still report 34, 29, 33, 42 and 36
+  down the pyramid.
+
+- **The draw rate is 27.7%, and the reason is not what I twice thought it
+  was.** Five played seasons, 1,900 Premier League matches, standard error
+  0.7, on 2.80 goals a game which is exactly real. Real football draws 24%.
+
+  Both of my earlier conclusions about it were wrong and are corrected here. A
+  two-season sample suggested a played career drew only 25–26% and that the
+  league-only rig was overstating; five seasons say the two rigs agree. And
+  the shot-count compressor was not the cause — per-side goals vary by 1.08
+  and 1.09 of their mean, slightly *above* Poisson rather than below.
+
+  What it actually is: the game's per-match scoring means sit too close
+  together. Real football draws *below* its own Poisson because a strong side
+  against a weak one plays to means like 2.2 and 0.8, which rarely finishes
+  level. This game's best squad scores 1.46 times the division average and
+  concedes 0.76, where a real champion is 1.70 and 0.62 — so every matchup is
+  nearer even than football's, and near-even matches draw.
+
+  Every uniform lever is absorbed by the goal-rate controller, which holds the
+  division at 2.80 by trimming every side alike and in doing so keeps those
+  means bunched. A late push for a level game was tried and measured at 27.3,
+  26.2 and 27.5 for pushes of nothing, 6% and 14% — non-monotonic, inside one
+  standard error, and not shipped.
+
 - **The Dugout is a view of the match again, not the match.** Watching in the
   Dugout was a different game from watching the same match on the Pitch tab,
   reading it as rolling text, or simulating it. While the broadcast was
