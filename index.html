@@ -927,6 +927,13 @@ const SPREAD={
  park:1.05,
  /* how hard a side is steered back towards thirteen shots a match */
  shotPull:.017,
+ /* HOW MUCH OF THE GOAL-RATE TRIM FALLS ON THE WEAKER ATTACK.
+    0 trims every side alike, which is where this started. Above 0 a
+    good attack against a poor defence keeps more of its goals and a
+    poor attack against a good defence keeps fewer, so the two sides of
+    a mismatch move apart while the division still lands on its
+    goals-a-game target. See "AND WHOSE GOAL IT TAKES". */
+ trimTilt:0,
  /* WHAT A GOAL DOES TO THE NEXT TEN MINUTES. The side that scored
     gets the initiative and the side that conceded responds; the
     question is how hard. On a realistic calendar the game's goalless
@@ -44460,11 +44467,55 @@ MatchSim.prototype.finish=function(){
    Penalties are exempt — they convert about three times in four in real
    football and the model already reproduces that.
    --------------------------------------------------------------------- */
+/* THE SQUAD THE ENGINE IS ACTUALLY PLAYING WITH, worked out once a
+   side per match and kept on it. calcEff is the engine's own view of a
+   man in a shirt — ability, then what condition, sharpness and morale
+   have done to it — so this is what "the better side" means everywhere
+   else in this file. */
+function sideStrength(s){
+ if(s._str!=null)return s._str;
+ let sum=0,n=0;
+ (s.onfield||[]).forEach(pl=>{if(!pl||pl.off)return;sum+=calcEff(pl.p,pl.slot);n++});
+ s._str=n?sum/n:12;
+ return s._str}
+
+/* ---------------------------------------------------------------------
+   AND WHOSE GOAL IT TAKES
+   ---------------------------------------------------------------------
+   Trimming every side alike scales all their expected goals by the same
+   factor. That keeps the RATIO between a good attack and a poor one —
+   two to one stays two to one — but it shrinks the DIFFERENCE, and the
+   difference is what decides whether a match finishes level. Two sides
+   on 2.0 and 1.0 draw far less often than the same two on 1.8 and 0.9.
+
+   Measured, that is the whole of the draw problem. Five played seasons,
+   1,900 Premier League matches: 27.7% drawn against real football's
+   24%, on 2.80 goals a game which is already exactly right. Real
+   football draws BELOW its own Poisson because a strong side against a
+   weak one plays to means like 2.2 and 0.8 and rarely finishes level;
+   this game draws above it, because its best squad scores 1.46 times
+   the division average and concedes 0.76 where a real champion is 1.70
+   and 0.62. Every matchup is nearer even than football's.
+
+   So the trim is tilted by the quality of the attack against the
+   defence it is facing. A good side attacking a poor one loses fewer of
+   its goals to the controller; a poor side attacking a good one loses
+   more. The division's total is untouched — the controller measures
+   what was actually scored and re-solves for it either way — so this
+   moves the spread without moving the rate.
+   --------------------------------------------------------------------- */
 const _goalCal=MatchSim.prototype.goal;
 MatchSim.prototype.goal=function(A,D,shooter,creator,assister,pen){
  try{
   const div=(this.fix&&this.fix.div)||null;
-  if(!pen&&Math.random()<goalCal(div).trim){
+  const cal=goalCal(div);
+  let t=cal.trim;
+  if(SPREAD.trimTilt){
+   /* calcEff runs on a 20-ish scale, so a division spans about twelve
+      points top to bottom; over ten keeps the tilt in the same units
+      whatever the league */
+   t=clamp(t+SPREAD.trimTilt*(sideStrength(D)-sideStrength(A))/10,0,.62)}
+  if(!pen&&Math.random()<t){
    const g=this.gk(D);
    A.st.sot++;D.st.sv++;
    g.rating+=.24;

@@ -277,6 +277,25 @@ const BAL = process.argv[5] ? JSON.parse(process.argv[5]) : null;
       const games = table.reduce((t, r) => t + r.p, 0) / 2;
       runs.push({
         split, lines,
+        /* WHAT BEING GOOD IS WORTH, which is the number the draw rate
+           is downstream of. A real champion scores about 1.70 times its
+           division's average and concedes about 0.62 times it; the club
+           that finishes bottom is close to the mirror. If the two ends
+           of the league sit nearer the middle than that, every matchup
+           is nearer even than football's and near-even matches draw. */
+        spread: (() => {
+          const byI = {};
+          table.forEach((r) => { byI[r.i] = r; });
+          const totG = table.reduce((t, r) => t + r.gf, 0);
+          const totP = table.reduce((t, r) => t + r.p, 0);
+          const mean = totP ? totG / totP : 1;
+          const at = (ci) => {
+            const r = byI[ci];
+            if (!r || !r.p || !mean) return null;
+            return { gf: (r.gf / r.p) / mean, ga: (r.ga / r.p) / mean };
+          };
+          return { top: at(byStrength[0]), bot: at(byStrength[byStrength.length - 1]) };
+        })(),
         wear: { out: wear.out / wear.n, cond: wear.cond / wear.men,
           sharp: wear.sharp / wear.men, morale: wear.morale / wear.men },
         champ: G.clubs[table[0].i].name,
@@ -392,6 +411,16 @@ const BAL = process.argv[5] ? JSON.parse(process.argv[5]) : null;
   console.log('    condition    ' + (W.cond / wn).toFixed(1) + '%');
   console.log('    sharpness    ' + (W.sharp / wn).toFixed(1) + '%');
   console.log('    morale       ' + (W.morale / wn).toFixed(1) + '%');
+  /* the two ends of the league, against what real football gives them */
+  const sp = out.runs.map((r) => r.spread).filter((x) => x && x.top && x.bot);
+  if (sp.length) {
+    const m = (f) => sp.reduce((t, x) => t + f(x), 0) / sp.length;
+    console.log('\n  what being good is worth, as a multiple of the division average');
+    console.log('    best squad    ' + m((x) => x.top.gf).toFixed(2) + ' scored, '
+      + m((x) => x.top.ga).toFixed(2) + ' conceded   (real champion 1.70 and 0.62)');
+    console.log('    worst squad   ' + m((x) => x.bot.gf).toFixed(2) + ' scored, '
+      + m((x) => x.bot.ga).toFixed(2) + ' conceded   (real bottom 0.62 and 1.70)');
+  }
   const even = out.duels['evenly matched'];
   if (even) {
     const t = even.w + even.d + even.l;
