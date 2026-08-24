@@ -38,6 +38,8 @@ const { chromium } = require('/opt/node22/lib/node_modules/playwright');
 const path = require('path');
 
 const DEEP = process.argv.includes('--deep');
+/* the sheets pass is slow; --screens-only checks the navigation alone */
+const SCREENS_ONLY = process.argv.includes('--screens-only');
 const SEED = 20260821;
 
 (async () => {
@@ -63,7 +65,7 @@ const SEED = 20260821;
   }, { seed: SEED });
   if (ready !== 'ok') { console.log('could not start a career: ' + ready); await browser.close(); return; }
 
-  const out = await page.evaluate(async ({ deep }) => {
+  const out = await page.evaluate(async ({ deep, screensOnly }) => {
     const thrown = [];
     window.addEventListener('error', (e) => thrown.push(String(e.message || e).slice(0, 160)));
 
@@ -257,6 +259,10 @@ const SEED = 20260821;
        A dead control inside a modal is worse than one on a screen,
        because a modal is where the game asks you to decide something.
        ================================================================= */
+    if (screensOnly) {
+      return { screens: screens.length, worked: worked.length, dead, threw, unwired,
+        sheets: 0, sheetControls: 0, seconds: 0, ranOut: false };
+    }
     const sheetBody = () => document.getElementById('sheetBody');
     const modalOpen = () => {
       const h = document.getElementById('modalHost');
@@ -347,7 +353,7 @@ const SEED = 20260821;
       sheets: sheets.length, sheetControls: sheets.reduce((t, x) => t + x.controls, 0),
       seconds: Math.round((Date.now() - t0) / 1000),
       ranOut: Date.now() - t0 > BUDGET };
-  }, { deep: DEEP });
+  }, { deep: DEEP, screensOnly: SCREENS_ONLY });
 
   const line = (r) => '    ' + String(r.where).padEnd(18)
     + String(r.action || '(none)').padEnd(20)

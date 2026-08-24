@@ -313,6 +313,57 @@
   game's own Berger round robin, the same engine put United, City and
   Liverpool top on 87, 80 and 78.
 
+### Changed
+
+- **Four layout faults fixed, one diagnosed and left alone.** "improve the
+  visual layout but keep all functionality" — so nothing here changes what a
+  control does or what a screen contains. `src/layout-polish.js` is all pixels.
+
+  The method is the story. Reading screenshots produced three confident faults
+  in a row that were not faults: the Continue dock "covering" the bottom of
+  every screen (the scroller has had padding for it for months, and all eleven
+  screens scroll clear — measured); the tab rails "cut dead" at the right edge
+  (they have an edge fade that sizes itself to how much is actually hidden); a
+  section's value "colliding" with the rule beside it (a ten-pixel gap, and the
+  value sits a clean seventeen pixels off the glass). So `scripts/audit-layout.cjs`
+  was built to decide it by measurement instead, over seventeen screens, and
+  what shipped is only what survived that.
+
+  * **Your own country's chip was printed over the next one.** On the league
+    table the home country is `position:sticky` so it stays reachable however
+    far the rail is scrolled — with a background of `rgba(255,255,255,.03)`, so
+    the chip sliding underneath showed straight through it. Measured: England's
+    chip ended at x=106 while France's began at x=85. Twenty-one pixels of two
+    flags on top of each other. Now opaque.
+  * **The shortlist star was a 17x21 target**, on every row in the market. The
+    glyph is the right size; the hit area was not, and they are not the same
+    thing. Extended to 44px with a pseudo-element, so nothing moves.
+  * **The calendar's month arrows were 24x32.** Same fault, same fix.
+  * **Two-letter chips were 39x32 and lopsided** next to "Premier League". A
+    floor on the width evens the rail and widens the target; the height is
+    extended the same way, so the rail keeps its 32px rhythm.
+
+  Measured after: zero controls under 40x40 that a thumb cannot reach, zero
+  controls covered by something else, zero elements past the screen edge, and
+  the only two remaining overlaps are both by design (the two-layer star rating,
+  and sticky doing what sticky does).
+
+  **Not fixed, and worth saying plainly.** A transfer row reads "23 · unscouted"
+  and renders "3 ·" — the age loses its first digit, so a 33-year-old shows as
+  three. The chain is fully diagnosed in the file: `.pright` measures 178px
+  because `.psub`, the wage line, is `white-space:nowrap`; `.prow`'s third grid
+  track is `auto` so it takes that first; the 1fr track holding the name, club
+  and age is left with 76px; and `.pmeta`'s `text-overflow:ellipsis` — which
+  would trim this neatly — is inert because `.pmeta` is also `display:flex`.
+
+  Four CSS fixes were tried and three regressed the row, each caught by the
+  audit within a run, which is why none of them shipped. Making `.pmeta` a block
+  cost *more* information than it saved. A min-width floor overflowed the grid
+  and printed the two columns across each other by 57px on every row. Letting
+  the third track shrink moved neither width. This needs the row's markup
+  reworked so the wage line is not competing with the player's own details for
+  the same track — a change to how the row is built, not how it is painted.
+
 ### Added
 
 - **The draw rate has a name now: it is the goalless games.** Two new lines in

@@ -65,6 +65,7 @@ function gameHtml() {
     'src/dugout-matchday.js',
     'src/stadium-costs.js',
     'src/golden-boot.js',
+    'src/layout-polish.js',
     'src/crazygames.js',
   ]) {
     html = inlineScript(html, fs.readFileSync(path.join(root, filename), 'utf8'), filename);
