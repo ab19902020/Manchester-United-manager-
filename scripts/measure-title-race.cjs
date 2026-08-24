@@ -214,7 +214,7 @@ const BAL = process.argv[5] ? JSON.parse(process.argv[5]) : null;
          says whether the goals are spread the way football spreads them
          or bunched into 1-1s. A league can arrive at the right champion
          with entirely the wrong football underneath it. */
-      const split = { h: 0, d: 0, a: 0 };
+      const split = { h: 0, d: 0, a: 0, hg: 0, ag: 0 };
       const lines = {};
       /* WHAT A SEASON LEAVES ON A SQUAD. Reset the squads before every
          match and this engine draws 25.2% of them and finishes 4.4%
@@ -249,6 +249,14 @@ const BAL = process.argv[5] ? JSON.parse(process.argv[5]) : null;
           if (fix.hs > fix.as) { H.w += 1; A.l += 1; H.pts += 3; split.h += 1; }
           else if (fix.hs < fix.as) { A.w += 1; H.l += 1; A.pts += 3; split.a += 1; }
           else { H.d += 1; A.d += 1; H.pts += 1; A.pts += 1; split.d += 1; }
+          /* HOW THE GOALS SPLIT BETWEEN THE TWO ENDS. Real football
+             scores about 1.53 at home and 1.27 away out of its 2.8, and
+             that gap is a large part of why only 24% of matches finish
+             level: two unequal averages produce fewer identical scores
+             than two equal ones. A game whose home and away sides score
+             alike will draw more than football does however its win
+             percentages are arranged. */
+          split.hg += fix.hs; split.ag += fix.as;
           const key = Math.min(fix.hs, 5) + '-' + Math.min(fix.as, 5);
           lines[key] = (lines[key] || 0) + 1;
         });
@@ -322,14 +330,28 @@ const BAL = process.argv[5] ? JSON.parse(process.argv[5]) : null;
   console.log('  table vs strength   ' + avg((r) => r.rho).toFixed(1)
     + ' places out on average   (real football: about 3)');
   /* the division as a whole, across every league match played */
-  const S = out.runs.reduce((t, r) => ({ h: t.h + r.split.h, d: t.d + r.split.d, a: t.a + r.split.a }),
-    { h: 0, d: 0, a: 0 });
+  const S = out.runs.reduce((t, r) => ({ h: t.h + r.split.h, d: t.d + r.split.d, a: t.a + r.split.a,
+    hg: t.hg + r.split.hg, ag: t.ag + r.split.ag }), { h: 0, d: 0, a: 0, hg: 0, ag: 0 });
   const St = S.h + S.d + S.a;
   if (St) {
     console.log('\n  every league match, ' + St + ' of them');
     console.log('    home wins  ' + (S.h / St * 100).toFixed(1) + '%   (real 45%)');
     console.log('    draws      ' + (S.d / St * 100).toFixed(1) + '%   (real 24%)');
     console.log('    away wins  ' + (S.a / St * 100).toFixed(1) + '%   (real 31%)');
+    console.log('    goals      ' + (S.hg / St).toFixed(2) + ' at home, '
+      + (S.ag / St).toFixed(2) + ' away   (real 1.53 and 1.27)');
+    /* what an independent-Poisson model would draw at those two means,
+       which is the floor a low-scoring sport is arguing with */
+    const pois = (m, n) => {
+      let p = 0;
+      for (let k = 0; k < 12; k += 1) {
+        const f = (x) => (x <= 1 ? 1 : x * f(x - 1));
+        p += (Math.exp(-m) * (m ** k) / f(k)) * (Math.exp(-n) * (n ** k) / f(k));
+      }
+      return p;
+    };
+    console.log('    if those two were Poisson it would draw '
+      + (pois(S.hg / St, S.ag / St) * 100).toFixed(1) + '% of them');
     const L = {};
     out.runs.forEach((r) => Object.entries(r.lines)
       .forEach(([k, v]) => { L[k] = (L[k] || 0) + v; }));
