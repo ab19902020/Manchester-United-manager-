@@ -22904,26 +22904,40 @@ const VAR_OUT=[
  ['handball','it came off an arm on its way through'],
  ['foul','the goalkeeper was caught as the ball came in']];
 
+/* THE VAR DECISION, ON ITS OWN. The Dugout holds a goal back until the
+   broadcast has scored it, so every reason a goal might not stand has
+   to be settled at the moment MatchSim decides it — asking afterwards
+   would disallow a goal the player has already watched hit the net.
+   Measured before this was pulled out: four matches in twenty finished
+   with the picture and the save on different scores, all of them VAR
+   ruling out a goal the picture had shown. One implementation, two
+   callers, exactly as the goal-rate controller. */
+function varRulesItOut(m,A,shooter,pen){
+ try{
+  if(!varInUse(m.fix)||pen||m._varOff)return false;
+  const r=Math.random();
+  if(r<.062){
+   // ruled out. The scoreboard never moves, so nothing else has to be undone.
+   const why=pick(VAR_OUT);
+   m.say(m.dispMin(),A,'The ball is in the net — but the flag is up and it is going to the screen…','big');
+   varSay(m,A,'<b>NO GOAL.</b> '+why[1]+'. The goal is disallowed.','varno');
+   m.mom[A===m.sides[0]?0:1]=Math.max(0,(m.mom[A===m.sides[0]?0:1]||0)-2);
+   try{shooter.rating-=.15}catch(e){}
+   try{sfx('ooh')}catch(e){}
+   try{varFlash('NO GOAL','#ff5348')}catch(e){}
+   return true}
+  if(r<.20){
+   // checked and given: the pause before the roar
+   setTimeout(()=>{try{varFlash('GOAL CONFIRMED','#3ddc84')}catch(e){}},520);
+   m._varConfirm=true}
+ }catch(e){}
+ return false}
+
 const _goalVAR=MatchSim.prototype.goal;
 MatchSim.prototype.goal=function(A,D,shooter,creator,assister,pen){
- try{
-  if(varInUse(this.fix)&&!pen&&!this._varOff){
-   const r=Math.random();
-   if(r<.062){
-    // ruled out. The scoreboard never moves, so nothing else has to be undone.
-    const why=pick(VAR_OUT);
-    this.say(this.dispMin(),A,'The ball is in the net — but the flag is up and it is going to the screen…','big');
-    varSay(this,A,'<b>NO GOAL.</b> '+why[1]+'. The goal is disallowed.','varno');
-    this.mom[A===this.sides[0]?0:1]=Math.max(0,(this.mom[A===this.sides[0]?0:1]||0)-2);
-    try{shooter.rating-=.15}catch(e){}
-    try{sfx('ooh')}catch(e){}
-    try{varFlash('NO GOAL','#ff5348')}catch(e){}
-    return}
-   if(r<.20){
-    // checked and given: the pause before the roar
-    setTimeout(()=>{try{varFlash('GOAL CONFIRMED','#3ddc84')}catch(e){}},520);
-    this._varConfirm=true}}
- }catch(e){}
+ /* `_varDone` is set by the Dugout when it applies a goal it held back:
+    the referee had his look when the goal was decided */
+ if(!this._varDone&&varRulesItOut(this,A,shooter,pen))return;
  const out=_goalVAR.apply(this,arguments);
  try{
   if(this._varConfirm){this._varConfirm=false;
@@ -24154,6 +24168,14 @@ if(typeof skipHalf==='function'){
    if(m.min!==lastMin||m.stage!==lastStage){lastMin=m.min;lastStage=m.stage;lastAt=now;return}
    if(m.stage==='HT')return;          // half time is meant to wait for you
    if(MU.speed===0||MU.speed===9)return;   // so is a deliberate pause
+   /* AND SO IS A GOAL THE PICTURE HAS NOT SHOWN YET. The Dugout stops
+      both clocks on the minute a held goal belongs to -- about half a
+      minute of football while the side that scored it lays siege -- so
+      a still minute there is the game working, not a stall. Without
+      this the watchdog restarted the match loop every six seconds
+      through every goal. */
+   try{if(window.RBSDugoutMatchday&&RBSDugoutMatchday.LIVE&&RBSDugoutMatchday.LIVE.on
+        &&RBSDugoutMatchday.LIVE.waiting.length){lastAt=now;return}}catch(e){}
    if(now-lastAt<6000)return;
    lastAt=now;
    if(typeof startLoop==='function')startLoop();
@@ -44504,24 +44526,43 @@ function sideStrength(s){
    what was actually scored and re-solves for it either way — so this
    moves the spread without moving the rate.
    --------------------------------------------------------------------- */
-const _goalCal=MatchSim.prototype.goal;
-MatchSim.prototype.goal=function(A,D,shooter,creator,assister,pen){
+/* THE DECISION, ON ITS OWN, so it can be asked once and acted on
+   later. The Dugout holds a goal back until the broadcast has actually
+   scored it, which means it has to know at the moment MatchSim decides
+   one whether the goal is going to count — asking again when the
+   picture delivers would let the controller turn down a goal the player
+   has just watched go in. One implementation, two callers. */
+function goalIsTrimmed(m,A,D,pen){
+ if(pen)return false;
  try{
-  const div=(this.fix&&this.fix.div)||null;
-  const cal=goalCal(div);
-  let t=cal.trim;
+  const div=(m.fix&&m.fix.div)||null;
+  let t=goalCal(div).trim;
   if(SPREAD.trimTilt){
    /* calcEff runs on a 20-ish scale, so a division spans about twelve
       points top to bottom; over ten keeps the tilt in the same units
       whatever the league */
    t=clamp(t+SPREAD.trimTilt*(sideStrength(D)-sideStrength(A))/10,0,.62)}
-  if(!pen&&Math.random()<t){
-   const g=this.gk(D);
-   A.st.sot++;D.st.sv++;
-   g.rating+=.24;
-   if(shooter&&shooter.rating!=null)shooter.rating-=.02;
-   this.say(this.dispMin(),A,
-    cf(COMM.save,{b:shooter.p.name,g:g.p.name}),'big');
+  return Math.random()<t;
+ }catch(e){return false}}
+
+/* and what it looks like when it says no */
+function goalBecameASave(m,A,D,shooter){
+ try{
+  const g=m.gk(D);
+  A.st.sot++;D.st.sv++;
+  g.rating+=.24;
+  if(shooter&&shooter.rating!=null)shooter.rating-=.02;
+  m.say(m.dispMin(),A,cf(COMM.save,{b:shooter.p.name,g:g.p.name}),'big');
+ }catch(e){}}
+
+const _goalCal=MatchSim.prototype.goal;
+MatchSim.prototype.goal=function(A,D,shooter,creator,assister,pen){
+ try{
+  /* `_calDone` is set by the Dugout when it applies a goal it held
+     back: the controller already had its say when the goal was decided,
+     and asking twice would take a goal off a player who watched it */
+  if(!this._calDone&&goalIsTrimmed(this,A,D,pen)){
+   goalBecameASave(this,A,D,shooter);
    return}
  }catch(e){}
  return _goalCal.apply(this,arguments)};
