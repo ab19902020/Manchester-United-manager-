@@ -1958,9 +1958,17 @@ function endSeason(){
  const exp=G._finalExp||expectPos(G.my);
  my.patience=clamp(my.patience+(exp-pos>=0?14:(exp-pos)*3),5,100);
  if(pos>exp+4&&my.patience<30){sackManager()}
- // golden boot
- let boot=null;eachPlayer(p=>{if(!boot||p.stats.goals>boot.stats.goals)boot=p});
- if(boot&&boot.stats.goals>0)mail('award','Golden Boot: '+boot.name,'<b>'+esc(boot.name)+'</b> ('+esc(G.clubs[boot.club].short)+') finishes top scorer with <b>'+boot.stats.goals+'</b> league goals.');
+ /* GOLDEN BOOT — THE TOP FLIGHT OF EVERY COUNTRY, ALL COMPETITIONS.
+    This used to read every player in the world and take the highest
+    number, which handed the award to the National League: the lower a
+    division is the more freely it scores, so over three played seasons
+    a fifth-tier striker won it on 38 and a League One striker on 31.
+    Only a top division can win it now. The goals were never "league
+    goals" either — stats.goals is added up in MatchSim.finish(), which
+    the FA Cup, the League Cup and Europe all run through. */
+ let boot=(typeof goldenBoot==='function')?goldenBoot():null;
+ if(!boot)eachPlayer(p=>{if(!boot||p.stats.goals>boot.stats.goals)boot=p});
+ if(boot&&boot.stats.goals>0)mail('award','Golden Boot: '+boot.name,'<b>'+esc(boot.name)+'</b> ('+esc(G.clubs[boot.club].short)+') finishes top scorer with <b>'+boot.stats.goals+'</b> goals in all competitions.');
  // retirements + newgens (PA = retiree PA ±15%)
  const myRet=[],myKids=[];
  G.clubs.forEach(c=>{
@@ -57197,6 +57205,7 @@ showStart();
 <script src="src/matchday-engine.js"></script>
 <script src="src/dugout-matchday.js"></script>
 <script src="src/stadium-costs.js"></script>
+<script src="src/golden-boot.js"></script>
 <script src="src/crazygames.js"></script>
 </body>
 </html>
