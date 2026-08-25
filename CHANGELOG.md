@@ -481,6 +481,50 @@
 
 ### Added
 
+- **The draw rate: closed as not reachable from these constants, with the
+  evidence to stop anyone reopening it.** Roughly forty settings have now been
+  measured across three sessions. The last of them was the most promising and it
+  is the one that settles it.
+
+  Raising the chance floor and ceiling together (`chanceLo` 0.41→0.45,
+  `chanceHi` 0.57→0.66, `chanceMul` 0.70→0.63) was aimed at the blank rate — the
+  weak side's attack measured 0.54× the division average against a real 0.62×,
+  so lifting the floor should have cut the goalless games. Run paired against
+  baseline on **three seeds, 24 seasons each — 27,000 matches a side**:
+
+  | | base | candidate | delta | per seed | verdict |
+  |---|---|---|---|---|---|
+  | draws % | 28.2 | 27.8 | −0.4 | −1.0, +1.1, −1.3 | **sign flips** |
+  | goalless % | 11.2 | 10.9 | −0.3 | −0.6, +0.2, −0.6 | **sign flips** |
+  | a side blanks % | 30.3 | 29.3 | −1.0 | −1.3, −0.6, −1.0 | same sign 3/3 |
+  | champion pts | 85.8 | 84.4 | −1.4 | −1.4, −2.5, −0.2 | same sign 3/3 |
+  | bottom pts | 21.4 | 22.5 | +1.1 | +0.1, +1.3, +2.0 | same sign 3/3 |
+
+  So the two numbers it was aimed at do not move — they flip sign between seeds,
+  which is what noise looks like — while the two costs are real and repeat every
+  time: the champion loses a point and a half against a real 87, and the bottom
+  club climbs past the real 21 it was already sitting on. The blank rate does
+  fall by a point, reliably, and that is not worth a flatter league.
+
+  Raising all three ceilings instead (`possHi`, `buildHi`, `chanceHi`, so the
+  best sides can run away) was worse on every count: draws 29.2%, blanks 31.5%,
+  goalless 12.5%, and total goals down to 2.6.
+
+  **Why no constant can do it.** Both phases of chance creation are
+  `sigmoid(attack − defence)`, and they multiply. A side facing a strong defence
+  is cut twice, so its rate collapses to roughly 60% of the even-match rate,
+  which is a per-side λ near 0.86 and a 42% chance of not scoring — against 24%
+  at the division average. That fat low tail is where the goalless games come
+  from, and it is a property of multiplying two symmetric sigmoids, not of the
+  numbers fed into them. Any constant that thins the tail does it by making the
+  two sides more alike, which adds drawn matches at the same rate it removes
+  goalless ones. That is the trap, and it is why forty settings all land between
+  27% and 29%.
+
+  A fix has to break the symmetry — the defence suppressing chance QUALITY while
+  leaving chance COUNT closer to the attacking side's own level — and that is a
+  change to how `tickOnce` generates chances, not a number in `SPREAD`.
+
 - **The draw rate has a name now: it is the goalless games.** Two new lines in
   `scripts/measure-title-race.cjs`, and between them they turn a symptom nobody
   could shift into a fault with an address.
