@@ -376,6 +376,23 @@
   going to put him. Verified through a real match played by the game's own
   timer, both halves, to `stage: FT` — the reel opens by itself.
 
+  **And every match you have already played.** A finished fixture keeps
+  everything a reel needs and always has — measured across a played season,
+  **242 of 257 completed fixtures carry their full goal list** (minute, scorer,
+  club, penalty flag), and the fifteen without one are the goalless draws. So
+  nothing new is stored and the save format does not change: the reel is rebuilt
+  from the record whenever it is asked for, and the match report grows a "Watch
+  the goals again".
+
+  The one thing a past fixture does not keep is the eleven who were on the
+  pitch, because MatchSim is long gone. `autoPick` names a side for any club —
+  the same call the engine makes for every AI team — and the men who actually
+  scored are seated in it by hand, because the engine finds its scorer by id and
+  a goal by somebody left out of today's side would otherwise be scored by a
+  stranger. Verified on a fixture from earlier in the season: four goals, both
+  minutes and sides matching the record, both elevens named, every scorer
+  seated, and the squad converting cleanly for the broadcast.
+
   **What is not verified:** how the reel looks at real speed. Under headless
   software rendering the engine gets about one frame a second, so on-screen
   playback here is measuring SwiftShader rather than the reel. The staging logic

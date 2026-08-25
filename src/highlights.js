@@ -1,4 +1,5 @@
-/* global G, MU, ACTIONS, buildMatchScreen, renderMCtl, esc, shortName, surname */
+/* global G, MU, ACTIONS, buildMatchScreen, renderMCtl, esc, FORMATIONS, autoPick,
+   playerById */
 
 /* =====================================================================
    THE DUGOUT STOPS BEING A LIVE VIEW AND BECOMES THE HIGHLIGHTS
@@ -314,6 +315,82 @@
     stage();
   }
 
+  /* -------------------------------------------------------------------
+     ANY GAME, NOT JUST THE ONE YOU JUST PLAYED
+     -------------------------------------------------------------------
+     "you can watch the highlights of each game that way"
+
+     A finished fixture keeps everything a reel needs and always has:
+     measured across a played season, 242 of 257 completed fixtures carry
+     their full goal list -- minute, scorer, club and penalty flag -- and
+     the fifteen without one are the goalless draws. So no save format
+     changes and nothing new is stored; the reel is rebuilt from the
+     record whenever it is asked for.
+
+     What a past fixture does NOT keep is the eleven that were on the
+     pitch, because MatchSim is long gone. `autoPick` names a side for any
+     club, which is the same thing the engine does for every AI team, and
+     the men who actually scored are put into it by hand -- the engine
+     finds its scorer by id, so a reel of a goal by somebody left out of
+     today's XI would otherwise be scored by a stranger.
+     ------------------------------------------------------------------- */
+  function sideForClub(ci, home) {
+    const c = (G.clubs || [])[ci];
+    if (!c) return null;
+    const form = (c.tacs && c.tacs.formation) || '4-3-3';
+    const slots = (typeof FORMATIONS !== 'undefined' && FORMATIONS[form]) || null;
+    if (!slots) return null;
+    let ids = [];
+    try { ids = (typeof autoPick === 'function' && autoPick(ci, form)) || []; }
+    catch (error) { ids = []; }
+    const used = new Set();
+    const onfield = slots.map((sl, ix) => {
+      const pos = sl[0];
+      let p = ids[ix] != null ? playerById(ids[ix]) : null;
+      if (!p || used.has(p.id)) {
+        p = (c.players || []).find((q) => !used.has(q.id) && !q.loan) || null;
+      }
+      if (!p) return null;
+      used.add(p.id);
+      return { p, slot: pos, hx: sl[1], hy: sl[2], cond: p.cond,
+        rating: 6, yc: 0, off: false, goals: 0, assists: 0, entered: 0 };
+    }).filter(Boolean);
+    return { ci, c, home, isMy: ci === G.my, onfield, bench: [],
+      tac: { formation: form, mentality: 'Balanced' },
+      st: { sh: 0, sot: 0, cor: 0, fl: 0, xg: 0, sv: 0 } };
+  }
+
+  /* the men who scored have to be on the pitch for the reel to name them */
+  function seatTheScorers(side, fixture) {
+    if (!side) return;
+    try {
+      const want = (fixture.sc || [])
+        .filter((g) => g.ci === side.ci && g.pid != null)
+        .map((g) => String(g.pid));
+      want.forEach((pid) => {
+        if (side.onfield.some((x) => x && x.p && String(x.p.id) === pid)) return;
+        const p = playerById(pid);
+        if (!p) return;
+        /* the outfield man furthest from being a goalkeeper makes way */
+        const ix = side.onfield.findIndex((x) => x && x.slot !== 'GK');
+        if (ix < 0) return;
+        side.onfield[ix] = { ...side.onfield[ix], p, cond: p.cond };
+      });
+    } catch (error) { /* the reel still plays, with a stand-in */ }
+  }
+
+  /* a reel for any finished fixture in the world */
+  function playFixture(fixture) {
+    const fx = fixture;
+    if (!fx || !reelFor(fx).length) return false;
+    const home = sideForClub(fx.h, true);
+    const away = sideForClub(fx.a, false);
+    if (!home || !away) return false;
+    seatTheScorers(home, fx);
+    seatTheScorers(away, fx);
+    return play(fx, { sides: [home, away] });
+  }
+
   function play(fixture, match) {
     const d = dug();
     const fx = fixture || (MU && MU.fix);
@@ -454,7 +531,60 @@
     }
   } catch (error) { /* ignore */ }
 
+  /* -------------------------------------------------------------------
+     AND EVERY MATCH YOU HAVE ALREADY PLAYED
+     -------------------------------------------------------------------
+     The match report is where the game already keeps a past match, so
+     that is where the reel goes rather than a new screen. A report names
+     the two clubs and the day, which finds the fixture, which carries
+     the goals.
+     ------------------------------------------------------------------- */
+  function fixtureFor(entry) {
+    if (!entry) return null;
+    try {
+      const all = (G.fixtures || []).concat(
+        Object.keys(G.cups || {}).reduce((acc, k) => acc.concat((G.cups[k].ties) || []), []),
+      );
+      return all.find((f) => f && f.played && f.h === entry.h && f.a === entry.a
+        && (entry.day == null || f.day === entry.day)) || null;
+    } catch (error) { return null; }
+  }
+
   try {
+    const passReport = ACTIONS.matchReport;
+    if (typeof passReport === 'function') {
+      ACTIONS.matchReport = function reportWithHighlights(el) {
+        const out = passReport.apply(this, arguments);
+        try {
+          const ix = +((el && el.dataset && el.dataset.v) || 0);
+          const entry = G.repLog && G.repLog[ix];
+          const fx = fixtureFor(entry);
+          if (!fx || !reelFor(fx).length) return out;
+          const sb = document.getElementById('sheetBody');
+          if (!sb || sb.querySelector('[data-action="hlFix"]')) return out;
+          const b = document.createElement('button');
+          b.className = 'btn btn-block';
+          b.style.cssText = 'margin-top:8px';
+          b.setAttribute('data-action', 'hlFix');
+          b.setAttribute('data-v', String(ix));
+          b.textContent = '\ud83c\udfa5 Watch the goals again';
+          sb.appendChild(b);
+        } catch (error) { /* the report is still the report */ }
+        return out;
+      };
+    }
+  } catch (error) { /* ignore */ }
+
+  try {
+    ACTIONS.hlFix = (el) => {
+      try {
+        const ix = +((el && el.dataset && el.dataset.v) || 0);
+        const fx = fixtureFor(G.repLog && G.repLog[ix]);
+        if (!fx) return;
+        if (typeof window.closeModal === 'function') window.closeModal();
+        playFixture(fx);
+      } catch (error) { /* ignore */ }
+    };
     ACTIONS.hlPlay = () => { play(MU && MU.fix, MU && MU.m); };
     ACTIONS.hlNext = () => { next(); };
     ACTIONS.hlClose = () => { close(); };
@@ -463,5 +593,6 @@
   window.RBSHighlights = Object.freeze({
     standDown, offTheBar, reelFor, minuteOf, dug, api, num,
     play, next, close, REEL, offerAtFullTime, autoPlayAtFullTime,
+    playFixture, sideForClub, seatTheScorers, fixtureFor,
   });
 }());

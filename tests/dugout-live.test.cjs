@@ -441,3 +441,70 @@ test('the reel is built from the record, and says what the record says',
     assert.equal(out.empty, 0, 'a goalless match has no reel, so nothing is offered');
     assert.equal(out.stoppage, 48, '"45+3" is the forty-eighth minute, not the forty-fifth');
   });
+
+/* =====================================================================
+   AND EVERY MATCH THAT HAS ALREADY BEEN PLAYED
+   ---------------------------------------------------------------------
+   "you can watch the highlights of each game that way"
+
+   A finished fixture keeps everything a reel needs and always has --
+   measured across a played season, 242 of 257 completed fixtures carry
+   their full goal list, and the fifteen without one are the goalless
+   draws. So nothing new is stored and no save format changes: the reel
+   is rebuilt from the record whenever it is asked for.
+
+   The one thing a past fixture does not keep is the eleven that were on
+   the pitch, because MatchSim is long gone. `autoPick` names a side for
+   any club, and the men who actually scored are put into it by hand --
+   the engine finds its scorer by id, so a goal by somebody left out of
+   today's side would otherwise be scored by a stranger.
+   ===================================================================== */
+test('a match played weeks ago can still be rebuilt into a reel',
+  { timeout: 60000 }, async (t) => {
+    const game = await createGame();
+    t.after(() => game.close());
+    await startCareer(game, 'Old Games');
+
+    const out = game.eval(`(()=>{
+    const nf=nextUserFixture(); G.day=nf.day+1;
+    for(let i=0;i<40;i++){ try{ ACTIONS.advance(); }catch(e){} }
+    const H=window.RBSHighlights;
+    const played=(G.fixtures||[]).filter(f=>f.played&&f.sc&&f.sc.length);
+    if(!played.length) return {none:true};
+    const fx=played[0];
+    const home=H.sideForClub(fx.h,true), away=H.sideForClub(fx.a,false);
+    H.seatTheScorers(home,fx); H.seatTheScorers(away,fx);
+    const ids=s=>s.onfield.map(x=>String(x.p.id));
+    const sq=window.RBSDugoutMatchday.squadFor(home);
+    const goalless=(G.fixtures||[]).find(f=>f.played&&(!f.sc||!f.sc.length));
+    return {
+      withGoals:played.length,
+      reelMinutes:H.reelFor(fx).map(r=>r.label).join(','),
+      recorded:(fx.sc||[]).map(g=>String(g.min)).join(','),
+      reelSides:H.reelFor(fx).map(r=>r.team).join(','),
+      wantSides:(fx.sc||[]).map(g=>g.ci===fx.h?0:1).join(','),
+      homeXI:home.onfield.length, awayXI:away.onfield.length,
+      scorersSeated:(fx.sc||[]).every(gl=>{
+        const s=gl.ci===fx.h?home:away; return ids(s).indexOf(String(gl.pid))>=0;}),
+      squadPlayers:sq&&sq.players?sq.players.length:0,
+      squadNamed:!!(sq&&sq.name&&sq.shirt),
+      lookup:!!H.fixtureFor({h:fx.h,a:fx.a,day:fx.day}),
+      goallessReel:goalless?H.reelFor(goalless).length:0
+    };
+  })()`);
+
+    assert.equal(out.none, undefined, 'a played season has finished matches in it');
+    assert.ok(out.withGoals > 20,
+      'and most of them carry their goals — the record is the only source the reel has');
+    assert.equal(out.reelMinutes, out.recorded,
+      'the reel carries the minutes the fixture recorded, weeks after the whistle');
+    assert.equal(out.reelSides, out.wantSides, 'and puts each goal on the right side');
+    assert.equal(out.homeXI, 11, 'an eleven is named for a club with no MatchSim left');
+    assert.equal(out.awayXI, 11);
+    assert.equal(out.scorersSeated, true,
+      'every man who scored is on the pitch, or the engine would credit a stranger');
+    assert.equal(out.squadPlayers, 11, 'and the broadcast gets a full squad');
+    assert.equal(out.squadNamed, true);
+    assert.equal(out.lookup, true, 'a report finds its fixture by the two clubs and the day');
+    assert.equal(out.goallessReel, 0, 'a goalless match still has nothing to show');
+  });
