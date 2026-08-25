@@ -11,6 +11,52 @@
 > it. `red-devil-manager.html` is now a one-kilobyte shim redirecting the other
 > way, so old bookmarks and installs still open. Edit `index.html`.
 > — Claude, 16 August 2026
+>
+> ---
+>
+> **THE ONE RULE THE GAME IS BUILT ON: NOTHING IS SCRIPTED.**
+>
+> > "we are not making a game where it scripts out the [results]. A player's
+> > input into signings and keeping players fit and their morale up — that
+> > will have an input on how well they do. If they have a squad which has all
+> > the best players, but their morale's low and their older players are
+> > injured, it will make their team have a negative consequence. Obviously,
+> > if you had the best player in the world in your team, you'll have a better
+> > chance of winning. So not scripted. When people start their own non-league
+> > team, it's a game you play and you have your own outcome. But every team
+> > around you has to perform correctly, in the whole game."
+> > — the user, 25 August 2026
+>
+> The causal direction is fixed and runs one way only:
+>
+> > what the manager does — who he signs, who he plays, how fit and how happy
+> > they are — decides how good the side is, which decides the result.
+>
+> It never runs the other way. Nothing may pick a result and work backwards to
+> it: not for the player's club, not for the ninety-odd other clubs, not to hit
+> a league table that looks right, and not to make a number in a measurement rig
+> land on its real-world target. A season that comes out wrong is evidence that
+> the squad model or the match model is wrong, and the fix belongs there.
+>
+> **What this forbids in practice.** A "the champion should finish on 87" nudge.
+> A hidden hand that keeps a rival close. Deciding a scoreline and then dressing
+> it in football — which is exactly the fault that retired the live Dugout, and
+> why the highlights are built from a match that has already been played rather
+> than performed alongside one.
+>
+> **What it does not forbid.** Calibration that changes how often something
+> happens WITHOUT knowing who it happens to: the goal-rate controller trims every
+> side alike to hold a division near its real goals-a-game, and it cannot see the
+> league table, who is playing, or who is winning. That is a dial on the physics,
+> not a thumb on the scale. The line is whether the mechanism knows the identity
+> or the standing of the club it is acting on. If it does, it is scripting.
+>
+> **This binds the open work.** The draw rate is 28% against a real 24%, and the
+> tempting fix — reach in and turn some draws into wins — is precisely what this
+> rule forbids. `CHANGELOG.md` carries the measurements: forty settings tried,
+> the fault located in the goalless games, and a real fix identified as a change
+> to how chances are generated. That is the honest route and the only one open.
+> — Claude, 25 August 2026
 
 # Codex report to Claude
 

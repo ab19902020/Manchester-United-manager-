@@ -315,6 +315,60 @@
 
 ### Changed
 
+- **The rule the game is built on, written down and then measured: nothing is
+  scripted.**
+
+  > "we are not making a game where it scripts out the [results]. A player's
+  > input into signings and keeping players fit and their morale up — that will
+  > have an input on how well they do… Obviously, if you had the best player in
+  > the world in your team, you'll have a better chance of winning. So not
+  > scripted."
+
+  It is now the first thing in `CLAUDE.md`, above everything else, with the line
+  drawn where it can be applied: **the causal direction runs one way only** —
+  what the manager does decides how good the side is, which decides the result —
+  and nothing may pick a result and work backwards to it, for his club or for
+  the ninety-odd others. Calibration that cannot see who it is acting on (the
+  goal-rate controller trims every side alike and cannot see the table, the
+  fixture or the score) is a dial on the physics, not a thumb on the scale. The
+  test is whether the mechanism knows the identity or the standing of the club.
+
+  **And then measured, because a rule nobody checks is a wish.** `effA` does
+  multiply every attribute by condition, sharpness, morale and the team talk —
+  but a term being present says nothing about whether it is big enough to change
+  a season. `scripts/measure-inputs.cjs` (new) plays 1,200 matches a variant
+  against the same opponent off a seeded stream, healing both squads before
+  every match, and reports what each input is worth over a 38-game season:
+
+  | input | −  | | base | + |
+  |---|---|---|---|---|
+  | morale 20 / 45 / 72 / 95 | −9.9 | −4.8 | — | +1.3 |
+  | condition 60 / 80 / 100 | −27.8 | −17.9 | — | |
+  | sharpness 35 / 70 / 95 | −11.7 | | — | +4.9 |
+  | best man / best three injured | −4.0 | −8.1 | | |
+  | every attribute −2 / +2 | −55.1 | | — | +36.2 |
+
+  Every ladder is monotonic, every sign is right, and **squad quality dominates
+  everything else**, which is the shape the rule asks for. Fitness is the largest
+  thing a manager controls week to week at 28 points a season; morale bites
+  harder going down than it rewards going up, which is about right for a
+  dressing room.
+
+  `tests/manager-inputs.test.cjs` (new) guards the ordering rather than the
+  numbers, so the match model stays free to change while a knackered squad can
+  never be as good as a fresh one.
+
+  **The rig was wrong twice before it was right**, and both faults are worth
+  recording because they would fool anyone measuring this again. Replaying one
+  fixture hundreds of times lets `tickOnce` injure real players and the injuries
+  stick to the club — the first run reported 568 goalless draws in 600 and
+  looked like a dead match model, when it was two teams of crocks. The goal-rate
+  controller separately read the repetition as a scoring glut and trimmed almost
+  every goal away. And the test itself failed on its second run until the world
+  was seeded: `startCareer` builds an unseeded one, so which clubs sit ninth and
+  tenth changes each time, and that swamped morale's effect — 0.26 points a game
+  on one run, 0.045 on the next.
+
 - **The Dugout stops being a live view and becomes the highlights.** "Remove
   dugout mode. It's just not working. It's just forcing penalties for the goals.
   I think we should use that visual engine to create highlights at the end of
