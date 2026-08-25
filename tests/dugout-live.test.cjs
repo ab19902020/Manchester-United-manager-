@@ -480,7 +480,15 @@ test('a match played weeks ago can still be rebuilt into a reel',
     return {
       withGoals:played.length,
       reelMinutes:H.reelFor(fx).map(r=>r.label).join(','),
-      recorded:(fx.sc||[]).map(g=>String(g.min)).join(','),
+      /* THE RECORD IS WRITTEN TWO WAYS. MatchSim stores a goal's minute
+         as "45"; the model sim at the other end of the game stores it
+         with an apostrophe on the end. The reel normalises both to the
+         bare minute, because the caption adds the apostrophe itself and
+         a goal from the second writer used to print two of them. So the
+         comparison is against the recorded minute with any apostrophe
+         taken off, which is what the reel is supposed to hold. */
+      recorded:(fx.sc||[]).map(g=>String(g.min).replace(/['’]\s*$/,'')).join(','),
+      captionWouldRead:window.RBSHighlights.reelFor(fx).map(r=>r.label+"'").join(','),
       reelSides:H.reelFor(fx).map(r=>r.team).join(','),
       wantSides:(fx.sc||[]).map(g=>g.ci===fx.h?0:1).join(','),
       homeXI:home.onfield.length, awayXI:away.onfield.length,
@@ -498,6 +506,8 @@ test('a match played weeks ago can still be rebuilt into a reel',
       'and most of them carry their goals — the record is the only source the reel has');
     assert.equal(out.reelMinutes, out.recorded,
       'the reel carries the minutes the fixture recorded, weeks after the whistle');
+    assert.ok(!/''/.test(out.captionWouldRead),
+      'and the caption prints one apostrophe, not two: ' + out.captionWouldRead);
     assert.equal(out.reelSides, out.wantSides, 'and puts each goal on the right side');
     assert.equal(out.homeXI, 11, 'an eleven is named for a club with no MatchSim left');
     assert.equal(out.awayXI, 11);
@@ -563,7 +573,15 @@ test('a finished match offers its goals wherever the game shows it',
       dayBtn:!!btn,
       aboveClose:!!(btn&&shut&&btn.nextElementSibling===shut),
       dayReel:window.RBSHighlights.reelFor(fx).map(r=>r.label).join(','),
-      recorded:(fx.sc||[]).map(g=>String(g.min)).join(','),
+      /* THE RECORD IS WRITTEN TWO WAYS. MatchSim stores a goal's minute
+         as "45"; the model sim at the other end of the game stores it
+         with an apostrophe on the end. The reel normalises both to the
+         bare minute, because the caption adds the apostrophe itself and
+         a goal from the second writer used to print two of them. So the
+         comparison is against the recorded minute with any apostrophe
+         taken off, which is what the reel is supposed to hold. */
+      recorded:(fx.sc||[]).map(g=>String(g.min).replace(/['’]\s*$/,'')).join(','),
+      captionWouldRead:window.RBSHighlights.reelFor(fx).map(r=>r.label+"'").join(','),
       dullBtn,
       wired:['hlPlay','hlFix','hlDay'].every(a=>typeof ACTIONS[a]==='function')
     };
@@ -580,4 +598,69 @@ test('a finished match offers its goals wherever the game shows it',
     if (out.dullBtn !== null) {
       assert.equal(out.dullBtn, false, 'a goalless match offers nothing');
     }
+  });
+
+/* =====================================================================
+   THE SCOREBOARD ON A HIGHLIGHT READS THE SAVE
+   ---------------------------------------------------------------------
+   The reel used to let the board climb by one every time a moment came
+   off, which is fine until one does not: measured on Ceuta 1-4 Girona,
+   the sixteenth minute would not go in, the reel gave up on it, and the
+   board then sat a goal behind for the whole of the rest of the clip.
+
+   So every moment now carries the score as it stood BEFORE that goal,
+   worked out from the fixture's own goal list, and the engine is set to
+   it as the moment is staged. The board is then right at every moment
+   whatever the picture manages to do with the ones before it.
+
+   The staging itself needs WebGL and cannot run here -- see
+   scripts/measure-highlight-moments.cjs, which plays real ones under a
+   software renderer and reports how long each takes. What is checkable
+   in this room is the arithmetic that feeds it, which is the half that
+   was wrong.
+   ===================================================================== */
+test('every moment carries the score as it stood before that goal',
+  { timeout: 60000 }, async (t) => {
+    const game = await createGame();
+    t.after(() => game.close());
+    await startCareer(game, 'Boards');
+
+    const out = game.eval(`(()=>{
+    const nf=nextUserFixture(); G.day=nf.day+1;
+    for(let i=0;i<40;i++){ try{ ACTIONS.advance(); }catch(e){} }
+    const H=window.RBSHighlights;
+    /* a fixture where both sides scored, so a running score can be wrong
+       in a way a one-sided win would hide */
+    const both=(G.fixtures||[]).filter(f=>f.played&&f.hs>0&&f.as>0);
+    if(!both.length) return {none:true};
+    const fx=both[0];
+    const reel=H.reelFor(fx);
+    return {
+      none:false,
+      label:G.clubs[fx.h].short+' '+fx.hs+'-'+fx.as+' '+G.clubs[fx.a].short,
+      goals:reel.length,
+      opensAt:reel.length?reel[0].before.join('-'):null,
+      /* the board after the last moment has to be the fixture's score */
+      endsAt:reel.length
+        ? [reel[reel.length-1].before[0]+(reel[reel.length-1].team===0?1:0),
+           reel[reel.length-1].before[1]+(reel[reel.length-1].team===1?1:0)].join('-')
+        : null,
+      want:fx.hs+'-'+fx.as,
+      /* and it never goes backwards or jumps */
+      steps:reel.map((r,i)=>{
+        if(i===0) return r.before[0]===0&&r.before[1]===0;
+        const p=reel[i-1];
+        return r.before[0]===p.before[0]+(p.team===0?1:0)
+            && r.before[1]===p.before[1]+(p.team===1?1:0);
+      }).every(Boolean)
+    };
+  })()`);
+
+    if (out.none) return;
+    assert.ok(out.goals >= 2, out.label + ' should have goals at both ends');
+    assert.equal(out.opensAt, '0-0', 'the reel opens on nothing, like the match did');
+    assert.ok(out.steps, 'the score moves one goal at a time, to the side that scored');
+    assert.equal(out.endsAt, out.want,
+      'and the last moment leaves the board on the fixture score: '
+      + out.endsAt + ' against ' + out.want);
   });

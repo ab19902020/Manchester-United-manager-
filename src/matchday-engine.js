@@ -3414,6 +3414,12 @@ function resolvePossession(){
         stop *= 1 - scriptUrgency(SCRIPT.pending.team)*0.92;
     } else {
       stop = 0.22 + Amix(best,{positioning:1.4, aggression:1.0, tackling:0.6})*0.42;
+      /* A HIGHLIGHT IS NOT BLOCKED. The keeper is already told not to
+         overrule a goal that is in the save; the eleven men in front of
+         him were not, and a defence packed into its own box blocks a
+         great many shots. That was the moment that ran to eighty-four
+         match-seconds. */
+      if(MOMENT.on && best.team !== MOMENT.team) stop *= 0.12;
     }
     if(inBox && Math.random() < stop){
       const clean = best.isGK && Math.random() < A01(best,'handling')*0.75;
@@ -4236,6 +4242,240 @@ function pressureRestart(team){
         {x: s*(HALF_L-11-Math.random()*9), y: side*(HALF_W-0.2)}, 'THROW-IN');
   }
 }
+/* =====================================================================
+   A MOMENT, NOT A MATCH
+   ---------------------------------------------------------------------
+   "It should only show the bit before the goal and the goal. It
+    shouldn't have kick off. It shouldn't reset the players into
+    position. It should just have that exact moment of the goal being
+    scored, like a second before. Show the goal. Show the celebration."
+
+   What a highlight was: `start()`, which calls `newMatch()`, which
+   kicks off. Every goal in the reel therefore began by putting all
+   twenty-two men back on their own formation marks, taking a kick-off
+   from the centre circle, and then shoving the scoring side forward
+   every three seconds until something went in -- with a thirty-second
+   cap for the ones that never did. That is a match played badly, not a
+   highlight, and it was wrong in the way that matters most: it made you
+   watch the football that did not happen instead of the football that
+   did.
+
+   A highlight starts a second before the ball goes in. So this builds
+   THAT PICTURE and nothing else:
+
+     the shape    both sides where they would be with the ball in the
+                  final third -- the scoring side pushed up, keeping
+                  their own formation's spacing; the conceding side
+                  behind the ball with their back line on the edge of
+                  the six-yard box
+     the man      the scorer the save recorded, in the area
+     the ball     ALREADY TRAVELLING. The clip opens on the pass, not on
+                  a man standing on it, because a highlight opens on the
+                  move being played rather than on somebody deciding to
+                  play it
+
+   Then it lets go. The engine's own football takes it from there -- he
+   runs onto it, he strikes it, it goes in -- and the engine's own goal
+   handling does the rest, which is the part nobody had ever seen: five
+   seconds of celebration and then the replay. Both were always in
+   there. A live match at three and a third seconds to the minute never
+   had time for either.
+
+   NOTHING HERE DECIDES ANYTHING. The goal, the scorer and the minute
+   were all settled by MatchSim when the fixture was played; the reel is
+   reading them back. This is the staging of a re-enactment, which is
+   the one place in this game where working backwards from a known
+   result is not only allowed but is the entire point.
+   ===================================================================== */
+const MOMENT = { on:false, done:false, forced:false, t:0, team:0, scorer:null, scored:false, nudged:0 };
+
+/* the same goal stages the same way twice, so a moment is a fact about
+   the goal rather than a fresh roll of the dice every time you open it */
+function momentJitter(p, k){
+  const s = String((p && (p.pid || p.name || p.idx)) || '?') + ':' + k;
+  let h = 2166136261;
+  for(let i=0;i<s.length;i++){ h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+  h ^= h>>>15; h = Math.imul(h, 2246822507); h ^= h>>>13;
+  return ((h>>>0)/4294967296) - 0.5;               // -0.5 .. +0.5
+}
+
+/* BOTH SIDES AS THEY WOULD BE WITH THE BALL UP THERE, which is not the
+   same as both sides on their kick-off marks. Each man keeps his own
+   position in his own shape -- a right-back is still wide right, a
+   holding midfielder is still the deepest of the three -- and the whole
+   shape slides up or drops off. So a 4-3-3 still looks like a 4-3-3 and
+   a back five still looks like a back five. */
+function momentShape(team){
+  const s = S.dir[team];
+  for(const p of players){
+    const dir = S.dir[p.team];
+    const across = THREE.MathUtils.clamp(
+      p.home.y*(HALF_W*0.92) + momentJitter(p,'z')*5, -(HALF_W-1.5), HALF_W-1.5);
+    if(p.isGK){
+      p.pos.set(dir*-(HALF_L-1.7), THREE.MathUtils.clamp(across*0.2, -3, 3));
+    } else if(p.team===team){
+      /* the side that scored, camped in the final third */
+      const depth = 0.10 + (p.home.x + 1)*0.40 + momentJitter(p,'x')*0.07;
+      p.pos.set(s*HALF_L*THREE.MathUtils.clamp(depth, 0.04, 0.86), across);
+    } else {
+      /* and the side that conceded, every man behind the ball */
+      const depth = 0.36 + (0.5 - p.home.x*0.5)*0.56 + momentJitter(p,'x')*0.07;
+      p.pos.set(s*HALF_L*THREE.MathUtils.clamp(depth, 0.28, 0.94), across);
+    }
+    p.vel.set(0,0);
+    p.face = (p.team===team) === (s>0) ? 0 : Math.PI;
+    p.celeb = 0; p.cool = 0; p.dive = 0; p.lunge = 0; p.skill = 0;
+    p.strike = null; p.gkHold = 0;
+  }
+}
+
+/* Who looks like he played it: behind the scorer, far enough back that
+   it is a pass rather than a tap, off to one side so the ball comes
+   ACROSS him -- a square ball from directly behind reads as nothing --
+   and, above all, with nobody standing in the lane.
+
+   THE LANE IS THE HALF THAT MATTERS. Measured without it: the moment
+   ran a median of 31 match-seconds and twice went past 80, because the
+   conceding side is packed into its own box by definition and a pass
+   picked on distance alone is played straight through four of them,
+   cut out, and then has to be rescued by the siege. Weighting the lane
+   is the difference between a highlight and a scramble. */
+function momentPasser(team, scorer){
+  const s = S.dir[team];
+  let best = null, bs = -1e9;
+  for(const q of teamOf(team)){
+    if(q === scorer || q.isGK) continue;
+    const behind = s*(scorer.pos.x - q.pos.x);
+    const wide = Math.abs(q.pos.y - scorer.pos.y);
+    if(behind < 2 || behind > 24) continue;
+    const sc = 14 - Math.abs(behind - 11)*0.6 + Math.min(wide, 18)*0.32
+             - laneRisk(q, scorer)*3.2;
+    if(sc > bs){ bs = sc; best = q; }
+  }
+  return best || teamOf(team).find(q => q !== scorer && !q.isGK) || null;
+}
+
+function stageMoment(spec){
+  const team = (spec && spec.team)|0;
+  if(!TEAMS[team]) return false;
+  const s = S.dir[team];
+
+  /* out of whatever the last moment left behind, cleanly */
+  S.phase='play'; S.freeze=0; S.penLive=false; S.restart=null;
+  S.pendingOffside=null; S.liveShot=null; S.passTo=null; S.stoppage=0;
+  S.shake=0; S.scorer=null;
+  MOMENT.on=true; MOMENT.t=0; MOMENT.team=team; MOMENT.scored=false;
+  MOMENT.nudged=0; MOMENT.forced=false; MOMENT.done=false;
+
+  momentShape(team);
+
+  const scorer = teamOf(team).find(p => isScriptScorer(p))
+    || teamOf(team).find(p => p.slot==='ST')
+    || teamOf(team).find(p => p.isFwd && !p.isGK)
+    || teamOf(team).find(p => !p.isGK);
+  if(!scorer){ MOMENT.on=false; return false; }
+  MOMENT.scorer = scorer;
+
+  /* A PENALTY IS ALREADY A PICTURE. Everybody clears the area, the taker
+     walks up, the keeper picks his side -- the engine has done that for
+     a long time and it is exactly the right clip, so a spot kick is
+     handed straight to it rather than staged as open play. */
+  if(spec && spec.pen){
+    awardPenalty(team, scorer, (scorer.name || TEAMS[team].name) + ' from the spot');
+    return true;
+  }
+
+  /* him in the area, on the angle his own id picks */
+  const side = momentJitter(scorer,'side') >= 0 ? 1 : -1;
+  scorer.pos.set(s*(HALF_L - (8.5 + Math.abs(momentJitter(scorer,'d'))*11)),
+                 side*(1.5 + Math.abs(momentJitter(scorer,'w'))*15));
+  scorer.vel.set(0,0); scorer.face = s>0 ? 0 : Math.PI; scorer.cool = 0;
+
+  const passer = momentPasser(team, scorer);
+  if(!passer){ MOMENT.on=false; return false; }
+
+  /* AND THE BALL IS ALREADY ON ITS WAY. Played into the space in front
+     of him rather than onto his foot, so he runs onto it and finishes
+     the way the highlight of a goal actually looks. */
+  const to = new THREE.Vector2(scorer.pos.x + s*1.8 - passer.pos.x,
+                               scorer.pos.y - passer.pos.y);
+  const d = Math.max(1, to.length());
+  passer.face = Math.atan2(to.y, to.x);
+  S.possTeam = team; S.lastTouch = passer; S.passTo = scorer;
+  ball.owner = null; ball.spin = 0; ball.cool = 0;
+  kick(passer, to.normalize(), THREE.MathUtils.clamp(d*1.15 + 5, 13, 27),
+       d > 17 ? 1.9 : 0.7, 0, 'pass');
+
+  /* THE PASS IS ALLOWED TO ARRIVE. Every defender is caught leaning the
+     wrong way for the length of the ball's flight -- the same device the
+     engine already uses when a man is sold by a skill move -- and his
+     marker for longer than that. Without it the ball is cut out by one
+     of the eleven men who are, correctly, all standing in their own
+     penalty area, and the clip becomes a scramble instead of a goal. */
+  for(const q of players){
+    if(q.team===team || q.isGK) continue;
+    const gap = Math.hypot(q.pos.x-scorer.pos.x, q.pos.y-scorer.pos.y);
+    q.cool = Math.max(q.cool, gap < 8 ? 0.55 + (8-gap)*0.06 : 0.45);
+  }
+
+  cutTo('tele', 2.2);
+  return true;
+}
+
+/* The clip runs itself. This only watches it, and only intervenes if the
+   football refuses -- a ball cut out, a touch too heavy -- in which case
+   the same siege the live match used to run is applied, once a second,
+   rather than letting the reel sit on a picture where nothing happens. */
+function stepMoment(dt){
+  if(!MOMENT.on) return;
+  MOMENT.t += dt;
+  if(S.phase==='goal' || S.phase==='replay'){ MOMENT.scored = true; return; }
+  if(MOMENT.scored) return;
+  /* AND IF IT WILL NOT COME OFF, IT IS RESCUED QUICKLY AND CLOSER EACH
+     TIME. `SCRIPT.setTries` is what pressureChance reads to decide how
+     near the goal to put the ball -- the first rescue is played to the
+     edge of the box, the fourth is a cut-back across the six-yard line
+     -- so counting up here is what stops a stubborn moment running to
+     thirty seconds. */
+  if(MOMENT.t > 3 && MOMENT.t - MOMENT.nudged > 3){
+    MOMENT.nudged = MOMENT.t;
+    SCRIPT.setTries = (SCRIPT.setTries||0) + 1;
+    try{ pressureChance(MOMENT.team); }catch(e){ /* it can still come off on its own */ }
+  }
+  /* AND IN THE END IT IS SHOWN, because it happened. This goal is in the
+     save, on the report and in the league table; a clip that runs out of
+     patience and cuts away without it is the reel telling the player his
+     own result did not occur. Measured on Ceuta 1-4 Girona: the 16th
+     minute would not come off, the reel gave up on it, and the board
+     then sat a goal behind for the rest of the clip.
+
+     So after ten seconds -- long past the point where it is still an
+     interesting passage of play -- the ball is put at his feet six yards
+     out with the defence caught flat, and he puts it in. It is the last
+     resort and it is meant to look like one; what it is not is nothing.
+     Nothing about the RESULT is being decided here. It was decided by
+     MatchSim when the fixture was played. */
+  if(MOMENT.t > 13 && !MOMENT.forced && MOMENT.scorer){
+    MOMENT.forced = true;
+    const s = S.dir[MOMENT.team];
+    const p = MOMENT.scorer;
+    /* eleven metres rather than six: from six it is captioned TAP-IN,
+       which is what the lower third read on a goal the save recorded as
+       an ordinary finish. Far enough out to be struck, near enough that
+       it goes in. */
+    p.pos.set(s*(HALF_L - 11), (momentJitter(p,'last'))*9);
+    p.vel.set(0,0); p.face = s>0?0:Math.PI; p.cool = 0;
+    ball.pos.set(p.pos.x + s*0.45, CFG.BALL_R, p.pos.y);
+    ball.vel.set(0,0,0); ball.spin=0; ball.cool=0; ball.owner=p;
+    S.possTeam = MOMENT.team; S.passTo=null; S.lastTouch=p;
+    S.pendingOffside=null; S.liveShot=null;
+    for(const q of players){
+      if(q.team===MOMENT.team) continue;
+      q.cool = Math.max(q.cool, q.isGK ? 0.35 : 1.1);
+    }
+  }
+}
+
 /* Each tick: work out whether a goal is due, and if it is overdue push
    the side that is owed it. */
 function scriptTick(){
@@ -4247,6 +4487,18 @@ function scriptTick(){
     if(now >= e.minute - 0.75){ due = e; break; }
   }
   SCRIPT.pending = due;
+
+  /* A STAGED MOMENT OWNS ITSELF, and the ladder below must keep its
+     hands off it. The ladder exists for a LIVE match where a goal has
+     fallen due and open play will not oblige, and it escalates to set
+     pieces after 1.1 seconds -- so a moment placed on the edge of the
+     six-yard box was being converted into a corner, a free kick or a
+     throw-in before it had finished its first second, every single
+     time. Measured: a median of 31 match-seconds to score a goal that
+     had been placed a pass away from going in, and two past eighty.
+     A clip of a man walking over to take a throw-in is not a highlight
+     of the goal he scored. See stageMoment and stepMoment. */
+  if(MOMENT.on) return;
 
   /* Open play will not always oblige. Once a goal is overdue the owed
      side gets first a set piece and then, in the end, a spot kick —
@@ -4303,6 +4555,11 @@ function scriptTick(){
    falls due, rising the longer it goes unpaid. */
 function scriptUrgency(team){
   if(!SCRIPT.active || !SCRIPT.pending || SCRIPT.pending.team!==team) return 0;
+  /* A HIGHLIGHT IS ALL URGENCY. The goal on the reel has already been
+     scored -- it is in the save, on the report and in the league table --
+     so the keeper is not being asked to let one in, he is being asked
+     not to overrule one that happened. */
+  if(MOMENT.on) return 1;
   if(S.stoppage > 0) return 1;                       // added time: get it done
   if(S.held) return 1;                               // and so is a held clock
   return THREE.MathUtils.clamp((scriptMinute() - SCRIPT.pending.minute + 1.5)/3, 0, 1);
@@ -5138,12 +5395,21 @@ function tick(dt){
     /* the celebration, then the replay, and only then the restart */
     if(S.freeze<=0){
       if(replayStart()){ S.phase='replay'; return; }
+      /* A HIGHLIGHT ENDS ON THE GOAL. A match restarts from the centre
+         circle after one; a clip does not, and putting twenty-two men
+         back on their marks is the exact thing the reel is not supposed
+         to show. So the moment holds its last frame and the reel moves
+         on to the next one. */
+      if(MOMENT.on){ MOMENT.on=false; MOMENT.done=true; S.running=false; return; }
       kickoff(S.lastScorer==null?(S.score[0]>S.score[1]?1:0):1-S.lastScorer);
     }
     return;
   }
   if(S.phase==='replay'){
-    if(!replayStep(dt)) kickoff(S.lastScorer==null?(S.score[0]>S.score[1]?1:0):1-S.lastScorer);
+    if(!replayStep(dt)){
+      if(MOMENT.on){ MOMENT.on=false; MOMENT.done=true; S.running=false; return; }
+      kickoff(S.lastScorer==null?(S.score[0]>S.score[1]?1:0):1-S.lastScorer);
+    }
     return;
   }
   if(S.phase==='half'){
@@ -5204,6 +5470,7 @@ function tick(dt){
   /* the last few seconds of live play, kept so a goal can be shown again */
   replayRecord(dt);
   scriptTick();
+  stepMoment(dt);
   /* A referee plays added time, and so does this. If the plan is still
      owed a goal we keep going — with urgency at its highest — rather
      than blowing the whistle on a scoreline that disagrees with the
@@ -5252,7 +5519,17 @@ function tick(dt){
       addedTime = true;
     }
   }
-  if(S.clock >= S.halfLen && !addedTime){
+  /* A MOMENT HAS NO HALF TIME AND NO FULL TIME. The clip's clock is set
+     to the minute the save recorded, and a goal on 45 or on 90 therefore
+     lands the clock exactly on a boundary -- so the picture blew the
+     whistle, sent both sides down the tunnel for six seconds and never
+     showed the goal at all. Measured: a moment placed on minute 45 went
+     `half > restart > play > restart > play` and timed out without
+     scoring. A highlight is one passage of play; it does not have a
+     half. */
+  if(S.clock >= S.halfLen && !addedTime && MOMENT.on){
+    S.clock = S.halfLen - 0.001;
+  } else if(S.clock >= S.halfLen && !addedTime){
     if(S.half===1){
       S.phase='half'; S.freeze=6;   /* long enough to actually walk off */
       lowerThird('HT', S.score[0]+' — '+S.score[1], TEAMS[0].abbr+' v '+TEAMS[1].abbr);
@@ -5489,6 +5766,61 @@ window.Matchday = {
     return this;
   },
   clearScript(){ clearScript(); return this; },
+
+  /* ONE GOAL, FROM A SECOND BEFORE IT WENT IN.
+     -----------------------------------------------------------------
+         Matchday.playMoment({ team:0, pid:'123', scorer:'Rashford',
+                               pen:false, minute:40 })
+
+     No kick-off, no restart, no formation reset -- both sides are
+     placed as they would be with the ball in the final third and the
+     clip opens on the pass already travelling. See stageMoment above
+     for why, at length: it is the difference between showing the goal
+     and showing the ten seconds of football that were not the goal.
+
+     It resumes the engine WITHOUT `newMatch()`, which is the whole
+     point -- `start()` kicks off, and kicking off is what the reel was
+     doing wrong twenty-six times a match.
+
+     Returns false if there is nobody to score it, which the caller
+     should treat as "skip this moment" rather than as an error. */
+  playMoment(spec){
+    if(!spec) return false;
+    showDemoMenu(false);
+    /* the plan is this one goal, owed from the first second, so the
+       engine credits the right man and the keeper does not overrule a
+       goal that is already in the save */
+    loadScript({ events:[{ minute:0.2, team:spec.team, pid:spec.pid,
+      scorer:spec.scorer || null, finish:spec.finish || null }], stats:null });
+    SCRIPT.hold = false;
+    S.holdFT = false;
+    if(spec.minute != null){
+      /* the scoreboard reads the minute the save recorded, because that
+         is when this happened */
+      const m = Math.max(0, +spec.minute || 0);
+      S.half = m > 45 ? 2 : 1;
+      S.clock = Math.max(0, (m/90)*(S.halfLen*2) - (S.half-1)*S.halfLen);
+    }
+    /* the reel opens on 0-0 and climbs as the goals go in, in the order
+       the save recorded them, so the scoreboard reads what it read at
+       the time -- but only if the first moment says so, or watching a
+       reel twice would start it at 3-0 */
+    if(spec.first){ S.score=[0,0]; S.lastScorer=null; }
+    /* and the board is set to the score as it stood before this goal,
+       read out of the save, so it is right at every moment whatever the
+       picture manages to do with the ones before it */
+    if(spec.score && spec.score.length===2){
+      S.score = [spec.score[0]|0, spec.score[1]|0];
+    }
+    const ok = stageMoment(spec);
+    if(!ok) return false;
+    S.running = true; last = performance.now();
+    return true;
+  },
+  /* Is a staged moment still running? False once the goal has been
+     scored and the celebration and replay have both finished. */
+  momentDone(){ return !MOMENT.on; },
+
   /* Make a substitution the crowd can see.
 
        Matchday.substitute({ team:0, offPid:'123',
@@ -5563,7 +5895,32 @@ window.Matchday = {
   FINISHES: Object.keys(FINISH),
   /* the manager game announces itself here: no demo menu ever again,
      and elite tempo rather than the demo's PRO default */
-  embed(){ S.embedded = true; S.aiSkill = 1; showDemoMenu(false); return this; },
+  /* MOUNTED INSIDE THE GAME, THE DEMO'S OWN CONTROLS GO.
+     The camera picker and the speed picker belong to the standalone
+     broadcast page, where you sit in the gantry and choose your shot.
+     Inside the highlights reel they are three rows of buttons sitting
+     over a goal, they do things the reel does not want done, and the
+     reel has its own bar underneath. The scoreboard, the lower third,
+     the bug and the radar stay -- those are the broadcast, not the demo.
+
+     The possession readout goes too: it counts across every moment
+     staged into this engine, so on a reel it reads whatever the last
+     few clips added up to, which was 0% / 100%. */
+  embed(){
+    S.embedded = true; S.aiSkill = 1; showDemoMenu(false);
+    try{
+      ['camGrp','spdGrp'].forEach(id=>{ const e = el(id); if(e) e.style.display='none'; });
+      const rail = document.querySelector('#hud .rail');
+      if(rail) rail.style.display='none';
+      const poss = document.querySelector('#hud .poss');
+      if(poss) poss.style.display='none';
+      /* and the ticker, which says the same thing the reel's own caption
+         says, in the same corner, on top of it */
+      const feed = el('feed');
+      if(feed) feed.style.display='none';
+    }catch(e){ /* the reel plays with the demo chrome on it */ }
+    return this;
+  },
   start(){ showDemoMenu(false); newMatch(); S.running=true; last=performance.now(); return this; },
   pause(){ S.running=false; return this; },
   resume(){ showDemoMenu(false); S.running=true; last=performance.now(); return this; },

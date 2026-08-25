@@ -168,7 +168,12 @@
         out.push({
           kind: 'goal',
           min: minuteOf(g.min, 0),
-          label: String(g.min),
+          /* TWO WRITERS, TWO FORMATS. MatchSim records the minute as
+             "45" and "45+2"; the model sim at the other end of the game
+             records it as "45'", apostrophe included. The caption added
+             one of its own, so every goal from the second writer read
+             `16''`. Whatever arrives, it is stored here without one. */
+          label: String(g.min).replace(/['’]\s*$/, ''),
           team: g.ci === fixture.h ? 0 : 1,
           pid: g.pid != null ? String(g.pid) : null,
           who: g.name || '',
@@ -177,6 +182,19 @@
       });
     } catch (error) { /* a reel of nothing is still a reel */ }
     out.sort((a, b) => a.min - b.min);
+    /* THE SCOREBOARD READS THE SAVE, NOT THE REEL. Letting it climb by
+       one every time a moment comes off means a moment that does not
+       leaves it wrong for the rest of the clip -- measured on Ceuta 1-4
+       Girona, where the first goal timed out and the board sat a goal
+       behind for the whole reel. Each moment is handed the score as it
+       stood before that goal, so the board is right at every moment
+       whatever the picture manages to do. */
+    let h = 0;
+    let a = 0;
+    out.forEach((item) => {
+      item.before = [h, a];
+      if (item.team === 0) h += 1; else a += 1;
+    });
     return out;
   }
 
@@ -210,7 +228,19 @@
     el.id = FRAME;
     el.style.cssText = 'position:fixed;inset:0;z-index:120;background:#03050d;'
       + 'display:flex;flex-direction:column';
-    el.innerHTML = '<div id="hlStage" style="position:relative;flex:1 1 auto;min-height:0"></div>'
+    /* LETTERBOXED, BECAUSE FOOTBALL ON TELEVISION IS WIDE.
+       The reel opens full-screen on a phone held upright, which is a
+       tall narrow window, and the broadcast's cameras -- the celebration
+       one worst of all -- are framed for a wide one. Measured on a
+       390x844 screen: the celebration filled the frame with one man's
+       torso and an advertising hoarding, and you could not see the goal,
+       the net or anybody else. A 16:9 box centred in the black is the
+       same picture the shots were cut for, and it reads as a broadcast
+       rather than as a phone game. */
+    el.innerHTML = '<div id="hlStage" style="position:relative;flex:1 1 auto;min-height:0;'
+      + 'display:flex;align-items:center;justify-content:center">'
+      + '<div id="hlPitch" style="position:relative;width:100%;aspect-ratio:16/9;'
+      + 'max-height:100%;overflow:hidden;background:#03050d"></div></div>'
       + '<div id="hlBar" style="flex:none;display:flex;align-items:center;gap:8px;'
       + 'padding:10px 12px calc(10px + env(safe-area-inset-bottom));background:#080c09;'
       + 'border-top:1px solid rgba(240,245,240,.12)"></div>';
@@ -219,7 +249,7 @@
   }
 
   function caption(text, sub) {
-    const stage = document.getElementById('hlStage');
+    const stage = document.getElementById('hlPitch') || document.getElementById('hlStage');
     if (!stage) return;
     let c = document.getElementById('hlCap');
     if (!c) {
@@ -263,47 +293,77 @@
     try { if (typeof renderMCtl === 'function') renderMCtl(); } catch (error) { /* ignore */ }
   }
 
-  /* set the next moment up and let it play */
+  /* -------------------------------------------------------------------
+     ONE MOMENT, AND IT STARTS A SECOND BEFORE THE BALL GOES IN
+     -------------------------------------------------------------------
+     "It should only show the bit before the goal and the goal. It
+      shouldn't have kick off. It shouldn't reset the players into
+      position. It should just have that exact moment of the goal being
+      scored, like a second before. Show the goal. Show the
+      celebration."
+
+     What this used to do, and it is worth writing down because it was
+     indefensible: `md.start()`, which calls `newMatch()`, which kicks
+     off. Every goal on the reel therefore began by putting all
+     twenty-two men back on their formation marks and taking a kick-off
+     from the centre circle, then shoving the scoring side forward every
+     three seconds until something went in, with a THIRTY SECOND cap for
+     the ones that never did. So the reel spent most of its running time
+     showing the football that did not happen, and the celebration --
+     which the engine has always had, five seconds of it, followed by a
+     replay -- was reached late or not at all.
+
+     `playMoment` replaces the whole of that. It places both sides as
+     they would be with the ball in the final third, puts the scorer in
+     the area and opens the clip on the pass ALREADY TRAVELLING. Then
+     the engine's own football finishes it and the engine's own goal
+     handling does the celebration and the replay, and the moment holds
+     its last frame rather than kicking off again.
+
+     This loop no longer stages anything. It waits for the engine to say
+     the moment is over, and the cap is now fourteen seconds rather than
+     thirty because a moment that is placed on the edge of the six-yard
+     box does not need half a minute.
+     ------------------------------------------------------------------- */
   function stage() {
     const md = api();
     const item = REEL.items[REEL.ix];
     if (!md || !item) { close(); return; }
     bar();
     caption(item.label + "'", (item.who || '') + (item.pen ? ' (pen)' : ''));
+
+    let ok = false;
     try {
-      md.playScript({ events: [{ minute: 0.4, team: item.team, pid: item.pid,
-        scorer: item.who ? String(item.who).split(' ').pop() : null,
-        finish: item.pen ? 'sidefoot' : null }], stats: null });
-      if (typeof md.holdClock === 'function') md.holdClock(false);
-      if (typeof md.holdWhistle === 'function') md.holdWhistle(false);
-      md.setHalfLength(120);
       md.setSpeed(1);
-      md.start();
-    } catch (error) { close(); return; }
+      ok = typeof md.playMoment === 'function' && md.playMoment({
+        team: item.team,
+        pid: item.pid,
+        scorer: item.who ? String(item.who).split(' ').pop() : null,
+        pen: !!item.pen,
+        minute: item.min,
+        score: item.before,
+        first: REEL.ix === 0,
+      });
+    } catch (error) { ok = false; }
+    /* a moment with nobody to score it is skipped rather than stared at */
+    if (!ok) { next(); return; }
+
     REEL.waited = 0;
     let scored = false;
-    let since = 99;
     REEL.onGoal = () => { scored = true; };
     try { md.on('goal', REEL.onGoal); } catch (error) { /* ignore */ }
     if (REEL.timer) clearInterval(REEL.timer);
     REEL.timer = setInterval(() => {
       REEL.waited += 0.25;
-      since += 0.25;
-      /* PUT HIM ON THE BALL, THEN LEAVE HIM ALONE.
-         Staging the chance every tick was measured at ten moments in
-         twenty-six coming off: each new ball took the last one off his
-         foot before he could hit it. Staged once and then only again
-         after three seconds of nothing, twenty-seven in thirty come off,
-         with a median of four and a half seconds. */
-      if (!scored && since >= 3) {
-        since = 0;
-        try { if (typeof md.stageChance === 'function') md.stageChance(item.team, true); }
-        catch (error) { /* it can still come off on its own */ }
-      }
-      /* the celebration is the engine's own five seconds, then move on.
-         The cap is there because a moment that will not come off must not
-         hold the reel up -- it is a highlight, not a guarantee. */
-      if ((scored && REEL.waited > 5.5) || REEL.waited > 30) next();
+      /* the engine owns the end of a moment: the ball goes in, it
+         celebrates, it replays, and only then does it say it is done */
+      const over = typeof md.momentDone === 'function' ? md.momentDone() : scored;
+      /* THE ENGINE SAYS WHEN, AND THIS IS ONLY THE SAFETY NET. A moment
+         runs a few seconds, then five of celebration, then the replay,
+         so the net has to sit above all three -- at fourteen it was
+         cutting moments off in the middle of the celebration they exist
+         to show. */
+      if ((scored && over) || REEL.waited > 26) next();
     }, 250);
   }
 
@@ -405,7 +465,7 @@
     if (!items.length) return false;
 
     const host = box();
-    const stageEl = document.getElementById('hlStage');
+    const stageEl = document.getElementById('hlPitch') || document.getElementById('hlStage');
     REEL.items = items; REEL.ix = 0; REEL.fixture = fx; REEL.match = m; REEL.on = true;
     bar();
     caption('Highlights', 'building the pitch\u2026');
