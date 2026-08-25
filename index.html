@@ -1118,7 +1118,7 @@ class MatchSim{
    /* A goal is a shot on target. Save/woodwork interceptors count their
       own outcome, so only add it when the score actually changed. */
    if((this.fix.hs!==hs||this.fix.as!==as)&&A.st.sot===sot)A.st.sot++}
-  else if(Math.random()<(model?model.onTargetChance(ratio):clamp(.38+ratio*.22,.35,.72))){A.st.sot++;D.st.sv++;g.rating+=.22;
+  else if(Math.random()<(model?model.onTargetChance(ratio):clamp(.13+ratio*.13,.10,.48))){A.st.sot++;D.st.sv++;g.rating+=.22;
    this.say(this.dispMin(),A,cf(COMM.save,{b:shooter.p.name,g:g.p.name}),'big');
    if(Math.random()<.52){A.st.cor++;this.cornerEvent(A,D)}}
   else{this.say(this.dispMin(),A,cf(COMM.miss,{b:shooter.p.name}));shooter.rating-=.03}}

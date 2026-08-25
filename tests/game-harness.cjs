@@ -251,7 +251,36 @@ async function createGame() {
   };
 }
 
-async function startCareer(game, name = 'Adam') {
+/* AN OPTIONAL SEED, BECAUSE SOME OF THESE TESTS ASK ABOUT THE WORLD.
+ *
+ * Career creation is random, so a test that looks at what the world came
+ * out like is a different test every run. That is right for most of them
+ * -- a squad check that only passes on one world is not much of a check
+ * -- and wrong for any test chasing a fault that appears in some worlds
+ * and not others. tests/squad-identity.test.cjs failed once in a full
+ * run and then passed ten times in isolation, and the reason it could
+ * not be reproduced is here rather than in the code it was testing.
+ *
+ * It works through the machinery src/world-seed.js already has rather
+ * than adding any. `newGame` draws its world seed from `Math.random`
+ * before it replaces it, so pinning the stream for the duration of
+ * career creation pins which world gets built -- and the stream is put
+ * back afterwards, so the football is as random as it ever was.
+ */
+async function startCareer(game, name = 'Adam', options = {}) {
+  const seed = options.seed;
+  const realRandom = game.window.Math.random;
+  if (seed != null) {
+    game.window.Math.random = game.window.RBSWorldSeed.mulberry32(seed >>> 0);
+  }
+  try {
+    return await runCareerFlow(game, name);
+  } finally {
+    if (seed != null) game.window.Math.random = realRandom;
+  }
+}
+
+async function runCareerFlow(game, name) {
   game.click('frontNew');
   await wait(100);
   game.click('startGame');

@@ -208,27 +208,56 @@
         if (lost) { report.duplicates += lost; report.clubs += 1; }
       });
 
-      /* ---- pass two: everybody else, inside his own squad only ---- */
+      /* ---- pass two: everybody else, inside his own squad only ----
+         DECIDED FIRST, REMOVED SECOND, because doing both at once let a
+         duplicate through. The previous version chose inside a single
+         `filter` and, when a later copy outranked the one already held,
+         nulled the loser like this:
+
+             const at = club.players.indexOf(held);
+             if (at >= 0) club.players[at] = null;
+
+         `club.players` is still the ORIGINAL array while the filter is
+         running -- the assignment that replaces it has not happened yet
+         -- and `held` had already been returned true and copied into the
+         result. So the null landed in the array about to be thrown away
+         and both men stayed. It only bit when the second copy was the
+         better one, which is roughly half of them, and `report.sameSquad`
+         came out 0 because the squad had not got any shorter: the sweep
+         reported a clean squad while leaving the duplicate in it.
+
+         That is task #54's intermittent failure -- it passed ten times in
+         isolation because whether it fires depends on which copy is
+         rated higher, not on anything about the run.
+
+         Two plain passes cannot have that fault: the first decides who
+         survives each identity, the second keeps exactly those objects. */
       G.clubs.forEach((club) => {
-        const keptHere = new Map();
-        const before = (club.players || []).length;
-        club.players = (club.players || []).filter((p) => {
+        const roster = club.players || [];
+        const before = roster.length;
+
+        const keeper = new Map();
+        roster.forEach((p) => {
+          const id = identityOf(p);
+          if (!id) return;
+          const held = keeper.get(id);
+          if (!held || (p.ovr || 0) > (held.ovr || 0)) keeper.set(id, p);
+        });
+
+        /* `done` covers the degenerate case the reference check alone
+           would miss: the same player OBJECT sitting in the roster
+           twice, where `keeper.get(id) === p` is true at both indexes. */
+        const done = new Set();
+        club.players = roster.filter((p) => {
           const id = identityOf(p);
           if (!id) return true;
-          const held = keptHere.get(id);
-          if (!held) { keptHere.set(id, p); return true; }
-          /* keep the better of the two, drop the other */
-          if ((p.ovr || 0) > (held.ovr || 0)) {
-            dropped.add(held.id);
-            keptHere.set(id, p);
-            const at = club.players.indexOf(held);
-            if (at >= 0) club.players[at] = null;
-            return true;
-          }
+          if (keeper.get(id) === p && !done.has(id)) { done.add(id); return true; }
           dropped.add(p.id);
+          if (report.examples.length < 8) {
+            report.examples.push(p.name + ' twice at ' + club.name);
+          }
           return false;
         });
-        club.players = club.players.filter(Boolean);
         report.sameSquad += before - club.players.length;
       });
 
@@ -242,7 +271,17 @@
       });
 
       /* A dropped player must not still be named in the XI, or the
-         team sheet has a hole where a man used to be. */
+         team sheet has a hole where a man used to be.
+
+         An id only counts as dropped if it is gone from the world. The
+         same object listed in a squad twice is removed once and still
+         playing, and rebuilding the XI around a man who is standing
+         right there would be a rebuild for nothing. */
+      if (dropped.size) {
+        G.clubs.forEach((club) => {
+          (club.players || []).forEach((p) => { dropped.delete(p.id); });
+        });
+      }
       if (dropped.size && G.tacs && Array.isArray(G.tacs.xi)) {
         const holed = G.tacs.xi.some((id) => dropped.has(id));
         if (holed) {

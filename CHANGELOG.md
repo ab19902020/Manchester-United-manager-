@@ -2,6 +2,179 @@
 
 ## Unreleased
 
+### Fixed
+
+- **Shots on target were nearly double what football manages, and the corner
+  count was thirty per cent over.** This started as "get corners up to a real
+  rate", opened when the broadcast was measured at 2.0 corners a match against
+  a real ten. Measuring it again first found the premise had moved: 2.0 is the
+  **broadcast's** counter, and since the live Dugout was retired nothing shows
+  it to anyone. The number a player actually reads after every game is
+  MatchSim's, on the match report — and that was **13.35 a match, too many
+  rather than too few.**
+
+  The same rig found the real fault underneath it. Four hundred matches of
+  mid-table against mid-table off a seeded stream, goal-rate controller pinned:
+
+  | | game | real |
+  |---|---|---|
+  | shots a match | 27.5 | 25.5 |
+  | **shots on target** | **17.2** | **8.7** |
+  | **saves** | **14.0** | **5.9** |
+  | corners | 13.4 | 10.3 |
+  | goals from corners | 11% | 13% |
+
+  One function: `onTargetChance`, `clamp(0.38 + ratio*0.22, 0.35, 0.72)`, put
+  56% of non-goal efforts on target where football puts about 26%. Most of the
+  corner surplus was a **consequence** rather than a fault of its own — 52% of
+  saves go behind, so fourteen saves a match were manufacturing six and a half
+  corners. The split, measured by call depth rather than by guessing: 47% of
+  corners from a chance that broke down, 49% from a save, 4% won from another
+  corner.
+
+  It went unexamined for so long precisely because it is harmless to results:
+  the goal is rolled first, and this only decides what happens to the shots
+  that did not go in. Harmless to results is not harmless — it is on the match
+  report as "On target", on the analytics screen as a percentage, and on every
+  player's own line as "3 (2 OT)".
+
+  Four replacements swept over 300 matches on each of three seeds.
+  `clamp(0.13 + ratio*0.13, 0.10, 0.48)` was the most consistent. Shipped, on
+  two seeds of 400:
+
+  | | before | after | real |
+  |---|---|---|---|
+  | shots on target | 17.15 | 9.13 / 8.87 | 8.7 |
+  | saves | 14.04 | 6.07 / 5.92 | 5.9 |
+  | corners | 13.35 | 9.39 / 9.34 | ~10.3 |
+  | a side wins no corner | 0.5% | 2.3% / 2.8% | — |
+
+  The shape is kept, because a flat number would not be a football model: a
+  better shot against a worse keeper finds the target more often, from about
+  18% at a hopeless mismatch to 48% at the other end, which is roughly the best
+  accuracy a real player sustains. Nothing in it knows who is playing or what
+  the score is, so it is a dial on the physics rather than a thumb on the scale.
+
+  **What it costs, stated rather than buried:** goals fall about 0.10 a match —
+  all of it fewer corners producing fewer corner goals — which the division's
+  goal-rate controller restores in live play and which is pinned off in the rig
+  above. Corners land at 9.35 against a real ~10.3, about nine per cent under
+  where they were thirty per cent over, and goals from corners at 7–10% against
+  a real 13%. Closing that last gap means a second dial on top of this one, and
+  one measured change is worth more than two guessed ones.
+
+  `scripts/measure-corners.cjs` is new and is how any of this is checked again.
+  It reports the corner rate the player sees, splits it by where the corners
+  came from, and counts what they were worth in goals.
+
+- **A man could be in a squad twice, and the sweep that removes duplicates
+  reported the squad clean.** This was open as an intermittent test failure:
+  `squad-identity` caught one duplicate in a full suite run, then passed ten
+  times on its own and could not be reproduced.
+
+  It was not flaky. The same-squad pass of `dedupeWorld` chose the survivor and
+  removed the loser inside a single `Array#filter`, and when a later copy of a
+  man outranked the copy already held it nulled the loser like this:
+
+  ```js
+  const at = club.players.indexOf(held);
+  if (at >= 0) club.players[at] = null;
+  ```
+
+  `club.players` is still the **original** array while a filter over it is
+  running — the assignment that replaces it has not happened yet — and `held`
+  had already been returned true and copied into the result. So the null landed
+  in the array about to be discarded, both men stayed, and `report.sameSquad`
+  came back `0` because the squad was no shorter. The sweep declared a clean
+  squad while leaving the duplicate in it, which is why nobody found this by
+  reading the report.
+
+  It fired only when the second copy was the better one, which is roughly half
+  of them. That is the whole of the intermittency: ten clean runs were ten
+  worlds that did not happen to contain one.
+
+  Reproduced deliberately before it was touched — a copied player pushed into a
+  squad both ways round, which left **one man when the copy was worse and two
+  when it was better** — and the same rig after the fix leaves one either way,
+  counted in the report both times. The pass now decides who survives and then
+  keeps exactly those objects, which cannot have this fault. Two smaller things
+  went with it: the same player *object* listed twice is now caught as well as
+  two equal copies, and an id only counts as dropped once it is gone from the
+  world, so a removal no longer triggers a rebuild of an XI that has no hole in
+  it.
+
+  **How often it actually bit, measured rather than assumed:** across eight
+  worlds there were no same-squad duplicates at career creation at all (six to
+  eight cross-club duplicates each, which the world pass has always removed
+  correctly). So at kick-off this was latent. It bit when a duplicate appeared
+  later — the sweep also runs on load — and when it did, it left the man in the
+  squad and said it had not.
+
+  The test that found it is now repeatable. `startCareer` takes an optional
+  seed, which pins the world through machinery `src/world-seed.js` already has
+  rather than adding any: `newGame` draws its world seed from `Math.random`
+  before replacing it, so pinning the stream for the duration of career
+  creation pins which world gets built, and the stream is put back afterwards.
+  The check runs over four named worlds and names the club, both men and the
+  folded name they collide on, instead of reporting `1 !== 0`. And because
+  waiting for a world to contain the fault is not a test, a second one puts the
+  duplicate there on purpose and tries both orderings — only one of them was
+  ever broken.
+
+- **A man could be in a squad twice, and the sweep that removes duplicates
+  reported the squad clean.** This was open as an intermittent test failure:
+  `squad-identity` caught one duplicate in a full suite run, then passed ten
+  times on its own and could not be reproduced.
+
+  It was not flaky. The same-squad pass of `dedupeWorld` chose the survivor and
+  removed the loser inside a single `Array#filter`, and when a later copy of a
+  man outranked the copy already held it nulled the loser like this:
+
+  ```js
+  const at = club.players.indexOf(held);
+  if (at >= 0) club.players[at] = null;
+  ```
+
+  `club.players` is still the **original** array while a filter over it is
+  running — the assignment that replaces it has not happened yet — and `held`
+  had already been returned true and copied into the result. So the null landed
+  in the array about to be discarded, both men stayed, and `report.sameSquad`
+  came back `0` because the squad was no shorter. The sweep declared a clean
+  squad while leaving the duplicate in it, which is why nobody found this by
+  reading the report.
+
+  It fired only when the second copy was the better one, which is roughly half
+  of them. That is the whole of the intermittency: ten clean runs were ten
+  worlds that did not happen to contain one.
+
+  Reproduced deliberately before it was touched — a copied player pushed into a
+  squad both ways round, which left **one man when the copy was worse and two
+  when it was better** — and the same rig after the fix leaves one either way,
+  counted in the report both times. The pass now decides who survives and then
+  keeps exactly those objects, which cannot have this fault. Two smaller things
+  went with it: the same player *object* listed twice is now caught as well as
+  two equal copies, and an id only counts as dropped once it is gone from the
+  world, so a removal no longer triggers a rebuild of an XI that has no hole in
+  it.
+
+  **How often it actually bit, measured rather than assumed:** across eight
+  worlds there were no same-squad duplicates at career creation at all (six to
+  eight cross-club duplicates each, which the world pass has always removed
+  correctly). So at kick-off this was latent. It bit when a duplicate appeared
+  later — the sweep also runs on load — and when it did, it left the man in the
+  squad and said it had not.
+
+  The test that found it is now repeatable. `startCareer` takes an optional
+  seed, which pins the world through machinery `src/world-seed.js` already has
+  rather than adding any: `newGame` draws its world seed from `Math.random`
+  before replacing it, so pinning the stream for the duration of career
+  creation pins which world gets built, and the stream is put back afterwards.
+  The check runs over four named worlds and names the club, both men and the
+  folded name they collide on, instead of reporting `1 !== 0`. And because
+  waiting for a world to contain the fault is not a test, a second one puts the
+  duplicate there on purpose and tries both orderings — only one of them was
+  ever broken.
+
 ### Changed
 
 - **A goal at forty reads forty everywhere, and the clock is what waits.**
