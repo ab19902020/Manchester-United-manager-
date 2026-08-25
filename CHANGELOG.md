@@ -2,6 +2,43 @@
 
 ## Unreleased
 
+### Added
+
+- **Every other result in your division, and the goals from any of them.**
+  "Every team around you has to perform correctly, obviously, in the whole
+  game." They do — ninety-odd clubs play a full season each and the table
+  proves it — and there was no way to **look** at any of it. A Saturday's
+  results existed only as the numbers they moved in the standings, and the one
+  match you could watch was your own.
+
+  The reel has been able to play anybody's match since it was built:
+  `playFixture()` takes a fixture, builds both sides from their real squads,
+  seats the men who actually scored and plays the goals. Brighton 1–3 Villa was
+  watched back that way while it was being tested. There was simply nothing
+  anywhere in the game that would hand it a fixture that was not yours —
+  `vFixtures` lists your club and only your club, the calendar opens your own
+  days, the match report is your own report.
+
+  So there is now a **Results** toggle on World → Table. Not a new tab: the
+  table already carries a country rail and a division rail, and a division's
+  results belong behind those same two rails rather than behind a third copy of
+  them. The card underneath switches between the standings and the round, the
+  round has arrows, and every match with goals in it carries a 🎥.
+
+  Verified in a real browser rather than only under JSDOM: opened on Matchday
+  1, listed all ten fixtures with the played one showing 2–0 and the rest
+  showing their date, highlighted the row that was mine, stepped a matchday
+  with the arrows, and pressed the camera on **Arsenal 2–0 Coventry — a match
+  between two clubs the player has never managed** — which opened the reel with
+  both goals in it and no page errors. Toggling back left the league table
+  exactly as it was.
+
+  It decides nothing. Every fixture it lists was played by the same engine that
+  plays yours, at the time the calendar reached it; this only reads the result
+  out of the save. A goalless draw has an empty reel, so it gets no button
+  rather than a button that opens on nothing — which the tests check by
+  counting cameras against matches with goals, not by trusting the markup.
+
 ### Fixed
 
 - **Shots on target were nearly double what football manages, and the corner

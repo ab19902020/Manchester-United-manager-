@@ -67,6 +67,7 @@ function gameHtml() {
     'src/golden-boot.js',
     'src/layout-polish.js',
     'src/highlights.js',
+    'src/results-round.js',
     'src/crazygames.js',
   ]) {
     html = inlineScript(html, fs.readFileSync(path.join(root, filename), 'utf8'), filename);
