@@ -1,5 +1,5 @@
 /* global G, MU, ACTIONS, buildMatchScreen, renderMCtl, esc, FORMATIONS, autoPick,
-   playerById */
+   playerById, dayEvents */
 
 /* =====================================================================
    THE DUGOUT STOPS BEING A LIVE VIEW AND BECOMES THE HIGHLIGHTS
@@ -364,15 +364,20 @@
   function seatTheScorers(side, fixture) {
     if (!side) return;
     try {
-      const want = (fixture.sc || [])
+      const want = [...new Set((fixture.sc || [])
         .filter((g) => g.ci === side.ci && g.pid != null)
-        .map((g) => String(g.pid));
+        .map((g) => String(g.pid)))];
+      /* EACH ONE TAKES A DIFFERENT SHIRT. The first version asked for the
+         first outfield slot every time, so a second missing scorer was
+         seated on top of the first and the first vanished again -- a
+         two-goal game where both men were out of today's side left one of
+         them unseated, which the test caught on a later run. */
       want.forEach((pid) => {
         if (side.onfield.some((x) => x && x.p && String(x.p.id) === pid)) return;
         const p = playerById(pid);
         if (!p) return;
-        /* the outfield man furthest from being a goalkeeper makes way */
-        const ix = side.onfield.findIndex((x) => x && x.slot !== 'GK');
+        const ix = side.onfield.findIndex((x) => x && x.slot !== 'GK'
+          && want.indexOf(String(x.p.id)) < 0);
         if (ix < 0) return;
         side.onfield[ix] = { ...side.onfield[ix], p, cond: p.cond };
       });
@@ -575,7 +580,55 @@
     }
   } catch (error) { /* ignore */ }
 
+  /* AND THE CALENDAR, which already lists a match's scorers when you tap
+     the day -- so it is the third place a past match is surfaced, and the
+     one where somebody is already looking at the goals. The fixture is
+     right there on the event, so no lookup is needed. */
   try {
+    const passDay = ACTIONS.calDay;
+    if (typeof passDay === 'function') {
+      ACTIONS.calDay = function calDayWithHighlights(el) {
+        const out = passDay.apply(this, arguments);
+        try {
+          const gd = +((el && el.dataset && el.dataset.v) || -1);
+          const ev = (typeof dayEvents === 'function' ? dayEvents(gd) : [])
+            .find((e) => e && e.t === 'match');
+          const fx = ev && ev.f;
+          if (!fx || !fx.played || !reelFor(fx).length) return out;
+          const sb = document.getElementById('sheetBody');
+          if (!sb || sb.querySelector('[data-action="hlDay"]')) return out;
+          const b = document.createElement('button');
+          b.className = 'btn btn-block';
+          b.style.cssText = 'margin-top:8px';
+          b.setAttribute('data-action', 'hlDay');
+          b.setAttribute('data-v', String(gd));
+          b.textContent = '\ud83c\udfa5 Watch the goals';
+          /* ABOVE CLOSE, because Close is the way out and this is not.
+             Through the close button's OWN parent: `insertBefore` needs a
+             direct child, and the close button is nested a level down in
+             this sheet, so calling it on #sheetBody threw NotFoundError
+             into the catch below and the button was silently never
+             added -- everything else measured correct while it did. */
+          const shut = sb.querySelector('[data-action="closeModal"]');
+          if (shut && shut.parentNode) shut.parentNode.insertBefore(b, shut);
+          else sb.appendChild(b);
+        } catch (error) { /* the scorer list is still there */ }
+        return out;
+      };
+    }
+  } catch (error) { /* ignore */ }
+
+  try {
+    ACTIONS.hlDay = (el) => {
+      try {
+        const gd = +((el && el.dataset && el.dataset.v) || -1);
+        const ev = (typeof dayEvents === 'function' ? dayEvents(gd) : [])
+          .find((e) => e && e.t === 'match');
+        if (!ev || !ev.f) return;
+        if (typeof window.closeModal === 'function') window.closeModal();
+        playFixture(ev.f);
+      } catch (error) { /* ignore */ }
+    };
     ACTIONS.hlFix = (el) => {
       try {
         const ix = +((el && el.dataset && el.dataset.v) || 0);

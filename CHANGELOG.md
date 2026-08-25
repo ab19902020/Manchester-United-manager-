@@ -393,6 +393,24 @@
   minutes and sides matching the record, both elevens named, every scorer
   seated, and the squad converting cleanly for the broadcast.
 
+  **Three ways to the goals, and none of them a dead button.** The reel plays
+  itself at full time; after that it is offered wherever the game already
+  surfaces a finished match — the match report, and the calendar day, which is
+  the one screen already listing that match's scorers.
+
+  The calendar entry is worth recording because everything about it measured
+  correct while it did not work: the wrapper installed, the day's event found,
+  the fixture played, the reel holding three goals, the sheet 901 characters
+  long — and no button. `insertBefore` needs a direct child, the close button is
+  nested a level down in that sheet, and the NotFoundError went into a catch. It
+  goes through the close button's own parent now, and a test pins it above
+  Close.
+
+  A second fault came out of writing that test rather than from running the
+  game: `seatTheScorers` asked for the first outfield slot every time, so when
+  two scorers were both out of today's side the second was seated on top of the
+  first and the first vanished again. Each one takes a different shirt now.
+
   **What is not verified:** how the reel looks at real speed. Under headless
   software rendering the engine gets about one frame a second, so on-screen
   playback here is measuring SwiftShader rather than the reel. The staging logic
@@ -431,21 +449,35 @@
   the only two remaining overlaps are both by design (the two-layer star rating,
   and sticky doing what sticky does).
 
-  **Not fixed, and worth saying plainly.** A transfer row reads "23 · unscouted"
-  and renders "3 ·" — the age loses its first digit, so a 33-year-old shows as
-  three. The chain is fully diagnosed in the file: `.pright` measures 178px
-  because `.psub`, the wage line, is `white-space:nowrap`; `.prow`'s third grid
-  track is `auto` so it takes that first; the 1fr track holding the name, club
-  and age is left with 76px; and `.pmeta`'s `text-overflow:ellipsis` — which
-  would trim this neatly — is inert because `.pmeta` is also `display:flex`.
+  **And the fifth, which needed markup rather than CSS.** A transfer row reads
+  "23 · unscouted" and rendered "3 ·" — the age losing its first digit, so a
+  33-year-old showed as three, on every unscouted row in the market.
 
-  Four CSS fixes were tried and three regressed the row, each caught by the
-  audit within a run, which is why none of them shipped. Making `.pmeta` a block
-  cost *more* information than it saved. A min-width floor overflowed the grid
-  and printed the two columns across each other by 57px on every row. Letting
-  the third track shrink moved neither width. This needs the row's markup
-  reworked so the wage line is not competing with the player's own details for
-  the same track — a change to how the row is built, not how it is painted.
+  The chain: `.pright` measures 178px because `.psub`, the wage line, is
+  `white-space:nowrap`; `.prow`'s third grid track is `auto` so it takes that
+  first; the 1fr track holding the name, club and age is left with 76px; and
+  `.pmeta`'s `text-overflow:ellipsis` — which would trim this neatly — is inert
+  because `.pmeta` is also `display:flex`, so the age is squeezed to nothing and
+  cut from the left instead.
+
+  Four CSS attempts were measured and three regressed the row, each caught by
+  the audit inside a run. Making `.pmeta` a block cost *more* information than
+  it saved — the crest jumped to its own line and both the age and the scouting
+  status were lost. A min-width floor overflowed the grid and printed the two
+  columns across each other by 57px on every row. Letting the third track shrink
+  moved neither width, because its max is still max-content.
+
+  None could work, because none addressed the cause: **a long line of text was
+  in the narrow column.** `pRowInner` puts `opt.sub` beside the rating pill, and
+  for almost every row that is right — a squad row's sub is a value or a wage,
+  six to nine characters. The market's is thirty-one that will not wrap, and it
+  is the only one wide enough to starve the column beside it. So only that one
+  moves: over sixteen characters it goes under the player's details, under it
+  nothing changes at all, which leaves every other screen exactly as it was.
+
+  Measured after: `.pmeta` 76px → **214px**, `.pright` 178px → **40px**. The
+  row now reads "Jude Bellingham / Real Madrid · 23 · unscouted" in full, and
+  the squad screen is pixel-identical to before.
 
 ### Added
 

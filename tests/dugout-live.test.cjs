@@ -508,3 +508,76 @@ test('a match played weeks ago can still be rebuilt into a reel',
     assert.equal(out.lookup, true, 'a report finds its fixture by the two clubs and the day');
     assert.equal(out.goallessReel, 0, 'a goalless match still has nothing to show');
   });
+
+/* =====================================================================
+   THREE WAYS TO THE GOALS, AND NONE OF THEM A DEAD BUTTON
+   ---------------------------------------------------------------------
+   The reel plays itself when the whistle goes. After that a manager may
+   want it again, so it is offered everywhere the game already surfaces a
+   finished match: the match report, and the calendar day -- which is the
+   one screen already showing that match's scorers, so it is where
+   somebody is most likely to be looking at them.
+
+   The calendar entry is the reason this test exists. Everything about it
+   measured correct while it did not work: the wrapper was installed, the
+   day's event was found, the fixture was played, the reel had three
+   goals in it and the sheet was 901 characters long -- and no button.
+   `insertBefore` needs a direct child, the close button is nested a
+   level down in that sheet, and the NotFoundError went into a catch. It
+   is inserted through the close button's own parent now.
+   ===================================================================== */
+test('a finished match offers its goals wherever the game shows it',
+  { timeout: 60000 }, async (t) => {
+    const game = await createGame();
+    t.after(() => game.close());
+    await startCareer(game, 'Ways In');
+
+    const out = game.eval(`(()=>{
+    for(let n=0;n<6;n++){
+      const nf=nextUserFixture(); if(!nf) break;
+      G.day=nf.day; try{ render(); ACTIONS.advance(); }catch(e){}
+      try{ ACTIONS.kickoff(); }catch(e){}
+      if(MU&&MU.m){ let g=0; while(!MU.m.done&&g++<400) MU.m.tickOnce();
+        if(!MU.m.done){try{MU.m.finish()}catch(e){}}
+        try{ onFT(); }catch(e){}
+        try{ ACTIONS.matchDone(); }catch(e){} }
+    }
+    const mine=(G.fixtures||[]).filter(f=>f.played&&(f.h===G.my||f.a===G.my));
+    const withGoals=mine.filter(f=>f.sc&&f.sc.length);
+    if(!withGoals.length) return {none:true};
+    const fx=withGoals[0];
+
+    UI.view='world'; UI.clubTab='calendar'; render();
+    ACTIONS.calDay({dataset:{v:String(fx.day)}});
+    const sb=document.getElementById('sheetBody');
+    const btn=sb.querySelector('[data-action="hlDay"]');
+    const shut=sb.querySelector('[data-action="closeModal"]');
+
+    const dull=mine.find(f=>!f.sc||!f.sc.length);
+    let dullBtn=null;
+    if(dull){ ACTIONS.calDay({dataset:{v:String(dull.day)}});
+      dullBtn=!!document.getElementById('sheetBody').querySelector('[data-action="hlDay"]'); }
+
+    return {
+      played:mine.length,
+      dayBtn:!!btn,
+      aboveClose:!!(btn&&shut&&btn.nextElementSibling===shut),
+      dayReel:window.RBSHighlights.reelFor(fx).map(r=>r.label).join(','),
+      recorded:(fx.sc||[]).map(g=>String(g.min)).join(','),
+      dullBtn,
+      wired:['hlPlay','hlFix','hlDay'].every(a=>typeof ACTIONS[a]==='function')
+    };
+  })()`);
+
+    assert.equal(out.none, undefined, 'the career played some matches');
+    assert.equal(out.wired, true, 'all three ways in are wired to something');
+    assert.equal(out.dayBtn, true,
+      'tapping a played day offers its goals — the sheet already lists them');
+    assert.equal(out.aboveClose, true,
+      'and it sits above Close, because Close is the way out and this is not');
+    assert.equal(out.dayReel, out.recorded,
+      'the reel it would play carries the minutes the fixture recorded');
+    if (out.dullBtn !== null) {
+      assert.equal(out.dullBtn, false, 'a goalless match offers nothing');
+    }
+  });

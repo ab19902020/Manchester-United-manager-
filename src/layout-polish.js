@@ -1,14 +1,20 @@
 /* global */
 
 /* =====================================================================
-   FOUR LAYOUT FAULTS FIXED, AND ONE DIAGNOSED AND LEFT
+   FIVE LAYOUT FAULTS, FOUR OF THEM FIXED IN CSS
    ---------------------------------------------------------------------
    "improve the visual layout but keep all functionality"
 
    Nothing here changes what a control does, what a screen contains or
-   what any of it is worth. Every rule below moves pixels, and every one
+   what any of it is worth. Every fix below moves pixels, and every one
    of them answers a fault that `scripts/audit-layout.cjs` can point at
    with a number.
+
+   Four are stylesheet rules. The fifth is not, and could not be: four
+   CSS attempts at it were measured and three made the row worse. It
+   moves one line of a player row from one column to another, which is
+   markup, so it is a wrapper at the bottom of this file rather than a
+   rule in the middle of it.
 
    That rig exists because reading screenshots produced three faults in a
    row that were not faults. The Continue dock "covering" the bottom of
@@ -26,44 +32,38 @@
   const CSS = [
 
     /* -----------------------------------------------------------------
-       NOT FIXED, AND DIAGNOSED SO THE NEXT ATTEMPT STARTS AHEAD
+       1. THE AGE ON A TRANSFER ROW, WHICH THE WAGE LINE WAS EATING
        -----------------------------------------------------------------
-       A transfer row reads "23 · unscouted" and renders "3 ·". The age
-       loses its first digit, so a 33-year-old shows as a 3-year-old, on
-       every unscouted row in the market.
+       A market row reads "23 · unscouted" and rendered "3 ·", so a
+       33-year-old showed as a 3-year-old on every unscouted row.
 
-       Measured, and the chain is fully known:
+       The chain, measured: `.prow` is a grid of `auto minmax(0,1fr)
+       auto` -- avatar, the player's details, the money block. The money
+       block measures 178px, and one declaration holds it open:
+       `.psub{white-space:nowrap}` on the wage line, "£453K/w wanted · on
+       £370K/w now". The third track is `auto`, so it takes its 178px
+       first and the 1fr track holding the name, club and age is left
+       with 76. `.pmeta` does carry `text-overflow:ellipsis`, which would
+       trim that neatly, and it is inert because `.pmeta` is also
+       `display:flex` -- so the age, an anonymous flex item with no
+       minimum, is squeezed to nothing and cut from the left.
 
-         `.prow` is a grid, `auto minmax(0,1fr) auto`. Avatar, the
-         player's details, the money block.
-         `.pright`, the money block, measures 178px, and what holds it
-         open is one declaration -- `.psub{white-space:nowrap}` on the
-         wage line, "£453K/w wanted · on £370K/w now".
-         The third track is `auto`, so it takes its 178px first and the
-         1fr track holding the name, club and age is left with 76.
-         `.pmeta` does carry `text-overflow:ellipsis`, which would trim
-         this neatly, and it is inert because `.pmeta` is also
-         `display:flex`. So instead the age -- an anonymous flex item
-         with no minimum -- is squeezed to nothing and clipped.
+       Four CSS fixes were tried and three regressed the row, every one
+       caught by the audit inside a run. Making `.pmeta` a block put the
+       ellipsis back in charge and cost MORE: the crest jumped to its own
+       line and the age AND the scouting status were both lost. A
+       min-width floor on the middle column overflowed the grid and
+       printed the two columns across each other by 57px. Letting the
+       third track shrink moved neither width, because its max is still
+       max-content and nothing forces it down.
 
-       Four fixes were tried and three of them regressed the row. Making
-       `.pmeta` a block put the ellipsis back in charge and cost MORE
-       information: the crest jumped to its own line, the row grew to
-       three, and the age and the scouting status were both lost rather
-       than one digit. A min-width floor on the middle column overflowed
-       the grid -- the auto track will not shrink -- and printed `.pmain`
-       across `.pright` by 57px on every row. Letting the third track
-       shrink and the wage line wrap did not move either width: the
-       track's max is still max-content, and nothing forces it down.
-
-       Every one of those was caught by scripts/audit-layout.cjs within a
-       run, which is the reason none of them shipped. What this needs is
-       the row's markup reworked so the wage line is not competing with
-       the player's own details for the same track -- not another CSS
-       rule -- and that is a change to how the row is built rather than
-       how it is painted. Left alone deliberately.
-
-*/
+       None of them could work, because none of them addressed the
+       actual cause: a long line of text is in the narrow column. The fix
+       is to put it in the wide one -- see `wideSubOntoItsOwnLine` at the
+       foot of this file. What stays here is how it looks once it is
+       there. */
+    '.psub-wide{margin-top:3px;font-size:10.5px;font-weight:800;',
+    ' color:var(--ink-faint);font-variant-numeric:tabular-nums;letter-spacing:.2px}',
 
     /* -----------------------------------------------------------------
        2. THE COUNTRY YOU MANAGE IN SITS ON TOP OF THE NEXT ONE
@@ -133,4 +133,46 @@
     st.textContent = CSS;
     document.head.appendChild(st);
   } catch (error) { /* the game still plays without the polish */ }
+
+  /* -------------------------------------------------------------------
+     A LONG SUBTITLE BELONGS IN THE WIDE COLUMN
+     -------------------------------------------------------------------
+     `pRowInner` puts `opt.sub` in `.pright`, beside the rating pill, and
+     for almost every row that is right: a squad row's sub is a value or
+     a wage, six to nine characters, and it costs the row nothing. The
+     transfer market's is "£453K/w wanted · on £370K/w now" -- thirty-one
+     characters that will not wrap -- and it is the only one wide enough
+     to starve the column beside it.
+
+     So only that one moves. Under sixteen characters nothing changes at
+     all, which leaves every other screen exactly as it was; over it, the
+     line goes under the player's details where there is room for it, and
+     the money column shrinks to the rating pill and the star.
+
+     It is done by splicing the row's own markup rather than rebuilding
+     it, so the row stays whatever `pRowInner` says it is -- and if that
+     structure ever changes, the anchor is not found and the row is
+     returned untouched.
+     ------------------------------------------------------------------- */
+  function wideSubOntoItsOwnLine() {
+    if (typeof window.pRowInner !== 'function') return;
+    const pass = window.pRowInner;
+    const ANCHOR = '</div><div class="pright">';
+    window.pRowInner = function pRowInnerWideSub(p, opt) {
+      const o = opt || {};
+      const sub = o.sub == null ? '' : String(o.sub);
+      const text = sub.replace(/<[^>]*>/g, '');
+      if (text.length <= 16) return pass.call(this, p, o);
+      let html;
+      try { html = pass.call(this, p, { ...o, sub: null }); }
+      catch (error) { return pass.call(this, p, o); }
+      const at = html.indexOf(ANCHOR);
+      if (at < 0) return pass.call(this, p, o);
+      return html.slice(0, at)
+        + '<div class="psub psub-wide">' + sub + '</div>'
+        + html.slice(at);
+    };
+  }
+
+  try { wideSubOntoItsOwnLine(); } catch (error) { /* rows render as they did */ }
 }());
