@@ -39214,9 +39214,43 @@ function pitchReady(cv){
   }catch(e){}}
  return (cv._sx>0&&cv._sy>0&&cv.width>0&&cv.height>0)}
 
+/* THE PITCH TAB WAS A BLACK RECTANGLE, FOR THE WHOLE MATCH.
+   ---------------------------------------------------------------------
+   Measured before anything was touched: every pixel sampled on the
+   canvas came back 0,0,0 — four corners and the centre — while the
+   scoreboard, the tabs, the commentary and the dressing room around it
+   all worked perfectly. That is exactly why it could sit there
+   unnoticed: everything except the football was fine.
+
+   The cause is a seam between two layers. The Pitch tab's own body
+   renders `<canvas id="pitchCanvas">` and the frame loop calls
+   `drawPitch`, and every one of the nine `drawPitch` layers opens with
+
+       const cv=$('#pitchCanvas'); if(!cv||!MU.m)return;
+
+   which is consistent and correct. But a LATER layer replaced that body
+   with `<canvas id="dugCanvas">` — the low projected view, which is the
+   better picture and is plainly what was wanted — and did not move the
+   draw call with it. So the loop called drawPitch fifty times a second
+   (counted: 150 calls in three seconds, and none at all to drawDugout),
+   every layer of it looked for a canvas that no longer existed, every
+   layer returned, and nothing was ever drawn.
+
+   The last word decides which renderer to run by WHICH CANVAS IS
+   ACTUALLY ON THE SCREEN, rather than by which one it was written for.
+   That fixes it without touching any of the nine layers, and it keeps
+   working whichever canvas a future layer decides to render. */
 const _drawPitchSafe=drawPitch;
 drawPitch=function(){
  try{
+  const dug=document.getElementById('dugCanvas');
+  if(dug){
+   /* the projected view is on the screen, so the projected renderer is
+      the one that should be running */
+   if(!pitchReady(dug))return;
+   if(typeof drawDugout==='function')return drawDugout.apply(this,arguments);
+   return;
+  }
   const cv=document.getElementById('pitchCanvas');
   if(!pitchReady(cv))return;
  }catch(e){return}
@@ -57314,6 +57348,7 @@ showStart();
 <script src="src/layout-polish.js"></script>
 <script src="src/highlights.js"></script>
 <script src="src/results-round.js"></script>
+<script src="src/pitch-spotlight.js"></script>
 <script src="src/crazygames.js"></script>
 </body>
 </html>
