@@ -70,31 +70,26 @@
     return played.reduce((m, f) => Math.max(m, f.r == null ? 0 : f.r), 0);
   }
 
-  /* -------------------------------------------------------------------
-     WHETHER THERE IS ANYTHING TO WATCH
-     -------------------------------------------------------------------
-     The reel is built from the goals the save recorded, so a goalless
-     draw has an empty one. Asking the reel itself rather than counting
-     `sc` keeps the two from ever disagreeing.
-     ------------------------------------------------------------------- */
-  function watchable(fix) {
-    try {
-      const H = window.RBSHighlights;
-      if (!H || typeof H.reelFor !== 'function') return false;
-      return H.reelFor(fix).length > 0;
-    } catch (error) { return false; }
+  /* HOW MANY GOALS THE SAVE RECORDED. This used to ask the highlights
+     reel whether it had anything to play; there is no reel, so it asks
+     the fixture. Kept because it is a fact about the match and the
+     screen may want it again. */
+  function goalsIn(fix) {
+    try { return ((fix && fix.sc) || []).length; } catch (error) { return 0; }
   }
 
   function scoreLine(fix) {
     return (fix.hs == null ? 0 : fix.hs) + '–' + (fix.as == null ? 0 : fix.as);
   }
 
-  function row(fix, ix) {
+  function row(fix) {
     const home = G.clubs[fix.h];
     const away = G.clubs[fix.a];
     if (!home || !away) return '';
     const mine = fix.h === G.my || fix.a === G.my;
-    const can = fix.played && watchable(fix);
+    /* THE CAMERA IS GONE WITH THE REEL. A played fixture used to carry a
+       button that opened the highlights; there are no highlights, so the
+       row is the result and the two clubs and nothing else. */
     return '<div class="rr-row' + (mine ? ' rr-mine' : '') + '">'
       + '<div class="rr-side rr-h" data-action="clubView" data-id="' + fix.h + '">'
         + '<span class="rr-n">' + esc(home.short) + '</span>' + crest(home, 20) + '</div>'
@@ -105,10 +100,6 @@
       + '</div>'
       + '<div class="rr-side rr-a" data-action="clubView" data-id="' + fix.a + '">'
         + crest(away, 20) + '<span class="rr-n">' + esc(away.short) + '</span></div>'
-      + (can
-        ? '<button class="rr-watch" data-action="rrWatch" data-v="' + ix
-          + '" title="Watch the goals">🎥</button>'
-        : '<span class="rr-watch rr-none"></span>')
       + '</div>';
   }
 
@@ -124,8 +115,6 @@
     const games = fixturesIn(div).filter((f) => (f.r == null ? 0 : f.r) === UI.rrRound)
       .slice().sort((a, b) => (a.day - b.day) || (a.h - b.h));
     const done = games.filter((f) => f.played).length;
-    const index = new Map();
-    (G.fixtures || []).forEach((f, i) => index.set(f, i));
 
     let h = '<div class="rr-nav">'
       + '<button class="btn-ghost" data-action="rrRound" data-v="' + (at - 1) + '"'
@@ -139,13 +128,10 @@
       + '</div>';
 
     h += '<div class="card tight">'
-      + games.map((f) => row(f, index.has(f) ? index.get(f) : -1)).join('')
+      + games.map((f) => row(f)).join('')
       + '</div>';
     h += '<div class="xs faint" style="padding:6px 4px">'
-      + (games.some((f) => f.played && watchable(f))
-        ? 'Tap 🎥 to watch the goals from any of them.'
-        : 'Nothing to watch from this round yet.')
-      + '</div>';
+      + esc(DIV_NAMES[div] || 'League') + '</div>';
     return h;
   }
 
@@ -215,15 +201,6 @@
         render();
       } catch (error) { /* the round stays where it was */ }
     };
-    ACTIONS.rrWatch = (el) => {
-      try {
-        const ix = +((el && el.dataset && el.dataset.v) || -1);
-        const fix = (G.fixtures || [])[ix];
-        if (!fix || !fix.played) return;
-        const H = window.RBSHighlights;
-        if (H && typeof H.playFixture === 'function') H.playFixture(fix);
-      } catch (error) { /* ignore */ }
-    };
 
     /* CHANGING DIVISION HAS TO CHANGE THE ROUND WITH IT, or the
        Championship opens on the Premier League's matchday 27 and shows an
@@ -256,7 +233,7 @@
     '.rr-title{flex:1;text-align:center}',
     '.rr-md{font-size:13px;font-weight:800;letter-spacing:.3px}',
     '.rr-sub{font-size:10.5px;color:var(--ink-faint);font-weight:700}',
-    '.rr-row{display:grid;grid-template-columns:minmax(0,1fr) 58px minmax(0,1fr) 34px;',
+    '.rr-row{display:grid;grid-template-columns:minmax(0,1fr) 58px minmax(0,1fr);',
     ' align-items:center;gap:6px;padding:6px 2px}',
     '.rr-row+.rr-row{border-top:1px solid var(--chalk)}',
     '.rr-mine{background:rgba(218,41,28,.13);border-radius:8px}',
@@ -268,9 +245,6 @@
     '.rr-sc{font-size:13px;font-weight:800;font-variant-numeric:tabular-nums;',
     ' letter-spacing:.5px}',
     '.rr-when{font-size:10.5px;color:var(--ink-faint);font-weight:700}',
-    '.rr-watch{width:34px;height:34px;border:0;background:transparent;font-size:15px;',
-    ' cursor:pointer;border-radius:50%;padding:0}',
-    '.rr-none{visibility:hidden}',
     '.rr-toggle{margin-bottom:10px}',
   ].join('');
 
@@ -283,7 +257,7 @@
 
   try {
     window.RBSResultsRound = Object.freeze({
-      fixturesIn, roundsIn, latestRound, watchable, roundHtml,
+      fixturesIn, roundsIn, latestRound, goalsIn, roundHtml,
     });
   } catch (error) { /* no window */ }
 }());

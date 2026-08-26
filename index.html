@@ -39243,14 +39243,12 @@ function pitchReady(cv){
 const _drawPitchSafe=drawPitch;
 drawPitch=function(){
  try{
-  const dug=document.getElementById('dugCanvas');
-  if(dug){
-   /* the projected view is on the screen, so the projected renderer is
-      the one that should be running */
-   if(!pitchReady(dug))return;
-   if(typeof drawDugout==='function')return drawDugout.apply(this,arguments);
-   return;
-  }
+  /* ONE CANVAS AND ONE RENDERER. This used to look for `#dugCanvas`
+     first and hand off to the projected dugout view when it found one,
+     which was how the Pitch tab came to be showing the dugout at all.
+     There is no dugout now: the match is the Pitch, the Text and the
+     Stats, all three reading the one MatchSim result. See
+     src/match-view.js, which renders the body and owns the frame loop. */
   const cv=document.getElementById('pitchCanvas');
   if(!pitchReady(cv))return;
  }catch(e){return}
@@ -57315,11 +57313,9 @@ showStart();
 <script src="src/lineup.js"></script>
 <script src="src/boardroom.js"></script>
 <script src="src/match-ratings.js"></script>
-<script src="src/dugout-renderer.js"></script>
 <script src="src/contract-score.js"></script>
 <script src="src/squad-identity.js"></script>
 <script src="src/dugout-drama.js"></script>
-<script src="src/dugout-commentary.js"></script>
 <script src="src/ui-shell.js"></script>
 <script src="src/delegation.js"></script>
 <script src="src/analytics.js"></script>
@@ -57341,14 +57337,12 @@ showStart();
 <script src="src/transfer-search.js"></script>
 <script src="src/keep-history.js"></script>
 <script src="src/match-timeline.js"></script>
-<script src="src/matchday-engine.js"></script>
-<script src="src/dugout-matchday.js"></script>
 <script src="src/stadium-costs.js"></script>
 <script src="src/golden-boot.js"></script>
 <script src="src/layout-polish.js"></script>
-<script src="src/highlights.js"></script>
 <script src="src/results-round.js"></script>
 <script src="src/pitch-spotlight.js"></script>
+<script src="src/match-view.js"></script>
 <script src="src/crazygames.js"></script>
 </body>
 </html>

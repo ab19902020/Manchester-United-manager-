@@ -58,7 +58,7 @@ test('the round is listed, and only for the division on show',
       return { round, strays, fixtures: listed.length,
         rows: (html.match(/class="rr-row/g) || []).length,
         cameras: (html.match(/data-action="rrWatch"/g) || []).length,
-        watchable: listed.filter((f) => R.watchable(f)).length,
+        goalsShown: listed.filter((f) => R.goalsIn(f) > 0).length,
         headed: html.indexOf('Matchday ' + (round + 1)) >= 0,
         arrows: (html.match(/data-action="rrRound"/g) || []).length };
     }())`);
@@ -69,59 +69,12 @@ test('the round is listed, and only for the division on show',
     assert.ok(out.headed, 'the round names itself');
     assert.equal(out.arrows, 2, 'there is a way back and a way forward');
 
-    /* A CAMERA IS OFFERED EXACTLY WHERE THERE IS SOMETHING TO WATCH.
-       The reel is built from the goals the save recorded, so a goalless
-       draw has an empty one and must not offer a button that opens on
-       nothing. */
-    assert.equal(out.cameras, out.watchable,
-      out.cameras + ' cameras for ' + out.watchable + ' matches with goals in them');
-  });
-
-test('the camera on somebody else’s match plays somebody else’s match',
-  { timeout: 120000 }, async (t) => {
-    const game = await createGame();
-    t.after(() => game.close());
-    await worldWithResults(game);
-
-    const out = game.eval(`(function () {
-      const R = window.RBSResultsRound;
-      const div = myDiv();
-      const round = R.latestRound(div);
-      const listed = (G.fixtures || []).filter((f) => f.div === div && !f.comp
-        && (f.r == null ? 0 : f.r) === round && f.played && R.watchable(f));
-      const other = listed.find((f) => f.h !== G.my && f.a !== G.my) || listed[0];
-      if (!other) return { none: true };
-
-      /* the reel needs a canvas and a GPU, neither of which JSDOM has, so
-         what is checked here is the wiring: that the button reaches
-         playFixture carrying THIS fixture */
-      let got = null;
-      const pass = window.RBSHighlights.playFixture;
-      const spy = Object.assign({}, window.RBSHighlights,
-        { playFixture: (f) => { got = f; } });
-      const held = window.RBSHighlights;
-      try {
-        Object.defineProperty(window, 'RBSHighlights',
-          { value: spy, configurable: true, writable: true });
-        ACTIONS.rrWatch({ dataset: { v: String(G.fixtures.indexOf(other)) } });
-      } finally {
-        Object.defineProperty(window, 'RBSHighlights',
-          { value: held, configurable: true, writable: true });
-      }
-
-      return { none: false,
-        reached: got === other,
-        wasMine: other.h === G.my || other.a === G.my,
-        label: G.clubs[other.h].short + ' ' + other.hs + '-' + other.as
-          + ' ' + G.clubs[other.a].short,
-        goals: (other.sc || []).length,
-        stillReal: typeof pass === 'function' };
-    }())`);
-
-    assert.ok(!out.none, 'the round should contain a match with goals in it');
-    assert.ok(out.reached, 'the camera did not hand the reel that fixture');
-    assert.ok(out.goals > 0, out.label + ' has no goals to show');
-    assert.ok(out.stillReal, 'the real playFixture is still there afterwards');
+    /* NO CAMERA ON ANY ROW. The highlights reel it opened has been taken
+       out of the game -- the match is the Pitch, the Text and the Stats
+       -- so a results row is the result and the two clubs and nothing
+       else. */
+    assert.equal(out.cameras, 0,
+      'the results rows carry no highlights button, got ' + out.cameras);
   });
 
 test('the table is still the table, and the toggle switches between them',

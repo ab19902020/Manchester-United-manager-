@@ -2,6 +2,60 @@
 
 ## Unreleased
 
+### Removed
+
+- **The second match engine, all of it.** "Completely rip out dugout view. No
+  replays. No actual match engine like that. The only match engine now will be
+  the pitch view, the text, and the stats, and all of that will be displaying
+  the same information no matter what. It needs to go back to the proper core
+  of a football manager game — your decisions, the fitness, the attributes will
+  decide the game."
+
+  He is right, and this was my mistake to undo. A 3D broadcast was built
+  alongside the match, then a live Dugout, then a highlights reel, then a
+  staged re-enactment of every goal — and **every one of those is a second
+  account of a match MatchSim had already decided.** Two accounts of the same
+  ninety minutes can only ever agree by accident, and every device that kept
+  them in step was there to paper over that: a clock that stopped and waited
+  for a goal, penalties awarded to force one, chances staged onto a striker's
+  foot, an escalation ladder, a keeper told not to save. None of that machinery
+  was football. It existed because there were two engines.
+
+  Gone, with the files: `matchday-engine.js` (the 3D broadcast),
+  `dugout-matchday.js` (the live driver), `dugout-renderer.js`,
+  `dugout-commentary.js` and `highlights.js`. The Dugout tab, the replays, the
+  reel at full time, the "Watch the goals" buttons on the report and the
+  calendar, and the camera on the results screen all go with them.
+
+  **What is left is one engine and three windows onto it.** MatchSim plays the
+  match; the Pitch, the Text and the Stats show what it did and none of them
+  decides anything. Verified by playing a full match through the real
+  interface: three tabs, the scoreboard reading 1–2 against a fixture recorded
+  1–2, every goal in the record named in the commentary, the stats showing the
+  shots the match actually had, and no page errors.
+
+  `src/match-view.js` is what makes that stick, and it is a module rather than
+  an edit for a reason: the legacy file redefines `renderMBody` five times,
+  `drawPitch` nine times and the match tab bar in four places, and a later
+  layer beats an earlier one. Editing any single layer leaves the others to
+  argue — which is exactly the fault that left the Pitch tab a black rectangle
+  for a whole match, one layer having moved the canvas while another kept
+  drawing to the old one. This file loads last, so it is the last word, and it
+  says the same thing however many layers came before it.
+
+  **Nothing else was touched.** The speed control, the dressing room,
+  substitutions, shouts, the callouts, the touchline strip, the commentary
+  feed, the stats and the report at the end are all exactly as they were. The
+  match pacing that drops to real time for a goal or a card stays as well — it
+  lives in a file named for the dugout but has nothing to do with it.
+
+  One fault of my own, found on screen and fixed before this landed: the new
+  module rewound the commentary cursor on every render, and since `fillFeed`
+  walks one shared cursor and appends to whichever box asks next, the
+  wide-screen layout's feed replayed lines it already had and printed the
+  kick-off twice. The body is now only rebuilt, and the cursor only rewound,
+  when the element it needs is not already there.
+
 ### Added
 
 - **Every other result in your division, and the goals from any of them.**
