@@ -168,7 +168,17 @@ test('the three windows agree, because there is only one match behind them',
       score: f.hs+'-'+f.as,
       board: (document.getElementById('mScore')||{}).textContent||'',
       goalsRecorded: (f.sc||[]).length,
-      goalsInFeed: (m.feed||[]).filter(e=>e && e.cls==='goal').length,
+      /* EVERY RECORDED GOAL IS NAMED IN THE COMMENTARY. Counting feed
+         entries with cls 'goal' was the first attempt and it is wrong:
+         that class is the styling for a BIG event, and a sending-off
+         uses it too (see MatchSim.sendOff). So a match with a red card
+         and no goals read one against nought and failed a test that was
+         not describing anything real. What matters is that the Text tab
+         accounts for every goal the save wrote down. */
+      goalsNamed: (f.sc||[]).filter(g=>{
+        const who=String(g.name||'').split(' ').pop();
+        return who && (m.feed||[]).some(e=>String(e.text||'').indexOf(who)>=0);
+      }).length,
       shots: (A.sh||0)+(D.sh||0),
       statsMentionsShots: statsHtml.indexOf(String(A.sh))>=0,
       commHasLines: commHtml.length>40,
@@ -182,9 +192,9 @@ test('the three windows agree, because there is only one match behind them',
       out.score.replace('-', '-'),
       'the scoreboard reads the fixture score: board ' + out.board
       + ', fixture ' + out.score);
-    /* every goal in the record is a goal in the text */
-    assert.equal(out.goalsInFeed, out.goalsRecorded,
-      'the Text tab names every goal the save recorded: ' + out.goalsInFeed
+    /* every goal in the record is named in the text */
+    assert.equal(out.goalsNamed, out.goalsRecorded,
+      'the Text tab names every goal the save recorded: ' + out.goalsNamed
       + ' against ' + out.goalsRecorded);
     assert.ok(out.statsMentionsShots, 'the Stats tab shows the shots the match had');
     assert.ok(out.commHasLines, 'and the Text tab has the commentary in it');
