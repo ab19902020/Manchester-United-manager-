@@ -4,6 +4,89 @@
 
 ### Fixed
 
+- **The draw rate, and the reason ten previous attempts could not move it.**
+  27.2% of league matches drawn against real football's 24%, measured on three
+  world seeds at 380 fixtures repeated ten times each.
+
+  Every earlier attempt was absorbed, and the absorber turns out not to have
+  been doing its job at all. The goal-rate controller is meant to hold a
+  division at 2.80 goals a game by turning a share of goals into saves. Its
+  trim was measured at **exactly 0.000 on every candidate ever tried** — it was
+  not calibrating anything, it was pinned against its own floor while the
+  division scored 2.72. A controller at zero can take goals away and has no way
+  whatever to put one back, so anything that created more football was kept and
+  anything that created less was simply lost.
+
+  That also disabled the one mechanism built to fix this. `SPREAD.trimTilt`
+  decides *whose* goals the controller takes — a good attack against a poor
+  defence keeps more of them, a poor attack against a good defence keeps fewer
+  — which moves the spread of scoring without moving its mean, and the mean is
+  the only thing the controller defends. But the tilt is clamped at zero, so
+  with the base trim already there it could only ever subtract. Turned on
+  alone it drained the division to 2.4 goals a game.
+
+  So the controller was given room, and **how** it was given room is the whole
+  change. Raising the gate multipliers produces the goals and produces them as
+  **30.6 shots a match against a real 25.5** — a right number bought with a
+  wrong one, in a match report the player reads. Raising conversion instead
+  (`openPlayXgScale` 0.13 → 0.145) produces the same goals from the same shots.
+  The shot count does not move, and the trim finally comes off its floor.
+
+  | | shipped | now | real |
+  |---|---|---|---|
+  | drawn | 27.2% | **24.5%** | 24.0% |
+  | one-all | 13.9% | 12.0% | 9.0% |
+  | goals a game | 2.72 | 2.84 | 2.80 |
+  | shots a match | 27.7 | 27.6 | 25.5 |
+  | champion | 77.6 | 82.3 | 87.6 |
+  | bottom club | 25.9 | 20.2 | 20.7 |
+  | controller trim | 0.000 | 0.042 | — |
+
+  Nothing here can see a league table, a date, a score, or whose club it is.
+  The tilt reads the quality of the eleven on the pitch against the eleven
+  facing them and nothing else, which is the direction the game is built to run
+  in — what the manager does decides how good the side is, which decides the
+  result.
+
+  Two things ruled out on the way, recorded so they are not paid for twice.
+  `buildMul` was expected to buy better chances where `chanceMul` buys more of
+  them; measured, both cost the same in shots (29.2 against 29.5), so there is
+  no cheap territory. And `shotPull`, which is supposed to steer a side back
+  towards thirteen shots a match, **does not**: swept over a fivefold range the
+  shot count read 30.6, 30.4, 30.6, 30.6, 30.4. That is a fault of its own and
+  is left alone rather than smuggled into this change.
+
+  The sweep is also honest about its own precision. Five settings that
+  demonstrably changed nothing returned draw rates spanning 2.8 points, so six
+  repeats can see the direction of a change this size but not its landing
+  point, and no claim above is made to a tenth of a point.
+
+- **CLAUDE.md said the draw surplus was in the goalless games. It is not.**
+  Measured, the game finishes **5.7% goalless against a real 8%** — it has
+  always had too *few*, not too many. The entire surplus is one-all: 13.9%
+  against a real 9%. Too many matches in which both sides score exactly once
+  is what two sides too close together looks like, which is the fault that was
+  actually fixed.
+
+- **Squad → On Loan left half the phone blank.** Found by a new sweep,
+  `scripts/audit-blank.cjs`, which samples what each screen actually draws
+  rather than what its markup claims: a dead band of 366px, 49% of a 390x844
+  phone. Two sweeps over the interface already existed and neither could see
+  it — `audit-menus.cjs` clicks controls and reports dead ones, and a screen
+  with nothing on it has no controls to be dead; `sweep-screens.cjs` measures
+  boxes, and a screen with nothing on it has no boxes to be misshapen.
+
+  The screen was not broken. It said "Nobody out on loan — fringe players of 23
+  and under develop faster with regular football elsewhere, the option is on
+  their profile", which is true, and then stopped. The fault was the last
+  sentence: it names an action, says it lives somewhere else, and leaves the
+  one screen in the game devoted to loans as the one place you cannot arrange
+  one. It now lists the men it is talking about, most left to gain first, each
+  a tap from the profile carrying the button — and says so plainly when nobody
+  in the squad qualifies rather than padding the space out.
+
+  All 26 screens now sample clean.
+
 - **The faces had light shaped to the wrong head.** "It's like they've got fake
   lighting on them. It don't look good, and it's like two weird circles over
   the faces. Also fix the hair, it still looks like they've got bald spots on

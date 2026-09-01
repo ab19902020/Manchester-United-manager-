@@ -53,13 +53,22 @@ const SHIPPED = {
      Poisson rather than below — and the value is untouched. */
   shotPull: 0.017,
   /* HOW MUCH OF THE GOAL-RATE TRIM FALLS ON THE WEAKER ATTACK. Zero
-     trims every side alike, which is what shipped and what this pins.
-     Above zero a mismatch moves apart while the division still lands on
-     its goals-a-game target: measured at 0.10 it puts the champion on
-     86.9 and second on 81.6 against real 87.6 and 80.5. It is off
-     because the table already measured right, and because it moves the
-     draw rate only 0.6 points, which is inside the noise. */
-  trimTilt: 0,
+     trims every side alike, which preserves the RATIO between a good
+     attack and a poor one and shrinks the DIFFERENCE -- and the
+     difference is what decides whether a match finishes level. Trimming
+     uniformly actively manufactures draws.
+
+     It is on at 0.25. Measured on three world seeds, 380 fixtures
+     repeated ten times each: drawn 27.2% -> 24.5% against real
+     football's 24.0%, one-all 13.9% -> 12.0%, the champion 77.6 -> 82.3
+     against a real 87.6, the bottom club 25.9 -> 20.2 against a real
+     20.7, goals a game 2.72 -> 2.84, and the shot count unmoved at 27.6.
+
+     It only works because `openPlayXgScale` is 0.145. The tilt is
+     clamped at zero, so with the controller's trim pinned at 0.000 it
+     could only ever subtract and drained the division to 2.4 goals a
+     game. Both numbers move together or neither does. */
+  trimTilt: 0.25,
 };
 
 test('the balance constants hold the values they shipped with',

@@ -939,8 +939,25 @@ const SPREAD={
     good attack against a poor defence keeps more of its goals and a
     poor attack against a good defence keeps fewer, so the two sides of
     a mismatch move apart while the division still lands on its
-    goals-a-game target. See "AND WHOSE GOAL IT TAKES". */
- trimTilt:0,
+    goals-a-game target. See "AND WHOSE GOAL IT TAKES".
+
+    Measured on three world seeds, 380 fixtures repeated ten times each,
+    against the shipped setting of nothing:
+
+      drawn 27.2% -> 24.5%   (real football 24.0%)
+      one-all 13.9% -> 12.0% (real 9.0%)
+      champion 77.6 -> 82.3  (real 87.6)
+      bottom club 25.9 -> 20.2 (real 20.7)
+      goals a game 2.72 -> 2.84 (real 2.80)
+      shots a match 27.7 -> 27.6, which is the point: unchanged
+
+    It needs `openPlayXgScale` at 0.145 to work at all. The tilt is
+    applied as `t + tilt*(strD-strA)/10` clamped at zero, and with the
+    controller's trim pinned at 0.000 -- which is where it sat on every
+    candidate ever measured -- that floor makes it one-sided: it can
+    only ever subtract, so it drained the division to 2.4 goals a game.
+    See the note on that constant. */
+ trimTilt:.25,
  /* WHAT A GOAL DOES TO THE NEXT TEN MINUTES. The side that scored
     gets the initiative and the side that conceded responds; the
     question is how hard. On a realistic calendar the game's goalless
@@ -57420,6 +57437,7 @@ showStart();
 <script src="src/tutorial.js"></script>
 <script src="src/avatar-upgrade.js"></script>
 <script src="src/player-card.js"></script>
+<script src="src/loan-candidates.js"></script>
 <script src="src/crazygames.js"></script>
 </body>
 </html>

@@ -89,7 +89,7 @@ const SEED = +(process.argv[4] || 20260821);
    goal back. So the slope and the volume have to move together, which
    is what the gate multipliers are for. */
 const STEEP = { buildK: 1.8, chanceK: 1.7, buildHi: .80, chanceHi: .65 };
-const CANDIDATES = [
+const SPREAD_SET = [
   { name: 'shipped', bal: {} },
   { name: 'steep, ceilings only', bal: Object.assign({}, STEEP) },
   { name: 'steep + volume', bal: Object.assign({ chanceMul: .80, buildMul: 1.30 }, STEEP) },
@@ -101,6 +101,338 @@ const CANDIDATES = [
      row in the table means anything. */
   { name: 'shipped (repeat)', bal: {} },
 ];
+
+/* =====================================================================
+   THE DRAW RATE, AND THE ONE LEVER THAT IS NOT ABSORBED
+   ---------------------------------------------------------------------
+   Ten mechanisms were measured against the draw rate and none of them
+   moved it, for one reason: the goal-rate controller. It holds the
+   division at 2.80 goals a game by turning a share of goals into saves,
+   so anything that simply creates more football is handed straight
+   back. Worse, it hands it back UNIFORMLY -- every side trimmed alike
+   -- which preserves the ratio between a good attack and a poor one and
+   shrinks the DIFFERENCE. Two sides on 2.0 and 1.0 finish level far
+   less often than the same two on 1.8 and 0.9, so trimming uniformly
+   actively manufactures draws.
+
+   `trimTilt` is the exception, and it is the only lever here that can
+   be. It does not ask for more goals; it asks WHOSE goals the
+   controller takes. A good attack against a poor defence keeps more of
+   them, a poor attack against a good defence keeps fewer, and the
+   division's total is untouched because the controller measures what
+   was actually scored and re-solves either way. Dispersion moves, the
+   mean does not, so there is nothing for the controller to absorb.
+
+   It cannot see a league table, a date, a score or whose club it is --
+   only how good the eleven on the pitch are against the eleven facing
+   them, which is the direction the whole game is built to run in.
+
+   The clamp is the thing to watch. The tilt is applied as
+   `t + tilt*(strD - strA)/10` clamped to [0, .62], and that floor is
+   one-sided: a strong attack can have its trim taken to zero and no
+   further, while a weak one can always be trimmed harder. So the tilt
+   removes goals it cannot give back, the controller answers by
+   lowering the base trim for everyone, and the two only balance while
+   the base has room to fall. If the base is already near zero the
+   division goes under its target -- which is exactly what the goals a
+   game column is here to catch.
+   ===================================================================== */
+const TILT_SET = [
+  { name: 'shipped (tilt 0)', bal: {} },
+  { name: 'tilt 0.15', bal: { trimTilt: .15 } },
+  { name: 'tilt 0.30', bal: { trimTilt: .30 } },
+  { name: 'tilt 0.50', bal: { trimTilt: .50 } },
+  { name: 'tilt 0.80', bal: { trimTilt: .80 } },
+  { name: 'tilt 1.20', bal: { trimTilt: 1.2 } },
+  { name: 'shipped (repeat)', bal: {} },
+];
+
+/* =====================================================================
+   AND WHY THE TILT NEEDS THE CONTROLLER TO HAVE ROOM
+   ---------------------------------------------------------------------
+   The first tilt sweep answered the question and refused the answer.
+   Measured over 380 fixtures x 6 on seed 20260821, every candidate came
+   back with the controller's trim at 0.000:
+
+     tilt   drawn    0-0     1-1    g/g   trim
+     0      27.5%   6.6%   13.2%   2.69  0.000
+     0.50   26.1%   7.2%   12.8%   2.49  0.000
+     0.80   23.7%   7.9%   11.9%   2.39  0.000
+     1.20   24.3%   8.6%   11.4%   2.35  0.000
+
+   The draw rate goes exactly where it was wanted -- 23.7% against real
+   football's 24% -- and the champion rises from 75.9 to 85.6 against a
+   real 87.6. And it is bought by draining the game: 2.39 goals a match
+   against a real 2.80.
+
+   That is the clamp doing what the comment on it warned it would. The
+   tilt is `t + tilt*(strD - strA)/10` clamped to [0, .62], and with `t`
+   already at zero the floor bites on every fixture where the attack is
+   the better side. A strong attack cannot be trimmed less than not at
+   all, so the tilt only ever SUBTRACTS -- and the controller, which
+   would normally answer by lowering the base trim for everyone, has
+   nothing left to lower.
+
+   So the tilt is not a lever on its own. It is a lever on a controller
+   that has somewhere to go, and giving it somewhere to go means raising
+   the raw goal supply until the trim sits meaningfully above zero.
+   `buildMul` and `chanceMul` are the volume controls that exist for
+   exactly this, and were added the last time a change to the slopes
+   cost the division its goals. Raise the supply, let the controller
+   take the surplus back to 2.80, and the tilt then decides WHOSE goals
+   come off rather than only how many.
+   ===================================================================== */
+const TILT_VOL = [
+  { name: 'shipped', bal: {} },
+  { name: 'volume only', bal: { buildMul: 1.34, chanceMul: .88 } },
+  { name: 'vol + tilt 0.50', bal: { buildMul: 1.34, chanceMul: .88, trimTilt: .50 } },
+  { name: 'vol + tilt 0.80', bal: { buildMul: 1.34, chanceMul: .88, trimTilt: .80 } },
+  { name: 'vol + tilt 1.20', bal: { buildMul: 1.34, chanceMul: .88, trimTilt: 1.2 } },
+  { name: 'more vol + tilt 0.80', bal: { buildMul: 1.42, chanceMul: 1.0, trimTilt: .80 } },
+  { name: 'more vol + tilt 1.20', bal: { buildMul: 1.42, chanceMul: 1.0, trimTilt: 1.2 } },
+  { name: 'shipped (repeat)', bal: {} },
+];
+
+/* =====================================================================
+   HOW MUCH ROOM THE CONTROLLER NEEDS, AND WHAT BUYING IT COSTS
+   ---------------------------------------------------------------------
+   Both sweeps above end at the same wall: trim 0.000. The goal-rate
+   controller is not holding this division at 2.80 -- it is pinned
+   against its own floor while the division scores 2.69, which means it
+   has no authority at all. Everything it is supposed to be able to do,
+   including carrying a tilt, it currently cannot.
+
+   So this ladder asks one question: how much raw football does the
+   division need before the controller is actually controlling, and what
+   does buying that do to the rest of the match? The trim column is the
+   answer to the first. The shots columns are the answer to the second,
+   and they are the reason this is a ladder rather than a single guess:
+   the shot counts were calibrated hard and separately -- 25.5 a match
+   and 8.7 on target, down from 27.5 and 17.2 -- and a volume change
+   large enough to give the controller room could undo that quietly.
+   ===================================================================== */
+const VOLUME_SET = [
+  { name: 'shipped', bal: {} },
+  { name: 'vol 1.34/0.88', bal: { buildMul: 1.34, chanceMul: .88 } },
+  { name: 'vol 1.40/1.00', bal: { buildMul: 1.40, chanceMul: 1.0 } },
+  { name: 'vol 1.46/1.12', bal: { buildMul: 1.46, chanceMul: 1.12 } },
+  { name: 'vol 1.52/1.26', bal: { buildMul: 1.52, chanceMul: 1.26 } },
+  { name: 'vol 1.60/1.42', bal: { buildMul: 1.60, chanceMul: 1.42 } },
+  { name: 'shipped (repeat)', bal: {} },
+];
+
+/* =====================================================================
+   THE LADDER'S ANSWER, AND WHAT IT RULES OUT
+   ---------------------------------------------------------------------
+   The volume ladder gives the controller its room and shows the price
+   on the same line:
+
+     candidate        drawn    g/g   trim  shots  on tgt
+     real football    24.0%   2.80      —   25.5     8.7
+     shipped          27.5%   2.69  0.000   27.9     9.3
+     vol 1.46/1.12    24.7%   2.86  0.089   32.0    10.7
+     vol 1.52/1.26    24.3%   2.90  0.125   33.0    10.9
+     vol 1.60/1.42    24.9%   2.81  0.167   34.5    11.3
+
+   Volume alone fixes the draw rate. It also takes the division from
+   27.9 shots a match to 33, against a real 25.5 -- so it buys a right
+   number with a wrong one, and a match report full of thirty-three
+   shots is a more visible lie than a draw rate four points high.
+   Shipping any of those rows is out.
+
+   Which leaves the pairing. `chanceMul` is what turns possession into a
+   sight of goal, so it is the multiplier that puts shots on the board;
+   `buildMul` is getting out of your own half, which should buy better
+   chances rather than more of them. If that distinction is real, a
+   build-heavy volume raises goals with less damage to the shot count
+   than a chance-heavy one -- and if it is not real, this says so.
+   ===================================================================== */
+const TILT_FINAL = [
+  { name: 'shipped', bal: {} },
+  { name: 'vol 1.34/.88 + tilt .50', bal: { buildMul: 1.34, chanceMul: .88, trimTilt: .50 } },
+  { name: 'vol 1.34/.88 + tilt .80', bal: { buildMul: 1.34, chanceMul: .88, trimTilt: .80 } },
+  { name: 'build 1.50 + tilt .50', bal: { buildMul: 1.50, trimTilt: .50 } },
+  { name: 'build 1.50 + tilt .80', bal: { buildMul: 1.50, trimTilt: .80 } },
+  { name: 'build 1.65 + tilt .80', bal: { buildMul: 1.65, trimTilt: .80 } },
+  { name: 'build 1.65 + tilt 1.2', bal: { buildMul: 1.65, trimTilt: 1.2 } },
+  { name: 'shipped (repeat)', bal: {} },
+];
+
+/* =====================================================================
+   AND THE BUILD/CHANCE DISTINCTION IS NOT REAL
+   ---------------------------------------------------------------------
+   The set above was built on the idea that `buildMul` buys better
+   chances while `chanceMul` buys more of them, so a build-heavy volume
+   should cost fewer shots. Measured, it does not:
+
+     build 1.50 + tilt .50     29.2 shots   2.62 g/g   24.1% drawn
+     vol 1.34/.88 + tilt .50   29.5 shots   2.66 g/g   24.7% drawn
+
+   Three tenths of a shot apart, which is inside the noise. Getting out
+   of your own half more often ends in a shot about as reliably as
+   creating more openings does, so there is no cheap territory to buy.
+   The hypothesis is recorded here because the next person to have it
+   should not pay for the sweep again.
+
+   So the last question is only how far up the volume/tilt line to go.
+   The tilt costs goals -- it subtracts and cannot give back while the
+   trim is pinned -- and volume pays for them in shots. The exchange
+   rate, from the runs above: tilt .50 on top of vol 1.34/.88 costs 0.17
+   goals a game and buys 5.5 points on the champion, a point of draw
+   rate, and a move from 1.35/0.77 to 1.50/0.67 on the thing that
+   actually matters, which is whether being good shows up in results.
+   ===================================================================== */
+const TUNE_SET = [
+  { name: 'shipped', bal: {} },
+  { name: 'vol 1.34/.88 only', bal: { buildMul: 1.34, chanceMul: .88 } },
+  { name: 'vol 1.34/.88 + tilt .35', bal: { buildMul: 1.34, chanceMul: .88, trimTilt: .35 } },
+  { name: 'vol 1.40/.95 + tilt .50', bal: { buildMul: 1.40, chanceMul: .95, trimTilt: .50 } },
+  { name: 'vol 1.46/1.02 + tilt .50', bal: { buildMul: 1.46, chanceMul: 1.02, trimTilt: .50 } },
+  { name: 'vol 1.40/.95 + tilt .65', bal: { buildMul: 1.40, chanceMul: .95, trimTilt: .65 } },
+  { name: 'vol 1.34/.88 + tilt .50', bal: { buildMul: 1.34, chanceMul: .88, trimTilt: .50 } },
+  { name: 'shipped (repeat)', bal: {} },
+];
+
+/* =====================================================================
+   PAYING THE SHOTS BACK
+   ---------------------------------------------------------------------
+   Every setting that fixes the draw rate lands the division between
+   29.5 and 31 shots a match against a real 25.5, where the shipped game
+   is 27.9. The volume has to be there -- the tilt subtracts goals and
+   cannot give them back while the trim is pinned, so without the volume
+   the division falls to 2.5 -- but nothing says the volume has to be
+   paid for in shots.
+
+   `shotPull` is the dial that steers a side back towards thirteen shots
+   a match, and it is independent of everything above: it does not know
+   who is playing, it does not touch the trim, and it acts on the shot
+   count rather than on the goals. If it can take 30.6 back towards 27
+   while the draw rate and the goals a game stay where the volume and
+   the tilt put them, then the shot cost was never a real cost -- it was
+   just a dial nobody turned.
+   ===================================================================== */
+const WIN = { buildMul: 1.40, chanceMul: .95, trimTilt: .50 };
+const PULL_SET = [
+  { name: 'shipped', bal: {} },
+  { name: 'winner (pull .017)', bal: Object.assign({}, WIN) },
+  { name: 'winner + pull .030', bal: Object.assign({ shotPull: .030 }, WIN) },
+  { name: 'winner + pull .045', bal: Object.assign({ shotPull: .045 }, WIN) },
+  { name: 'winner + pull .060', bal: Object.assign({ shotPull: .060 }, WIN) },
+  { name: 'winner + pull .085', bal: Object.assign({ shotPull: .085 }, WIN) },
+  { name: 'shipped (repeat)', bal: {} },
+];
+
+/* =====================================================================
+   AND shotPull DOES NOT PULL
+   ---------------------------------------------------------------------
+   Swept over a five-fold range on top of the same settings, the shot
+   count does not move:
+
+     pull .017   30.6 shots      pull .060   30.6 shots
+     pull .030   30.4 shots      pull .085   30.4 shots
+     pull .045   30.6 shots
+
+   Whatever `shotPull` is steering, it is not the number of shots in a
+   match, so the volume's shot cost cannot be paid back with it. That is
+   a fault of its own and it is written down rather than fixed here,
+   because fixing it changes what a match looks like and belongs in its
+   own measured change rather than smuggled into this one.
+
+   The same sweep is also the honest measure of this rig's precision.
+   Five settings that demonstrably change nothing about the shots
+   returned draw rates of 23.4, 25.5, 26.2, 24.1 and 25.9 -- a spread of
+   2.8 points with nothing real behind it. So six repeats can see the
+   DIRECTION of a change of this size and not its landing point, and no
+   claim below is made to a tenth of a point.
+   ===================================================================== */
+/* THE CANDIDATE THAT SHIPPED, and why this one out of the six the
+   landing sweep offered. Their draw rates -- 23.0, 24.4, 24.3, 25.2,
+   23.8, 22.4 -- are all a long way better than the shipped 27.5 and all
+   within the rig's own noise of each other and of real football's 24,
+   so the draw rate could not choose between them. The rest of the shape
+   could. Summed absolute error against real football across the six
+   table columns: shipped 29.8, this candidate 15.8, and the only one
+   that beat it (14.4) did so while dropping the division to 2.64 goals
+   a game. This one holds 2.78 and puts the bottom club on 20.1 against
+   a real 20.7. It is also the smallest tilt of the six, which is the
+   right tie-breaker for a change to how every match in the game is
+   decided. */
+const SHIP_SET = [
+  { name: 'shipped', bal: {} },
+  { name: 'proposed', bal: { trimTilt: .25 }, xg: .145 },
+  { name: 'shipped (repeat)', bal: {} },
+];
+
+/* =====================================================================
+   BUYING THE GOALS IN CONVERSION INSTEAD OF IN SHOTS
+   ---------------------------------------------------------------------
+   The proposal above works and costs 2.8 shots a match. That cost is
+   not intrinsic to the fix -- it is intrinsic to paying for the fix
+   with VOLUME. The tilt drains goals, the goals have to come back, and
+   raising the gates is only one way to bring them.
+
+   The other is conversion. `shotXg` turns the attack-to-keeper ratio
+   into the probability a shot goes in, at 0.13 times the ratio. Raising
+   that scale produces more goals from the SAME number of shots, which
+   is exactly the shape of what is needed -- and it does something the
+   volume route cannot: it lifts raw scoring above the target, so the
+   goal-rate controller comes off its floor and has authority again.
+   With a trim above zero the tilt is no longer one-sided, because a
+   strong attack can be trimmed LESS than the base rather than merely
+   not at all.
+
+   If that works, the shot count never moves and the trim column stops
+   reading 0.000, which would make it the better fix on both counts.
+   ===================================================================== */
+const XG_SET = [
+  { name: 'shipped', bal: {} },
+  { name: 'xg .150 + tilt .50', bal: { trimTilt: .50 }, xg: .150 },
+  { name: 'xg .165 + tilt .50', bal: { trimTilt: .50 }, xg: .165 },
+  { name: 'xg .165 + tilt .80', bal: { trimTilt: .80 }, xg: .165 },
+  { name: 'xg .180 + tilt .80', bal: { trimTilt: .80 }, xg: .180 },
+  { name: 'xg .180 + tilt 1.2', bal: { trimTilt: 1.2 }, xg: .180 },
+  { name: 'proposed (volume)', bal: Object.assign({}, WIN) },
+  { name: 'shipped (repeat)', bal: {} },
+];
+
+/* =====================================================================
+   AND IT DOES WORK, SO THE VOLUME ROUTE IS DROPPED
+   ---------------------------------------------------------------------
+     candidate            drawn    0-0    g/g   trim  shots
+     real football        24.0%   8.0%   2.80      —   25.5
+     shipped              27.5%   6.6%   2.69  0.000   27.9
+     xg .150 + tilt .50   22.4%   4.4%   2.84  0.035   27.8
+     proposed (volume)    23.4%   5.7%   2.75  0.000   30.6
+
+   Conversion buys the goals for nothing: the shot count does not move
+   (27.8 against a shipped 27.9, where the volume route cost 2.7 a
+   match) and the trim comes off its floor, which is the controller
+   getting its authority back after being pinned at zero.
+
+   What is left is that tilt .50 now overshoots -- 22.4% drawn against a
+   real 24%, and 4.4% goalless against a real 8% -- because conversion
+   and tilt both push the same way. The last sweep is for the landing
+   point, and it is looking for the whole shape rather than the draw
+   rate alone: a division can hit 24% drawn with the wrong number of
+   goalless games and the wrong bottom of the table, and two of these
+   candidates do.
+   ===================================================================== */
+const LAND_SET = [
+  { name: 'shipped', bal: {} },
+  { name: 'xg .145 + tilt .25', bal: { trimTilt: .25 }, xg: .145 },
+  { name: 'xg .145 + tilt .35', bal: { trimTilt: .35 }, xg: .145 },
+  { name: 'xg .150 + tilt .30', bal: { trimTilt: .30 }, xg: .150 },
+  { name: 'xg .150 + tilt .40', bal: { trimTilt: .40 }, xg: .150 },
+  { name: 'xg .155 + tilt .35', bal: { trimTilt: .35 }, xg: .155 },
+  { name: 'xg .150 + tilt .50', bal: { trimTilt: .50 }, xg: .150 },
+  { name: 'shipped (repeat)', bal: {} },
+];
+
+const SETS = { spread: SPREAD_SET, tilt: TILT_SET, tiltvol: TILT_VOL,
+  volume: VOLUME_SET, final: TILT_FINAL, tune: TUNE_SET, pull: PULL_SET,
+  ship: SHIP_SET, xg: XG_SET, land: LAND_SET };
+const SET_NAME = process.argv[5] || 'spread';
+const CANDIDATES = SETS[SET_NAME] || SPREAD_SET;
 
 (async () => {
   const browser = await chromium.launch({
@@ -149,6 +481,7 @@ const CANDIDATES = [
     const rounds = rrPairs(mem);
 
     const shippedBal = Object.assign({}, SPREAD);
+    const shippedModel = window.RBSMatchModel;
     const shippedDay = { lo: DAY_LO, range: DAY_RANGE };
 
     /* EVERY CANDIDATE PLAYS THE SAME SEASON, NOT JUST THE SAME FIXTURES.
@@ -211,7 +544,9 @@ const CANDIDATES = [
       const fix = { h: hi, a: ai, div, sc: [], hs: 0, as: 0, r: 0,
         day: 40 + (ri * 7) % 260, played: false };
       buildContext(fix);
-      quickSim(fix);
+      /* keep the match object: its per-side stats are where the shot
+         counts live, and they are the collateral damage to watch */
+      fix._m = quickSim(fix);
       return fix;
     };
 
@@ -239,6 +574,23 @@ const CANDIDATES = [
 
       const pr = [];   // per ordered fixture: win/draw/loss and goals
       let goals = 0, played = 0;
+      /* THE SHAPE OF THE DRAWS, not just how many. Goals a game can be
+         exactly right while the results are wrong, and it is: the
+         division lands on 2.80 and still draws too often. Which
+         scoreline carries the surplus says which fault it is — a
+         surplus of 0-0 is a division that cannot create, a surplus of
+         1-1 is two sides too close together — and those want opposite
+         fixes, so it is worth counting them apart. Real English
+         football: 24% drawn, about 8% goalless, about 9% one-all. */
+      let drawn = 0, goalless = 0, oneAll = 0;
+      /* AND WHAT IT COSTS THE REST OF THE FOOTBALL. Raising the gates
+         is the only way to give the goal-rate controller room, but the
+         shot counts were calibrated separately and hard -- 25.5 shots
+         and 8.7 on target a match, against a game that once produced
+         27.5 and 17.2 -- and a volume change big enough to matter here
+         could quietly undo that. A sweep that cannot see the damage it
+         is doing is not a measurement. */
+      let shots = 0, onTarget = 0;
       const gf = {}, ga = {};
       mem.forEach((i) => { gf[i] = 0; ga[i] = 0; });
       rounds.forEach((round, ri) => {
@@ -247,9 +599,19 @@ const CANDIDATES = [
           for (let k = 0; k < reps; k += 1) {
             const fix = one(hi, ai, ri);
             goals += fix.hs + fix.as; played += 1;
+            try {
+              const st = fix._m && fix._m.sides;
+              if (st) { shots += st[0].st.sh + st[1].st.sh;
+                onTarget += st[0].st.sot + st[1].st.sot; }
+            } catch (e) {}
             gf[hi] += fix.hs; ga[hi] += fix.as;
             gf[ai] += fix.as; ga[ai] += fix.hs;
             if (fix.hs > fix.as) w += 1; else if (fix.hs === fix.as) d += 1; else l += 1;
+            if (fix.hs === fix.as) {
+              drawn += 1;
+              if (fix.hs === 0) goalless += 1;
+              else if (fix.hs === 1) oneAll += 1;
+            }
           }
           pr.push({ h: hi, a: ai, w: w / reps, d: d / reps, l: l / reps });
         });
@@ -266,6 +628,10 @@ const CANDIDATES = [
       const avg = goals / played / 2;
       const top = per(byStrength[0]), bot = per(byStrength[byStrength.length - 1]);
       return { pr, gpg: goals / played,
+        drawRate: drawn / played,
+        shots: shots / played, onTarget: onTarget / played,
+        goallessRate: goalless / played,
+        oneAllRate: oneAll / played,
         topGf: top.gf / avg, topGa: top.ga / avg,
         botGf: bot.gf / avg, botGa: bot.ga / avg };
     };
@@ -322,6 +688,16 @@ const CANDIDATES = [
       window.RBSWorldSeed.build(seed, 'MUN');
       clear();
       Object.assign(SPREAD, shippedBal, cand.bal || {});
+      /* THE OTHER WAY TO BUY GOALS. Volume buys them in shots; this
+         buys them in conversion, which is the one thing the shot count
+         does not notice. The engine reads RBSMatchModel off the global
+         on every shot, so swapping the object swaps the curve. */
+      if (cand.xg) {
+        window.RBSMatchModel = Object.assign({}, shippedModel, {
+          shotXg: (r) => Math.max(0.02, Math.min(0.75,
+            cand.xg * (Number.isFinite(r) ? r : 1))),
+        });
+      } else window.RBSMatchModel = shippedModel;
       DAY_LO = (cand.day && cand.day.lo != null) ? cand.day.lo : shippedDay.lo;
       DAY_RANGE = (cand.day && cand.day.range != null) ? cand.day.range : shippedDay.range;
       const m = playFixtures(seed, seasons);
@@ -333,6 +709,8 @@ const CANDIDATES = [
         mid: t.at(Math.floor(mem.length / 2)),
         seventeenth: t.at(mem.length - 4), last: t.at(mem.length - 1),
         gpg, W: t.W, D: t.D, L: t.L, rank: t.rank, rho: t.rho,
+        drawRate: m.drawRate, goallessRate: m.goallessRate, oneAllRate: m.oneAllRate,
+        shots: m.shots, onTarget: m.onTarget,
         topGf: m.topGf, topGa: m.topGa, botGf: m.botGf, botGa: m.botGa,
         /* WHY GOALS A GAME BARELY MOVES BETWEEN CANDIDATES. It is held
            there on purpose: the goal-rate controller turns a share of
@@ -347,6 +725,7 @@ const CANDIDATES = [
     });
     /* leave the page as we found it */
     Object.assign(SPREAD, shippedBal);
+    window.RBSMatchModel = shippedModel;
     DAY_LO = shippedDay.lo; DAY_RANGE = shippedDay.range;
     Math.random = trueRandom;
     return { results, clubs: mem.length };
@@ -386,6 +765,27 @@ const CANDIDATES = [
       + r.topGf.toFixed(2).padStart(15) + r.topGa.toFixed(2).padStart(7)
       + r.botGf.toFixed(2).padStart(17) + r.botGa.toFixed(2).padStart(7));
   });
+  /* THE RESULTS THEMSELVES, which is what the draw rate is about. Goals
+     a game can be exactly right while these are wrong, and on the
+     shipped settings they are. */
+  console.log('\n  how the matches finish');
+  console.log('  ' + 'candidate'.padEnd(24)
+    + 'drawn'.padStart(8) + '0-0'.padStart(8) + '1-1'.padStart(8)
+    + 'g/g'.padStart(8) + 'trim'.padStart(8)
+    + 'shots'.padStart(8) + 'on tgt'.padStart(8));
+  console.log('  ' + 'real football'.padEnd(24)
+    + '24.0%'.padStart(8) + '8.0%'.padStart(8) + '9.0%'.padStart(8)
+    + '2.80'.padStart(8) + '—'.padStart(8)
+    + '25.5'.padStart(8) + '8.7'.padStart(8));
+  out.results.forEach((r) => {
+    console.log('  ' + r.name.padEnd(24)
+      + (r.drawRate * 100).toFixed(1).padStart(7) + '%'
+      + (r.goallessRate * 100).toFixed(1).padStart(7) + '%'
+      + (r.oneAllRate * 100).toFixed(1).padStart(7) + '%'
+      + r.gpg.toFixed(2).padStart(8) + r.trim.toFixed(3).padStart(8)
+      + r.shots.toFixed(1).padStart(8) + r.onTarget.toFixed(1).padStart(8));
+  });
+
   /* the rig proving itself: the control and its repeat must agree */
   const a = out.results[0], z = out.results[out.results.length - 1];
   if (a && z && /repeat/.test(z.name)) {

@@ -9,7 +9,30 @@
     targetGoals: 2.8,
     calibrationWindow: 120,
     initialTrim: 0.06,
-    openPlayXgScale: 0.13,
+    /* HOW OFTEN A SHOT GOES IN, and why this is 0.145 rather than 0.13.
+       It is not here to change the number of goals -- the goal-rate
+       controller holds the division at `targetGoals` either way. It is
+       here to give that controller something to hold BACK.
+
+       Measured over 380 fixtures repeated, on three world seeds: the
+       controller's trim sat at exactly 0.000 on every single candidate
+       tried. It was not calibrating the division at all, it was pinned
+       against its own floor while the division scored 2.72 against a
+       target of 2.80 -- so it could take goals away and had no way
+       whatever to put one back. A controller with no authority cannot
+       carry `SPREAD.trimTilt`, which is the mechanism that decides
+       WHOSE goals it takes and the only lever measured to move the draw
+       rate.
+
+       Raising conversion lifts raw scoring above the target, the
+       controller comes off its floor, and the tilt has room to work in
+       both directions. The alternative was to lift raw scoring with the
+       gate multipliers, and that was measured and rejected: it produced
+       the same goals by producing 30.6 shots a match against a real
+       25.5, where this holds the shot count at 27.6 against a shipped
+       27.7. Conversion is the one route that buys the goals without the
+       match report having to lie about how they were made. */
+    openPlayXgScale: 0.145,
     minimumShotXg: 0.02,
     maximumShotXg: 0.75,
     fastSimulationBase: 1.35,

@@ -51,12 +51,22 @@
 > not a thumb on the scale. The line is whether the mechanism knows the identity
 > or the standing of the club it is acting on. If it does, it is scripting.
 >
-> **This binds the open work.** The draw rate is 28% against a real 24%, and the
+> **This bound the draw rate, and the draw rate is now closed.** It was 27.2%
+> against a real 24% and it is 24.5%, measured on three world seeds. The
 > tempting fix — reach in and turn some draws into wins — is precisely what this
-> rule forbids. `CHANGELOG.md` carries the measurements: forty settings tried,
-> the fault located in the goalless games, and a real fix identified as a change
-> to how chances are generated. That is the honest route and the only one open.
-> — Claude, 25 August 2026
+> rule forbids, and it was not used. What was used reads the quality of the
+> eleven on the pitch against the eleven facing them and nothing else: it cannot
+> see a league table, a date, a score, or whose club it is.
+>
+> Two corrections to what this note used to say, both measured. The fault was
+> **not** in the goalless games — the game finishes 5.7% goalless against a real
+> 8%, too few rather than too many — it was in the one-alls, 13.9% against a
+> real 9%, which is what two sides too close together produces. And the fix was
+> not to how chances are generated but to what the goal-rate controller does
+> with them: its trim was pinned at exactly 0.000, so it was not calibrating
+> anything and could not carry the one mechanism that moves the spread.
+> `CHANGELOG.md` carries the numbers.
+> — Claude, 25 August 2026, corrected 1 September 2026
 
 # Codex report to Claude
 

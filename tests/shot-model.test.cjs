@@ -75,9 +75,19 @@ test('the band holds however extreme the mismatch', () => {
   assert.equal(model.onTargetChance(1e6), 0.48);
 });
 
-test('whether it goes in is a different roll, and it has not moved', () => {
-  /* the guard that says this change was to accuracy and not to scoring */
-  assert.equal(model.shotXg(1), 0.13);
+test('whether it goes in is a different roll', () => {
+  /* THIS MOVED, AND ON PURPOSE. It was 0.13, pinned here to say that
+     the on-target work changed accuracy and not scoring, which it did.
+     It is 0.145 now for a different reason that has nothing to do with
+     accuracy: the goal-rate controller was measured sitting at a trim
+     of exactly 0.000 on every candidate ever tried -- pinned against
+     its own floor, able to take goals away and with no way to put one
+     back. A controller with no authority cannot carry the trim tilt,
+     and the tilt is the only mechanism measured to move the draw rate.
+     Raising conversion lifts raw scoring above the target so the
+     controller has somewhere to go. The division's goals a game is
+     unchanged either way -- that is what the controller is for. */
+  assert.equal(model.shotXg(1), 0.145);
   assert.equal(model.shotXg(0), 0.02);
   assert.equal(model.shotXg(100), 0.75);
   assert.equal(model.config.targetGoals, 2.8);
