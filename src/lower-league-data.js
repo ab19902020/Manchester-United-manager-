@@ -2647,7 +2647,6 @@
             "Maxim De Cuyper",
             "Diego Coppola",
             "Olivier Boscagli",
-            "Carlos Baleba",
             "Jack Hinshelwood",
             "Yasin Ayari",
             "Matt O'Riley",
@@ -3040,24 +3039,6 @@
               "displayWeight": "168 lbs",
               "shirt": 13,
               "profile": "https://www.espn.com/soccer/player/_/id/328011/jack-hinshelwood"
-            },
-            {
-              "id": "338814",
-              "name": "Carlos Baleba",
-              "aliases": [
-                "Carlos Baleba"
-              ],
-              "group": "M",
-              "age": 22,
-              "dateOfBirth": "2004-01-03",
-              "nationality": "Cameroon",
-              "nat": "CMR",
-              "heightCm": 178,
-              "weightKg": 73,
-              "displayHeight": "5' 10\"",
-              "displayWeight": "161 lbs",
-              "shirt": 17,
-              "profile": "https://www.espn.com/soccer/player/_/id/338814/carlos-baleba"
             },
             {
               "id": "359097",
@@ -9709,6 +9690,7 @@
           "source": "https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/teams/360/roster",
           "sourceTimestamp": "2026-08-13T11:16:00Z",
           "authoredPlayers": [
+            "Carlos Baleba",
             "Senne Lammens",
             "Altay Bayındır",
             "Karl Darlow",
@@ -10511,6 +10493,24 @@
               "displayWeight": null,
               "shirt": 77,
               "profile": "https://www.espn.com/soccer/player/_/id/3108507/jj-gabriel"
+            },
+            {
+              "id": "338814",
+              "name": "Carlos Baleba",
+              "aliases": [
+                "Carlos Baleba"
+              ],
+              "group": "M",
+              "age": 22,
+              "dateOfBirth": "2004-01-03",
+              "nationality": "Cameroon",
+              "nat": "CMR",
+              "heightCm": 178,
+              "weightKg": 73,
+              "displayHeight": "5' 10\"",
+              "displayWeight": "161 lbs",
+              "shirt": 17,
+              "profile": "https://www.espn.com/soccer/player/_/id/338814/carlos-baleba"
             }
           ]
         },

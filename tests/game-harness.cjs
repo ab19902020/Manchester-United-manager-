@@ -65,6 +65,7 @@ function gameHtml() {
     'src/results-round.js',
     'src/pitch-spotlight.js',
     'src/match-view.js',
+    'src/form-and-momentum.js',
     'src/crazygames.js',
   ]) {
     html = inlineScript(html, fs.readFileSync(path.join(root, filename), 'utf8'), filename);

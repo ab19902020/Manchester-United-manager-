@@ -2,6 +2,75 @@
 
 ## Unreleased
 
+### Added
+
+- **Form and momentum reach the pitch.** "If a team is playing well and they
+  have the momentum, that will help them. If a player's in a good run of form
+  and has scored more — all these sort of things will affect the game."
+
+  They did not. The game recorded both and read neither: `p.form` keeps a man's
+  last five match ratings and `c.recent` keeps a club's last results, and both
+  were written down every week and used only by the awards, the press and the
+  home screen. Every term in the match engine's own `effA` — the value an
+  attribute is actually worth on the day — was accounted for:
+
+  ```
+  position penalty · condition · sharpness · team talk · morale
+  ```
+
+  Condition, sharpness and morale are all there and all measured. **Form was
+  not in the list at all.** A striker on four straight sevens played exactly
+  like one who had not kicked a ball. Momentum existed only *inside* a match —
+  worth possession and a better build-up for about eight minutes after a goal —
+  and a side that had won five on the trot carried nothing into the next one.
+
+  Both now go through `effA`, which is the single place all four phases read,
+  so neither can be applied by one phase and missed by another. Measured over
+  600 matches a variant off a seeded stream, mid-table against mid-table:
+
+  | | points a season |
+  |---|---|
+  | every man on 7.6 | **+2.6** |
+  | every man on 5.6 | **−9.6** |
+  | five straight wins | **+1.6** |
+  | five straight defeats | **−3.1** |
+
+  Both ladders run the right way. The asymmetry is the engine's own and shows
+  in every input measured this way — morale reads −9.9 and +1.3, two attribute
+  points read −55 and +36 — because the sigmoids that decide a chance cost more
+  when you fall than they pay when you climb.
+
+  **Sized deliberately below the things a manager controls directly.** Morale
+  spans 5.7% of every attribute and is worth about eleven points a season, so
+  roughly two points a season per one per cent of `effA`. Form is ±3.5% and the
+  club's run ±2%. The ordering the game rests on is unchanged: the players you
+  sign matter most (36 points a season up, 55 down for two attribute points),
+  keeping them fit next (28), then morale, then how they are going.
+
+  **This is not scripting**, on the test `CLAUDE.md` sets. Neither term can see
+  who the club is, where it sits in the table, who it is playing or whether it
+  is winning. Each reads exactly one thing: the player's own last five ratings,
+  and the club's own last five results. A run of wins helps because the side
+  earned the run — it does not exist to keep anybody near the top. The season
+  shape was checked for exactly that feedback risk and the league did not
+  spread: top-to-bottom measured 62.3 points against a 63.8 baseline.
+
+### Changed
+
+- **Carlos Baleba is a Manchester United player.** Moved from Brighton, and it
+  took three edits rather than one because a transfer lives in three places.
+  Adding him to the `TRX26` real-transfer list was not enough and was worse
+  than doing nothing: he vanished from the game entirely. `applyWindow26` moved
+  him, and then `refreshPremierLeague` re-imposed the sourced rosters, found a
+  Man Utd player who matched nothing in Man Utd's sourced squad, and
+  **overwrote his identity with a different player's** — so he was not moved,
+  he was turned into somebody else. Jan Paul van Hecke survived the same list
+  only because Tottenham's sourced squad already listed him.
+
+  So he is moved where a squad actually comes from: the roster table in
+  `index.html` and the sourced identity data in `src/lower-league-data.js`. He
+  arrives 22 years old, 84 rated, and walks into the first XI.
+
 ### Removed
 
 - **The second match engine, all of it.** "Completely rip out dugout view. No
