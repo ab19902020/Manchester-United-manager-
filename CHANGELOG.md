@@ -4,6 +4,61 @@
 
 ### Fixed
 
+- **The faces had light shaped to the wrong head.** "It's like they've got fake
+  lighting on them. It don't look good, and it's like two weird circles over
+  the faces. Also fix the hair, it still looks like they've got bald spots on
+  the back of the head."
+
+  The circles and the bald spots were one cause. Every portrait ended with two
+  white ellipses drawn *last*, after the hair, meant as rim light. On the left
+  one lay across the hair as well as the cheek — a pale vertical streak through
+  a dark head, which is what a bald patch looks like. An earlier pass narrowed
+  them and left them in, and narrower smudges are still smudges.
+
+  They are replaced with light that has a direction: one key wash across the
+  whole portrait, occlusion under the hairline and the jaw, and a real rim —
+  the silhouette itself, offset and clipped back, so what survives is a sliver
+  hugging the edge.
+
+  The first attempt at that made the fault worse rather than better, and it is
+  worth recording why. It clipped everything to one hard-coded head path, which
+  turns out to be `JAWS.long` — one of **five** the game draws, and not the one
+  the manager uses. On the other four the rim no longer hugged the edge: it
+  fell a unit or two inside the face and drew a bright line down the cheek and
+  through the hair. Rendered at 400px that line was the streak that started all
+  of this, put back by the thing meant to remove it. The silhouette is now read
+  out of the portrait — both renderers paint the head once, as the shape filled
+  with the skin gradient — so the light fits whatever jaw the face has, and any
+  jaw added later.
+
+  The manager gets the same rig at just over half strength, because
+  `mgrFaceSVG` already shades him properly and he is seen at 154px, where a
+  wash over shading that is already there stops being light and becomes haze.
+
+- **A beard was a stain rather than hair.** Drawn as the beard mass in ink at
+  eight-tenths opacity and then the same path again at two-tenths, shifted up a
+  unit and a half to soften the join. Two translucent copies of one shape over
+  a skin gradient make a wash the colour of neither — on pale skin a muddy
+  beige — with a second faint edge running parallel to the first. It now has a
+  near-opaque mass so it is its own colour, a growth edge that fades across the
+  band the beard line actually runs through instead of a second copy, grain
+  along the way the hair lies, and a highlight under the lower lip.
+
+- **"Taking the your club job."** The manager creator builds that line as
+  `'Taking the ' + cname + ' job'` with `cname` falling back to the literal
+  `'your club'` — which is the path the screen is on whenever it opens before a
+  club has been resolved. A fallback has to be a whole phrase, not a noun
+  dropped into a sentence built for a proper name. It now reads *Ready for the
+  job*.
+
+- **The manager creator was standing in a different game's room.** Its backdrop
+  ramps through a cold blue-grey while every surface laid on it — the panel,
+  the tabs, the wells — comes from the green-black palette the rest of the game
+  is built in, so a phone showed a navy stage with a green card on it. Same
+  light, same shape, the game's own colour. The shadow pooled at `left:22px`
+  went with it: it was under the portrait when the portrait was left-aligned,
+  and the portrait is centred now.
+
 - **Potential was being eaten a bit at a time, and it was compounding.** The
   game gives every player a hidden *realised ceiling* between 80% and 100% of
   his potential, because almost nobody reaches their ceiling — a good idea,
@@ -67,6 +122,32 @@
   along with fitness and morale.
 
 ### Added
+
+- **The player card shows the shape of a player, not a column of numbers.**
+  "Massive upgrade to visual player cards and manager."
+
+  A profile listed sixteen attributes as name-on-the-left, number-on-the-right,
+  every row identical in weight. Finding out whether a midfielder could pass
+  meant reading sixteen figures and holding them in your head — the one
+  presentation that never gives you a player at a glance.
+
+  Each row now carries a track filled to its value, in four colour bands, so
+  the long bars and the short ones read before a single word does. The scale
+  runs from four rather than zero, because a professional's attributes rarely
+  fall below about five and a bar drawn from zero squeezes the differences that
+  matter into a third of the track. The portrait goes from 56px to 86px on a
+  ring, the rating becomes a medallion instead of a pill the size of a tag, and
+  condition, sharpness and morale — which are inputs to `effA`, and half of why
+  a good squad loses — get real tracks and readable labels instead of 5px rules
+  under 9px capitals.
+
+  None of it moves a node. Six layers append to a player profile and two
+  prepend, and reordering its children has broken the chrome before, so a
+  tagging pass adds marker classes and hands each row its fill as a custom
+  property; the stylesheet does the rest. If the tagging ever stops matching,
+  the card renders as it did before rather than breaking — which is why
+  `tests/player-card.test.cjs` checks the tagging and not the appearance,
+  including that the bar and the number never disagree.
 
 - **Form and momentum reach the pitch.** "If a team is playing well and they
   have the momentum, that will help them. If a player's in a good run of form

@@ -37708,7 +37708,12 @@ function vMgrCreate(){
     '<div class="mgr-k">Your manager</div>'+
     '<div class="mgr-n" id="mgrNameOut">'+esc(m.name||'The Boss')+'</div>'+
     '<div class="mgr-sub" id="mgrSubOut">'+esc(mgrNatName(m.nat))+' · '+(m.age|0)+'</div>'+
-    '<div class="mgr-job">Taking the '+esc(cname)+' job</div>'+
+    /* "Taking the "+cname+" job" reads "Taking the your club job" the
+       moment no club has been resolved yet — which is exactly the path
+       this screen is on when it is opened before one has been picked.
+       A fallback has to be a whole phrase, not a noun dropped into a
+       sentence built for a proper name. */
+    '<div class="mgr-job">'+(club?'Taking the '+esc(cname)+' job':'Ready for the job')+'</div>'+
     '<button class="mgr-rand" data-action="mgrRandom">🎲 Surprise me</button>'+
    '</div>'+
   '</div>'+
@@ -57413,6 +57418,8 @@ showStart();
 <script src="src/true-potential.js"></script>
 <script src="src/visual-upgrade.js"></script>
 <script src="src/tutorial.js"></script>
+<script src="src/avatar-upgrade.js"></script>
+<script src="src/player-card.js"></script>
 <script src="src/crazygames.js"></script>
 </body>
 </html>

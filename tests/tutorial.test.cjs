@@ -58,9 +58,15 @@ test('it is offered rather than launched, and only until it is taken',
     try{ localStorage.removeItem('rbsTutSeen'); }catch(e){}
     delete G.tutSeen;
     UI.view='home'; render();
+    const hb=document.getElementById('tutHelp');
+    const sheet=[...document.querySelectorAll('style')]
+      .map(s=>s.textContent||'').filter(t=>t.indexOf('.tut-help')>=0).join('');
+    const rule=(sheet.match(/\\.tut-help\\{[^}]*\\}/)||[''])[0];
     const fresh={
       offer: !!document.querySelector('.tut-offer'),
-      help: !!document.getElementById('tutHelp'),
+      help: !!hb,
+      helpClass: hb?hb.className:'',
+      helpRule: rule,
       /* NOTHING IS COVERING THE GAME. This is the assertion that keeps
          every other test in this directory working. */
       overlay: !!document.getElementById('tutLayer')
@@ -86,6 +92,30 @@ test('it is offered rather than launched, and only until it is taken',
 
     assert.ok(out.fresh.offer, 'a new manager is offered the tour on the home screen');
     assert.ok(out.fresh.help, 'and there is a ? in the header');
+    /* AND IT SITS WHERE ITS SIBLING SITS. The `?` is given `.fsbtn` so
+       it matches the fullscreen control beside it, plus
+       `position:relative` so its 44px hit area can be positioned. That
+       second one has a bite: `.fsbtn` still carries `top:50%` from an
+       older layout, inert only while it is `position:static`, and the
+       layer that made it static also set `transform:none` -- throwing
+       away the `translateY(-50%)` that used to cancel the `top`. So
+       turning position back on re-activated the `top` with nothing to
+       cancel it, dropping the `?` by half the header row and laying it
+       across the Inbox tile. Measured in Chromium: 28px against the
+       fullscreen button's 10px.
+
+       This asserts the CANCELLATION rather than the geometry, because
+       this harness is JSDOM and JSDOM has no layout engine --
+       getBoundingClientRect returns zeros there, so a test comparing
+       two positions would read 0 against 0 and pass whatever the
+       stylesheet said. What it can check is that the rule which cancels
+       the inherited offset is still in the rule that turns positioning
+       on, which is the thing that would actually be deleted. */
+    assert.ok(/position\s*:\s*relative/.test(out.fresh.helpRule),
+      'the ? is a positioning context for its hit area: ' + out.fresh.helpRule);
+    assert.ok(/(^|;)\s*top\s*:\s*0/.test(out.fresh.helpRule),
+      'and cancels the top:50% that .fsbtn hands it, or it drops half a '
+      + 'header row onto the Inbox tile: ' + out.fresh.helpRule);
     assert.equal(out.fresh.overlay, false,
       'the tour must NOT open itself — it would sit in front of the game for '
       + 'every test and every audit that clicks a real control');

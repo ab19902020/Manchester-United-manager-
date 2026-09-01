@@ -354,7 +354,16 @@
     '.tut-offer-row .btn{flex:1;min-height:44px}',
 
     /* the ? sits beside the fullscreen control rather than over it */
-    '.tut-help{font-size:16px;font-weight:800;line-height:1;position:relative}',
+    /* `position:relative` is here so the 44px hit area below can be
+       positioned against the button. It has a side effect that has to
+       be undone in the same breath: `.fsbtn` carries `top:50%` from the
+       layout where it was absolutely positioned, and a later layer set
+       it `position:static`, which makes `top` inert -- and set
+       `transform:none`, which threw away the `translateY(-50%)` that
+       used to cancel it. Turning position back on re-activates the
+       `top` and nothing cancels it, so the `?` dropped half of #hrow's
+       height -- 18px -- and sat across the Inbox tile. */
+    '.tut-help{font-size:16px;font-weight:800;line-height:1;position:relative;top:0}',
     /* AND IT IS THUMB-SIZED. The glyph is 32x32, which is the right size
        for the glyph and the wrong size for a finger, so the hit area is
        extended with a pseudo-element the way layout-polish does it for

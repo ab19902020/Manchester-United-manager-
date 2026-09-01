@@ -305,7 +305,82 @@
     '#modalHost.open{-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px)}',
 
     /* =================================================================
-       12. MOTION, AND THE PEOPLE WHO DO NOT WANT IT
+       12. MAKING YOUR MANAGER
+       -----------------------------------------------------------------
+       "When you make the manager, we need to update that area as well."
+
+       It is the first screen of a career and the only one that is about
+       you, and photographed at 390x844 the bottom 45% of it is empty
+       grey. The parts are all right -- a portrait, a name, four tabs,
+       the controls -- they are just laid out as a form with a picture
+       beside it rather than as the moment you are given a manager.
+
+       So the portrait becomes the subject: bigger, centred, standing on
+       a pool of light instead of floating in a square. The controls go
+       into a panel that FILLS the space rather than trailing off into
+       it, and the tabs, the swatches and the footer get the same
+       material as the rest of the game.
+       ================================================================= */
+    /* THE ROOM HE IS STANDING IN, which was a different game's room.
+       The creator's backdrop ramps #1d2530 -> #0a0d12 -> #05070a, a cold
+       blue-grey, while every surface laid on top of it -- the panel, the
+       tabs, the wells -- comes from the green-black palette the rest of
+       the game is built in. On a phone the join is obvious: a navy stage
+       with a green card sitting on it. Same light, same shape, the
+       game's own colour. */
+    '#mgrCreate{background:',
+    ' radial-gradient(120% 60% at 50% -6%,rgba(201,163,92,.14),transparent 62%),',
+    ' radial-gradient(1200px 700px at 50% -10%,#16211a,#0a0f0b 60%,#050806)}',
+
+    /* the portrait, lit from above and standing on something */
+    '.mgr-head{flex-direction:column;text-align:center;gap:10px;padding:18px 18px 10px;',
+    ' position:relative}',
+    /* AND THE OLD SHADOW GOES. An earlier layer pools a shadow at
+       left:22px, which was under the portrait when the portrait was
+       left-aligned. It is centred now, so that pool sits out on its own
+       to the side of him with nothing above it. */
+    '.mgr-head::after{display:none}',
+    '.mgr-head::before{content:"";position:absolute;left:50%;top:-30px;',
+    ' width:300px;height:300px;transform:translateX(-50%);pointer-events:none;',
+    ' background:radial-gradient(closest-side,rgba(255,235,190,.13),rgba(255,235,190,0) 70%)}',
+    '.mgr-port{position:relative}',
+    '.mgr-port svg{width:154px !important;height:154px !important;',
+    ' border-radius:22px}',
+    /* the pool of light he is standing on */
+    '.mgr-port::after{content:"";position:absolute;left:50%;bottom:-13px;',
+    ' width:150px;height:20px;transform:translateX(-50%);pointer-events:none;',
+    ' background:radial-gradient(closest-side,rgba(0,0,0,.55),rgba(0,0,0,0) 72%)}',
+    '.mgr-id{width:100%}',
+    '.mgr-n{font-size:30px;letter-spacing:-.4px}',
+    '.mgr-rand{margin-top:12px;min-height:38px;padding:8px 18px;font-size:12px}',
+
+    /* the controls sit in a panel that reaches the footer */
+    '.mgr-body{background:linear-gradient(180deg,var(--surf-2),var(--surf-1));',
+    ' border:1px solid var(--edge-soft);border-radius:18px 18px 0 0;',
+    ' box-shadow:0 1px 0 var(--edge) inset, 0 -12px 30px -18px rgba(0,0,0,.8);',
+    ' margin:0 10px;padding:16px 14px 20px}',
+    '.mgr-tabs{padding:0 10px 10px}',
+    '.mgr-tab{min-height:40px;transition:background var(--t-fast),color var(--t-fast)}',
+    '.mgr-tab.on{box-shadow:0 1px 0 rgba(255,255,255,.35) inset,',
+    ' 0 6px 16px -8px rgba(201,163,92,.8)}',
+
+    /* a colour swatch is a thing you pick, so it gets a real chosen state */
+    '.mgr-sw{width:42px;height:42px;transition:transform var(--t-fast),',
+    ' box-shadow var(--t-fast),border-color var(--t-fast)}',
+    '.mgr-chip{min-height:40px;transition:background var(--t-fast)}',
+
+    /* the field labels stop shouting: they were 1.8px tracked caps, four
+       of them down a short screen, each as loud as the name at the top */
+    '.mgr-lbl{font-size:10px;letter-spacing:1.1px;color:var(--ink-faint)}',
+
+    /* and the footer is chrome, so it gets the chrome treatment */
+    '.mgr-foot{background:linear-gradient(180deg,rgba(8,12,9,.86),rgba(6,10,7,.99));',
+    ' -webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);',
+    ' border-top:1px solid var(--edge)}',
+    '.mgr-foot .btn{min-height:46px}',
+
+    /* =================================================================
+       13. MOTION, AND THE PEOPLE WHO DO NOT WANT IT
        ================================================================= */
     '@media (prefers-reduced-motion:reduce){',
     ' *,*::before,*::after{transition-duration:.01ms !important;',

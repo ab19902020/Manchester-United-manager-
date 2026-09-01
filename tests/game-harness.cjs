@@ -69,6 +69,8 @@ function gameHtml() {
     'src/true-potential.js',
     'src/visual-upgrade.js',
     'src/tutorial.js',
+    'src/avatar-upgrade.js',
+    'src/player-card.js',
     'src/crazygames.js',
   ]) {
     html = inlineScript(html, fs.readFileSync(path.join(root, filename), 'utf8'), filename);
