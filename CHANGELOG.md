@@ -2,6 +2,70 @@
 
 ## Unreleased
 
+### Fixed
+
+- **Potential was being eaten a bit at a time, and it was compounding.** The
+  game gives every player a hidden *realised ceiling* between 80% and 100% of
+  his potential, because almost nobody reaches their ceiling — a good idea,
+  and its own comment says what it wants: *"Potential stays what the scouts
+  tell you — the gap between what he could have been and what he became is the
+  interesting part."*
+
+  It did the opposite. The ceiling was written **into** `p.pot`, and the
+  ceiling is deliberately recomputed in two places — after the ratings pass
+  reshapes the lower tiers, and at the end of every season, both of which clear
+  the guard and call again. So each recompute took a ceiling **of a ceiling**.
+  Traced on Leny Yoro in a single world build:
+
+  ```
+  potential 92  ->  first pass 85  ->  second pass 83   ... and again every season
+  ```
+
+  Compounded, it collapses potential onto ability for nearly everybody: **96 of
+  136 under-24s in the Premier League** had nothing left to give before a ball
+  was kicked. Yoro read 83/83 where the data says 83/92, Šeško 87/87 against
+  87/93, Baleba 84/84 against 84/91. Signing a twenty-year-old for his ceiling
+  was buying a number the game had already deleted.
+
+  The true potential is now kept once on `p.potMax` and **every recompute is
+  taken from that**, so the second pass lands on the same number as the first
+  and stays there. `potOf(p)` is what the scout, the profile and the academy
+  list print — eleven display sites moved onto it.
+
+  | | before | after |
+  |---|---|---|
+  | Baleba | 84/84 | 84/91, realises 84 |
+  | Yoro | 83/83 | 83/92, realises 85 |
+  | under-24s with no potential left | 71% | **7%** |
+  | league drift over five seasons | +2.01 | **+2.22** |
+
+  **Development is unchanged and that was checked rather than assumed.** The
+  obvious fix — keep `p.pot` true and move where growth stops — was built,
+  measured and thrown away: growth stops at `p.pot` in eight separate places,
+  so with the true potential there players grow further inside every session
+  and a pull-back afterwards does not undo it. Five seasons on the same seed
+  read **+3.86 against +2.01**, nearly doubling the very inflation the ceiling
+  exists to prevent. So the stop did not move; only the record was restored.
+
+- **A real transfer into a Premier League club destroyed the player.**
+  `applyWindow26` moved him, then `refreshPremierLeague` re-imposed the sourced
+  rosters, found a man who matched nothing in his new club's sourced squad, and
+  handed him **an unused sourced player's identity** — so he was not moved, he
+  was turned into somebody else, and vanished with no error. Measured: adding
+  `['Carlos Baleba','MUN']` left nobody of that name anywhere in the world,
+  while `['Jan Paul van Hecke','TOT']` in the same list worked only because
+  Tottenham's sourced squad already listed him. A moved player is now marked
+  and the refresh leaves him alone, and reports him.
+
+- **The manager-inputs test was reading its own leftovers.** Form and the
+  club's run now decide matches, and both are written by the match that just
+  finished — so a rig that replays one fixture ninety times builds up a history
+  and hands it to the next variant. It surfaced as a morale failure: a mutinous
+  squad measured 1.444 against a base of 1.400, which was not morale, it was
+  the run the previous pass had left behind. Both the test and
+  `scripts/measure-inputs.cjs` now reset form and the club's recent results
+  along with fitness and morale.
+
 ### Added
 
 - **Form and momentum reach the pitch.** "If a team is playing well and they

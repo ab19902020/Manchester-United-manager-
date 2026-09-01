@@ -106,9 +106,17 @@ const SEED = +(process.argv[3] || 20260821);
        600, which was not the match model saying anything, it was two
        teams of crocks. Both sides are put back to full health before
        every match, and the variant is re-applied on top. */
-    const heal = (ci) => squad(ci).forEach((p) => {
-      p.injury = null; p.susp = 0; p.cond = 100; p.sharp = 70; p.morale = 72;
-    });
+    /* Form and the club's run are reset with everything else: both now
+       decide matches and both are written by the match just played, so a
+       replayed fixture would otherwise carry a run into the next
+       variant and measure that instead of the input. */
+    const heal = (ci) => {
+      squad(ci).forEach((p) => {
+        p.injury = null; p.susp = 0; p.cond = 100; p.sharp = 70; p.morale = 72;
+        p.form = [];
+      });
+      try { G.clubs[ci].recent = []; } catch (e) { /* no history yet */ }
+    };
 
     VARIANTS.forEach(([label, apply]) => {
       const kept = snap();

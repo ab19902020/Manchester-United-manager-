@@ -83,8 +83,15 @@ test('a fresh, happy, well-stocked squad beats a tired, unhappy, depleted one',
 
     /* both sides back to full health before every match, so a run cannot
        dismantle the squads it is trying to measure */
-    const heal=ci=>squad(ci).forEach(p=>{
-      p.injury=null;p.susp=0;p.cond=100;p.sharp=70;p.morale=72;});
+    /* FORM AND THE CLUB'S RUN ARE RESET TOO. Both now decide matches,
+       and both are written by the match that just finished -- so without
+       this the ninety replays build up a form history and the variants
+       inherit each other's. Caught by this test failing on morale: a
+       mutinous squad read 1.444 against a base of 1.400, which was not
+       morale, it was the run the base pass had left behind. */
+    const heal=ci=>{squad(ci).forEach(p=>{
+      p.injury=null;p.susp=0;p.cond=100;p.sharp=70;p.morale=72;p.form=[];});
+      try{ G.clubs[ci].recent=[]; }catch(e){}};
 
     const play=(apply)=>{
       Math.random=window.RBSWorldSeed.mulberry32(0x5eed1>>>0);

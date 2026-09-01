@@ -235,7 +235,8 @@
     const unresolved = new Set((data.unresolvedPremierLeague || [])
       .map((player) => `${nameKey(player.club)}\0${canonicalPlayerKey(player.name)}`));
     const report = {
-      clubs: 0, players: 0, replacedGenerated: 0, unresolvedAuthored: [], unfilled: [], identity: null,
+      clubs: 0, players: 0, replacedGenerated: 0, unresolvedAuthored: [], unfilled: [],
+      transferredIn: [], identity: null,
     };
     for (const team of Object.values(data.divisions.PL.teams)) {
       const club = clubs.find((candidate) => candidate.league === 'PL' && candidate.name === team.name);
@@ -254,6 +255,18 @@
         report.players += 1;
       }
       for (const player of unmatched) {
+        /* A MAN A REAL TRANSFER MOVED HERE IS LEFT ALONE. He is not in
+           this club's sourced roster because the roster is a snapshot
+           taken before he signed, and handing him an unused sourced
+           identity does not move him -- it turns him into somebody else
+           and deletes him from the game. That is what happened to the
+           first attempt at moving Carlos Baleba to Manchester United:
+           no player of that name existed anywhere afterwards, and
+           nothing reported it. `_trx` is set by applyWindow26. */
+        if (player._trx) {
+          report.transferredIn.push(`${club.name}: ${player.name}`);
+          continue;
+        }
         const unresolvedKey = `${nameKey(club.name)}\0${canonicalPlayerKey(player.name)}`;
         if (unresolved.has(unresolvedKey)) {
           report.unresolvedAuthored.push(`${club.name}: ${player.name}`);

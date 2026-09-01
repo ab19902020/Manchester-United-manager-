@@ -149,3 +149,68 @@ test('a squad in form beats the same squad out of form',
       'a side on a run beats the same side on none: '
       + out.won.toFixed(3) + ' against ' + out.lost.toFixed(3));
   });
+
+/* =====================================================================
+   THE CEILING TAKES ONE BITE, NOT ONE A SEASON
+   ---------------------------------------------------------------------
+   Every player gets a hidden realised ceiling between 80% and 100% of
+   his potential, because almost nobody reaches their ceiling. It was
+   written into `p.pot`, and the ceiling is recomputed deliberately in
+   two places -- after the ratings pass and at the end of every season --
+   so each recompute took a ceiling OF A CEILING. Yoro traced 92 -> 85 ->
+   83 in one world build, and again every season after that, which
+   collapsed potential onto ability for 96 of 136 under-24s in the
+   Premier League.
+
+   The true potential is kept on `p.potMax` and every recompute is taken
+   from that. This is the guard: applying it twice has to land on the
+   same number both times.
+   ===================================================================== */
+test('a second ceiling pass lands where the first one did',
+  { timeout: 90000 }, async (t) => {
+    const game = await createGame();
+    t.after(() => game.close());
+
+    const out = game.eval(`(()=>{
+    window.RBSWorldSeed.build(20260825,'MUN');
+    const pl=G.clubs.filter(c=>c.league==='PL');
+    const young=pl.flatMap(c=>(c.players||[]).filter(p=>p.age<=23));
+
+    /* ONE SETTLING PASS FIRST. A handful of players are created after
+       the world build's own ceiling pass -- the real-transfer window
+       makes some -- so they have never been ceiled and the first pass
+       legitimately moves them. What is being tested is that the pass is
+       IDEMPOTENT, so the baseline is taken once everybody has had one. */
+    eachPlayer(p=>{p._cap=0}); applyCeilings();
+    const before=young.map(p=>({id:p.id,pot:p.pot,potMax:p.potMax,cap:p.cap,ovr:p.ovr}));
+
+    /* exactly what the ratings pass and the end of a season both do */
+    eachPlayer(p=>{p._cap=0}); applyCeilings();
+    eachPlayer(p=>{p._cap=0}); applyCeilings();
+
+    let moved=0, worst=0;
+    before.forEach(b=>{
+      const p=young.find(x=>x.id===b.id); if(!p) return;
+      const d=Math.abs((p.pot||0)-(b.pot||0));
+      if(d>0){moved++; if(d>worst)worst=d;}
+    });
+    return {
+      young: young.length,
+      moved, worst,
+      /* and the record of what he might have been survives all of it */
+      flat: young.filter(p=>potOf(p)<=p.ovr).length,
+      sample: young.slice(0,3).map(p=>p.ovr+'/'+potOf(p)+' stops '+p.cap)
+    };
+  })()`);
+
+    assert.ok(out.young > 40, 'the division should have young players in it');
+    assert.equal(out.moved, 0,
+      'two more ceiling passes moved ' + out.moved + ' potentials, worst by '
+      + out.worst + ' — the ceiling is compounding again');
+
+    /* AND MOST OF THEM STILL HAVE SOMETHING TO GIVE. At its worst this
+       read 96 of 136 with nothing left. */
+    assert.ok(out.flat / out.young < 0.25,
+      out.flat + ' of ' + out.young + ' under-24s have no potential left: '
+      + out.sample.join(' | '));
+  });

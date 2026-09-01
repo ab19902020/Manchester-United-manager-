@@ -610,6 +610,13 @@ function valueFor(p){const ovr=Math.round(ovrOf(p));let v=Math.pow(Math.max(6,ov
  const a=p.age;let af=a<=20?1.2:a<=23?1.1:a<=27?1:a<=29?.9:a<=31?.72:a<=33?.5:.3;
  v*=af*(1+Math.max(0,p.pot-ovr)*.02);if(p.contract<=1)v*=.65;
  return Math.round(v/50000)*50000}
+/* WHAT HE MIGHT HAVE BEEN. src/true-potential.js replaces this with the
+   real reader; this definition exists so the display sites below can call
+   it unconditionally and can never throw if that file is missing. See
+   applyCeilings: `p.pot` holds the hidden realised ceiling because that is
+   where development stops, and `p.potMax` holds the potential a scout is
+   supposed to be telling you about. */
+function potOf(p){try{const m=p&&p.potMax;return (m!=null&&m>0)?Math.max(m,p.pot||0,p.ovr||0):((p&&(p.pot||p.ovr))||0)}catch(e){return (p&&(p.pot||p.ovr))||0}}
 function starsOf(ovr){const s=clamp((ovr-52)/8,0.5,5);return s}
 function starHtml(s){let h='';for(let i=1;i<=5;i++){h+=i<=Math.floor(s)?'★':(s>=i-.5?'⯨':'☆')}return '<span class="stars">'+h+'</span>'}
 function fogSpan(p,attr){const r=mulberry(hashStr(p.id+':'+attr));const a=p.attrs[attr];
@@ -757,7 +764,7 @@ function boardMonthlyReview(){const c=G.clubs[G.my];const played=G.fixtures.filt
 function sackManager(){G.sacked=true;mail('board','Contract terminated','The board has relieved you of your duties following a poor run of results. Thank you for your service.');}
 function scoutTick(){G.scouts.forEach(s=>{if(!s.job)return;s.job.days--;
  if(s.job.days<=0){const p=playerById(s.job.pid);if(p){p.scouted=true;
-  mail('scout','Scout report: '+p.name,s.name+' has completed a full report on <b>'+p.name+'</b> ('+p.pos+', '+G.clubs[p.club].short+'). Overall <b>'+p.ovr+'</b>, potential '+starHtml(starsOf(p.pot))+'. Attributes are now fully revealed.')}
+  mail('scout','Scout report: '+p.name,s.name+' has completed a full report on <b>'+p.name+'</b> ('+p.pos+', '+G.clubs[p.club].short+'). Overall <b>'+p.ovr+'</b>, potential '+starHtml(starsOf(potOf(p)))+'. Attributes are now fully revealed.')}
   s.job=null}})}
 function offerExpiry(){G.pendingOffers=G.pendingOffers.filter(o=>{if(G.day>o.expires){return false}return true})}
 function flavorNews(){if(Math.random()>.12)return;const c=G.clubs[G.my];if(!c.players.length)return;const p=pick(c.players);
@@ -1503,7 +1510,7 @@ function openProfile(pid){
  const hide=!mine&&!p.scouted;
  let h='<div class="row" style="margin-bottom:2px">'+crest(c,34)+'<div style="flex:1;min-width:0"><h3>'+esc(p.name)+'</h3>'+
  '<div class="small muted">'+esc(c.name)+' · '+p.age+' yrs'+playerTags(p)+'</div></div>'+ovrPill(p)+'</div>';
- h+='<div class="row" style="gap:6px;margin:10px 0 4px">'+posBadge(p.pos)+'<span class="small muted">Potential</span> '+(hide?'<span class="av-fog small">'+starHtml(starsOf(p.ovr+6))+'?</span>':starHtml(starsOf(p.pot)))+'</div>';
+ h+='<div class="row" style="gap:6px;margin:10px 0 4px">'+posBadge(p.pos)+'<span class="small muted">Potential</span> '+(hide?'<span class="av-fog small">'+starHtml(starsOf(p.ovr+6))+'?</span>':starHtml(starsOf(potOf(p))))+'</div>';
  h+='<div class="grid3" style="margin:12px 0">'+
  '<div class="kpi"><div class="v num" style="font-size:13px">'+fmtM(p.value)+'</div><div class="l">Value</div></div>'+
  '<div class="kpi"><div class="v num" style="font-size:13px">'+fmtW(p.wage)+'</div><div class="l">Wage</div></div>'+
@@ -2821,7 +2828,7 @@ function openProfile(pid){
  const hide=!mine&&!p.scouted;
  let h='<div class="row" style="margin-bottom:2px;gap:10px">'+face(p,56)+'<div style="flex:1;min-width:0"><h3>'+esc(p.name)+'</h3>'+
  '<div class="small muted"><span style="display:inline-block;vertical-align:-3px;margin-right:3px">'+crest(c,15)+'</span>'+esc(c.name)+' \u00b7 '+p.age+' yrs'+playerTags(p)+'</div></div>'+ovrPill(p)+'</div>';
- h+='<div class="row" style="gap:6px;margin:10px 0 4px;flex-wrap:wrap">'+posBadge(p.pos)+(hide?'':traitPills(p))+'<span class="small muted">Potential</span> '+(hide?'<span class="av-fog small">'+starHtml(starsOf(p.ovr+6))+'?</span>':starHtml(starsOf(p.pot)))+'</div>';
+ h+='<div class="row" style="gap:6px;margin:10px 0 4px;flex-wrap:wrap">'+posBadge(p.pos)+(hide?'':traitPills(p))+'<span class="small muted">Potential</span> '+(hide?'<span class="av-fog small">'+starHtml(starsOf(p.ovr+6))+'?</span>':starHtml(starsOf(potOf(p))))+'</div>';
  h+='<div class="grid3" style="margin:12px 0">'+
  '<div class="kpi"><div class="v num" style="font-size:13px">'+fmtM(p.value)+'</div><div class="l">Value</div></div>'+
  '<div class="kpi"><div class="v num" style="font-size:13px">'+fmtW(p.wage)+'</div><div class="l">Wage</div></div>'+
@@ -3213,7 +3220,7 @@ dailyTickCore=function(){
   const golden=fresh[0]&&fresh[0].pot>=88;
   mail('scout',(golden?'\ud83c\udf1f GOLDEN GENERATION \u2014 ':'')+'Youth intake day at the academy',
    'The Head of Youth Development presents this year\u2019s crop:<br>'+
-   fresh.map(p=>'<b>'+esc(p.name)+'</b> \u2014 '+p.pos+', '+p.age+' '+starHtml(starsOf(p.pot))).join('<br>')+
+   fresh.map(p=>'<b>'+esc(p.name)+'</b> \u2014 '+p.pos+', '+p.age+' '+starHtml(starsOf(potOf(p)))).join('<br>')+
    (golden?'<br><br>The coaches believe <b>'+esc(fresh[0].name)+'</b> could be a generational talent.':''))}};
 ACTIONS.promoteYouth=el=>{
  const p=playerById(el.dataset.id);if(!p||!p.youth)return;
@@ -3222,7 +3229,7 @@ ACTIONS.promoteYouth=el=>{
  p.youth=false;p.contract=3;p.wage=Math.max(2000,Math.round(wageFor(p.ovr,c.rep)*.4/500)*500);
  p.morale=clamp(p.morale+10,1,100);p.scouted=true;
  c.players.push(p);
- if(p.club===G.my)mail('contract','Promoted: '+p.name,'<b>'+esc(p.name)+'</b> ('+p.pos+', '+p.age+') steps up from the academy to the first-team squad on '+fmtW(p.wage)+'. The '+(p.age<=16?'kid':'youngster')+' is one for the future \u2014 potential '+starHtml(starsOf(p.pot))+'.');
+ if(p.club===G.my)mail('contract','Promoted: '+p.name,'<b>'+esc(p.name)+'</b> ('+p.pos+', '+p.age+') steps up from the academy to the first-team squad on '+fmtW(p.wage)+'. The '+(p.age<=16?'kid':'youngster')+' is one for the future \u2014 potential '+starHtml(starsOf(potOf(p)))+'.');
  closeModal();toast('\u2b06\ufe0f '+p.name+' promoted');render()};
 /* ---------- loans ---------- */
 ACTIONS.loanOut=el=>{
@@ -3276,7 +3283,7 @@ function vSquad(){
   const ys=[...c.youth].sort((a,b)=>b.pot-a.pot);
   h+='<div class="card tight"><table class="tbl"><thead><tr><th>Prospect</th><th>Pos</th><th class="c">Age</th><th class="c">Now</th><th class="r">Potential</th></tr></thead><tbody>';
   if(!ys.length)h+='<tr><td colspan="5" class="small muted">The academy is empty \u2014 the spring intake will bring new blood.</td></tr>';
-  ys.forEach(p=>{h+='<tr data-action="profile" data-id="'+p.id+'"><td><div class="row" style="gap:7px">'+face(p,24)+'<span style="font-weight:700">'+esc(p.name)+'</span></div></td><td>'+posBadge(p.pos)+'</td><td class="c num">'+p.age+'</td><td class="c">'+ovrPill(p)+'</td><td class="r">'+starHtml(starsOf(p.pot))+'</td></tr>'});
+  ys.forEach(p=>{h+='<tr data-action="profile" data-id="'+p.id+'"><td><div class="row" style="gap:7px">'+face(p,24)+'<span style="font-weight:700">'+esc(p.name)+'</span></div></td><td>'+posBadge(p.pos)+'</td><td class="c num">'+p.age+'</td><td class="c">'+ovrPill(p)+'</td><td class="r">'+starHtml(starsOf(potOf(p)))+'</td></tr>'});
   h+='</tbody></table></div><div class="xs faint" style="padding:0 4px">Youth intake arrives every March. Prospects graduate to the first team at 19 \u2014 or promote your wonderkids early.</div>';
   return h}
  if(UI.squadTab==='loans'){
@@ -3284,7 +3291,7 @@ function vSquad(){
   if(!loans.length)h+='<div class="small muted" style="padding:8px 2px">Nobody out on loan. Loan young fringe players (23 and under) for faster development \u2014 find the option on their profile.</div>';
   loans.forEach(p=>{const d=G.clubs[p.loan.club];
    h+='<div class="mail" data-action="profile" data-id="'+p.id+'"><div class="ic">\ud83d\udeeb</div><div style="flex:1"><div class="tt">'+esc(p.name)+' <span class="xs faint">'+p.pos+', '+p.age+'</span></div>'+
-   '<div class="bd">At '+esc(d.name)+' \u00b7 developing '+(p.ovr<p.pot?'toward '+starHtml(starsOf(p.pot)):'')+'</div></div>'+ovrPill(p)+'</div>'});
+   '<div class="bd">At '+esc(d.name)+' \u00b7 developing '+(p.ovr<p.pot?'toward '+starHtml(starsOf(potOf(p))):'')+'</div></div>'+ovrPill(p)+'</div>'});
   return h+'</div>'}
  const ps=c.players.filter(p=>!p.loan);
  const s=UI.squadSort;
@@ -3979,7 +3986,7 @@ ACTIONS.clubView=el=>{
  if(c.youth&&c.youth.length){
   h+='<div class="chip-lbl">Academy</div><div class="card tight" style="max-height:180px;overflow-y:auto"><table class="tbl"><tbody>';
   [...c.youth].sort((a,b)=>b.pot-a.pot).forEach(p=>{
-   h+='<tr data-action="profile" data-id="'+p.id+'"><td><div class="row" style="gap:7px">'+face(p,22)+'<span style="font-weight:700;font-size:12px">'+esc(p.name)+'</span><span class="xs faint">'+p.pos+', '+p.age+'</span></div></td><td class="r">'+starHtml(starsOf(p.pot))+'</td></tr>'});
+   h+='<tr data-action="profile" data-id="'+p.id+'"><td><div class="row" style="gap:7px">'+face(p,22)+'<span style="font-weight:700;font-size:12px">'+esc(p.name)+'</span><span class="xs faint">'+p.pos+', '+p.age+'</span></div></td><td class="r">'+starHtml(starsOf(potOf(p)))+'</td></tr>'});
   h+='</tbody></table></div>'}
  h+='<div class="chip-lbl">Coaching & backroom staff</div><div class="card tight">'+clubStaffHtml(c)+'</div>';
  openModal(h)};
@@ -4244,7 +4251,7 @@ ACTIONS.clubView=el=>{
  if(c.youth&&c.youth.length){
   h+='<div class="chip-lbl">Academy</div><div class="card tight" style="max-height:170px;overflow-y:auto"><table class="tbl"><tbody>';
   [...c.youth].sort((a,b)=>b.pot-a.pot).forEach(p=>{
-   h+='<tr data-action="profile" data-id="'+p.id+'"><td><div class="row" style="gap:7px">'+face(p,22)+'<span style="font-weight:700;font-size:12px">'+esc(p.name)+'</span><span class="xs faint">'+p.pos+', '+p.age+'</span></div></td><td class="r">'+starHtml(starsOf(p.pot))+'</td></tr>'});
+   h+='<tr data-action="profile" data-id="'+p.id+'"><td><div class="row" style="gap:7px">'+face(p,22)+'<span style="font-weight:700;font-size:12px">'+esc(p.name)+'</span><span class="xs faint">'+p.pos+', '+p.age+'</span></div></td><td class="r">'+starHtml(starsOf(potOf(p)))+'</td></tr>'});
   h+='</tbody></table></div>'}
  h+='<div class="chip-lbl">Backroom staff</div><div class="card tight">'+clubStaffHtml(c)+'</div>';
  openModal(h)};
@@ -21009,7 +21016,7 @@ function academyRow(p){
   ['unlikely to make the grade','var(--ink-faint)'];
  return pRow(p,{
   meta:p.age+' · <span style="color:'+ceiling[1]+';font-weight:700">'+ceiling[0]+'</span>',
-  rail:'<span class="rlbl">CEILING</span>'+starHtml(starsOf(p.pot))+
+  rail:'<span class="rlbl">CEILING</span>'+starHtml(starsOf(potOf(p)))+
    '<span class="num faint">now '+p.ovr+'</span>',
   sub:'+'+gap+' to come',
   tags:(p.pot>=88?'<span class="tag-pill" style="background:rgba(251,225,34,.16);color:var(--gold)">🌟 Generational</span>':'')+
@@ -21039,7 +21046,7 @@ function vSquadLoans(){
   return pRow(p,{
    meta:(typeof crest==='function'?crest(d,14):'')+' '+esc(d.name)+' · '+p.age,
    rail:p.ovr<p.pot?
-    '<span class="faint" style="font-weight:800;letter-spacing:.5px">CEILING</span>'+starHtml(starsOf(p.pot)):
+    '<span class="faint" style="font-weight:800;letter-spacing:.5px">CEILING</span>'+starHtml(starsOf(potOf(p))):
     '<span class="faint">Developed</span>',
    sub:fmtW(p.wage)})}).join('')+'</div>';
  return h+'</div>'}
@@ -30328,6 +30335,18 @@ function applyWindow26(){
    const dest=keyClub(to);
    if(!dest){gone++;return}
    hit.p.club=dest.i;
+   /* HE IS MARKED AS HAVING MOVED, or the move is undone a moment later.
+      refreshPremierLeague re-imposes the sourced rosters over every top
+      flight squad: it walks the club's players, matches each against
+      that club's sourced list, and hands anyone who does not match the
+      identity of an unused sourced player instead. A man moved INTO a
+      Premier League club is by definition not in that club's sourced
+      list, so he was not moved — he was overwritten with somebody else
+      and vanished from the game with no error. Measured: adding
+      ['Carlos Baleba','MUN'] here left nobody of that name anywhere in
+      the world, while ['Jan Paul van Hecke','TOT'] in the same list
+      worked only because Tottenham's sourced squad already had him. */
+   hit.p._trx=1;
    dest.players.push(hit.p);
    moved++;
   });
@@ -44390,13 +44409,60 @@ function ceilingGap(p){
    Idempotent and deterministic, so applying it twice is harmless and a
    reload lands on the same number.
    --------------------------------------------------------------------- */
+/* THE CEILING GETS ITS OWN FIELD, AND POTENTIAL STAYS TRUE.
+   ---------------------------------------------------------------------
+   This used to write the ceiling straight into `p.pot`, which is the
+   opposite of what the paragraph above says it wants: "Potential stays
+   what the scouts tell you — the gap between what he could have been and
+   what he became is the interesting part." Writing the ceiling over the
+   potential destroys that gap, and it destroys it everywhere else too,
+   because `p.pot` is what the scout report prints, what the academy
+   list sorts on, and what `valueFor` pays for.
+
+   Measured on the shipped build: 96 of 136 under-24s in the Premier
+   League came out of generation with potential equal to ability. Leny
+   Yoro read 83/83 where the roster says 83/92, Šeško 87/87 against
+   87/93, Carlos Baleba 84/84 against 84/91. Signing a twenty-year-old
+   for his ceiling was buying a number the game had already deleted.
+
+   So the ceiling lives on `p.cap` now and `p.pot` is left alone.
+   Development still stops at the ceiling — src/true-potential.js holds
+   every player to it, in the same way capGrowth already holds them to a
+   season's allowance — so nothing about how far a player actually gets
+   has changed. Only the record of what he might have been survives. */
 function applyCeilings(){
  try{
   eachPlayer(p=>{
    if(p._cap)return;
    p._cap=1;
-   const c=playerCeiling(p);
-   if(c<p.pot)p.pot=c});
+   /* WHAT HE MIGHT HAVE BEEN IS KEPT, and the ceiling still goes into
+      p.pot because that is where every growth path stops. Moving the
+      stop was tried and measured: with the gates reading the true
+      potential instead, players grow further inside each session and a
+      pull-back afterwards does not undo it -- the Premier League drifted
+      +3.86 overall in five seasons against +2.01 before, nearly doubling
+      the inflation this ceiling exists to prevent. So development is
+      left exactly as it was and only the RECORD is restored. */
+   /* THE CEILING IS TAKEN FROM THE TRUE POTENTIAL, EVERY TIME.
+      This is recomputed deliberately in two places -- after the ratings
+      pass reshapes the lower tiers, and at the end of every season --
+      and both clear `_cap` and call again, because a ceiling worked out
+      against the old ratings is stale. That is right. What was wrong is
+      that the ceiling was written into `p.pot` and the recompute then
+      took a ceiling OF A CEILING. Traced on Leny Yoro in one world
+      build: potential 92, first pass 85, second pass 83, and another
+      bite at the end of every season after that.
+
+      Compounded across a career it collapses potential onto ability for
+      almost everybody -- measured at 96 of 136 under-24s in the Premier
+      League with nothing left to give. So the true potential is kept
+      once, on `p.potMax`, and every recompute is taken from THAT. The
+      answer is deterministic from the player's id, so the second pass
+      now lands on the same number as the first and stays there. */
+   if(p.potMax==null)p.potMax=p.pot;
+   const c=playerCeiling({id:p.id,name:p.name,ovr:p.ovr,pot:p.potMax});
+   p.cap=c;
+   p.pot=Math.max(p.ovr||0,Math.min(p.potMax,c));});
  }catch(e){}}
 
 const _ngCeil=newGame;
@@ -57344,6 +57410,7 @@ showStart();
 <script src="src/pitch-spotlight.js"></script>
 <script src="src/match-view.js"></script>
 <script src="src/form-and-momentum.js"></script>
+<script src="src/true-potential.js"></script>
 <script src="src/crazygames.js"></script>
 </body>
 </html>
