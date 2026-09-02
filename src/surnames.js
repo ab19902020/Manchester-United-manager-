@@ -1,3 +1,5 @@
+/* global G */
+
 /* =====================================================================
    DE LIGT, NOT LIGT
    ---------------------------------------------------------------------
@@ -81,5 +83,64 @@
     }
   };
 
-  window.RBSSurnames = { isParticle: isParticle, of: window.surname };
+  /* -------------------------------------------------------------------
+     THE ONE PITCH THAT DOES NOT ASK
+
+     Most of the game shortens a name by calling `surname`, so the rule
+     above reaches it. The shape on the Tactics screen does not: it
+     builds the label inline, in the page,
+
+         '<div class="nm">'+(p?esc(p.name.split(' ').pop()):'Empty')+...
+
+     which is a private copy of the old rule and cannot be wrapped. So
+     the finished markup is corrected instead. Each shirt carries the
+     slot it was drawn for, `data-v="3"`, and the eleven picked for those
+     slots are in `G.tacs.xi` -- so the right name for each label is
+     known exactly rather than guessed at from the text.
+     ------------------------------------------------------------------- */
+  const LABEL = /(<div class="tslot[^"]*" data-action="tslot" data-v="(\d+)"[\s\S]*?<div class="nm">)([^<]*)(<\/div>)/g;
+
+  function fixPitchLabels(html) {
+    if (typeof html !== 'string' || html.indexOf('data-action="tslot"') < 0) return html;
+    let xi = null;
+    try { xi = (typeof G !== 'undefined' && G && G.tacs && G.tacs.xi) || null; } catch (error) { xi = null; }
+    if (!Array.isArray(xi)) return html;
+    return html.replace(LABEL, function (all, head, idx, text, tail) {
+      try {
+        const id = xi[+idx];
+        if (id == null) return all;
+        const p = window.playerById ? window.playerById(id) : null;
+        if (!p || !p.name) return all;
+        const want = window.surname(p.name);
+        /* only where the two rules actually disagree, so a label the
+           page built for something else is never touched */
+        if (!want || want === text) return all;
+        return head + want + tail;
+      } catch (error) { return all; }
+    });
+  }
+
+  function wrapView() {
+    if (typeof window.vTactics !== 'function') return false;
+    const passView = window.vTactics;
+    window.vTactics = function vTacticsWithRealSurnames() {
+      return fixPitchLabels(passView.apply(this, arguments));
+    };
+    return true;
+  }
+
+  if (!wrapView()) {
+    /* the view may be defined after this file runs */
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', wrapView);
+    } else {
+      window.setTimeout(wrapView, 0);
+    }
+  }
+
+  window.RBSSurnames = {
+    isParticle: isParticle,
+    of: window.surname,
+    fixPitchLabels: fixPitchLabels,
+  };
 })();
