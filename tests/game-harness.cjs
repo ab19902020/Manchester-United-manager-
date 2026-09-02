@@ -5,9 +5,17 @@ const { IDBFactory } = require('fake-indexeddb');
 
 const root = path.resolve(__dirname, '..');
 
+/* THE FILE BEING INLINED IS DATA, NOT A REPLACEMENT PATTERN.
+   With a string replacement, String.replace interprets `$&`, `` $` ``,
+   `$'` and `$$` inside it -- so a module containing `$&` (a perfectly
+   ordinary thing to write in a .replace call) had the matched
+   `<script src=...>` tag spliced into its own source at inline time.
+   The script then threw, the module silently never loaded, and every
+   test went on passing against a game that was missing it. A replacer
+   FUNCTION is passed the match and returns the text verbatim. */
 function inlineScript(html, source, filename) {
   const tag = `<script src="${filename}"></script>`;
-  return html.replace(tag, `<script>\n${source}\n</script>`);
+  return html.replace(tag, () => `<script>\n${source}\n</script>`);
 }
 
 function gameHtml() {
@@ -70,6 +78,7 @@ function gameHtml() {
     'src/chip-gutters.js',
     'src/surnames.js',
     'src/manager-background.js',
+    'src/player-identity.js',
     'src/offside-trap.js',
     'src/visual-upgrade.js',
     'src/crazygames.js',

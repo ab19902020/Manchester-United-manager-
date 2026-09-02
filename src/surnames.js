@@ -138,9 +138,98 @@
     }
   }
 
+  /* -------------------------------------------------------------------
+     AND THE BUTTONS ON A PLAYER'S CARD
+
+     "Have a word with Ligt". "Ligt replies". "Back to Ligt". Three more
+     inline `p.name.split(' ').pop()` in the game file, on the card where
+     you actually talk to the man. There is no function to wrap for those
+     either, so the modal is corrected on its way out -- and only for the
+     player whose card it is, whose full name is known, so this is a
+     substitution of one known string for another rather than a guess at
+     what any word in the markup might be.
+
+     The full name is put behind a placeholder first, because it CONTAINS
+     the short one: replacing "Ligt" in a card headed "Matthijs de Ligt"
+     would otherwise produce "Matthijs de De Ligt".
+     ------------------------------------------------------------------- */
+  function fixModalNames(html, p) {
+    try {
+      if (typeof html !== 'string' || !p || !p.name) return html;
+      const full = String(p.name);
+      const parts = full.trim().split(/\s+/);
+      if (parts.length < 2) return html;
+      const wrong = parts[parts.length - 1];
+      const right = window.surname(full);
+      if (!right || right === wrong) return html;
+      const MARK = '\u0000rbsname\u0000';
+      let out = html.split(full).join(MARK);
+      const safe = wrong.replace(/[.*+?^${}()|[\]\\]/g, function (ch) { return '\\' + ch; });
+      out = out.replace(new RegExp('(^|[^\\w>])' + safe + '(?![\\w])', 'g'),
+        function (all, lead) { return lead + right; });
+      return out.split(MARK).join(full);
+    } catch (error) { return html; }
+  }
+
+  /* Text nodes only, so no markup can be damaged, and never a node that
+     carries the man's full name -- replacing "Ligt" inside "Matthijs de
+     Ligt" would read "Matthijs de De Ligt". */
+  function fixSheet(p) {
+    if (!p || !p.name) return;
+    const parts = String(p.name).trim().split(/\s+/);
+    if (parts.length < 2) return;
+    const wrong = parts[parts.length - 1];
+    const right = window.surname(p.name);
+    if (!right || right === wrong) return;
+    const sheet = document.getElementById('sheetBody');
+    if (!sheet) return;
+    const safe = wrong.replace(/[.*+?^${}()|[\]\\]/g, function (ch) { return '\\' + ch; });
+    const re = new RegExp('(^|[^\\w])' + safe + '(?![\\w])', 'g');
+    const walk = document.createTreeWalker(sheet, 4 /* text nodes */, null);
+    const hits = [];
+    for (let n = walk.nextNode(); n; n = walk.nextNode()) {
+      const t = n.nodeValue;
+      if (!t || t.indexOf(wrong) < 0) continue;
+      if (t.indexOf(p.name) >= 0) continue;
+      hits.push(n);
+    }
+    for (let i = 0; i < hits.length; i++) {
+      hits[i].nodeValue = hits[i].nodeValue.replace(re, function (all, lead) { return lead + right; });
+    }
+  }
+
+  let card = null;
+  (function hookCard() {
+    if (typeof window.openProfile !== 'function' || typeof window.openModal !== 'function') return;
+    const passProfile = window.openProfile;
+    window.openProfile = function openProfileNamed(pid) {
+      let who = null;
+      try { who = window.playerById ? window.playerById(pid) : null; } catch (error) { who = null; }
+      card = who;
+      try {
+        return passProfile.apply(this, arguments);
+      } finally {
+        card = null;
+        /* The game wraps openProfile itself to prepend the chat button,
+           and writes it straight into the sheet AFTER the modal is built
+           -- so "Have a word with Ligt" never passes through openModal.
+           The sheet is corrected once the whole chain has run. */
+        try { fixSheet(who); } catch (error) { /* the card is still readable */ }
+      }
+    };
+    const passModal = window.openModal;
+    window.openModal = function openModalNamed(h) {
+      let out = h;
+      try { if (card) out = fixModalNames(h, card); } catch (error) { out = h; }
+      return passModal.call(this, out);
+    };
+  })();
+
   window.RBSSurnames = {
     isParticle: isParticle,
     of: window.surname,
     fixPitchLabels: fixPitchLabels,
+    fixModalNames: fixModalNames,
+    fixSheet: fixSheet,
   };
 })();
