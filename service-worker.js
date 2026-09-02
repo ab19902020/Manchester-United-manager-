@@ -1,4 +1,4 @@
-const CACHE_NAME = 'results-business-v57';
+const CACHE_NAME = 'results-business-v58';
 const CORE_ASSETS = [
   './',
   './index.html',
@@ -64,6 +64,7 @@ const CORE_ASSETS = [
   './src/player-identity.js',
   './src/opposition-instructions.js',
   './src/ai-tactics.js',
+  './src/opposition-report.js',
   './src/offside-trap.js',
   './src/visual-upgrade.js',
   './src/crazygames.js',

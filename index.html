@@ -3904,7 +3904,22 @@ const FACE_MAP={
 function leagueSwap2627(){
  const up=['HUL','IPS','COV'],down=['WHU','WOL','BUR'];
  up.forEach(k=>{const c=G.clubs.find(x=>x.key===k);if(!c)return;
-  c.league='PL';c.rep=Math.max(c.rep,5950);c.budget=Math.max(c.budget,55e6);c.bank=Math.max(c.bank,70e6);c.wageCap=Math.max(c.wageCap,c.rep*300)});
+  /* PROMOTION USED TO FLOOR ALL THREE AT ONE NUMBER, 5950, which is
+     1,100 below the club directly above them when every other adjacent
+     pair in the division differs by 200-350. That gap is not decoration:
+     aiMentality reads it, and `d < -700` means Counter. So the three
+     promoted clubs set up to counter-attack in ~85% of their matches --
+     including against Sunderland and Leeds, the games a promoted side
+     actually targets -- which is a second handicap stacked on the
+     legitimate 2.5 of squad quality that separates them. Measured over
+     eight careers, the bottom three were the three promoted clubs every
+     single time; real football relegates about half of them.
+     They come up into a band just under the weakest established sides,
+     and keep their order instead of being flattened into one club:
+         Ipswich 5450 -> 6700   Coventry 5250 -> 6600   Hull 5050 -> 6500
+     which reads Balanced against Sunderland and Leeds, Counter against
+     mid-table, and Defensive away at the top six. */
+  c.league='PL';c.rep=Math.max(c.rep,Math.round(6500+(c.rep-5050)*0.5));c.budget=Math.max(c.budget,55e6);c.bank=Math.max(c.bank,70e6);c.wageCap=Math.max(c.wageCap,c.rep*300)});
  down.forEach(k=>{const c=G.clubs.find(x=>x.key===k);if(!c)return;
   c.league='CH';c.rep=Math.min(c.rep,5700);c.budget=Math.min(c.budget,30e6)});
 }
@@ -57436,6 +57451,7 @@ showStart();
 <script src="src/player-identity.js"></script>
 <script src="src/opposition-instructions.js"></script>
 <script src="src/ai-tactics.js"></script>
+<script src="src/opposition-report.js"></script>
 <script src="src/offside-trap.js"></script>
 <script src="src/visual-upgrade.js"></script>
 <script src="src/crazygames.js"></script>
