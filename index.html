@@ -929,7 +929,26 @@ const SPREAD={
     one fault rather than two. Its size lives here: what the crowd is
     worth to keeping the ball, to getting out of your own half, and to
     the shot at the end of it. */
- homePoss:1.02, homeBuild:1.04, homeShot:1.03,
+ /* MEASURED UP, 2026-09. Four seasons a setting -- 1,520 matches each,
+    which puts about 1.2 points of sampling error on a home-win rate:
+        1.02/1.04/1.03   home 40.5%  draw 26.1%  0-0 6.4%  gpm 2.697
+        1.03/1.06/1.05        42.6%       26.1%      5.9%      2.676
+        1.04/1.08/1.07        44.9%       24.6%      6.8%      2.726
+        1.05/1.10/1.09        43.7%       24.3%      6.4%      2.795
+    against a real Premier League of 44.0 / 24.0 / 7.0 / 2.80.
+
+    Then re-swept with src/ai-tactics.js on, because a club that presses
+    and sits deep changes these numbers and the two have to be calibrated
+    together rather than one after the other:
+        1.04/1.08/1.07   home 42.6%  draw 26.6%  0-0 7.8%  gpm 2.747
+        1.05/1.10/1.09        43.6%       25.4%      6.7%      2.745
+        1.06/1.12/1.11        45.9%       24.5%      6.4%      2.795
+    The middle row ships. Home advantage lands within the sampling error
+    of the real 44.0, the draw rate and the goalless rate sit beside the
+    real ones, and goals a match stays inside the model's 2.55-3.05 --
+    which is the note above coming true: the shortage of home wins and
+    the surplus of draws really were one fault. */
+ homePoss:1.05, homeBuild:1.10, homeShot:1.09,
  /* what a side in front is worth defensively in the last ten minutes */
  park:1.05,
  /* how hard a side is steered back towards thirteen shots a match */
@@ -57416,6 +57435,7 @@ showStart();
 <script src="src/manager-background.js"></script>
 <script src="src/player-identity.js"></script>
 <script src="src/opposition-instructions.js"></script>
+<script src="src/ai-tactics.js"></script>
 <script src="src/offside-trap.js"></script>
 <script src="src/visual-upgrade.js"></script>
 <script src="src/crazygames.js"></script>

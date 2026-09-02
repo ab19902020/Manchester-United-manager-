@@ -43,7 +43,7 @@ const SHIPPED = {
   possK: 0.22, buildK: 3.4, chanceK: 3.2,
   buildMul: 1.22, chanceMul: 0.70,
   shotK: 0.42,
-  homePoss: 1.02, homeBuild: 1.04, homeShot: 1.03,
+  homePoss: 1.05, homeBuild: 1.10, homeShot: 1.09,
   park: 1.05,
   momScore: 4, momConcede: 2.6,
   /* how hard a side is steered back towards thirteen shots a match.
