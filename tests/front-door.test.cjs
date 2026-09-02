@@ -47,7 +47,12 @@ test('you can read the job before you take it', async (t) => {
   assert.match(run.stars, /[★☆]{5}/, 'the job has no difficulty on it');
   assert.ok(run.stat['Transfer budget'], 'the budget is not shown');
   assert.ok(run.stat.Capacity, 'the ground is not shown');
-  assert.ok(run.stat.Standing, 'the club standing is not shown');
+  /* the tile that used to say "Standing 92" -- a bare number with no
+     scale, next to a budget in pounds and a capacity in seats. It says
+     what it measures now, and what the top of the scale is. */
+  assert.ok(run.stat.Reputation, 'the club reputation is not shown');
+  assert.match(run.stat.Reputation, /\d+\s*of\s*100/,
+    `reputation reads "${run.stat.Reputation}" — a number with no scale is the thing this replaced`);
   assert.ok(run.squadRows >= 5,
     `only ${run.squadRows} players shown for a club whose squad the game knows`);
   assert.ok(run.leagues >= 20,

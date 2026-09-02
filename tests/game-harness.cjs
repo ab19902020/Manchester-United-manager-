@@ -68,6 +68,7 @@ function gameHtml() {
     'src/form-and-momentum.js',
     'src/true-potential.js',
     'src/chip-gutters.js',
+    'src/surnames.js',
     'src/offside-trap.js',
     'src/visual-upgrade.js',
     'src/crazygames.js',
