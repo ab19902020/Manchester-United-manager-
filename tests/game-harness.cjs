@@ -79,6 +79,7 @@ function gameHtml() {
     'src/surnames.js',
     'src/manager-background.js',
     'src/player-identity.js',
+    'src/opposition-instructions.js',
     'src/offside-trap.js',
     'src/visual-upgrade.js',
     'src/crazygames.js',
