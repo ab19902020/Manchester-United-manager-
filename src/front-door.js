@@ -62,6 +62,8 @@
       '.fd-stat{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:8px 10px}',
       '.fd-stat .k{font-size:9.5px;text-transform:uppercase;letter-spacing:.9px;opacity:.62;font-weight:800}',
       '.fd-stat .v{font-size:15px;font-weight:800;margin-top:2px}',
+      /* the scale, quiet enough that the number is still the thing you read */
+      '.fd-stat .fd-of{font-size:10px;font-weight:700;opacity:.5;letter-spacing:.2px}',
       '.fd-squad{margin-top:10px;border-top:1px solid rgba(255,255,255,.09);padding-top:9px}',
       '.fd-squad .row{display:flex;align-items:center;gap:8px;padding:3px 1px;font-size:12px}',
       '.fd-squad .ps{flex:0 0 34px;font-size:9.5px;font-weight:800;opacity:.66;letter-spacing:.5px}',
@@ -176,8 +178,13 @@
       + '<div class="fd-stat"><div class="k">Transfer budget</div><div class="v">' + money(club.budget) + '</div></div>'
       + '<div class="fd-stat"><div class="k">Capacity</div><div class="v">'
       + (club.cap || 0).toLocaleString() + '</div></div>'
-      + '<div class="fd-stat"><div class="k">Standing</div><div class="v">'
-      + Math.round((club.rep || 0) / 100) + '</div></div>'
+      /* WAS "Standing 92", WHICH TOLD YOU NOTHING. A bare number with no
+         scale and no unit, sitting next to a budget in pounds and a
+         capacity in seats -- the one tile on the card a player could not
+         read. The stars above it already say how big the club is, so
+         this says how big on a scale you can see the top of. */
+      + '<div class="fd-stat"><div class="k">Reputation</div><div class="v">'
+      + Math.round((club.rep || 0) / 100) + '<span class="fd-of"> of 100</span></div></div>'
       + '<div class="fd-stat"><div class="k">Country</div><div class="v">' + esc(club.cc || '—') + '</div></div>'
       + '</div>';
 
