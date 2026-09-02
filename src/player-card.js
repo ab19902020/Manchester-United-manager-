@@ -1,4 +1,4 @@
-/* global openProfile:writable */
+/* global openProfile:writable, playerById, face */
 
 /* =====================================================================
    THE PLAYER CARD
@@ -65,6 +65,10 @@
     return Math.max(0, Math.min(1, v));
   }
 
+  /* the id of the profile currently open, so the head portrait can be
+     redrawn at the size it is actually displayed at */
+  let openId = null;
+
   function decorate(body) {
     if (!body) return;
     const grid = body.querySelector('.attr-grid');
@@ -93,6 +97,29 @@
     }
     if (head) {
       head.classList.add('pc-head');
+      /* AND THE PORTRAIT IS REDRAWN AT THE SIZE IT IS SEEN AT.
+         `face(p, sz)` is asked for 46 or 56 here and the stylesheet
+         above then displays it at 86, which is fine for an SVG -- it
+         scales -- but not for the avatar layer, which uses the
+         requested size to decide whether the lighting rig is worth
+         drawing. Below its threshold a card portrait got the smudges
+         removed and none of the light that replaced them. Asking for
+         the size it is shown at costs one call and makes the two
+         agree. */
+      try {
+        const svg = head.querySelector('svg');
+        const p = (openId != null && typeof playerById === 'function')
+          ? playerById(openId) : null;
+        if (svg && p && typeof face === 'function' && !svg.dataset.pcSized) {
+          const lifted = document.createElement('div');
+          lifted.innerHTML = face(p, 96);
+          const next = lifted.firstChild;
+          if (next && next.tagName && next.tagName.toLowerCase() === 'svg') {
+            next.dataset.pcSized = '1';
+            head.replaceChild(next, svg);
+          }
+        }
+      } catch (error) { /* the old portrait is still a portrait */ }
       /* the badge row is whichever row follows it */
       let sib = head.nextElementSibling;
       while (sib && !sib.classList.contains('row')) sib = sib.nextElementSibling;
@@ -147,7 +174,8 @@
   try {
     if (typeof openProfile === 'function') {
       const pass = openProfile;
-      openProfile = function openProfileCarded() {
+      openProfile = function openProfileCarded(id) {
+        openId = id;
         const out = pass.apply(this, arguments);
         run();
         if (typeof requestAnimationFrame === 'function') requestAnimationFrame(run);

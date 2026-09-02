@@ -44657,11 +44657,32 @@ function goalIsTrimmed(m,A,D,pen){
  try{
   const div=(m.fix&&m.fix.div)||null;
   let t=goalCal(div).trim;
-  if(SPREAD.trimTilt){
+  /* THE TILT REDISTRIBUTES A TRIM; IT DOES NOT CREATE ONE OR OVERRULE
+     ONE. Both ends of that matter and the first version had neither.
+
+     It was `clamp(t + tilt*(strD-strA)/10, 0, .62)`, and the ceiling in
+     that clamp is not the tilt's ceiling — it is applied to the total,
+     so it caps the CONTROLLER too. With the controller demanding every
+     goal refused, a trim of 1 came back as 0.62 and better than a third
+     of them scored anyway. Turning the tilt on quietly took the
+     controller's authority away at exactly the moment it was using all
+     of it, which is the opposite of the change's whole purpose.
+
+     The floor is the same fault upside down. At a trim of zero the
+     controller is refusing nothing, and a tilt that still refuses a
+     weak attack's goals is inventing refusals out of nothing — which
+     is measurably what drained the division to 2.4 goals a game when
+     the tilt was first tried on its own.
+
+     So the tilt only acts while the controller is actually calibrating,
+     between refusing nothing and refusing everything. Inside that range
+     it decides whose goals come off; outside it, the controller has
+     already decided and is left alone. */
+  if(SPREAD.trimTilt&&t>0&&t<1){
    /* calcEff runs on a 20-ish scale, so a division spans about twelve
       points top to bottom; over ten keeps the tilt in the same units
       whatever the league */
-   t=clamp(t+SPREAD.trimTilt*(sideStrength(D)-sideStrength(A))/10,0,.62)}
+   t=clamp(t+SPREAD.trimTilt*(sideStrength(D)-sideStrength(A))/10,0,Math.max(t,.62))}
   return Math.random()<t;
  }catch(e){return false}}
 

@@ -52,7 +52,7 @@
 > or the standing of the club it is acting on. If it does, it is scripting.
 >
 > **This bound the draw rate, and the draw rate is now closed.** It was 27.2%
-> against a real 24% and it is 24.5%, measured on three world seeds. The
+> against a real 24% and it is 23.7%, measured on three world seeds. The
 > tempting fix — reach in and turn some draws into wins — is precisely what this
 > rule forbids, and it was not used. What was used reads the quality of the
 > eleven on the pitch against the eleven facing them and nothing else: it cannot

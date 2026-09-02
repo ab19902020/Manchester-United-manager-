@@ -21,8 +21,8 @@
   decides *whose* goals the controller takes — a good attack against a poor
   defence keeps more of them, a poor attack against a good defence keeps fewer
   — which moves the spread of scoring without moving its mean, and the mean is
-  the only thing the controller defends. But the tilt is clamped at zero, so
-  with the base trim already there it could only ever subtract. Turned on
+  the only thing the controller defends. But the tilt is clamped at zero, so with
+  the base trim already sitting there it could only ever subtract. Turned on
   alone it drained the division to 2.4 goals a game.
 
   So the controller was given room, and **how** it was given room is the whole
@@ -32,15 +32,32 @@
   (`openPlayXgScale` 0.13 → 0.145) produces the same goals from the same shots.
   The shot count does not move, and the trim finally comes off its floor.
 
+  Across three world seeds at 380 fixtures repeated ten times each, the
+  control reproducing exactly on every run:
+
   | | shipped | now | real |
   |---|---|---|---|
-  | drawn | 27.2% | **24.5%** | 24.0% |
-  | one-all | 13.9% | 12.0% | 9.0% |
-  | goals a game | 2.72 | 2.84 | 2.80 |
-  | shots a match | 27.7 | 27.6 | 25.5 |
-  | champion | 77.6 | 82.3 | 87.6 |
-  | bottom club | 25.9 | 20.2 | 20.7 |
-  | controller trim | 0.000 | 0.042 | — |
+  | drawn | 27.2% | **23.7%** | 24.0% |
+  | one-all | 13.9% | 12.4% | 9.0% |
+  | goals a game | 2.72 | 2.78 | 2.80 |
+  | shots a match | 27.7 | 27.7 | 25.5 |
+  | controller trim | 0.000 | 0.075 | — |
+
+  And the table it produces, on seed 20260821:
+
+  | | shipped | now | real |
+  |---|---|---|---|
+  | champion | 77.0 | 84.7 | 87.6 |
+  | second | 72.8 | 80.1 | 80.5 |
+  | bottom club | 25.9 | 19.6 | 20.7 |
+  | best squad, goals for | 1.23× | 1.46× | 1.70× |
+  | best squad, goals against | 0.76× | 0.65× | 0.62× |
+
+  What it costs: the lower-middle of the table gets too weak — seventeenth
+  falls from 37.6 to 32.7 against a real 37.8 — and goalless games, already
+  short at 5.7% against a real 8%, do not improve. The champion, second, the
+  bottom club, the draw rate and the spread of scoring all move a long way
+  toward football, and those are the numbers a season is read through.
 
   Nothing here can see a league table, a date, a score, or whose club it is.
   The tilt reads the quality of the eleven on the pitch against the eleven
@@ -60,6 +77,40 @@
   demonstrably changed nothing returned draw rates spanning 2.8 points, so six
   repeats can see the direction of a change this size but not its landing
   point, and no claim above is made to a tenth of a point.
+
+  **And the tilt had to be stopped from overruling the controller**, which the
+  first version of it did in both directions. It was
+  `clamp(t + tilt*(strD-strA)/10, 0, .62)`, and that ceiling applies to the
+  total rather than to the tilt — so a controller demanding every goal refused
+  got 0.62 and better than a third of them scored anyway, caught by an existing
+  test asserting exactly that invariant. The floor was the same fault upside
+  down: at a trim of zero the controller is refusing nothing, and a tilt that
+  still refused a weak attack's goals was inventing refusals out of nothing,
+  which is what drained the division to 2.4 goals a game when the tilt was
+  first tried alone. It now acts only while the controller is actually
+  calibrating, between refusing nothing and refusing everything. That made the
+  result more consistent, not less: the trim is now positive on all three
+  seeds where it was on two.
+
+- **A test that could not see what it asserted, and had been passing on luck.**
+  `a squad in form beats the same squad out of form` played one seeded stream of
+  seventy matches a variant and compared points a game. The change above shifted
+  the random stream and it failed — 1.300 against 1.329.
+
+  Form was not broken, and the first thing done was to check rather than assume:
+  `effA` read 16.90 in form against 15.76 out of it, a ratio of 1.0725, which is
+  the declared ±3.5% span applied in both directions exactly. Then the emergent
+  effect was measured properly — eight independent streams of 150 matches — and
+  an in-form squad won **8 times out of 8**, worth +0.349 points a game with a
+  standard deviation across streams of 0.169.
+
+  Which is the diagnosis: a single seventy-match sample carries a standard
+  deviation of about 0.25 against an effect of 0.35, so roughly one run in
+  twelve comes out the wrong way whatever the game does. The test was a coin
+  flip that had been landing heads for as long as nobody disturbed the stream.
+  It now averages four streams, taking the estimate to nearly three standard
+  deviations, and drops the `base` variant — seventy matches were played for it
+  every run and no assertion ever read it, which paid for the extra streams.
 
 - **CLAUDE.md said the draw surplus was in the goalless games. It is not.**
   Measured, the game finishes **5.7% goalless against a real 8%** — it has

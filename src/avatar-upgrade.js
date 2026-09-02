@@ -102,6 +102,39 @@
   const SKULL = 'M20 2.9c-5.8 0-9.1 3.9-9.1 10.2 0 5.3.8 9.3 2.4 12.3 1.6 3 3.9 4.6 6.7 4.6'
     + 's5.1-1.6 6.7-4.6c1.6-3 2.4-7 2.4-12.3 0-6.3-3.3-10.2-9.1-10.2z';
 
+  /* -------------------------------------------------------------------
+     DETAIL ONLY WHERE IT CAN BE SEEN
+     -------------------------------------------------------------------
+     A portrait in the squad list is 28 pixels across. At that size a
+     one-unit rim, a beard's grain and a gradient across the forehead
+     are each well under a pixel: they cost DOM nodes on every row of
+     every list in the game and change nothing a player can see. The
+     mobile integration test caps the page at 4,300 elements and this
+     is what pushed it over.
+
+     So the light and the grain are drawn on the portraits that are
+     actually looked at -- a profile at 86px, a manager at 154 -- and
+     the thumbnails get the part that mattered anyway, which is the
+     REMOVAL of the two smudges. That was the complaint; the rig on top
+     is a refinement of it.
+
+     `face` is the only caller that knows the size, and it calls
+     `faceHair` synchronously while it builds, so the size is stashed
+     for the beard to read rather than threaded through a signature
+     that six other layers already wrap. */
+  /* SIXTY-FOUR, and the number is measured rather than picked. The
+     sizes this game actually draws a face at, counted off one rendered
+     screen: 15, 26, 30, 34 and 46 for rows in lists, then 86 for the
+     portrait on a player card and 118 and 154 for the manager. Forty
+     was the first guess and it fell in the wrong gap -- the transfer
+     list draws at 46, so twenty-one list rows were each carrying a
+     full lighting rig and a gradient mask, which is where 342 of the
+     page's elements were going. Sixty-four separates a face in a list
+     from a face that is the subject of the screen. */
+  const DETAIL_AT = 64;
+  let drawingAt = 28;
+  function detailed() { return drawingAt >= DETAIL_AT; }
+
   function headOf(svg) {
     const hit = HEAD.exec(svg);
     return (hit && hit[1]) || SKULL;
@@ -201,6 +234,16 @@
      The moustache and the other four styles keep their shapes -- those
      were fixed properly once already -- and gain the same material. */
   function beardBody(uid, full, ink, clip, k) {
+    /* AT THUMBNAIL SIZE THE SOFT EDGE IS THREE PIXELS. The gradient
+       mask that fades the beard line in over four and a half units
+       costs six DOM nodes -- a defs, a gradient, two stops, a mask and
+       a rect -- on every portrait in every list, and at 28px it renders
+       as an edge indistinguishable from a hard one. Sixty faces on the
+       transfers screen made that the difference between 4,465 elements
+       and the 4,300 the mobile test allows. */
+    if (!detailed()) {
+      return '<path d="' + full + '" fill="' + ink + '" opacity="' + k + '"' + clip + '/>';
+    }
     const g = 'bd' + uid;
     /* the growth edge. The beard line runs through y=21..24 wherever it
        is on the face, so a wash that fades in across that band lands on
@@ -224,13 +267,19 @@
     [20.0, 27.0, 20.0, 29.9], [22.4, 26.8, 22.6, 29.6], [24.2, 26.2, 24.6, 28.8],
     [25.8, 25.0, 26.4, 27.4], [12.8, 22.6, 12.4, 24.6], [27.2, 22.6, 27.6, 24.6]
   ];
-  function beardGrain(clip, tone) {
-    let s = '<g stroke="' + tone + '" stroke-width=".42" stroke-linecap="round"'
-      + ' opacity=".30" fill="none"' + clip + '>';
+  /* ONE PATH, NINE SUBPATHS. Nine separate <path> elements draw the
+     identical picture and cost eight more DOM nodes per face, which a
+     squad list of thirty portraits turns into two hundred and forty --
+     enough on its own to push the page past the node budget the mobile
+     integration test guards. A path may hold as many M/L pairs as it
+     likes. */
+  function beardGrain(clip, tone, opacity) {
+    let d = '';
     GRAIN.forEach(function (v) {
-      s += '<path d="M' + v[0] + ' ' + v[1] + 'L' + v[2] + ' ' + v[3] + '"/>';
+      d += 'M' + v[0] + ' ' + v[1] + 'L' + v[2] + ' ' + v[3];
     });
-    return s + '</g>';
+    return '<path d="' + d + '" stroke="' + tone + '" stroke-width=".42"'
+      + ' stroke-linecap="round" opacity="' + opacity + '" fill="none"' + clip + '/>';
   }
 
   try {
@@ -253,13 +302,14 @@
             /* stubble is skin showing through hair, so it stays light --
                but it gets the same real edge instead of two flat copies */
             return beardBody(uid, FULL, ink, clip, '.42')
-              + beardGrain(clip, lift).replace('opacity=".30"', 'opacity=".16"');
+              + (detailed() ? beardGrain(clip, lift, '.16') : '');
           }
           return beardBody(uid, FULL, ink, clip, '.94')
-            + beardGrain(clip, lift)
-            /* under the lower lip, where a beard always catches the light */
-            + '<path d="M17.4 25.4c1.7.7 3.5.7 5.2 0" stroke="' + lift + '"'
-            + ' stroke-width=".55" fill="none" opacity=".22"' + clip + '/>'
+            + (detailed() ? beardGrain(clip, lift, '.30')
+              /* under the lower lip, where a beard catches the light --
+                 half a unit of stroke, invisible on a list row */
+              + '<path d="M17.4 25.4c1.7.7 3.5.7 5.2 0" stroke="' + lift + '"'
+              + ' stroke-width=".55" fill="none" opacity=".22"' + clip + '/>' : '')
             /* the moustache keeps its shape -- it was got right once
                already, thin and parted under the nose -- and only gains
                the same opacity as the mass it belongs to */
@@ -277,7 +327,8 @@
   try {
     if (typeof face === 'function') {
       const pass = face;
-      face = function faceLit() {
+      face = function faceLit(p, sz) {
+        drawingAt = (typeof sz === 'number' && isFinite(sz)) ? sz : 28;
         let svg = pass.apply(this, arguments);
         try {
           if (!svg || svg.indexOf('<svg') < 0) return svg;
@@ -303,7 +354,7 @@
           if (svg.indexOf(RIM_OLD) >= 0) svg = svg.split(RIM_OLD).join('');
           svg = svg.replace(SHEEN, '');
           SHEEN.lastIndex = 0;
-          if (!had) return svg;
+          if (!had || !detailed()) return svg;
           /* a uid of its own, so two portraits on one screen cannot
              share a gradient id */
           const uid = 'L' + (svg.length % 9973) + (Math.random() * 1e6 | 0);
@@ -328,7 +379,10 @@
   try {
     if (typeof window.mgrFaceSVG === 'function') {
       const pass = window.mgrFaceSVG;
-      window.mgrFaceSVG = function mgrFaceLit() {
+      window.mgrFaceSVG = function mgrFaceLit(m, sz) {
+        /* the manager has his own renderer and his own size argument,
+           and he is the one portrait always drawn big */
+        drawingAt = (typeof sz === 'number' && isFinite(sz)) ? sz : 96;
         let svg = pass.apply(this, arguments);
         try {
           if (!svg || svg.indexOf('<svg') < 0) return svg;

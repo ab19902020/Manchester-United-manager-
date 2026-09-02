@@ -358,9 +358,9 @@ const PULL_SET = [
    right tie-breaker for a change to how every match in the game is
    decided. */
 const SHIP_SET = [
-  { name: 'shipped', bal: {} },
-  { name: 'proposed', bal: { trimTilt: .25 }, xg: .145 },
-  { name: 'shipped (repeat)', bal: {} },
+  { name: 'before', bal: { trimTilt: 0 }, xg: .13 },
+  { name: 'after', bal: {} },
+  { name: 'before (repeat)', bal: { trimTilt: 0 }, xg: .13 },
 ];
 
 /* =====================================================================

@@ -96,10 +96,31 @@ test('a squad in form beats the same squad out of form',
     t.after(() => game.close());
     await startCareer(game, 'In Form');
 
-    /* KEPT SHORT ON PURPOSE. The full ladders are in the rig; this is the
-       guard, and `node --test` runs two files at once, so a heavy one
-       times its neighbour out. Paired off the same seeded stream, so a
-       difference is the input rather than the sample. */
+    /* IT HAS TO BE ABLE TO SEE WHAT IT ASSERTS, and for a long time it
+       could not.
+
+       This ran one seeded stream of seventy matches a variant and
+       compared points a game. Measured properly -- eight independent
+       streams of a hundred and fifty matches each -- an in-form squad
+       is worth +0.349 points a game with a standard deviation across
+       streams of 0.169, so a single seventy-match sample carries a
+       standard deviation of about 0.25 against an effect of 0.35. That
+       is roughly a one-in-twelve chance of coming out the wrong way by
+       luck alone, and it eventually did: 1.300 against 1.329.
+
+       Nothing was wrong with form when that happened. `effA` was
+       checked directly at the same moment and read 16.90 in form
+       against 15.76 out of it, a ratio of 1.0725, which is the declared
+       span applied in both directions exactly. The test was a coin
+       flip that had been landing heads, and a change elsewhere shifted
+       the random stream and flipped it.
+
+       So it averages four streams instead of trusting one, which takes
+       the standard deviation of the estimate to about 0.12 and the
+       effect to nearly three of them. `base` is dropped: seventy
+       matches were being played for it every run and no assertion ever
+       read it. The full ladders stay in scripts/measure-inputs.cjs at
+       six hundred matches a variant. */
     const out = game.eval(`(()=>{
     window.RBSWorldSeed.build(20260825,'MUN');
     const mem=G.clubs.filter(c=>c.league==='PL').map(c=>c.i);
@@ -109,8 +130,8 @@ test('a squad in form beats the same squad out of form',
     const heal=ci=>squad(ci).forEach(x=>{
       x.injury=null;x.susp=0;x.cond=100;x.sharp=70;x.morale=72;x.form=[];});
 
-    const play=(apply)=>{
-      Math.random=window.RBSWorldSeed.mulberry32(0x5eed1>>>0);
+    const play=(apply,stream)=>{
+      Math.random=window.RBSWorldSeed.mulberry32(stream>>>0);
       let pts=0,played=0;
       for(let i=0;i<70;i++){
         heal(ME);heal(THEM);
@@ -126,24 +147,31 @@ test('a squad in form beats the same squad out of form',
       return pts/Math.max(1,played);
     };
 
+    /* the same four streams for every variant, so each pair is still
+       compared against its own coin flips and only the averaging is new */
+    const STREAMS=[0x5eed1,0x5eed1+7919,0x5eed1+15838,0x5eed1+23757];
+    const mean=a=>a.reduce((x,y)=>x+y,0)/a.length;
+    const over=(apply)=>mean(STREAMS.map(s=>play(apply,s)));
     return {
-      base: play(()=>{}),
-      hot:  play(()=>squad(ME).forEach(x=>{x.form=[7.6,7.6,7.6,7.6,7.6];})),
-      cold: play(()=>squad(ME).forEach(x=>{x.form=[5.6,5.6,5.6,5.6,5.6];})),
-      won:  play(()=>{G.clubs[ME].recent=[1,2,3,4,5].map(()=>({r:'W',gf:2,ga:0}));}),
-      lost: play(()=>{G.clubs[ME].recent=[1,2,3,4,5].map(()=>({r:'L',gf:0,ga:2}));})
+      hot:  over(()=>squad(ME).forEach(x=>{x.form=[7.6,7.6,7.6,7.6,7.6];})),
+      cold: over(()=>squad(ME).forEach(x=>{x.form=[5.6,5.6,5.6,5.6,5.6];})),
+      won:  over(()=>{G.clubs[ME].recent=[1,2,3,4,5].map(()=>({r:'W',gf:2,ga:0}));}),
+      lost: over(()=>{G.clubs[ME].recent=[1,2,3,4,5].map(()=>({r:'L',gf:0,ga:2}));}),
+      streams: STREAMS.length
     };
   })()`);
 
-    /* ONLY THE EXTREMES ARE ASSERTED. At seventy matches a variant, a
-       hot squad against a cold one is the full span apart and separates
-       cleanly; base against cold is half that and does not — the first
-       version of this test asserted it and read 1.329 against 1.329,
-       which is the sample, not the game. The middle of both ladders is
-       measured properly in the rig at 600 matches a variant, where cold
-       comes out 9.6 points a season below base. */
+    /* ONLY THE EXTREMES ARE ASSERTED. Hot against cold is the full span
+       apart and separates once it is averaged over four streams; base
+       against cold is half that and does not separate even then — an
+       early version asserted it and read 1.329 against 1.329, which is
+       the sample and not the game. The middle of both ladders is
+       measured properly in scripts/measure-inputs.cjs at 600 matches a
+       variant, where cold comes out 9.6 points a season below base. */
+    assert.equal(out.streams, 4, 'averaged over four streams, not one');
     assert.ok(out.hot > out.cold,
-      'a squad in form beats the same squad out of form: '
+      'a squad in form beats the same squad out of form, averaged over '
+      + out.streams + ' streams: '
       + out.hot.toFixed(3) + ' against ' + out.cold.toFixed(3));
     assert.ok(out.won > out.lost,
       'a side on a run beats the same side on none: '
