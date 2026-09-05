@@ -74,8 +74,10 @@
 
   function enhanceAccessibility(root) {
     const host = root && root.querySelectorAll ? root : document;
-    host.querySelectorAll('[data-action]').forEach((element) => {
-      if (element.tagName !== 'BUTTON' && element.tagName !== 'A') {
+    const actions = Array.from(host.querySelectorAll('[data-action]'));
+    if (host.matches && host.matches('[data-action]')) actions.unshift(host);
+    actions.forEach((element) => {
+      if (!/^(BUTTON|A|INPUT|SELECT|TEXTAREA|OPTION|SUMMARY)$/.test(element.tagName)) {
         if (!element.hasAttribute('role')) element.setAttribute('role', 'button');
         if (!element.hasAttribute('tabindex')) element.tabIndex = 0;
       }
@@ -96,6 +98,7 @@
 
   document.addEventListener('keydown', (event) => {
     if (event.key !== 'Enter' && event.key !== ' ') return;
+    if (event.target.closest && event.target.closest('input,textarea,select,[contenteditable="true"]')) return;
     const target = event.target.closest && event.target.closest('[data-action][role="button"]');
     if (!target || target.tagName === 'BUTTON' || target.tagName === 'A') return;
     event.preventDefault();
@@ -181,16 +184,18 @@
   }
 
   function saveLabel(slot) {
+    if (slot === 'auto-1' || slot === 'auto-2') return `Recovery point ${slot.slice(-1)}`;
     return slot === 'auto' ? '⚡ Autosave' : `Slot ${slot}`;
   }
 
-  function slotCard(slot) {
+  function slotCard(slot, loadOnly = false) {
     const meta = metaFor(slot);
+    const recovery = slot === 'auto-1' || slot === 'auto-2';
     if (!meta) {
       return `<div class="card tight rbs-save-card"><div class="spread"><div><div class="small" style="font-weight:800">${saveLabel(slot)}</div><div class="xs faint">Empty</div></div>${slot === 'auto' ? '' : `<button class="btn btn-ghost btn-xs" data-action="saveSlot" data-v="${slot}">Save here</button>`}</div></div>`;
     }
     const position = meta.pos ? `${ordinal(meta.pos)} in ` : '';
-    return `<div class="card tight rbs-save-card" style="border-left:3px solid ${meta.crest || 'var(--red)'}"><div class="spread" style="align-items:flex-start"><div style="min-width:0"><div class="small" style="font-weight:800">${saveLabel(slot)}</div><div class="xs" style="font-weight:800;margin-top:2px">${esc(meta.club || 'Career')}</div><div class="xs faint">Season ${meta.season || 1} · ${esc(meta.date || `Day ${meta.day || 0}`)} · ${position}${esc(meta.div || '')}</div><div class="xs faint">${dateAgo(meta.savedAt)} · ${(meta.size / 1048576).toFixed(1)} MB</div></div><div style="display:flex;flex-direction:column;gap:5px;flex:none"><button class="btn btn-gold btn-xs" data-action="loadSlotAsk" data-v="${slot}">Load</button>${slot === 'auto' ? '' : `<button class="btn btn-ghost btn-xs" data-action="saveSlot" data-v="${slot}">Overwrite</button><button class="btn btn-ghost btn-xs" data-action="deleteSlotAsk" data-v="${slot}">Delete</button>`}</div></div></div>`;
+    return `<div class="card tight rbs-save-card" style="border-left:3px solid ${meta.crest || 'var(--red)'}"><div class="spread" style="align-items:flex-start"><div style="min-width:0"><div class="small" style="font-weight:800">${saveLabel(slot)}</div><div class="xs" style="font-weight:800;margin-top:2px">${esc(meta.club || 'Career')}</div><div class="xs faint">Season ${meta.season || 1} · ${esc(meta.date || `Day ${meta.day || 0}`)} · ${position}${esc(meta.div || '')}</div><div class="xs faint">${dateAgo(meta.savedAt)} · ${(meta.size / 1048576).toFixed(1)} MB</div></div><div style="display:flex;flex-direction:column;gap:5px;flex:none"><button class="btn btn-gold btn-xs" data-action="loadSlotAsk" data-v="${slot}">${recovery ? 'Restore' : 'Load'}</button>${slot === 'auto' || recovery || loadOnly ? '' : `<button class="btn btn-ghost btn-xs" data-action="saveSlot" data-v="${slot}">Overwrite</button><button class="btn btn-ghost btn-xs" data-action="deleteSlotAsk" data-v="${slot}">Delete</button>`}</div></div></div>`;
   }
 
   async function refreshMetadata() {
@@ -239,18 +244,29 @@
     if (!screen) return;
     screen.querySelectorAll('[data-rbs-resume], [data-action="resumeCareer"]').forEach((button) => button.remove());
     const slots = ['auto', '1', '2', '3'];
-    const slot = slots.find((key) => metaFor(key));
-    if (!slot) return;
-    const meta = metaFor(slot);
+    const slot = slots.filter((key) => metaFor(key))
+      .sort((a, b) => (metaFor(b).savedAt || 0) - (metaFor(a).savedAt || 0))[0];
+    const recoveryAvailable = metaFor('auto-1') || metaFor('auto-2');
+    if (!slot && !recoveryAvailable) return;
+    const meta = metaFor(slot) || recoveryAvailable;
     const button = document.createElement('button');
     button.className = 'btn btn-gold btn-block hero-cta';
     button.dataset.action = 'resumeCareer';
-    button.dataset.v = slot;
+    button.dataset.v = slot || meta.slot;
     button.dataset.rbsResume = '1';
     button.style.marginBottom = '10px';
     button.innerHTML = `▶️ CONTINUE YOUR CAREER<span style="display:block;font-family:var(--body);font-size:10.5px;letter-spacing:.4px;opacity:.85;font-weight:700;text-transform:none;margin-top:2px">${esc(meta.club)} · Season ${meta.season || 1} · ${esc(meta.date || `Day ${meta.day || 0}`)}</span>`;
     const newButton = screen.querySelector('[data-action="frontNew"], [data-action="startGame"], .hero-cta');
-    if (newButton && newButton.parentNode) newButton.parentNode.insertBefore(button, newButton);
+    if (newButton && newButton.parentNode) {
+      newButton.parentNode.insertBefore(button, newButton);
+      const choose = document.createElement('button');
+      choose.className = 'btn btn-ghost btn-block';
+      choose.dataset.action = 'savedCareers';
+      choose.dataset.rbsResume = '1';
+      choose.style.marginBottom = '10px';
+      choose.textContent = 'Choose a save or recovery point';
+      newButton.parentNode.insertBefore(choose, newButton);
+    }
   }
 
   const SaveController = {
@@ -275,7 +291,6 @@
       let payload;
       let checked;
       try {
-        G._lastAuto = Date.now();
         payload = saveBlob();
         checked = StoreApi.validatePayload(payload);
         if (!checked.valid) throw new StoreApi.SaveValidationError(checked.reason, checked);
@@ -295,6 +310,8 @@
             meta = await store.put(String(slot), payload, checked.meta);
           }
           await refreshMetadata();
+          G._lastAuto = Date.now();
+          warnedAutosave = false;
           if (!quiet) notify(`💾 Saved to ${saveLabel(String(slot))}`);
           refreshStartResume();
           paintSaveScreen();
@@ -314,6 +331,9 @@
 
     async load(slot) {
       try {
+        if (autoTimer) clearTimeout(autoTimer);
+        autoTimer = null;
+        await saveQueue;
         const record = await store.get(String(slot));
         if (!record) { notify('That save no longer exists'); return false; }
         const checked = StoreApi.validatePayload(record.payload);
@@ -364,13 +384,35 @@
 
   vSave = function indexedDbSaveScreen() {
     const mode = store.mode === 'indexedDB' ? 'device database' : store.mode === 'localStorage' ? 'limited browser storage' : 'opening storage';
-    const backups = [metaFor('auto-1'), metaFor('auto-2')].filter(Boolean).length;
-    return `<div class="sec"><div class="t">💾 Your saves</div><div class="ln"></div><div class="sub">${mode}</div></div>${slotCard('auto')}${slotCard('1')}${slotCard('2')}${slotCard('3')}<div class="xs faint" style="padding:2px 4px 10px">Autosaves are checked before writing and never erase a manual career.${backups ? ` ${backups} recovery point${backups === 1 ? '' : 's'} also kept.` : ''}</div><div class="sec"><div class="t">Save file</div><div class="ln"></div></div><div class="card"><p class="xs muted" style="margin-bottom:10px">Export a portable backup for another device or browser.</p><button class="btn btn-primary btn-block" data-action="exportSave">⬇️ Export save file</button><button class="btn btn-ghost btn-block" style="margin-top:8px" data-action="importSave">⬆️ Import save file</button><input type="file" id="impFile" accept=".json,application/json" style="display:none"><button class="btn btn-danger btn-block" style="margin-top:18px" data-action="restartAsk">Abandon career & start again</button></div><div class="xs faint" style="text-align:center;margin-top:8px">The Results Business · 2026/27</div>`;
+    const recoverySlots = ['auto-1', 'auto-2'].filter((slot) => metaFor(slot));
+    const backups = recoverySlots.length;
+    const recovery = backups ? '<section aria-label="Recovery saves"><div class="sec"><div class="t">Recovery saves</div><div class="ln"></div></div>'
+      + '<p class="small muted">Restore an earlier checkpoint if you need to recover your career.</p>'
+      + recoverySlots.map((slot) => slotCard(slot)).join('') + '</section>' : '';
+    return `<div class="sec"><div class="t">💾 Your saves</div><div class="ln"></div><div class="sub">${mode}</div></div>${slotCard('auto')}${slotCard('1')}${slotCard('2')}${slotCard('3')}<div class="xs faint" style="padding:2px 4px 10px">Autosaves are checked before writing and never erase a manual career.${backups ? ` ${backups} recovery point${backups === 1 ? '' : 's'} also kept.` : ''}</div>${recovery}<div class="sec"><div class="t">Save file</div><div class="ln"></div></div><div class="card"><p class="xs muted" style="margin-bottom:10px">Export a portable backup for another device or browser.</p><button class="btn btn-primary btn-block" data-action="exportSave">⬇️ Export save file</button><button class="btn btn-ghost btn-block" style="margin-top:8px" data-action="importSave">⬆️ Import save file</button><input type="file" id="impFile" accept=".json,application/json" style="display:none"><button class="btn btn-danger btn-block" style="margin-top:18px" data-action="restartAsk">Abandon career & start again</button></div><div class="xs faint" style="text-align:center;margin-top:8px">The Results Business · 2026/27</div>`;
   };
 
   ACTIONS.saveSlot = async (element) => {
     await SaveController.ready;
+    const slot = String(element.dataset.v);
+    const meta = metaFor(slot);
+    if (meta && ['1', '2', '3'].includes(slot)) {
+      openModal(`<h3>Overwrite ${saveLabel(slot)}?</h3><p class="small muted">Replace <b>${esc(meta.club)}</b> · ${esc(meta.date || `Day ${meta.day}`)} with your current career?</p><button class="btn btn-gold btn-block" data-action="saveSlotConfirm" data-v="${slot}">Overwrite this slot</button><button class="btn btn-ghost btn-block" style="margin-top:8px" data-action="closeModal">Keep the existing save</button>`);
+      return false;
+    }
     return SaveController.save(element.dataset.v, false);
+  };
+  ACTIONS.saveSlotConfirm = async (element) => {
+    const result = await SaveController.save(element.dataset.v, false);
+    if (result) closeModal();
+    return result;
+  };
+  ACTIONS.savedCareers = async () => {
+    await SaveController.ready;
+    const slots = ['auto', '1', '2', '3', 'auto-1', 'auto-2'].filter((slot) => metaFor(slot));
+    openModal('<h3>Saved careers</h3><p class="small muted">Choose a career or restore an earlier recovery point.</p>'
+      + slots.map((slot) => slotCard(slot, true)).join('')
+      + '<button class="btn btn-ghost btn-block" data-action="closeModal">Close</button>');
   };
   ACTIONS.resumeCareer = async (element) => {
     await SaveController.ready;
@@ -393,9 +435,10 @@
     openModal(`<h3>Delete ${saveLabel(slot)}?</h3><p class="small muted" style="margin:10px 0 14px">This removes the saved career for <b>${esc(meta.club)}</b>. Export it first if you may want it later.</p><button class="btn btn-danger btn-block" data-action="deleteSlotGo" data-v="${slot}">Delete this save</button><button class="btn btn-ghost btn-block" style="margin-top:8px" data-action="closeModal">Keep it</button>`);
   };
   ACTIONS.deleteSlotGo = async (element) => {
-    await SaveController.remove(element.dataset.v);
-    closeModal();
-    notify('Save deleted');
+    if (await SaveController.remove(element.dataset.v)) {
+      closeModal();
+      notify('Save deleted');
+    }
   };
 
   function flushAutosave() {
@@ -446,6 +489,10 @@
      INSTALLABLE OFFLINE SHELL
      ------------------------------------------------------------------ */
   if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
+    const wasControlled = !!navigator.serviceWorker.controller;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (wasControlled && worldReady()) notify('Game update ready — save your career and reopen to apply it.');
+    });
     win.addEventListener('load', () => {
       navigator.serviceWorker.register('./service-worker.js').catch((error) => report(error, 'pwa.register'));
     });

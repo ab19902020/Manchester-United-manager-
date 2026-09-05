@@ -1,5 +1,5 @@
 /* global G, UI, ACTIONS, FORMATIONS, playerById, calcEff, posPenalty, posBadge,
-          esc, openModal, render, toast, face */
+          esc, openModal, closeModal, render, toast, face, squadIssues:writable */
 
 /* =====================================================================
    PICKING THE SIDE — three faults, one screen
@@ -74,9 +74,13 @@
   /* ---- 1. putting a man in a shirt, without cloning him -------------- */
   function putInSlot(ix, id) {
     const xi = (G.tacs && G.tacs.xi) || [];
-    if (ix == null || ix < 0 || ix >= xi.length || id == null) return false;
+    if (!Number.isInteger(ix) || ix < 0 || ix >= xi.length || !Number.isInteger(id)) return false;
+    const club = G.clubs && G.clubs[G.my];
+    const player = club && (club.players || []).find((p) => p.id === id);
+    if (!player || player.club !== G.my || player.injury || player.susp > 0 || player.loan || player.youth) return false;
     const already = xi.indexOf(id);
     if (already === ix) return false;
+    const outgoing = xi[ix];
     if (already >= 0) {
       /* he is already on the pitch: the two change places rather than one
          of them being cloned and somebody else silently dropped */
@@ -85,7 +89,44 @@
     } else {
       xi[ix] = id;
     }
+    /* A named substitute taking a shirt trades places with the outgoing
+       starter on the bench too. Stale/ineligible entries cannot consume
+       one of the nine slots in the bench picker. */
+    if (Array.isArray(G.tacs.bench)) {
+      const seen = new Set(xi);
+      G.tacs.bench = G.tacs.bench.map((pid) => pid === id ? outgoing : pid).filter((pid) => {
+        const p = club.players.find((candidate) => candidate.id === pid);
+        if (seen.has(pid) || !p || p.club !== G.my || p.injury || p.susp > 0 || p.loan || p.youth) return false;
+        seen.add(pid);
+        return true;
+      }).slice(0, 9);
+    }
     return true;
+  }
+
+  function pick(ix, id) {
+    if (!putInSlot(ix, id)) {
+      if (has(window.toast)) window.toast('Choose an available first-team player.');
+      return false;
+    }
+    UI.selSlot = null;
+    const sheet = document.querySelector('[data-xi-swap]');
+    if (sheet && has(window.closeModal)) window.closeModal();
+    if (has(window.render)) window.render();
+    return true;
+  }
+
+  function cleanBench() {
+    if (!G.tacs || !Array.isArray(G.tacs.bench)) return;
+    const club = G.clubs && G.clubs[G.my];
+    if (!club) return;
+    const seen = new Set(G.tacs.xi || []);
+    G.tacs.bench = G.tacs.bench.filter((id) => {
+      const p = club.players.find((candidate) => candidate.id === id);
+      if (!p || seen.has(id) || p.injury || p.susp > 0 || p.loan || p.youth || p.club !== G.my) return false;
+      seen.add(id);
+      return true;
+    }).slice(0, 9);
   }
 
   if (typeof ACTIONS !== 'undefined' && has(ACTIONS.sugPick)) {
@@ -93,9 +134,7 @@
       const ix = UI.selSlot;
       const id = +((el && el.dataset && el.dataset.id) || NaN);
       if (ix == null || !(id === id)) return;          /* NaN guard */
-      putInSlot(ix, id);
-      UI.selSlot = null;
-      if (has(window.render)) window.render();
+      pick(ix, id);
     };
   }
 
@@ -106,12 +145,14 @@
       if (UI.selSlot != null) {
         const id = +((el && el.dataset && el.dataset.id) || NaN);
         if (id === id) {
-          putInSlot(UI.selSlot, id);
-          UI.selSlot = null;
-          if (has(window.render)) window.render();
+          pick(UI.selSlot, id);
           return undefined;
         }
       }
+      cleanBench();
+      const id = Number(el && el.dataset && el.dataset.id);
+      const p = playerById(id);
+      if (!p || p.club !== G.my || p.injury || p.susp > 0 || p.loan || p.youth || G.tacs.xi.includes(id)) return;
       return previousBench.apply(this, arguments);
     };
   }
@@ -120,6 +161,7 @@
     const previousOpen = ACTIONS.benchOpen;
     ACTIONS.benchOpen = function benchOpenClearingTheShirt() {
       UI.selSlot = null;                 /* the two modes cannot overlap */
+      cleanBench();
       return previousOpen.apply(this, arguments);
     };
   }
@@ -157,26 +199,53 @@
         const tags = (r.onPitch ? '<span class="xs" style="color:var(--gold)">in the XI</span> ' : '') +
           (r.out ? '<span class="xs" style="color:var(--amber)">⚠ natural ' + esc(r.p.pos) + '</span> ' : '') +
           (r.unfit ? '<span class="xs" style="color:var(--danger)">unavailable</span>' : '');
-        return '<div class="mail" data-action="sugPick" data-id="' + r.p.id + '">' +
+        return '<button type="button" class="mail rbs-xi-choice" data-action="sugPick" data-id="' + r.p.id + '"'
+          + (r.unfit ? ' disabled aria-disabled="true"' : '') + '>' +
           '<div class="ic">' + (has(window.face) ? window.face(r.p, 26) : '👤') + '</div>' +
           '<div style="flex:1;min-width:0"><div class="tt">' + esc(r.p.name) + '</div>' +
           '<div class="bd">' + (has(window.posBadge) ? window.posBadge(r.p.pos) : r.p.pos) +
           ' · ' + Math.round(r.p.cond) + '% fit' + (tags ? ' · ' + tags : '') + '</div></div>' +
           '<div style="text-align:right"><div class="num" style="font-weight:800">' + Math.round(r.eff) + '</div>' +
           '<div class="xs" style="font-weight:800;color:' + col + '">' +
-          (d > 0 ? '+' + d : d < 0 ? String(d) : 'level') + '</div></div></div>';
+          (d > 0 ? '+' + d : d < 0 ? String(d) : 'level') + '</div></div></button>';
       };
       window.openModal('<h3>Swap ' + esc(name) + '</h3>' +
         '<div class="small muted" style="margin:4px 0 10px">' +
         (cur ? 'Currently <b>' + esc(cur.name) + '</b> at <b>' + Math.round(curEff) + '</b>. '
           : 'Nobody in this shirt. ') +
         'Anyone already in the eleven changes places with him.</div>' +
-        '<div class="card tight" style="max-height:58vh;overflow-y:auto">' +
+        '<div class="card tight" data-xi-swap style="max-height:58dvh;overflow-y:auto">' +
         (rows.length ? rows.map(line).join('')
           : '<div class="small muted" style="padding:10px 4px">Nobody else in the squad.</div>') +
         '</div>');
     });
   };
+
+  const style = document.createElement('style');
+  style.textContent = '.rbs-xi-choice{width:100%;min-height:56px;text-align:left;color:inherit;font:inherit;background:transparent;border:0;border-bottom:1px solid var(--chalk);cursor:pointer}.rbs-xi-choice:disabled{opacity:.45;cursor:not-allowed}.rbs-xi-choice:focus-visible{outline:2px solid var(--gold);outline-offset:-2px}';
+  document.head.appendChild(style);
+
+  if (typeof squadIssues === 'function') {
+    const previous = squadIssues;
+    squadIssues = function squadIssuesWithIdentityChecks() {
+      const issues = previous.apply(this, arguments) || [];
+      const xi = (G.tacs && G.tacs.xi) || [];
+      const selected = xi.filter((id) => id != null);
+      const players = selected.map((id) => playerById(id)).filter(Boolean);
+      if (new Set(selected).size !== selected.length || players.length !== selected.length) {
+        issues.push({ k: 'identity', t: 'Check your starting XI',
+          s: 'A player is missing or selected more than once. Choose eleven different players.',
+          fix: 'Pick the best available XI' });
+      }
+      const goalkeeperSlot = xi.findIndex((id, ix) => slotNameAt(ix) === 'GK');
+      const goalkeeper = goalkeeperSlot >= 0 ? playerById(xi[goalkeeperSlot]) : null;
+      if (goalkeeper && goalkeeper.pos !== 'GK') {
+        issues.push({ k: 'keeper-position', t: 'Your goalkeeper is in the wrong position',
+          s: 'Put a goalkeeper in the goalkeeper slot before kick-off.', fix: 'Pick the best available XI' });
+      }
+      return issues;
+    };
+  }
 
   /* the way in: a button on the panel that used to offer three names */
   if (has(window.vTactics)) {

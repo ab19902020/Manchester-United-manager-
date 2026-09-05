@@ -62,54 +62,92 @@
 
 ## Current as of
 
-- Worked from remote `main` at `6e065b87e4944980c7f477c5b110ba78f327cd93` on 13 August 2026.
-- The user explicitly rejected the extracted 2D Dugout as below the required standard, supplied a low-angle 3D stadium reference, and authorized this game-feel change. He then required the pictures to use the existing match analytics while fitting the accelerated clock.
-- I read `CODEX.md` and all 2,096 lines of `AGENT-ONE.md` before starting. Neither was edited. Agent One's economy, tactics, attributes and underlying rules were not changed.
+Worked from remote main `2209bec96b12477da8ae68a0d29a23dbcce4e97b`, Claude’s
+latest September 2 build. Re-fetched main during final review: unchanged. The user
+explicitly asked for a major visual, avatar and management-quality upgrade and
+requested publication directly to main. Current code replaces no match simulator.
 
 ## Done
 
-Implementation: GitHub commit `0f95d81d37e8c665462b725b86078051a6847a4d`, equivalent to local logical commit `6415eaee184c64581bf7144c93cd8bffe7d5f1e6` (`Build analytics-driven 3D Dugout`). GitHub's Git Data API supplied the published identity.
+Implementation: the changeset accompanying this report, requested for main by the user.
 
-- Added `src/dugout-3d.js`, a real Three.js match scene with a regulation striped pitch and corrected markings, solid goals and lattice nets, corner flags, tiered stadium/seats/crowd, roofs, boards, floodlights, stadium screen, officials, articulated 22-player models, club/GK kits, real height/build scaling, ball flight, rain, contact shadows, a lower touchline camera and compact broadcast HUD.
-- The renderer observes the authoritative match; it does not simulate another result. Per-tick deltas for completed/missed/key passes, tackle and dribble attempts plus outcomes, interceptions, shots/on-target shots, saves, cards and goals produce deterministic staged actions with the responsible player's live PAS/TAC/DRB/SAV numbers. Saves stage shooter-to-keeper rather than keeper-to-goal.
-- The visual editor uses the current engine clock, not the obsolete 1x/3x/8x table: a 3,200 ms minute at 1x shows most of the move; 1,600 ms at 2x shows representative actions; 800 ms at 4x shows one transition; Highlights skips routine minutes and retains decisive events under the engine's existing hold. Skip and pause enqueue nothing.
-- Added phone-specific rendering: instanced stands, seats and boards, bounded crowd/rain, compact articulated models, Lambert lighting, fake contact shadows instead of phone shadow maps, DPR limits, runtime quality adaptation and WebGL-context failure recovery. Desktop retains the detailed skeleton/PBR/shadow path. The tested 2D renderer remains the no-WebGL/load-failure fallback.
-- Fixed the match-tab selected state while entering/leaving Dugout and reduced the legacy stacked commentary to one compact callout over the 3D canvas.
-- Added six pure analytics/camera/quality tests and extended live integration to prove the 3D hook receives engine events, tab state is correct and JSDOM takes the 2D fallback. Updated the offline cache to `results-business-v11`, README and changelog.
+- New `src/player-portraits.js`: one studio illustration renderer, natural eye and
+  mouth proportions, individual features, age detail and current club kits. Uses
+  existing appearance descriptions; no photographs or appearance dataset added.
+  Each portrait is an isolated SVG image with a 192-entry LRU cache. Gradient IDs
+  cannot collide across players and each avatar adds one DOM element.
+- New `src/manager-experience.js`: consistent page headings, player/club/screen
+  search, Ctrl/Cmd + K, a searchable management handbook with working shortcuts,
+  tactical-plan feedback and profile readiness explanations. All readings come
+  from current game state; unscouted attributes remain hidden.
+- New `src/match-preparation.js`: actual XI condition, sharpness, morale, selection
+  concerns with direct replacement actions, and a 14-day league/cup workload.
+- New `src/player-comparison.js`: compare a player with the managed squad at his
+  position using the same effective rating, true potential and real attributes.
+- Selection rejects unavailable/outside-squad players, validates identity and the
+  goalkeeper slot, swaps starters, maintains the named bench, and closes the
+  replacement picker after a successful choice.
+- Cup reports follow `nextUserMatch`; transfer/free-agent potential filters and
+  sorting follow `potOf`; contract filters reset pagination; the dashboard displays
+  effective XI rating under an accurate label.
+- IndexedDB autosave and both recovery copies rotate atomically. Invalid incoming
+  saves and transaction failures preserve earlier checkpoints. Recovery copies
+  retain their original timestamps. Continue picks the latest primary save;
+  recovery selection is available before loading; manual overwrites ask first.
+- Native form controls keep their keyboard behaviour; newly inserted action roots
+  receive accessibility enhancements. Offline caches belong to their registration
+  scope and keep a complete HTML/script build together.
 
-The only edit to `red-devil-manager.html` is this final loader; no legacy function or style was edited there:
+Every surgical edit to `index.html`:
 
-```html
-<script src="src/dugout-3d.js"></script>
-```
+1. Return a copy of an authored player appearance so render-time patches cannot
+   mutate the shared description.
+2. Make the later general player lookup respect the authored United appearance.
+   The comment already promised that precedence, but the guard was absent.
+3. Market minimum-potential filter uses `potOf(p)`.
+4. Market potential sort uses `potOf` for both players.
+5. Market potential-gap display uses `potOf(p)`.
+6. Four loader tags for the four new modules. No legacy block was reordered.
 
 ## Checked, and how
 
-Final repository check, after implementation and documentation:
+The full `npm run check` has not completed at publication. The user explicitly
+requested the new build on main for testing while regression checking continues.
+The focused results below are completed checks; they are not a full-suite pass.
 
-```text
-npm run check
-lint clean
-tests 93; pass 93; fail 0; cancelled 0; skipped 0
-duration 421,755.919 ms
-```
+Focused commands already completed:
 
-Real WebGL QA used headless Chromium/SwiftShader through Playwright at an 844x390 coarse-pointer phone viewport. I started a career, entered a live fixture through the real UI and inspected wide, penalty-area and injected-goal frames. The final sample had `threeReady=true`, 22 players, no renderer error, 130 draw calls and 34,100 triangles; it rendered at 16.5 FPS while the same browser's blank RAF ran at 58.5 FPS. At 4x it moved minute 1 to minute 4 around a held goal, peaked at one queued action and ended with zero queued, proving the pictures caught up. The two console 404s were the documented optional `crowd_base.mp3`/`goal_home.mp3` probes; synthesis remained active. No QA browser, package or screenshot is committed.
+- `node --test --test-reporter=spec --test-concurrency=2 tests/career-quality.test.cjs tests/boardroom.test.cjs tests/lineup.test.cjs`: 14 passed, 0 failed.
+- `node --test --test-reporter=spec --test-concurrency=2 tests/manager-experience.test.cjs tests/career-quality.test.cjs`: 8 passed, 0 failed (before the final authored-appearance precedence fix; included again in the full suite).
+- `npm run lint`: clean. `git diff --check`: clean.
+- Rendered and visually inspected 18 portrait illustrations at 160px with CairoSVG.
+  This found a scalp outline and hair strokes extending onto the forehead; both
+  were corrected. No rendering tool, QA dependency or snapshot is shipped.
 
-`git diff --check`, module syntax and focused Dugout/PWA tests also passed before the full run.
+The old lineup regression expected a newly selected starter also to become a
+substitute. It now checks rejection of that illegal duplicate and selection of a
+separate eligible reserve. The full suite caught a new preparation-panel startup
+error (`G` was null before career creation); the guard and startup assertion fix it.
 
 ## Found but not fixed
 
-- `MatchSim` still has no timed spatial event log. Action type, actor, count and outcome are authoritative analytics; exact support runs and coordinates use the established `advancePlay()` / `pitchTargets()` state plus deterministic receiver/opponent staging. A literal replay of every engine touch needs a new engine event contract.
-- The 56,000-line legacy file still contains repeated historical Dugout implementations. They are intentionally untouched and remain behind `src/dugout-renderer.js` as the last failure path; deleting/reordering them mechanically is still unsafe.
-- SwiftShader is useful for regression rendering, not a physical-phone GPU benchmark. The mobile path is much cheaper than the first draft (about 130 versus 349 draw calls), but 60 FPS has not been claimed.
+- The game still has a large legacy file with many ordered wrappers. This cycle
+  isolates new presentation code but does not attempt a mechanical extraction.
+- Full browser/device layout and animation performance have not been measured in
+  this environment. Automated DOM/game-flow checks do not establish those results.
+- No claim is made that a finite regression suite proves every career path free
+  of bugs or that this upgrade constitutes AAA production sign-off.
 
 ## Blocked
 
-- Physical-phone sign-off remains blocked on access to one mid-range Android and one iPhone. Check frame time, heat/battery, rain, substitutions, rotation and WebGL context recovery on both before tightening the quality profile further.
+The cloud browser could not connect to the local game server. A static snapshot
+preview was also rejected by the browser URL security policy; no alternate browser
+surface was used to bypass it. Real interactive browser and physical-phone QA
+remain outstanding. Portrait artwork was reviewed through a local SVG renderer.
 
 ## Data provenance
 
-- Visual target: the user's uploaded `13614.jpg`, read 13 August 2026. It was used only as a composition/quality reference and is not copied into the repository.
-- Match actions, statistics, timing and before/after QA values come from this repository's engine. No external football data or generated visual asset was added in this cycle.
-- `vendor/three.min.js` was already present and carries its Three.js Authors MIT/SPDX licence header; the new renderer loads that local copy so installed phones remain offline-capable.
+All gameplay explanations and displayed metrics come from the current repository’s
+models and stored players. Existing appearance descriptions and club kit rules are
+retained. No external football facts, downloaded photographs, generated bitmap
+assets, production dependency or new network requirement was introduced.

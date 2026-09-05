@@ -60,8 +60,13 @@ test('you can swap a starter with anybody in the squad', async (t) => {
     // 4. and with no shirt selected the bench sheet still works
     UI.selSlot = null;
     const namedBefore = ((G.tacs && G.tacs.bench) || []).length;
+    // sub is now a STARTER. The old test accidentally required a man to
+    // be named in both squads. He must not consume a bench place.
     ACTIONS.benchPick({dataset:{id: String(sub.id)}});
-    out.bench = {named: ((G.tacs && G.tacs.bench) || []).length > namedBefore};
+    const rejectedStarter = ((G.tacs && G.tacs.bench) || []).length === namedBefore;
+    const reserve = c.players.find(p => !G.tacs.xi.includes(p.id) && !p.loan && !p.youth && !p.injury && !(p.susp > 0));
+    ACTIONS.benchPick({dataset:{id: String(reserve.id)}});
+    out.bench = {rejectedStarter, named: (G.tacs.bench || []).includes(reserve.id)};
     return out;
   })()`);
 
@@ -87,4 +92,5 @@ test('you can swap a starter with anybody in the squad', async (t) => {
 
   // 4. the other feature is undamaged
   assert.ok(run.bench.named, 'naming your bench should still work when no shirt is selected');
+  assert.ok(run.bench.rejectedStarter, 'a starter must not also occupy a named bench place');
 });

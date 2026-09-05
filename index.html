@@ -8554,7 +8554,7 @@ const MUN_FACES={
  'Bendito Mantato':{sk:'deep',hr:'black',cut:'curls',beard:'none',jaw:'oval'}};
 function faceSpec(p){
  const named=MUN_FACES[p.name];
- if(named)return named;
+ if(named)return Object.assign({},named);
  // everyone else is generated, but from the same richer palette
  const r=mulberry(hashStr('fc2'+p.id+p.name));
  const sk=Object.keys(SKIN2),hr=Object.keys(HAIR2);
@@ -40404,7 +40404,7 @@ const _specNamed=faceSpec;
 faceSpec=function(p){
  const s=_specNamed.apply(this,arguments);
  try{
-  if(!p||!p.name)return s;
+  if(!p||!p.name||MUN_FACES[p.name])return s;
   const v=PLAYER_LOOK[p.name];
   if(!v)return s;
   const bits=String(v).split('|');
@@ -50711,7 +50711,7 @@ trResultsHtml=function(){
   if(UI.trListed&&!p.listed)return;
   if(q&&!p.name.toLowerCase().includes(q))return;
   if(fOvr&&p.ovr<fOvr)return;
-  if(fPot&&(p.pot||p.ovr)<fPot)return;
+  if(fPot&&potOf(p)<fPot)return;
   if(fCon!=='any'){const cc=p.contract==null?3:p.contract;
    if(fCon==='0'&&cc>0)return;
    if(fCon==='1'&&cc>1)return;
@@ -50736,7 +50736,7 @@ trResultsHtml=function(){
  list.sort((a,b)=>
   s==='val'?b.value-a.value:
   s==='age'?a.age-b.age||b.ovr-a.ovr:
-  s==='pot'?(b.pot||b.ovr)-(a.pot||a.ovr)||b.ovr-a.ovr:
+  s==='pot'?potOf(b)-potOf(a)||b.ovr-a.ovr:
   s==='wage'?costOf(a).wage-costOf(b).wage||b.ovr-a.ovr:
   s==='ask'?costOf(a).ask-costOf(b).ask||b.ovr-a.ovr:
   b.ovr-a.ovr);
@@ -50803,7 +50803,7 @@ trRow=function(p){
  const ask=cached?cached.ask:askPrice(p);
  const w=cached?cached.wage:wageHere(p);
  const okFee=ask<=my.budget, okWage=w<=myRoom();
- const gap=(p.pot||p.ovr)-p.ovr;
+ const gap=potOf(p)-p.ovr;
  const meta=(typeof crest==='function'?crest(c,15):'')+' '+esc(c.short||c.name)+' · '+p.age+
   (p.scouted?'':' · <span style="color:var(--blue)">unscouted</span>');
  const rail=trInterest(p)+
@@ -57453,7 +57453,11 @@ showStart();
 <script src="src/ai-tactics.js"></script>
 <script src="src/opposition-report.js"></script>
 <script src="src/offside-trap.js"></script>
+<script src="src/match-preparation.js"></script>
+<script src="src/player-comparison.js"></script>
+<script src="src/player-portraits.js"></script>
 <script src="src/visual-upgrade.js"></script>
+<script src="src/manager-experience.js"></script>
 <script src="src/crazygames.js"></script>
 </body>
 </html>

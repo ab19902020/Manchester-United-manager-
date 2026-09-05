@@ -1,4 +1,5 @@
-const CACHE_NAME = 'results-business-v58';
+const CACHE_PREFIX = 'results-business:' + encodeURIComponent(self.registration.scope) + ':';
+const CACHE_NAME = CACHE_PREFIX + 'v59';
 const CORE_ASSETS = [
   './',
   './index.html',
@@ -66,7 +67,11 @@ const CORE_ASSETS = [
   './src/ai-tactics.js',
   './src/opposition-report.js',
   './src/offside-trap.js',
+  './src/match-preparation.js',
+  './src/player-comparison.js',
+  './src/player-portraits.js',
   './src/visual-upgrade.js',
+  './src/manager-experience.js',
   './src/crazygames.js',
   './vendor/three.min.js',
   './assets/results-business-icon.svg',
@@ -74,17 +79,22 @@ const CORE_ASSETS = [
   './assets/results-business-icon-512.png'
 ];
 
+// Keep one complete build together. Network-first HTML mixed with old cached
+// modules could start an upgraded game with yesterday's rules and save code.
+const CORE_URLS = new Set(CORE_ASSETS.map((asset) => new URL(asset, self.registration.scope).href));
+
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(CORE_ASSETS)));
-  self.skipWaiting();
+  event.waitUntil(caches.open(CACHE_NAME)
+    .then((cache) => cache.addAll(CORE_ASSETS))
+    .then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    caches.keys()
-      .then((keys) => Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))))
-      .then(() => self.clients.claim()),
-  );
+  event.waitUntil(caches.keys()
+    .then((keys) => Promise.all(keys
+      .filter((key) => key.startsWith(CACHE_PREFIX) && key !== CACHE_NAME)
+      .map((key) => caches.delete(key))))
+    .then(() => self.clients.claim()));
 });
 
 self.addEventListener('fetch', (event) => {
@@ -92,32 +102,17 @@ self.addEventListener('fetch', (event) => {
   if (request.method !== 'GET') return;
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
+  // Navigation query strings do not create unbounded copies of the 3 MB shell.
+  const key = new URL(url.href);
+  if (request.mode === 'navigate') key.search = '';
+  if (!CORE_URLS.has(key.href)) return;
 
-  if (request.mode === 'navigate') {
-    event.respondWith(
-      fetch(request)
-        .then((response) => {
-          const copy = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
-          return response;
-        })
-        .catch(() => caches.match(request).then((response) => response || caches.match('./index.html'))),
-    );
-    return;
-  }
-
-  event.respondWith(
-    caches.match(request).then((cached) => {
-      const update = fetch(request)
-        .then((response) => {
-          if (response && response.ok) {
-            const copy = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
-          }
-          return response;
-        })
-        .catch(() => cached);
-      return cached || update;
-    }),
-  );
+  event.respondWith(caches.open(CACHE_NAME).then(async (cache) => {
+    const cached = await cache.match(key.href);
+    if (cached) return cached;
+    const response = await fetch(request);
+    // Never replace a working offline entry with a hosting error page.
+    if (response && response.ok) await cache.put(key.href, response.clone());
+    return response;
+  }));
 });

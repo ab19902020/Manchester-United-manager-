@@ -2,6 +2,29 @@
 
 The Results Business is a mobile-first football management career covering 484 clubs across twenty countries. Manchester United remains the featured career, with its 2026/27 squad and fixture schedule, but every playable club uses the same full management systems.
 
+Player portraits now use a single studio-style illustration system with more
+natural facial proportions, individual features, current club kits and age detail.
+They use the game's existing appearance descriptions. Each portrait is a cached,
+self-contained image, keeping long lists light and working without downloads.
+
+Every management screen has **Search** and **Guide** controls. Search players,
+clubs or screens by name, or press **Ctrl/Cmd + K**. The searchable handbook
+explains selection, training, transfers, contracts, finances and match management,
+with direct links to the relevant screen. The tactical brief describes your actual
+instructions and highlights selection and workload concerns. Player profiles show
+how positional fit, condition, sharpness and morale relate to their effective rating.
+
+The home screen now includes match preparation: condition, sharpness and morale
+for your actual XI, selection concerns with a direct replacement picker, and the
+next fortnight's fixtures. Open a player's profile and choose **Compare with my
+squad** to compare him with your existing players. Unscouted attributes stay hidden.
+
+**Continue your career** opens the most recently saved primary slot. **Choose a
+save or recovery point** also opens the two recovery checkpoints, including from
+the start screen. Overwriting a manual slot asks first. IndexedDB autosave rotation
+commits the career and its recovery copies together, so a failed write cannot
+partially rotate away your previous saves.
+
 ## Play locally
 
 The game must be served from a web address so browser storage, the service worker and optional neural voices work correctly.
@@ -35,8 +58,13 @@ The automated suite covers:
 - sourced 2026/27 English fixture dates, pairings and season-two handoff;
 - sourced English squad identities, nationality, birth date and physical facts;
 - press-conference, fullscreen, SVG-ID and transfer-pagination regressions;
-- the dugout broadcast: the goal seam the picture scores through, the tab the
-  match opens on, and the 2D fallback for a browser without WebGL;
+- one authoritative match displayed through Pitch, Text and Stats;
+- legal team selection, consistent bench swaps, cup-opponent scouting, player
+  comparison and recruitment filters that agree with visible potential;
+- atomic save recovery, start-screen save selection, native keyboard controls,
+  and offline updates that keep each installed build together;
+- stable, self-contained portraits, bounded portrait caching, current club kits,
+  career search, management shortcuts and tactical/readiness explanations;
 - goalkeeper Man of the Match frequency across all five English divisions;
 - full-season statistical bands for both match simulators.
 
@@ -53,9 +81,11 @@ GitHub Actions runs the same checks on every pull request.
 - `src/authentic-fixtures.js` — applies sourced dates to season one without moving them for cups.
 - `src/runtime-enhancements.js` — save integration, diagnostics, accessibility and PWA wiring.
 - `src/match-ratings.js` — diminishing goalkeeper save rewards and rating-distribution guardrails.
-- `src/matchday-engine.js` — the broadcast: pitch, stadium, crowd, camera director and the football itself, scoped under `#mdHost`.
-- `src/dugout-matchday.js` — the dugout tab. Paces the save to the picture's clock, pushes the picture's goals into the save, and owns full screen.
-- `src/dugout-renderer.js` — the tested perspective 2D fallback for browsers without WebGL.
+- `src/match-view.js` — Pitch, Text and Stats views of the same MatchSim result.
+- `src/match-preparation.js` — actionable XI readiness and upcoming workload on the home screen.
+- `src/player-comparison.js` — comparison against your squad using existing player attributes and scouting knowledge.
+- `src/player-portraits.js` — a consistent portrait composition and bounded image cache.
+- `src/manager-experience.js` — management headings, career search, handbook and tactical/readiness explanations.
 - `src/cup-calendar.js` — keeps a cup tie off a date that has already gone past, and rescues any that are.
 - `src/trophy-room.js` — the season's campaign board on the Trophies tab, and what stands in the empty room.
 - `src/world-seed.js` — world generation behind one 32-bit seed, so the same number gives back the same world.

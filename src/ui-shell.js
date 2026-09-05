@@ -319,9 +319,9 @@ body{
         + `<div class="sh-nm">${esc(label)}</div></div>`;
     });
 
-    /* chemistry, as the reference shows it: how well the eleven you
-       picked fit the shirts you picked them for */
-    const chem = counted ? Math.round((rated / counted) * 1.02) : 0;
+    /* This is the effective ability of the selected eleven, not a
+       chemistry simulation. Print the quantity the calculation measures. */
+    const chem = counted ? Math.round(rated / counted) : 0;
 
     return `<section class="sh-panel" id="shPitch" style="margin-bottom:12px">`
       + `<div class="sh-head"><span>Team Overview</span><span class="sh-sub">${esc(shape)}</span></div>`
@@ -334,9 +334,9 @@ body{
       + `transform:translateY(-50%);border-radius:50%"></div>`
       + tokens
       + `</div>`
-      + `<div class="sh-meter"><span class="sh-k">Team chemistry</span>`
+      + `<div class="sh-meter"><span class="sh-k">Effective XI</span>`
       + `<span class="sh-bar"><i style="width:${Math.max(0, Math.min(100, chem))}%"></i></span>`
-      + `<span class="sh-v">${chem}%</span></div>`
+      + `<span class="sh-v">${chem} / 100</span></div>`
       + `</div></section>`;
   }
 

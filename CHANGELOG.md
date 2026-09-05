@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+### Career quality upgrade — 5 September 2026
+
+- Rebuilt player portraits as consistent studio illustrations, retaining existing
+  appearance descriptions and live club kits. Self-contained cached images remove
+  document-wide SVG collisions and keep the avatar DOM to one element per player.
+  Also fixed a later appearance lookup overwriting authored United portraits and
+  rendering permanently modifying the shared appearance descriptions.
+- Added career-wide player/club/screen search, Ctrl/Cmd + K, contextual headings
+  and a searchable management handbook with working screen shortcuts.
+- Added an actual-XI preparation panel, tactical instruction summary and workload
+  advice, profile readiness explanations, and player-to-squad comparisons.
+- Fixed illegal/duplicate selections, unavailable-player picks, keeper-slot
+  validation, named-bench swaps and the replacement modal remaining open.
+- Fixed cup opposition reports, market/free-agent potential filters and sorting,
+  contract-tab pagination, and a misleading dashboard chemistry readout.
+- Made autosave and recovery rotation atomic in IndexedDB; made recovery saves
+  accessible; made Continue choose the latest primary save; protected manual
+  overwrites and kept successful-save feedback behind a completed write.
+- Fixed keyboard handling for native form controls and new actionable rows.
+- Scoped offline caches to the game installation and kept each HTML/script build
+  together, including safe failure handling when an update cannot be cached.
+
 ### Fixed
 
 - **Potential was being eaten a bit at a time, and it was compounding.** The

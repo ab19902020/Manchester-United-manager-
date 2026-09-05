@@ -83,7 +83,11 @@ function gameHtml() {
     'src/ai-tactics.js',
     'src/opposition-report.js',
     'src/offside-trap.js',
+    'src/match-preparation.js',
+    'src/player-comparison.js',
+    'src/player-portraits.js',
     'src/visual-upgrade.js',
+    'src/manager-experience.js',
     'src/crazygames.js',
   ]) {
     html = inlineScript(html, fs.readFileSync(path.join(root, filename), 'utf8'), filename);

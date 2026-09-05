@@ -1,4 +1,4 @@
-/* global G, autoPick, playerById, FORMATIONS, nextUserFixture, esc, RBSAiTactics */
+/* global G, autoPick, playerById, FORMATIONS, nextUserMatch, esc, RBSAiTactics */
 
 /* =====================================================================
    WHO YOU ARE PLAYING, AND HOW THEY SET UP
@@ -174,7 +174,7 @@
     if (typeof html !== 'string' || html.indexOf('fx-meta') < 0) return html;
     if (html.indexOf('class="opr"') >= 0) return html;
     return safe(function () {
-      const nf = nextUserFixture();
+      const nf = nextUserMatch();
       if (!nf) return html;
       const home = nf.h === G.my;
       const extra = block(G.my, home ? nf.a : nf.h, home);

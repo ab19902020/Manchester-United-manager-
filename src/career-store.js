@@ -71,7 +71,7 @@
         counts: { clubs: clubs.length || clubCount, fixtures: fixtures.length || fixtureCount, players: playerCount },
       };
     }
-    if (myClub < 0 || myClub >= clubs.length) {
+    if (myClub < 0 || myClub >= clubs.length || !clubs[myClub] || typeof clubs[myClub] !== 'object') {
       return { valid: false, reason: 'The save does not identify a valid managed club.', parsed };
     }
 
@@ -115,8 +115,12 @@
   class CareerStore {
     constructor(options) {
       const settings = options || {};
-      this.indexedDB = settings.indexedDB || root.indexedDB || null;
-      this.localStorage = settings.localStorage || root.localStorage || null;
+      const storage = (key) => {
+        if (Object.prototype.hasOwnProperty.call(settings, key)) return settings[key];
+        try { return root[key] || null; } catch (error) { return null; }
+      };
+      this.indexedDB = storage('indexedDB');
+      this.localStorage = storage('localStorage');
       this.dbName = settings.dbName || DB_NAME;
       this.db = null;
       this.mode = 'pending';
@@ -179,13 +183,47 @@
 
     async putAutosave(payload, suppliedMeta) {
       await this.ready;
-      if (this.db) {
-        const previous = await this.get('auto');
-        const older = await this.get('auto-1');
-        if (older) await this.put('auto-2', older.payload, Object.assign({}, older.meta, { backup: true }));
-        if (previous) await this.put('auto-1', previous.payload, Object.assign({}, previous.meta, { backup: true }));
+      const checked = validatePayload(payload);
+      if (!checked.valid) throw new SaveValidationError(checked.reason, checked);
+      if (!this.db) return this.put('auto', payload, suppliedMeta);
+
+      /* One transaction commits the new career AND its recovery chain.
+         The old three-transaction path could destroy both recovery points
+         before discovering that the incoming career could not be saved. */
+      const transaction = this.db.transaction([CAREERS, METADATA], 'readwrite');
+      const done = transactionDone(transaction);
+      done.catch(() => {}); // request failure may reject before we reach await done
+      const careers = transaction.objectStore(CAREERS);
+      const metadata = transaction.objectStore(METADATA);
+      const [previous, previousMeta, older, olderMeta] = await Promise.all([
+        requestResult(careers.get('auto')), requestResult(metadata.get('auto')),
+        requestResult(careers.get('auto-1')), requestResult(metadata.get('auto-1')),
+      ]);
+      const healthy = (record) => record && (!record.checksum || record.checksum === checksum(record.payload))
+        && validatePayload(record.payload).valid;
+      const archive = (slot, record, meta) => {
+        const digest = checksum(record.payload);
+        const savedAt = record.savedAt || (meta && meta.savedAt) || Date.now();
+        careers.put(Object.assign({}, record, { slot, checksum: digest, savedAt }));
+        metadata.put(Object.assign({}, validatePayload(record.payload).meta, meta || {}, {
+          slot, checksum: digest, savedAt, size: record.payload.length, backup: true,
+        }));
+      };
+      /* A damaged current autosave must not poison good recovery copies,
+         or stop a healthy new save from ever being written again. */
+      if (healthy(previous)) {
+        if (healthy(older)) archive('auto-2', older, olderMeta);
+        archive('auto-1', previous, previousMeta);
       }
-      return this.put('auto', payload, suppliedMeta);
+      const savedAt = Date.now();
+      const digest = checksum(payload);
+      const meta = Object.assign({}, checked.meta, suppliedMeta || {}, {
+        slot: 'auto', checksum: digest, size: String(payload).length, savedAt,
+      });
+      careers.put({ slot: 'auto', payload: String(payload), checksum: digest, savedAt });
+      metadata.put(meta);
+      await done;
+      return meta;
     }
 
     async get(slot) {

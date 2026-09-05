@@ -76,6 +76,7 @@
 
   ACTIONS.trDeal = function trDealPick(el) {
     UI.trDeal = el.dataset.v;
+    UI.trPage = 0;
     render();
   };
 
@@ -134,6 +135,7 @@
      ReferenceError on first click. Same trap as the lexical `class` and
      `const` hooks; declaring a global to a linter does not make one. */
   const num = (v) => (v == null ? 0 : +v || 0);
+  const potential = (p) => typeof window.potOf === 'function' ? window.potOf(p) : num(p.pot || p.ovr);
 
   /* WHAT HE ACTUALLY ASKS FOR. `p.wage` is what his last club paid him,
      and on a free agent freshly rehydrated from a save it is not set at
@@ -184,7 +186,7 @@
     h += '<div class="grid3" style="margin:12px 0">'
       + kpi(fmtW(ask), 'He asks', fits ? 'var(--green)' : 'var(--danger)')
       + kpi(num(p.ovr), 'Ability')
-      + kpi(num(p.pot || p.ovr), 'Potential')
+      + kpi(potential(p), 'Potential')
       + '</div>';
 
     h += '<div class="small muted" style="line-height:1.55;margin-bottom:10px">'
@@ -318,7 +320,7 @@
       if (p.age > +(UI.trAge || '40')) return false;
       if (q && String(p.name || '').toLowerCase().indexOf(q) < 0) return false;
       if (minOvr && p.ovr < minOvr) return false;
-      if (minPot && (p.pot || p.ovr) < minPot) return false;
+      if (minPot && potential(p) < minPot) return false;
       if (nat && nat !== 'any' && natOf(p) !== nat) return false;
 
       /* EVERY FILTER THE REST OF THE MARKET HAS, ON THE SAME TERMS.
@@ -352,7 +354,7 @@
     list.sort((a, b) => (
       s === 'val' ? b.value - a.value
         : s === 'age' ? a.age - b.age || b.ovr - a.ovr
-          : s === 'pot' ? (b.pot || b.ovr) - (a.pot || a.ovr) || b.ovr - a.ovr
+          : s === 'pot' ? potential(b) - potential(a) || b.ovr - a.ovr
             : s === 'wage' ? wageOf(a) - wageOf(b) || b.ovr - a.ovr
               : b.ovr - a.ovr));
 

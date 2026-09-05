@@ -86,3 +86,65 @@ test('persists a career when the store is reopened', async () => {
   assert.equal(validatePayload(restored.payload).valid, true);
   second.close();
 });
+
+test('rejecting an autosave leaves both recovery points byte-for-byte intact', async (t) => {
+  const store = new CareerStore({ indexedDB: new IDBFactory() });
+  t.after(() => store.close());
+  await store.putAutosave(payload(1));
+  await store.putAutosave(payload(8));
+  await store.putAutosave(payload(15));
+  const slots = ['auto', 'auto-1', 'auto-2'];
+  const before = await Promise.all(slots.map((slot) => store.get(slot)));
+  await assert.rejects(store.putAutosave('{"G":{}}'), SaveValidationError);
+  assert.deepEqual(await Promise.all(slots.map((slot) => store.get(slot))), before);
+});
+
+test('recovery copies preserve their original saved time and survive a damaged autosave', async (t) => {
+  const store = new CareerStore({ indexedDB: new IDBFactory() });
+  t.after(() => store.close());
+  await store.putAutosave(payload(1));
+  const original = await store.get('auto');
+  await store.putAutosave(payload(8));
+  assert.equal((await store.get('auto-1')).meta.savedAt, original.meta.savedAt);
+  const recovery = await store.get('auto-1');
+  await new Promise((resolve, reject) => {
+    const tx = store.db.transaction('careers', 'readwrite');
+    tx.objectStore('careers').put({ slot: 'auto', payload: payload(9), checksum: 'corrupt' });
+    tx.oncomplete = resolve;
+    tx.onerror = reject;
+  });
+  await store.putAutosave(payload(15));
+  assert.equal((await store.get('auto')).meta.day, 15);
+  assert.deepEqual(await store.get('auto-1'), recovery);
+});
+
+test('aborting autosave storage rolls back the entire recovery rotation', async (t) => {
+  const store = new CareerStore({ indexedDB: new IDBFactory() });
+  t.after(() => store.close());
+  await store.putAutosave(payload(1));
+  await store.putAutosave(payload(8));
+  await store.putAutosave(payload(15));
+  const slots = ['auto', 'auto-1', 'auto-2'];
+  const before = await Promise.all(slots.map((slot) => store.get(slot)));
+  const transaction = store.db.transaction.bind(store.db);
+  store.db.transaction = (...args) => {
+    const tx = transaction(...args);
+    if (args[1] === 'readwrite') {
+      const objectStore = tx.objectStore.bind(tx);
+      tx.objectStore = (name) => {
+        const os = objectStore(name);
+        const put = os.put.bind(os);
+        os.put = (record) => {
+          const request = put(record);
+          if (name === 'metadata' && record.slot === 'auto') request.addEventListener('success', () => tx.abort());
+          return request;
+        };
+        return os;
+      };
+    }
+    return tx;
+  };
+  await assert.rejects(store.putAutosave(payload(22)), /abort/i);
+  store.db.transaction = transaction;
+  assert.deepEqual(await Promise.all(slots.map((slot) => store.get(slot))), before);
+});
