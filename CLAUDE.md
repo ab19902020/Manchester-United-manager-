@@ -69,7 +69,9 @@ requested publication directly to main. Current code replaces no match simulator
 
 ## Done
 
-Implementation: the changeset accompanying this report, requested for main by the user.
+Implementation: `9bcff96d732f1906fca6fb380bf43695914224a0`, published to main at
+the user's explicit request. The remote tree was checked against the local staged
+tree before publication; all 21 changed files matched exactly.
 
 - New `src/player-portraits.js`: one studio illustration renderer, natural eye and
   mouth proportions, individual features, age detail and current club kits. Uses
@@ -120,6 +122,7 @@ Focused commands already completed:
 - `node --test --test-reporter=spec --test-concurrency=2 tests/career-quality.test.cjs tests/boardroom.test.cjs tests/lineup.test.cjs`: 14 passed, 0 failed.
 - `node --test --test-reporter=spec --test-concurrency=2 tests/manager-experience.test.cjs tests/career-quality.test.cjs`: 8 passed, 0 failed (before the final authored-appearance precedence fix; included again in the full suite).
 - `npm run lint`: clean. `git diff --check`: clean.
+- Final authored-appearance regression: `node --test --test-reporter=spec --test-name-pattern='portraits are stable' tests/manager-experience.test.cjs`: 1 passed, 0 failed.
 - Rendered and visually inspected 18 portrait illustrations at 160px with CairoSVG.
   This found a scalp outline and hair strokes extending onto the forehead; both
   were corrected. No rendering tool, QA dependency or snapshot is shipped.
@@ -128,6 +131,11 @@ The old lineup regression expected a newly selected starter also to become a
 substitute. It now checks rejection of that illegal duplicate and selection of a
 separate eligible reserve. The full suite caught a new preparation-panel startup
 error (`G` was null before career creation); the guard and startup assertion fix it.
+
+The previous two main CI jobs stopped after about 15 minutes, matching the
+workflow's configured timeout, before the suite reached its final files. Raised
+the allowance to 40 minutes so the full regression suite can complete. The game
+changes are already on main; full CI success remains pending.
 
 ## Found but not fixed
 
