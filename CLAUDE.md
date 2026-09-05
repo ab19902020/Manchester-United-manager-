@@ -113,9 +113,13 @@ Every surgical edit to `index.html`:
 
 ## Checked, and how
 
-The full `npm run check` has not completed at publication. The user explicitly
-requested the new build on main for testing while regression checking continues.
-The focused results below are completed checks; they are not a full-suite pass.
+The full `npm run check` passed on GitHub Actions at commit
+`17b62be57c3a4e74bc6d5122458518e6245e4fe6` on September 5, 2026:
+lint clean; 227 tests passed, 0 failed, 0 cancelled, 0 skipped, 0 todo.
+Test duration: 1,773,378 ms (29 minutes 33 seconds).
+Run: https://github.com/ab19902020/Manchester-United-manager-/actions/runs/33981034415
+No game-code corrections were needed after this run. This report-only update
+records the completed result without rerunning the unchanged code.
 
 Focused commands already completed:
 
@@ -135,7 +139,7 @@ error (`G` was null before career creation); the guard and startup assertion fix
 The previous two main CI jobs stopped after about 15 minutes, matching the
 workflow's configured timeout, before the suite reached its final files. Raised
 the allowance to 40 minutes so the full regression suite can complete. The game
-changes are already on main; full CI success remains pending.
+changes are already on main, and the complete suite has now passed.
 
 ## Found but not fixed
 
