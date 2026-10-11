@@ -27,6 +27,9 @@ partially rotate away your previous saves.
 
 ## Play on Android
 
+**Download:** [`releases/the-results-business.apk`](releases/the-results-business.apk)
+(version 1.1.0, 1.9 MB, Android 7.0 or later).
+
 The game also ships as an Android app (`android/`): the same build, served
 from inside the APK, so it plays offline and keeps its saves in the app's own
 storage. Install the APK on the phone (allow "install unknown apps" for the
