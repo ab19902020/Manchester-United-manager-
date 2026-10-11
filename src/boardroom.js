@@ -1,7 +1,8 @@
 /* global G, BR, clamp, ordinal, esc, fmtM, leaguePos, expectPos, gamesPlayed,
           tableRows, divMembers, myDiv, DIV_NAMES, CUP_DEFS, formStreak,
           fansShift, makePledge, mulberry, hashStr, boardPeople, boardTemper,
-          boardMood, boardOwner, sackManager, keyAbsences, ACTIONS, UI, dateOf */
+          boardMood, boardOwner, sackManager, keyAbsences, ACTIONS, UI, dateOf,
+          closeModal */
 /* global boardScene:writable, boardTarget:writable, openBoardRoom:writable,
           dailyTickCore:writable, closeBoardRoom:writable */
 
@@ -1135,6 +1136,13 @@
         if (typeof document === 'undefined') return;
         if (!document.getElementById('brRoom')) return;
         consumeInvitation();
+        /* The letter is gone from the inbox, but the sheet it was read in
+           is still open underneath the room — so leaving the meeting put
+           you back in front of the same "Go up" button, and pressing it
+           opened a second meeting nobody had called. The sheet closes as
+           the room opens; the inbox redraws without the letter. */
+        const sheet = document.querySelector('#modalHost.open');
+        if (sheet && sheet.querySelector('[data-action="boardGo"]') && typeof closeModal === 'function') closeModal();
       });
       return r;
     };

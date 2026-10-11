@@ -25,6 +25,47 @@ the start screen. Overwriting a manual slot asks first. IndexedDB autosave rotat
 commits the career and its recovery copies together, so a failed write cannot
 partially rotate away your previous saves.
 
+## Play on Android
+
+The game also ships as an Android app (`android/`): the same build, served
+from inside the APK, so it plays offline and keeps its saves in the app's own
+storage. Install the APK on the phone (allow "install unknown apps" for the
+browser or file manager you open it from) and launch **The Results Business**.
+
+The app is more than a browser around the game:
+
+- **Back** steps back through sheets, letters and screens, returns to Home
+  and, only on Home, asks before leaving. In a match it pauses rather than
+  walking out of the ground; the board keeps you until you have answered.
+- **Export save file** writes a real `.json` file wherever you choose
+  (Downloads, Drive, …) and **Import save file** opens the phone's file picker.
+  Export before uninstalling: removing an app removes its saves.
+- The press-conference voice speaks through Android's own text-to-speech,
+  choosing a British male voice on the device.
+- Sending the app to the background saves the career immediately and silences
+  the crowd; the screen stays awake while a match is on.
+- Full screen, notch-aware, and Android backup carries careers to a new phone.
+
+Build it with the Android SDK installed (`ANDROID_HOME` set):
+
+```bash
+npm run apk          # android/app/build/outputs/apk/release/app-release.apk
+npm run android:check  # the app's page side, driven in Chromium with a simulated bridge
+```
+
+The web files are not copied into `android/`: the build stages exactly the
+files `service-worker.js` lists in `CORE_ASSETS`, so the offline install, the
+CrazyGames zip and the APK can never disagree about what the game needs.
+
+**Signing.** An update only installs over an earlier APK if both were signed
+with the same key. Put the key's details in `android/keystore.properties`
+(`storeFile`, `storePassword`, `keyAlias`, `keyPassword`; never committed),
+or, for the GitHub Actions build, in the repository secrets
+`RB_KEYSTORE_BASE64` (the keystore, base64-encoded), `RB_KEYSTORE_PASSWORD`,
+`RB_KEY_ALIAS` and `RB_KEY_PASSWORD`. Without them the build is signed with a
+throwaway debug key, which installs fine but will not update an APK signed
+with the release key — export your career first in that case.
+
 ## Play locally
 
 The game must be served from a web address so browser storage, the service worker and optional neural voices work correctly.

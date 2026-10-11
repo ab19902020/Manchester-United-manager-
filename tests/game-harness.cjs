@@ -88,7 +88,9 @@ function gameHtml() {
     'src/player-portraits.js',
     'src/visual-upgrade.js',
     'src/manager-experience.js',
+    'src/decision-dock.js',
     'src/crazygames.js',
+    'src/android-shell.js',
   ]) {
     html = inlineScript(html, fs.readFileSync(path.join(root, filename), 'utf8'), filename);
   }
@@ -233,7 +235,10 @@ async function waitFor(predicate, { timeout = 15000, interval = 25, label = 'con
   }
 }
 
-async function createGame() {
+/* `options.beforeParse(window)` runs after the stubs and before a line of
+   the game does — the place to stand in for something the page expects to
+   find already there, such as the Android app's bridge. */
+async function createGame(options = {}) {
   const errors = [];
   const virtualConsole = new VirtualConsole();
   virtualConsole.on('jsdomError', (error) => errors.push(error.stack || error.message));
@@ -244,7 +249,10 @@ async function createGame() {
     runScripts: 'dangerously',
     pretendToBeVisual: true,
     virtualConsole,
-    beforeParse: installBrowserStubs,
+    beforeParse(window) {
+      installBrowserStubs(window);
+      if (typeof options.beforeParse === 'function') options.beforeParse(window);
+    },
   });
   await wait(1400);
 

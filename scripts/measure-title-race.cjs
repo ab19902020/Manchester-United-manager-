@@ -4,6 +4,14 @@
  *
  *   node scripts/measure-title-race.cjs [seasons] [division]
  *
+ * TRUST IT FOR THE TABLE, NOT FOR THE DRAWS. This rig keeps its own
+ * calendar — a fixed rest between rounds, no cups, no injuries healing —
+ * and its home/draw/away split and its 0-0s move with that. On the same
+ * build it reads 29% drawn and 13% goalless, where a career played
+ * through the game's own day loop (scripts/measure-career-scorelines.cjs)
+ * reads 25% drawn and 6% goalless across every English division. Judge
+ * the scoreline shape on that one.
+ *
  * A whole season of a division, played with the game's own quickSim and
  * nothing else -- no days advancing, no transfers, no cups -- so a
  * season takes seconds rather than minutes and a tuning change can be

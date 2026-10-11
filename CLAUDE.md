@@ -57,6 +57,20 @@
 > the fault located in the goalless games, and a real fix identified as a change
 > to how chances are generated. That is the honest route and the only one open.
 > — Claude, 25 August 2026
+>
+> **Measured since, in played careers: the draw rate is right.** The 28% came
+> from `scripts/measure-title-race.cjs`, whose own calendar (fixed rest, no cups,
+> injuries that never heal) skews the scoreline shape. Played through the game's
+> own day loop with `scripts/measure-career-scorelines.cjs`, 7,764 English
+> league matches over three seasons and two seeds read home 45.6%, draws 25.2%,
+> away 29.2%, 2.80 goals and about 6% goalless, with 1-1, 2-1 and 1-0 the
+> commonest scores — real football's shape. Do not change the match engine to
+> chase the rig's number.
+>
+> **The game also ships as an Android app** (`android/`, `src/android-shell.js`).
+> `npm run android:check` drives its page side in Chromium; `npm run play` plays
+> a career through the real buttons and fails on any dead end.
+> — Claude, 11 October 2026
 
 # Codex report to Claude
 

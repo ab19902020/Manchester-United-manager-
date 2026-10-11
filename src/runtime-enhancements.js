@@ -389,7 +389,7 @@
     const recovery = backups ? '<section aria-label="Recovery saves"><div class="sec"><div class="t">Recovery saves</div><div class="ln"></div></div>'
       + '<p class="small muted">Restore an earlier checkpoint if you need to recover your career.</p>'
       + recoverySlots.map((slot) => slotCard(slot)).join('') + '</section>' : '';
-    return `<div class="sec"><div class="t">💾 Your saves</div><div class="ln"></div><div class="sub">${mode}</div></div>${slotCard('auto')}${slotCard('1')}${slotCard('2')}${slotCard('3')}<div class="xs faint" style="padding:2px 4px 10px">Autosaves are checked before writing and never erase a manual career.${backups ? ` ${backups} recovery point${backups === 1 ? '' : 's'} also kept.` : ''}</div>${recovery}<div class="sec"><div class="t">Save file</div><div class="ln"></div></div><div class="card"><p class="xs muted" style="margin-bottom:10px">Export a portable backup for another device or browser.</p><button class="btn btn-primary btn-block" data-action="exportSave">⬇️ Export save file</button><button class="btn btn-ghost btn-block" style="margin-top:8px" data-action="importSave">⬆️ Import save file</button><input type="file" id="impFile" accept=".json,application/json" style="display:none"><button class="btn btn-danger btn-block" style="margin-top:18px" data-action="restartAsk">Abandon career & start again</button></div><div class="xs faint" style="text-align:center;margin-top:8px">The Results Business · 2026/27</div>`;
+    return `<div class="sec"><div class="t">💾 Your saves</div><div class="ln"></div><div class="sub">${mode}</div></div>${slotCard('auto')}${slotCard('1')}${slotCard('2')}${slotCard('3')}<div class="xs faint" style="padding:2px 4px 10px">Autosaves are checked before writing and never erase a manual career.${backups ? ` ${backups} recovery point${backups === 1 ? '' : 's'} also kept.` : ''}</div>${recovery}<div class="sec"><div class="t">Save file</div><div class="ln"></div></div><div class="card"><p class="xs muted" style="margin-bottom:10px">${win.AndroidShell ? 'Export a backup file before uninstalling the app or moving to a new phone — removing the app removes its saves.' : 'Export a portable backup for another device or browser.'}</p><button class="btn btn-primary btn-block" data-action="exportSave">⬇️ Export save file</button><button class="btn btn-ghost btn-block" style="margin-top:8px" data-action="importSave">⬆️ Import save file</button><input type="file" id="impFile" accept=".json,application/json" style="display:none"><button class="btn btn-danger btn-block" style="margin-top:18px" data-action="restartAsk">Abandon career & start again</button></div><div class="xs faint" style="text-align:center;margin-top:8px">The Results Business · 2026/27</div>`;
   };
 
   ACTIONS.saveSlot = async (element) => {
@@ -447,6 +447,10 @@
     return SaveController.save('auto', true);
   }
 
+  /* The Android app saves the moment it is sent to the background, which
+     can happen without the page ever seeing a visibilitychange. */
+  SaveController.flushAutosave = () => (worldReady() ? flushAutosave() : false);
+
   autoSave = function indexedDbAutosave() {
     if (!worldReady()) return false;
     if (autoTimer) clearTimeout(autoTimer);
@@ -488,7 +492,9 @@
   /* ------------------------------------------------------------------
      INSTALLABLE OFFLINE SHELL
      ------------------------------------------------------------------ */
-  if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
+  /* The Android app serves this build out of the APK itself, so it is
+     already offline and a worker would only cache a second copy. */
+  if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol) && !win.AndroidShell) {
     const wasControlled = !!navigator.serviceWorker.controller;
     navigator.serviceWorker.addEventListener('controllerchange', () => {
       if (wasControlled && worldReady()) notify('Game update ready — save your career and reopen to apply it.');

@@ -171,8 +171,21 @@ async function walk(page, orientation) {
           if (el.clientHeight === 0 && el.scrollHeight <= 8) return;
           const over = el.scrollHeight - el.clientHeight;
           if (over <= 6) return;
+          /* AN INVISIBLE TOUCH TARGET IS NOT CONTENT. Chips are 32px tall
+             on purpose and carry a 44px ::after so a thumb can hit them
+             (src/layout-polish.js, section 5); scrollHeight counts that
+             overlay, so every chip in the game — and every row holding
+             one — read as squashed. What has to fit is what is drawn:
+             the union of the box's text and child boxes, which a Range
+             measures and which leaves pseudo-elements out. */
+          const range = document.createRange();
+          range.selectNodeContents(el);
+          const drawn = range.getBoundingClientRect();
+          const box = el.getBoundingClientRect();
+          if (drawn.height === 0 || (drawn.top >= box.top - 2 && drawn.bottom <= box.bottom + 2)) return;
           squashed.push(el.tagName + '.' + String(el.className).slice(0, 24)
             + ' box=' + el.clientHeight + ' content=' + el.scrollHeight
+            + ' drawn=' + Math.round(drawn.top - box.top) + '..' + Math.round(drawn.bottom - box.top)
             + ' shrink=' + style.flexShrink);
         });
 

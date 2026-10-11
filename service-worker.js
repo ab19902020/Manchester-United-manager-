@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'results-business:' + encodeURIComponent(self.registration.scope) + ':';
-const CACHE_NAME = CACHE_PREFIX + 'v59';
+const CACHE_NAME = CACHE_PREFIX + 'v60';
 const CORE_ASSETS = [
   './',
   './index.html',
@@ -72,7 +72,9 @@ const CORE_ASSETS = [
   './src/player-portraits.js',
   './src/visual-upgrade.js',
   './src/manager-experience.js',
+  './src/decision-dock.js',
   './src/crazygames.js',
+  './src/android-shell.js',
   './vendor/three.min.js',
   './assets/results-business-icon.svg',
   './assets/results-business-icon-192.png',

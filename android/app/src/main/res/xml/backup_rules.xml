@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Careers live in the WebView's IndexedDB under app_webview. Android's
+     own backup carries them to a new phone with the rest of the app. -->
+<full-backup-content>
+    <include domain="root" path="app_webview/" />
+    <include domain="sharedpref" path="." />
+</full-backup-content>

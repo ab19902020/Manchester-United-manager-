@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">The Results Business</string>
+    <string name="no_file_app">No app on this phone can open files</string>
+</resources>

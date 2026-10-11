@@ -2,6 +2,114 @@
 
 ## Unreleased
 
+### The game as an Android app — 11 October 2026
+
+- **An APK, built from this repository.** `android/` is a native shell
+  around the same build the browser runs: no framework, no third-party
+  library, one activity. The game is served out of the APK at
+  `https://appassets.androidplatform.net/` (the host Android reserves for
+  exactly this), so it plays with no connection and its IndexedDB saves
+  live in a real secure origin that persists between launches. The web
+  files are not copied into `android/`: the build stages exactly what
+  `service-worker.js` lists in `CORE_ASSETS`, the list the offline install
+  and the CrazyGames zip already use, and fails if a listed file is missing.
+  `npm run apk` builds it; `.github/workflows/android.yml` builds it on every
+  push and uploads the APK as an artifact.
+- **What a bare WebView gets wrong for a game, put right** (`src/android-shell.js`,
+  which does nothing at all outside the app):
+  - *Back* used to leave the app on the first press. It now steps back
+    through stacked sheets, closes the last one, leaves a letter, the club
+    picker or manager creation, returns to Home from any section, and only
+    on Home asks before leaving. A live match is paused rather than walked
+    out of; the board room keeps you until you have answered; the trophy
+    celebrations, the dressing room and the intro each have their own exit.
+  - *Export save file* made a Blob and clicked a download link, which a
+    WebView silently ignores — the one backup that survives uninstalling did
+    nothing. The career is now handed to Android in 256 KB chunks and the
+    system picker asks where to write it. Measured: a 13.9 MB career arrives
+    whole and parses back to the same club.
+  - *Import save file* opens the phone's file picker, which shows every file
+    rather than filtering on a JSON type phones label inconsistently.
+  - *The press-room voice.* Android's WebView has no working speechSynthesis,
+    so the press room was mute. A Web Speech shim speaks through Android's
+    text-to-speech and names Google's British voices by gender, so the
+    existing "British men only" rules choose `en-gb-x-gbb` rather than the
+    female default. Online-only voices are not offered when the phone has
+    its own, because they go silent the moment the signal does.
+  - *Leaving the app* saves the career at once (`RBSSaves.flushAutosave`),
+    stops the voice and suspends the crowd; coming back resumes the sound.
+    The screen is held awake during a match. No service worker is registered
+    inside the app. Full screen, notch-aware, renderer-crash recovery, and
+    Android backup carries careers to a new phone.
+- **How it was checked, since no emulator runs here.** `npm run android:check`
+  drives the real game in Chromium at phone size with a stand-in for the Java
+  bridge — same methods, same argument types, same events back — and passes
+  17 of 17: back on every kind of screen, export, voice, save on pause,
+  keep-awake, match pause, and no page errors. The Java side compiles clean
+  under Android lint (0 errors) and its pure rules have JVM unit tests.
+  What has **not** been done is running the APK on a phone; that is the one
+  check that remains.
+
+### Measured — the match engine already plays like football
+
+- **The 28% draw rate was the measuring rig, not the game.** The open item
+  in `CLAUDE.md` was a draw rate of 28% and goalless games far above real
+  football's. Re-measured on this build, `measure-title-race.cjs` still says
+  so — 29.4% drawn and 0-0 the single commonest score at 13.2% on its default
+  three days' rest, 28.4% and 11.3% on seven. But that rig keeps its own
+  calendar: a fixed rest between rounds, no cups, injuries that never heal.
+  A career does not play like that.
+- **`scripts/measure-career-scorelines.cjs`** plays the game itself — `newGame`,
+  then `advanceDay()` day after day with the manager's fixtures through the
+  instant sim — and reads every English league result at each season's end.
+  Over three played seasons on two seeds, 7,764 matches:
+
+  | | played career | real English football |
+  |---|---|---|
+  | home / draw / away | 45.6 / 25.2 / 29.2 | ~44 / 25 / 31 |
+  | goals a game | 2.80 | ~2.7–2.8 |
+  | goalless | ~6.2% | ~7–8% |
+  | commonest scores | 1-1, 2-1, 1-0 | 1-1, 1-0, 2-1 |
+
+  So the engine was left alone: turning knobs to move the rig's number would
+  have pushed the game a player actually plays away from football.
+
+### Fixed — found by playing a career through the buttons
+
+- **Leaving the board room put you back in front of "Go up", for ever.** The
+  summons is opened from the inbox, and opening the board room withdrew the
+  letter from `G.inbox` — but the sheet showing it stayed open underneath the
+  room. Leave the meeting and the same letter was still there with its button,
+  and pressing it opened a second meeting nobody had called, and then a third.
+  The sheet now closes as the room opens.
+- **"⚠️ Answer 1 thing" could outlive the thing.** Agree a loan from the inbox
+  and the dock kept offering the loan enquiry, and pressing it did nothing,
+  however many times. A dozen mail-answer wrappers in the legacy file call the
+  inner action (which draws the screen) and only then clear the letter, so the
+  dock was drawn while the letter was still open and never drawn again;
+  `gotoDecision` then found nothing to open and returned without a word.
+  `src/decision-dock.js` redraws the dock and header after any answer given
+  from a letter, once every wrapper has finished, and a dock pressed with
+  nothing left to answer redraws itself into Continue and says so. It answers
+  nothing and changes no decision.
+- **Every face on the tactics pitch was cut off.** The studio portraits arrive
+  as an image fixed at the 38px the token asks for, inside a shirt that is 26px
+  within its ring and clips — so each player showed only the top-left of his
+  portrait, face pushed into the corner behind the rating badge. The portrait
+  now fills the circle (`src/tactics-token.js`).
+- **The layout sweep had stopped being able to see.** Since chips gained an
+  invisible 44px touch target (`src/layout-polish.js`), `scrollHeight` counted
+  it and `npm run sweep` reported 33 of 50 screens faulty — every chip, every
+  row holding one — which buried the one real fault above. It now measures
+  what is drawn (a Range over the box's contents, which leaves pseudo-elements
+  out): 50 screens, the tactics portraits found, and once fixed only the
+  documented intermittent 9px on the landscape home portal remains.
+- **`scripts/play-career.cjs` (`npm run play`)** is the instrument that found
+  both: a career played from the front door by clicking only what is visible —
+  answering the board, the press, bids and loan enquiries, kicking off and
+  watching matches, walking out of the dressing room, pressing Continue — and
+  failing on a page error, a game diagnostic, or a screen that stops moving.
+
 ### Career quality upgrade — 5 September 2026
 
 - Rebuilt player portraits as consistent studio illustrations, retaining existing

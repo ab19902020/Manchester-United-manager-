@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The game's own icon (assets/results-business-icon.svg), drawn inside the
+     adaptive-icon safe zone so no launcher mask clips the bars. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="512"
+    android:viewportHeight="512">
+    <group
+        android:pivotX="256"
+        android:pivotY="256"
+        android:scaleX="0.62"
+        android:scaleY="0.62"
+        android:translateY="-14">
+        <path
+            android:fillColor="#EEF3EE"
+            android:fillAlpha="0.96"
+            android:pathData="M84,132h344v54H84z M84,230h248v54H84z M84,328h344v54H84z" />
+        <group
+            android:pivotX="379"
+            android:pivotY="256"
+            android:rotation="12">
+            <path android:pathData="M330,207h98v98h-98z">
+                <aapt:attr name="android:fillColor">
+                    <gradient
+                        android:type="linear"
+                        android:startX="330"
+                        android:startY="207"
+                        android:endX="428"
+                        android:endY="305">
+                        <item android:offset="0" android:color="#FFFF4A3C" />
+                        <item android:offset="1" android:color="#FFA91810" />
+                    </gradient>
+                </aapt:attr>
+            </path>
+        </group>
+        <path
+            android:pathData="M68,418L444,418"
+            android:strokeColor="#FBE122"
+            android:strokeWidth="14"
+            android:strokeLineCap="round" />
+    </group>
+</vector>

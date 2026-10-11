@@ -65,6 +65,15 @@
     ' box-shadow:0 2px 5px rgba(0,0,0,.55);pointer-events:none;z-index:3}',
     '#tacPitch .tslot .tvit.tv-none{display:none}',
     '#tacPitch .tslot .tvit i{display:none}',
+
+    /* THE FACE FILLS THE SHIRT. The studio portraits arrive as an image
+       fixed at the 38px the token asks for, but the shirt it sits in is
+       26px inside its ring and clips — so every man on the pitch showed
+       only the top-left of his own portrait, his face pushed off into the
+       corner behind the rating badge. The sweep measured it as 38px of
+       content in a 26px box. Scaled to the circle, the whole face shows. */
+    '.tslot .jersey .jf>img.rbs-portrait{width:100%!important;height:100%!important;',
+    ' border-radius:50%!important;box-shadow:none}',
   ].join('');
 
   try {

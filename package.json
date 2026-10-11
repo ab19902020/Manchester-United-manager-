@@ -1,6 +1,6 @@
 {
   "name": "the-results-business",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "description": "A mobile-first football management career game.",
   "scripts": {
@@ -13,7 +13,10 @@
     "sweep": "node scripts/sweep-screens.cjs",
     "check": "npm run lint && npm test",
     "framed": "node scripts/check-framed.cjs",
-    "upload": "node scripts/build-upload.cjs"
+    "upload": "node scripts/build-upload.cjs",
+    "play": "node scripts/play-career.cjs",
+    "android:check": "node scripts/check-android-shell.cjs",
+    "apk": "cd android && ./gradlew --no-daemon assembleRelease"
   },
   "devDependencies": {
     "eslint": "^9.33.0",
