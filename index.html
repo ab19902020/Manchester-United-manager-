@@ -361,7 +361,7 @@ textarea.presstx:focus{border-color:var(--gold);box-shadow:0 0 0 2px rgba(251,22
 <script>
 'use strict';
 /* =====================================================================
-   RED DEVIL MANAGER 26/27 — single-file football management simulation
+   THE RESULTS BUSINESS 26/27 — football management simulation
    Architecture: DATA -> ENGINE (pure sim logic) -> UI (render layer)
    ===================================================================== */
 
@@ -513,7 +513,7 @@ const DB=[
  ["Cauã Albuquerque","AMC",30,77],
  ["Kelechi Olawale","AML",30,79],["Niall Lister","AMC",26,78],["Ricardo Menezes","AML",23,78,85],
  ["Gethin Eynon","AMR",29,77],["Jhon Orozco","ST",35,75],["Lucas Vasconcelos","ST",25,78]]],
-["BRE","Hounslow Athletic","Hounslow","#E30613","#FFFFFF",6900,55,"Southgate Lane",17250,[
+["BRE","Hounslow Athletic","Hounslow","#E30613","#FFFFFF",6900,55,"Southfield Lane",17250,[
  ["Sean Redmond","GK",27,80],["Kári Kristjánsson","GK",24,74],
  ["Magnus Vik","DC",28,77],["Conor Hanrahan","DC",25,80],["Deshawn Cunningham","DC",33,76],["Dirk van Dam","DC",24,78],
  ["Salvatore Mariani","DR",22,77,84],["Zak Briggs","DL",25,77],["Cameron Haldane","DL",24,75],["Ben Fairclough","DL",28,74],
@@ -2068,7 +2068,7 @@ function showStart(){
  paintStart()}
 function paintStart(){
  const ss=$('#startScreen');
- let h='<div class="logo">RED DEVIL<br><em>MANAGER</em> <span style="font-size:.55em;vertical-align:middle">26/27</span></div>'+
+ let h='<div class="logo">THE RESULTS<br><em>BUSINESS</em> <span style="font-size:.55em;vertical-align:middle">26/27</span></div>'+
  '<div class="tag">20 clubs · 400+ players · full match engine · transfers, training & newgens.<br>Pick your club — the board is waiting.</div>'+
  '<div class="clubgrid">';
  DB.forEach((c,i)=>{const fake={i:900+i,short:c[2],c1:c[3],c2:c[4]};
@@ -3814,7 +3814,7 @@ function showStart(){
  UI.startSel=0; // Man Reds
  const ss=$('#startScreen');
  ss.style.display='flex';
- ss.innerHTML='<div class="logo">RED DEVIL<br><em>MANAGER</em></div>'+
+ ss.innerHTML='<div class="logo">THE RESULTS<br><em>BUSINESS</em></div>'+
  '<div class="tag">2026/27 \u00b7 84 clubs \u00b7 six divisions \u00b7 promotion & relegation \u00b7 3D matches & stadiums</div>'+
  '<div style="width:100%;max-width:520px" id="startBody"></div>';
  paintStart()}
@@ -7799,7 +7799,7 @@ ACTIONS.awardsOpen=()=>{
  '<h3 class="disp" style="margin:6px 0 2px">END OF SEASON AWARDS</h3>'+
  '<div class="xs faint">Season '+a.season+'</div></div>';
  h+='<div class="card tight" style="border-color:rgba(251,225,34,.45);margin-bottom:10px">'+
-  awardRow('\ud83c\udf1f BALLON D\u2019OR',a.ballon,a.ballonLine)+
+  awardRow('\ud83c\udf1f WORLD PLAYER OF THE YEAR',a.ballon,a.ballonLine)+
   awardRow('\ud83c\udfc5 PLAYER OF THE YEAR',a.poty,a.potyLine)+
   awardRow('\ud83d\udc76 YOUNG PLAYER OF THE YEAR',a.young,a.youngLine)+
   awardRow('\u26bd GOLDEN BOOT',a.boot,a.bootLine)+
@@ -9485,9 +9485,9 @@ tableRows=function(div){
    FACES — plausible appearance for every player in the world
    ===================================================================== */
 const NAME_ORIGIN=[
- {re:/(bagayoko|bamba|barry|cissokho|dabo|dembélé|kanté|diaby|diakhaté|diarra|diatta|diawara|dieng|doumbouya|fall|faye|guindo|kaba|kanouté|konaté|sow |kouyaté|maïga|ndao|niang|sangaré|sanogo|sidibé|sylla|tounkara|yattara|abanda|atangana|bassong|bekono|ebanga|ekambi|ndo |etoundi|fotso|mbarga|mbida|moukoko|essomba|ndzana|ngono|nkoulou|biya|onana|mvogo|tchami|tchoumi|zobo|bakambu|ilunga|bokila|kabongo|kalala|kasongo|kayembe|lukusa|mabiala|makiadi|mbemba|kanda|mputu|mukendi|tshibangu|tshimanga|adebayo|adeleke|afolabi|akinola|anyanwu|babatunde|chukwueze|obi |ezenwa|igwe|nwachukwu|nwosu|obasi|ogunleye|okeke|okonkwo|okoro|olawale|onuoha|oyelaran|uzoma|acquah|addo|adjei|agyeman|amankwah|ampofo|annan|antwi|appiah|asamoah|badu|bonsu|darko|donkor|fosu|nkansah|ofori|opoku|osei|sarpong|tetteh|diallo|traoré|keita|camara|coulibaly|ndiaye|fofana|cissé|doucouré|banda|chirwa|dlamini|khumalo|mokoena|moyo|mwale|ncube|ndlovu|nkosi|phiri|sithole|zungu|bartley|blackwood|cunningham|dacres|dixon|fearon|gayle|morris|hylton|lawrence|morrison|powell|reid|richards|simms|whyte|kon[ae] |toure|diop|kamara|sissoko|doumbia|boateng|owusu|mensah|asante|okafor|ajayi)/i,sk:['brown','deep','dark'],hr:['black'],cut:['fade','curls','buzz','short']},
+ {re:/(bagayoko|bamba|barry|cissokho|dabo|diaby|diakhaté|diarra|diatta|diawara|dieng|doumbouya|fall|faye|guindo|kaba|diabaté|koné|sow |kourouma|maïga|ndao|niang|sangaré|sanogo|sidibé|sylla|tounkara|yattara|abanda|atangana|bikoi|bekono|ebanga|ndo |elong|etoundi|fotso|mbarga|mbida|essomba|ndzana|ngono|biya|ndongo|mvogo|tchami|tchoumi|zobo|ilunga|banza|bokila|kabongo|kalala|kasongo|kayembe|lukusa|mabiala|makiadi|kanda|mpoyi|mukendi|tshibangu|tshimanga|adebayo|adeleke|afolabi|akinola|anyanwu|babatunde|chidozie|ezenwa|igwe|nwachukwu|nwosu|obasi|ogunleye|okeke|okonkwo|okoro|olawale|onuoha|oyelaran|uzoma|acquah|addo|adjei|agyeman|amankwah|ampofo|annan|antwi|appiah|asamoah|badu|bonsu|darko|donkor|fosu|nkansah|ofori|opoku|osei|sarpong|tetteh|diallo|traoré|keita|camara|coulibaly|ndiaye|fofana|cissé|doucouré|banda|chirwa|dlamini|khumalo|mokoena|moyo|mwale|ncube|ndlovu|nkosi|phiri|sithole|zungu|bartley|blackwood|cunningham|dacres|dixon|fearon|gayle|morris|hylton|lawrence|morrison|powell|reid|richards|simms|whyte|kon[ae] |toure|diop|kamara|sissoko|doumbia|boateng|owusu|mensah|asante|okafor|ajayi)/i,sk:['brown','deep','dark'],hr:['black'],cut:['fade','curls','buzz','short']},
  {re:/(aouad|benali|benchekroun|bensaïd|berrada|bouazza|boukhari|chaouch|cherif|amrani|fassi|idrissi|ghazali|haddad|hamdi|kadiri|khelifi|lahlou|mansouri|mesbahi|naciri|rahmani|sabri|tazi|zeroual|ziani| el [a-z]+)/i,sk:['tan','olive','brown'],hr:['black'],cut:['short','buzz','curls','fade']},
- {re:/(aguirre|alarcón|arrieta|barrios|beltrán|bermejo|bustamante|cabrera|calderón|campos|cárdenas|carrasco|cordero|delgado|escudero|espinosa|fajardo|galván|gallardo|heredia|ibarra|lozano|maldonado|márquez|mendizábal|montero|ochoa|olivares|palacios|paredes|peralta|quesada|robledo|rosales|salazar|sandoval|tejada|trujillo|urrutia|valcárcel|zamora|zubiría|acevedo|altamirano|arboleda|arce|barrientos|benavídez|bogado|caicedo|luna|cardozo|castaño|cuesta|echeverría|farías|figueroa|gaitán|godoy|insúa|ledesma|leguizamón|machado|mosquera|ruiz|olivera|orozco|palavecino|pizarro|quintero|rentería|riquelme|sosa|saavedra|tapia|valencia|vergara|villalba|zárate|abrantes|amaral|antunes|azevedo|barbosa|borges|brandão|cabral|caldeira|cardoso|coelho|correia|cruz|esteves|faria|figueiredo|freitas|gouveia|leitão|lopes|macedo|marques|meireles|moura|nogueira|pacheco|pinheiro|queirós|rebelo|sequeira|teixeira|vaz |vieira|garcía|fernández|martínez|moreno|navarro|sánchez|robles|gómez|torres|herrera|vázquez|iglesias|cuenca|larrea|zubieta|etxeberria|olmedo|quintana|serrano|cortés|bravo|alcázar|peña|rivas|silva|santos|castro|pereira|ferreira|rodrigues|oliveira|carvalho|gomes|almeida|ribeiro|moreira|pinto|novais|fonseca|matos|rodr[ií]guez|l[óo]pez|p[ée]rez|ram[ií]rez)/i,sk:['light','olive','fair'],hr:['darkbrown','black','midbrown'],cut:['short','mid','curtains','curls']},
+ {re:/(aguirre|alarcón|arrieta|barrios|beltrán|bermejo|bustamante|cabrera|calderón|campos|cárdenas|carrasco|cordero|delgado|escudero|espinosa|fajardo|galván|gallardo|heredia|ibarra|lozano|maldonado|márquez|mendizábal|montero|ochoa|olivares|palacios|paredes|peralta|quesada|robledo|rosales|salazar|sandoval|tejada|trujillo|urrutia|valcárcel|zamora|zubiría|acevedo|altamirano|arboleda|arce|barrientos|benavídez|bogado|calvo|luna|cardozo|castaño|cuesta|echeverría|farías|figueroa|gaitán|godoy|insúa|ledesma|leguizamón|machado|mosquera|ruiz|olivera|orozco|palavecino|pizarro|quintero|rentería|rivero|sosa|saavedra|tapia|valencia|vergara|villalba|zárate|abrantes|amaral|antunes|azevedo|barbosa|borges|brandão|cabral|caldeira|cardoso|coelho|correia|cruz|esteves|faria|figueiredo|freitas|gouveia|leitão|lopes|macedo|marques|meireles|moura|nogueira|pacheco|pinheiro|queirós|rebelo|sequeira|teixeira|vaz |vieira|garcía|fernández|martínez|moreno|navarro|sánchez|robles|gómez|torres|herrera|vázquez|iglesias|cuenca|larrea|zubieta|etxeberria|olmedo|quintana|serrano|cortés|bravo|alcázar|peña|rivas|silva|santos|castro|pereira|ferreira|rodrigues|oliveira|carvalho|gomes|almeida|ribeiro|moreira|pinto|novais|fonseca|matos|rodr[ií]guez|l[óo]pez|p[ée]rez|ram[ií]rez)/i,sk:['light','olive','fair'],hr:['darkbrown','black','midbrown'],cut:['short','mid','curtains','curls']},
  {re:/(gabriel|matheus|thiago|willian|caio |kaique|cau[ãa]|murilo|ruan |wesley|yuri |breno|danilo|renan|jefferson|anderson|albuquerque|andrade|aragão|araújo|barreto|bezerra|brito|cavalcanti|chaves|diniz|duarte|farias|guimarães|lacerda|lima|maciel|medeiros|menezes|miranda|monteiro|moraes|nascimento|paiva|peixoto|prado|queiroz|rezende|rocha|sampaio|siqueira|tavares|vasconcelos|xavier)/i,sk:['tan','brown','light'],hr:['black','darkbrown'],cut:['curls','fade','short','bun']},
  {re:/(berg|str[öo]m|sson|sen |dahl|lund|holm|vik |van | de |der |m[üu]ller|kova[cč]|ovi[cć] |evi[cć] |i[cć] |novak|wski |czyk |enko |chuk |gaard|qvist|gren |mann |meier|schmid|huber|bauer|albrecht|baumann|bergmann|böhm|brandt|dietrich|engel|fiedler|franke|friedrich|gerlach|graf|haas|hartmann|heinrich|herrmann|jäger|kaiser|keller|kessler|kraus|lindner|lorenz|maier|marx|pohl|reuter|roth|sauer|schreiber|schubert|seidel|sommer|stein|thiele|vogel|voigt|winkler|ziegler|bakker|boersma|bos |brouwer|boer|graaf|wit |dekker|dijkstra|hoekstra|hofman|huisman|jansen|koster|kramer|kuipers|maas|meijer|mulder|postma|prins|scholten|schouten|smits|beek|dam |heijden|leeuwen|vliet|veenstra|verhoeven|visser|vos |willems)/i,sk:['pale','fair','light'],hr:['blond','lightbrown','midbrown','darkbrown','dirtyblond'],cut:['short','mid','curtains','bun']},
  {re:/(kim |lee |park |hwang |cho |jung |kang |yang |min-|jun-|hyun|aoyama|fujimoto|hasegawa|hirano|ishikawa|iwasaki|kawamura|kinoshita|matsuda|miyazaki|morita|abe |nakajima|nishimura|ogawa|okada|sakamoto|shimizu|takeda|uchida|yamashita|tanaka|yamamoto|sato |suzuki|takahashi|nakamura|yamada|bae )/i,sk:['light','fair'],hr:['black','jet'],cut:['short','mid','buzz']},
@@ -17113,7 +17113,7 @@ showStart=function(){
   '<div class="fspacer"></div>'+
   '<div class="fhero">'+
    '<div class="crestwrap">'+crest({c1:'#DA291C',c2:'#FBE122',short:'MUN',name:'Manchester Reds'},76)+'</div>'+
-   '<div class="ftitle">RED DEVIL<br><em>MANAGER</em></div>'+
+   '<div class="ftitle">THE RESULTS<br><em>BUSINESS</em></div>'+
    '<div class="fsub">Westgate Stadium · 2026/27</div>'+
   '</div>'+
   '<div class="fmenu">'+
@@ -18658,12 +18658,12 @@ function initCups(){
  const pl=byTier('PL');
  const euroEng=pl.filter(i=>inEurope.has(i));
  const plRest=pl.filter(i=>!inEurope.has(i));
- const efl=[...byTier('CH'),...byTier('L1'),...byTier('L2')].sort((a,b)=>G.clubs[b].rep-G.clubs[a].rep);
- let lcByes=clamp(16-2*euroEng.length,0,efl.length);
- if((efl.length-lcByes)%2)lcByes++;
+ const lowerDivs=[...byTier('CH'),...byTier('L1'),...byTier('L2')].sort((a,b)=>G.clubs[b].rep-G.clubs[a].rep);
+ let lcByes=clamp(16-2*euroEng.length,0,lowerDivs.length);
+ if((lowerDivs.length-lcByes)%2)lcByes++;
  G.cups.LC.entryLater={1:plRest,2:euroEng};
- G.cups.LC.byes={1:efl.slice(0,lcByes)};
- cupDraw('LC',0,efl.slice(lcByes));
+ G.cups.LC.byes={1:lowerDivs.slice(0,lcByes)};
+ cupDraw('LC',0,lowerDivs.slice(lcByes));
 
  if(alloc.CL.includes(G.my)||alloc.EL.includes(G.my)||alloc.EC.includes(G.my)){
   const k=alloc.CL.includes(G.my)?'CL':alloc.EL.includes(G.my)?'EL':'EC';
@@ -19133,20 +19133,20 @@ const NAT_EXACT={
 'Gustav Westerlund':'SWE','Nassim El Amrani':'EGY'};
 const NAT_HINT=[
  [/(ndiaye|sarr |gueye|mendy|diouf|faye |niang|dieng|diatta|ndao|fall )/i,'SEN'],
- [/(bagayoko|bamba|barry|cissokho|dabo|dembélé|kanté|diaby|diakhaté|diarra|diatta|diawara|dieng|doumbouya|fall|faye|guindo|kaba|kanouté|konaté|sow |kouyaté|maïga|ndao|niang|sangaré|sanogo|sidibé|sylla|tounkara|yattara|diallo|traor|keita|camara|coulibaly|fofana|ciss[eé]|doucour|kon[eé] |tour[eé] |sissoko|doumbia|kamara)/i,'MLI'],
- [/(abanda|atangana|bassong|bekono|ebanga|ekambi|ndo |etoundi|fotso|mbarga|mbida|moukoko|essomba|ndzana|ngono|nkoulou|biya|onana|mvogo|tchami|tchoumi|zobo)/i,'CMR'],
- [/(bakambu|ilunga|bokila|kabongo|kalala|kasongo|kayembe|lukusa|mabiala|makiadi|mbemba|kanda|mputu|mukendi|tshibangu|tshimanga)/i,'COD'],
- [/(adebayo|adeleke|afolabi|akinola|anyanwu|babatunde|chukwueze|obi |ezenwa|igwe|nwachukwu|nwosu|obasi|ogunleye|okeke|okonkwo|okoro|olawale|onuoha|oyelaran|uzoma)/i,'NGA'],
+ [/(bagayoko|bamba|barry|cissokho|dabo|diaby|diakhaté|diarra|diatta|diawara|dieng|doumbouya|fall|faye|guindo|kaba|diabaté|koné|sow |kourouma|maïga|ndao|niang|sangaré|sanogo|sidibé|sylla|tounkara|yattara|diallo|traor|keita|camara|coulibaly|fofana|ciss[eé]|doucour|kon[eé] |tour[eé] |sissoko|doumbia|kamara)/i,'MLI'],
+ [/(abanda|atangana|bikoi|bekono|ebanga|ndo |elong|etoundi|fotso|mbarga|mbida|essomba|ndzana|ngono|biya|ndongo|mvogo|tchami|tchoumi|zobo)/i,'CMR'],
+ [/(ilunga|banza|bokila|kabongo|kalala|kasongo|kayembe|lukusa|mabiala|makiadi|kanda|mpoyi|mukendi|tshibangu|tshimanga)/i,'COD'],
+ [/(adebayo|adeleke|afolabi|akinola|anyanwu|babatunde|chidozie|ezenwa|igwe|nwachukwu|nwosu|obasi|ogunleye|okeke|okonkwo|okoro|olawale|onuoha|oyelaran|uzoma)/i,'NGA'],
  [/(acquah|addo|adjei|agyeman|amankwah|ampofo|annan|antwi|appiah|asamoah|badu|bonsu|darko|donkor|fosu|nkansah|ofori|opoku|osei|sarpong|tetteh)/i,'GHA'],
  [/(banda|chirwa|dlamini|khumalo|mokoena|moyo|mwale|ncube|ndlovu|nkosi|phiri|sithole|zungu)/i,'RSA'],
  [/(aouad|benali|benchekroun|bensaïd|berrada|bouazza|boukhari|chaouch|cherif|amrani|fassi|idrissi|ghazali|haddad|hamdi|kadiri|khelifi|lahlou|mansouri|mesbahi|naciri|rahmani|sabri|tazi|zeroual|ziani)/i,'MAR'],
  [/(bartley|blackwood|cunningham|dacres|dixon|fearon|gayle|morris|hylton|lawrence|morrison|powell|reid|richards|simms|whyte)/i,'JAM'],
  [/(akın|aksoy|altıntaş|aydın|bayram|bozkurt|çakır|çetin|coşkun|demirci|doğan|erdem|güneş|karaca|kılıç|koç |korkmaz|kurt|özkan|polat|şahin|sarı|tekin|toprak|turan|uçar|yavuz|yıldırım|yılmaz|demir|kaya|çelik|yıldız|öztürk|arslan|aslan|erdoğan|bulut|şimşek|sönmez|akgün|uzun|acar|balcı|duran|fırat|hakan|i̇nan|kara|levent|mutlu|nalbant|öztekin|pehlivan|varol|o[ğg]lu )/i,'TUR'],
- [/(alexiou|anagnostou|daskalakis|economou|galanis|karagiannis|kotsiras|lambrou|makris|mavridis|nikolaidis|pappas|petrakis|rallis|samaras|vlachos|stavropoulos|tsakiris|vassiliou|xenakis|zafeiris|papadopoulos|nikolaou|georgiou|ioannidis|christodoulou|athanasiou|antoniou|sidiropoulos|rota|barkas|chatzis|dimitriou|efthymiou|fotakis|hristou|iosifidis|kalogeras|lambropoulos|manolis|oikonomou|petrou|stavrou|theodorou|vasileiou|zisis)/i,'GRE'],
+ [/(alexiou|anagnostou|daskalakis|economou|galanis|karagiannis|kotsiras|lambrou|makris|mavridis|nikolaidis|pappas|petrakis|rallis|vlachos|stavropoulos|tsakiris|vassiliou|xenakis|zafeiris|papadopoulos|nikolaou|georgiou|ioannidis|christodoulou|athanasiou|antoniou|sidiropoulos|rota|barkas|chatzis|dimitriou|efthymiou|fotakis|hristou|iosifidis|kalogeras|lambropoulos|manolis|oikonomou|petrou|stavrou|theodorou|vasileiou|zisis)/i,'GRE'],
  [/(beridze|gelashvili|japaridze|kapanadze|lomidze|mchedlidze|tsiklauri|tsereteli)/i,'GEO'],
  [/(avetisyan|grigoryan|hakobyan|karapetyan|sargsyan|vardanyan)/i,'ARM'],
  [/(abdullaev|ismoilov|karimov|rakhimov|tursunov|yusupov)/i,'UZB'],
- [/(ademi|bajrami|hoxha|berisha|dervishi|gashi|hasani|hyseni|kastrati|krasniqi|kryeziu|limani|morina|osmani|rexhepi|shala|thaçi|kelmendi|zeqiri)/i,'ALB'],
+ [/(ademi|bajrami|hoxha|berisha|dervishi|gashi|hasani|hyseni|kastrati|krasniqi|kryeziu|limani|morina|osmani|rexhepi|shala|kelmendi|zeqiri)/i,'ALB'],
  [/(bizjak|golob|hribar|kastelic|zupan|kolar|kos |krajnc|mlakar|novak|pirc|rozman|turk|vidmar|zajc)/i,'SVN'],
  [/(balogh|bartha|fazekas|gulyás|hegedűs|juhász|kelemen|lakatos|major|molnár|orbán|soós|pásztor|sipos|somogyi|vadász|vincze)/i,'HUN'],
  [/(angelov|dimitrov|georgiev|iliev|kolev|marinov|nikolov|petkov|stoyanov|todorov|yordanov|zhelev)/i,'BUL'],
@@ -19155,26 +19155,26 @@ const NAT_HINT=[
  [/(kim |lee |park |hwang |jung |kang |yoon |kwon |jeon |shin |moon |jang )/i,'KOR'],
  [/(avraham|biton|dahan|golan|katz|levi|mor |mizrahi|peretz|shalom|vaknin)/i,'ISR'],
  [/(albuquerque|andrade|aragão|araújo|barreto|bezerra|brito|cavalcanti|chaves|diniz|duarte|farias|guimarães|lacerda|lima|maciel|medeiros|menezes|miranda|monteiro|moraes|nascimento|paiva|peixoto|prado|queiroz|rezende|rocha|sampaio|siqueira|tavares|vasconcelos|xavier)/i,'BRA'],
- [/(acevedo|altamirano|arboleda|arce|barrientos|benavídez|bogado|caicedo|luna|cardozo|castaño|cuesta|echeverría|farías|figueroa|gaitán|godoy|insúa|ledesma|leguizamón|machado|mosquera|ruiz|olivera|orozco|palavecino|pizarro|quintero|rentería|riquelme|sosa|saavedra|tapia|valencia|vergara|villalba|zárate)/i,'ARG'],
+ [/(acevedo|altamirano|arboleda|arce|barrientos|benavídez|bogado|calvo|luna|cardozo|castaño|cuesta|echeverría|farías|figueroa|gaitán|godoy|insúa|ledesma|leguizamón|machado|mosquera|ruiz|olivera|orozco|palavecino|pizarro|quintero|rentería|rivero|sosa|saavedra|tapia|valencia|vergara|villalba|zárate)/i,'ARG'],
  [/(bach|bertelsen|bjerregaard|clausen|dahl|dalgaard|frandsen|friis|gregersen|holm|hougaard|iversen|juhl|kjær|lund|krogh|lauridsen|mikkelsen|nygaard|overgaard|ravn|skov|storm|thorsen|vestergaard|winther|jensen|nielsen|hansen|pedersen|andersen|larsen|sørensen|rasmussen|jørgensen|madsen|kristensen|olsen|thomsen|poulsen|johansen|møller|mortensen|bruun|asmussen|bech|enevoldsen|frost|gade|jakobsen|mathiesen|nørgaard|petersen|riis|toft)/i,'DEN'],
  [/(aasen|berge|lie |bakken|brekke|dahl|eide|fossum|gjerde|haugen|hovland|kleven|lunde|moen|myhre|nygård|ruud|sandvik|solbakken|aas |strand|tveit|vik |hansen|johansen|olsen|larsen|andersen|pedersen|nilsen|kristiansen|jensen|karlsen|berg|dahle|engen|fjeld|gran|hagen|iversen|jakobsen|knudsen|nordby|opsahl|riise|ulven|wold)/i,'NOR'],
  [/(åkesson|bergqvist|björk|blomqvist|dahlberg|edlund|ekström|forsberg|lind|hedlund|holmgren|lindahl|lindgren|lundqvist|nordin|öberg|sandberg|sjöberg|söderberg|strand|wallin|westerlund)/i,'SWE'],
  [/(hakala|heikkinen|karjalainen|koskinen|laaksonen|lehtonen|mäkelä|niemi|rantanen|salonen|virtanen)/i,'FIN'],
  [/(arnarsson|birgisson|einarsson|gunnarsson|hauksson|jónsson|kristjánsson|ólafsson|stefánsson|þórsson)/i,'ISL'],
  [/(adamczyk|baran|borkowski|chmielewski|czarnecki|dudek|gajewski|górski|jasiński|kaczmarek|kalinowski|kubiak|lis |majewski|malinowski|mazur|michalski|nowicki|olszewski|pawlak|pietrzak|sikora|sobczak|stępień|szulc|walczak|wróbel|zalewski|nowak|kowalski|wiśniewski|wójcik|kamiński|woźniak|dąbrowski|kozłowski|jankowski|krawczyk|chmiel|duda|eliasz|fabian|hoffman|iwanicki|michalak|rutkowski|tomczyk)/i,'POL'],
- [/(bartoš|beneš|čermák|doležal|fiala|hájek|havlík|holub|jelínek|kadlec|kolář|konečný|kratochvíl|mareš|pospíšil|růžička|sedláček|šimek|urban|vaněk|zeman|novák|svoboda|novotný|dvořák|černý|procházka|kučera|veselý|horák|němec|marek|král|cerný|hruška|lukas|matějka|nedvěd|ondrák|pavlík|rezník|tichý|vávra|bláha|čapek)/i,'CZE'],
+ [/(bartoš|beneš|čermák|doležal|fiala|hájek|havlík|holub|jelínek|kadlec|kolář|konečný|kratochvíl|mareš|pospíšil|růžička|sedláček|šimek|urban|vaněk|zeman|novák|svoboda|novotný|dvořák|černý|procházka|kučera|veselý|horák|němec|marek|král|cerný|hruška|lukas|matějka|nedoma|ondrák|pavlík|rezník|tichý|vávra|bláha|čapek)/i,'CZE'],
  [/(baláž|bartoš|gajdoš|hudák|kováč|lukáč|mikuš|oravec|polák|sloboda|šimko|tóth|varga|urban|zelenka)/i,'SVK'],
- [/(bondar|boyko|havrylenko|hrytsenko|kovalchuk|kravets|kushnir|lysenko|marchenko|melnyk|moroz|oliynyk|panchenko|polishchuk|romanchuk|savchenko|shevchuk|sydorenko|tkachuk|tymoshchuk|vasylenko|zinchuk|kovalenko|bondarenko|tkachenko|kravchenko|petrenko|antonenko|bilyk|chernenko|danylko|fedorenko|ivanenko|nazarenko|ostapenko|romanenko|usenko|yakovenko|zhuk)/i,'UKR'],
+ [/(bondar|boyko|havrylenko|hrytsenko|kovalchuk|kravets|kushnir|lysenko|marchenko|melnyk|moroz|oliynyk|panchenko|polishchuk|romanchuk|savchenko|shevchuk|sydorenko|tkachuk|tymchuk|vasylenko|zinchuk|kovalenko|bondarenko|tkachenko|kravchenko|petrenko|antonenko|bilyk|chernenko|danylko|fedorenko|ivanenko|nazarenko|ostapenko|romanenko|usenko|yakovenko|zhuk)/i,'UKR'],
  [/(abernethy|baird|buchan|cairns|calder|carmichael|crawford|dalgleish|drummond|dunbar|erskine|farquhar|galbraith|geddes|haldane|innes|jardine|kinnear|laidlaw|lennox|lockerbie|macauley|macbride|macinnes|macrae|menzies|moncrieff|muirhead|ogilvie|pringle|rennie|sutherland|tennant|urquhart|macdonald|campbell|stewart|fraser|murray|ferguson|gordon|robertson|macleod|kerr|buchanan|hendry|mcgill|mcallan|docherty|sinclair|nisbet|ralston|coutts|boyle|grant|mckenna|cairney|aitken|baxter|elphinstone|forsyth|hunter|irvine|johnstone|mackay|nicol|paterson|shankly|tulloch|wallace)/i,'SCO'],
  [/(brannigan|carmody|cassidy|corrigan|costello|cullinane|devaney|donnellan|dowling|fennelly|finnerty|flanagan|gilligan|hanrahan|heffernan|kavanagh|keaveney|kinsella|lenihan|loughlin|mulcahy|mulvaney|rafferty|redmond|scanlon|tierney|twomey)/i,'IRL'],
  [/(bevan|bowen|price|cadwallader|coslett|eynon|gethin|gwilym|howells|idris|llewellyn|maddock|meredith|parry|penhale|pritchard|probert|prosser|pugh|rhydderch|tudor|vaughan|wynne)/i,'WAL'],
- [/(abbott|baxter|beckett|brennan|callahan|colvin|dalton|easley|garrison|halvorsen|hendricks|jarrett|kessler|lindqvist|maddox|novak|prescott|ramsey|sandoval|sterling|tolliver|vance|whitaker|yates)/i,'USA'],
+ [/(abbott|baxter|beckett|brennan|callahan|colvin|dalton|easley|garrison|halvorsen|hendricks|jarrett|kessler|lindmark|maddox|novak|prescott|ramsey|sandoval|sterne|tolliver|vance|whitaker|yates)/i,'USA'],
  [/(aguirre|alarcón|arrieta|barrios|beltrán|bermejo|bustamante|cabrera|calderón|campos|cárdenas|carrasco|cordero|delgado|escudero|espinosa|fajardo|galván|gallardo|heredia|ibarra|lozano|maldonado|márquez|mendizábal|montero|ochoa|olivares|palacios|paredes|peralta|quesada|robledo|rosales|salazar|sandoval|tejada|trujillo|urrutia|valcárcel|zamora|zubiría|garcía|fernández|martínez|moreno|navarro|sánchez|ruiz|robles|gómez|torres|herrera|vázquez|iglesias|cuenca|larrea|zubieta|etxeberria|olmedo|quintana|serrano|cortés|bravo|alcázar|peña|rivas|fuentes|izaguirre|jiménez|prieto|rojas|ureña|valverde|cañizares)/i,'ESP'],
  [/(abrantes|amaral|antunes|azevedo|barbosa|borges|brandão|cabral|caldeira|cardoso|coelho|correia|cruz|esteves|faria|figueiredo|freitas|gouveia|leitão|lopes|macedo|marques|meireles|moura|nogueira|pacheco|pinheiro|queirós|rebelo|sequeira|teixeira|vaz |vieira|silva|santos|castro|pereira|ferreira|rodrigues|oliveira|carvalho|gomes|almeida|ribeiro|moreira|machado|pinto|novais|fonseca|matos|amaro|barros|duarte|guerra|henriques|infante|jordão|leal|osório|paiva|queiroga|rocha|salgado|tavares|valente)/i,'POR'],
- [/(albanese|basile|bellini|benedetti|bernardi|caputo|carbone|cattaneo|colombo|d’angelo|rosa|fabbri|ferraro|fiore|galli|gentile|grasso|guidi|leone|lombardo|longo|mariani|martini|mazza|monti|morelli|donati|negri|orlando|pagano|palumbo|parisi|piras|rinaldi|sala|santoro|testa|valentini|zanetti|rossi|ricci|moretti|ferrari|esposito|romano|conti|greco|bruno|gallo|costa|mancuso|marchetti|barbieri|lombardi|fontana|caruso|rizzo|serra|pellegrino|vitale|sartori|bianchi|villa|amato|deluca|marino|neri|riva|valli|basso|damico|ferrante)/i,'ITA'],
+ [/(albanese|basile|bellini|benedetti|bernardi|caputo|carbone|cattaneo|colombo|d’angelo|rosa|fabbri|ferraro|fiore|galli|gentile|grasso|guidi|leone|lombardo|longo|mariani|martini|mazza|monti|morelli|donati|negri|orlando|pagano|palumbo|parisi|piras|rinaldi|sala|santoro|testa|valentini|zanella|rossi|ricci|moretti|ferrari|esposito|romano|conti|greco|bruno|gallo|costa|mancuso|marchetti|barbieri|lombardi|fontana|caruso|rizzo|serra|pellegrino|vitale|sartori|bianchi|villa|amato|deluca|marino|neri|riva|valli|zanetti|basso|damico|ferrante)/i,'ITA'],
  [/(albrecht|baumann|bergmann|böhm|brandt|dietrich|engel|fiedler|franke|friedrich|gerlach|graf|haas|hartmann|heinrich|herrmann|jäger|kaiser|keller|kessler|kraus|lindner|lorenz|maier|marx|pohl|reuter|roth|sauer|schreiber|schubert|seidel|sommer|stein|thiele|vogel|voigt|winkler|ziegler|müller|schmidt|schneider|fischer|weber|wagner|becker|hoffmann|schäfer|kühn|bauer|richter|klein|wolf|neumann|zimmermann|braun|krüger|lange|werner|krause|schulte|böhme|frank|gerber|hein|jung|mayer|nagel|otto|pfeiffer|ulrich|voss|winter)/i,'GER'],
  [/(aubert|barbier|beaumont|bellamy|berthier|blanchard|boucher|carpentier|chevalier|clément|colin|delacroix|delmas|deschamps|fabre|faure|fontaine|gaillard|garnier|giraud|guérin|jacquet|morel|lacroix|lambert|leclerc|lemaire|marchand|mercier|noël|perrin|picard|renard|rousseau|tessier|vasseur|vidal|dubois|lefèvre|moreau|girard|bonnet|fournier|arnaud|bertrand|escoffier|gauthier|herve|imbert|jourdain|laurent|marchal|noel|olivier|poirier|renaud|sauvage|thibault|weber)/i,'FRA'],
- [/(bakker|boersma|bos |brouwer|boer|graaf|wit |dekker|dijkstra|hoekstra|hofman|huisman|jansen|koster|kramer|kuipers|maas|meijer|mulder|postma|prins|scholten|schouten|smits|beek|dam |berg|heijden|leeuwen|vliet|veenstra|verhoeven|visser|vos |willems|smit|peters|hendriks|timmermans|groot|blom|kroon|rietveld|sanders|aalders|bruggink|cornelissen|driessen|everts|faber|geerts|ijssel|jonker|klaassen|lammers|nijhuis|overmars|reinders|stam|terpstra|vermeer|van |de boer|de graaf|de wit)/i,'NED'],
+ [/(bakker|boersma|bos |brouwer|boer|graaf|wit |dekker|dijkstra|hoekstra|hofman|huisman|jansen|koster|kramer|kuipers|maas|meijer|mulder|postma|prins|scholten|schouten|smits|beek|dam |berg|heijden|leeuwen|vliet|veenstra|verhoeven|visser|vos |willems|smit|peters|hendriks|timmermans|groot|blom|kroon|rietveld|sanders|aalders|bruggink|cornelissen|driessen|everts|faber|geerts|ijssel|jonker|klaassen|lammers|nijhuis|overbeek|reinders|stam|terpstra|vermeer|van |de boer|de graaf|de wit)/i,'NED'],
  [/(claes|coppens|backer|smet|declercq|dubois|goossens|hermans|jacobs|lemmens|maes|martens|mertens|wouters|peeters|pauwels|segers|thys|damme|vandenberghe|vermeulen|verstraete|willems|janssens|desmet|vandamme|cools|verhoeven|michiels|dewulf|buyse|vervoort|standaert|baert|dhondt|naert|aerts|bogaert|deblauwe|everaert|fransen|geerinck|ivens|keppens|loos|nuyts|onkelinx|rombouts|steenackers|vanhoof)/i,'BEL']];
 const NAT_POOL_BY_CC={ENG:['ENG','ENG','ENG','ENG','ENG','ENG','IRL','SCO','WAL','NIR','NGA','GHA','JAM'],
  ESP:['ESP','ESP','ESP','ESP','ESP','ARG','BRA','URU','COL','MAR'],
@@ -19536,7 +19536,7 @@ ENG:('Jack Harry Oliver George Charlie Alfie Archie Freddie Louie Kai Mason Reec
  'Ethan Zach Nathan Corey Brandon Aaron Declan Connor Liam Kit Shay Jamie Luca Elias Ellis Micah Malachi Ezra Kobi Jarell Tyrese Kaeden Roman Vinnie Chester '+
  'Sol Zane Jonah Reuben Seth Miles Caleb Blake Kian Joel Curtis Levi Trey Devon Ashton Marley Rio Ade Femi Tunde Kwame Kofi Jaden Nile Bode').split(' '),
 ENG2:('Walker Hughes Bennett Clarke Robinson Turner Wright Foster Barnes Chapman Dawson Ellis Gibson Hardy Ingram Jennings Kerr Lowe Mercer Nash Osborne Peverell Reid Shaw Webb '+
- 'Ashby Bramley Carrington Dunmore Eastwood Fairhurst Garside Halliwell Ibbotson Jardine Kimber Lockwood Marlowe Netherwood Ollerton Pemberton Quarrie Ravenhill Sedgwick Thornley '+
+ 'Ashby Bramley Carleton Dunmore Eastwood Fairhurst Garside Halliwell Ibbotson Jardine Kimber Lockwood Marlowe Netherwood Ollerton Pemberton Quarrie Ravenhill Sedgwick Thornley '+
  'Underhill Verity Wharton Yardley Ackroyd Braithwaite Castleton Denby Endicott Fenwick Grimshaw Hollingworth Inkpen Jessop Kirkbride Langtree Mowbray Norbury Oakley Prescott '+
  'Radcliffe Standish Tunnicliffe Uttley Vickery Wadsworth Yorke Alderton Birtwistle Cawley Duxbury Entwistle Fothergill Gledhill Haworth Iveson Jellicoe Kenworthy Lightfoot Massey '+
  'Naylor Openshaw Pilkington Quill Rushworth Shackleton Thistlethwaite Umber Vine Winstanley Yates Adeyemi Boateng Chukwu Danquah Eze Frimpong Gyasi Hylton Idowu Johnson '+
@@ -22452,8 +22452,8 @@ openModal=function(){
     '<div class="in-crest"><div class="in-ring"></div>'+
      crest({i:'intro',c1:'#DA291C',c2:'#FBE122',short:'MUN',name:'Manchester Reds'},118)+
     '</div>'+
-    '<div class="in-t1">RED DEVIL</div>'+
-    '<div class="in-t2">MANAGER</div>'+
+    '<div class="in-t1">THE RESULTS</div>'+
+    '<div class="in-t2">BUSINESS</div>'+
     '<div class="in-rule"></div>'+
     '<div class="in-sub">Westgate Stadium · 2026/27</div>'+
    '</div></div>'+
@@ -24925,7 +24925,7 @@ const NAT_REAL={
 for(const k in NAT_REAL)NAT_EXACT[k]=NAT_REAL[k];
 
 /* =====================================================================
-   AND ANY SAVE THAT ALREADY HAS BELLINGHAM DOWN AS COLOMBIAN
+   AND ANY SAVE THAT ALREADY HAS A PLAYER DOWN AS THE WRONG NATIONALITY
    ---------------------------------------------------------------------
    natOf() caches onto the player object and the object is serialised into
    the save, so a career already in progress carries the wrong answer
@@ -32382,7 +32382,7 @@ TB.boot=function(){
  g.add(boot);
  return g};
 
-/* ---- 6. THE BALLON D'OR ----------------------------------------------
+/* ---- 6. THE WORLD PLAYER OF THE YEAR ----------------------------------------------
    The ball itself: a gold sphere with real pentagon and hexagon panels
    cut into it, held on a slim stem above a dark stone base. */
 TB.ballon=function(){
@@ -32390,7 +32390,7 @@ TB.ballon=function(){
  g.add(tLathe([[4.2,0],[4.2,1.4],[3.4,1.9],[2.6,2.4]],M.dark));
  const band=new THREE.Mesh(new THREE.CylinderGeometry(2.6,2.6,1.1,96),
   new THREE.MeshStandardMaterial({color:0xf0f2f4,metalness:1,roughness:.2,
-   bumpMap:tEngraveBand(['BALLON D\'OR']),bumpScale:.04}));
+   bumpMap:tEngraveBand(['WORLD PLAYER OF THE YEAR']),bumpScale:.04}));
  band.position.y=2.95;g.add(band);
  g.add(tLathe([[2.6,3.5],[1.2,4.2],[.55,5.4],[.5,7.4],[.9,8.4]],M.goldWarm));
  /* the ball, panelled */
@@ -39939,7 +39939,7 @@ newGame=function(){
    the token level, which means every screen in the game improves at once
    rather than one at a time.
 
-   1. IT IS ALWAYS MANCHESTER UNITED RED. Take the Mersey Blues job and the
+   1. IT IS ALWAYS ONE CLUB'S RED. Take the Mersey Blues job and the
       buttons, the active tabs, the nav and the accents stay red. The
       accent is now YOUR club's first colour, derived on load and whenever
       you change job, with a readable-contrast pass so a yellow club does
@@ -41503,7 +41503,7 @@ tEngraveBand=function(lines,opt){
    if(i){
     x.strokeStyle='#5c5c5c';x.lineWidth=h*.009;
     x.beginPath();x.moveTo(i*slot,h*.24);x.lineTo(i*slot,h*.76);x.stroke()}
-   /* 'S7 Islington' becomes SEASON 7 over ARSENAL, which is how a winners'
+   /* 'S7 Islington' becomes SEASON 7 over ISLINGTON, which is how a winners'
       ring is actually laid out and reads far better at a glance */
    const m=String(s).match(/^S(\d+)\s+(.+)$/);
    if(m&&!o.oneLine){
@@ -41918,7 +41918,7 @@ TB.EL=function(){
  return g};
 
 /* =====================================================================
-   10. THE CONFERENCE LEAGUE
+   10. THE FEDERATION CUP
    ---------------------------------------------------------------------
    The odd one out and the only abstract in the room: a cage of tall
    silver blades that twist as they rise and open into a cup. It was an
@@ -42254,7 +42254,7 @@ TB.ballon=function(){
  g.add(tLathe2([[4.3,0],[4.3,1.3],[4.05,1.55],[3.0,2.0],[2.4,2.45]],M.stone));
  const band=new THREE.Mesh(new THREE.CylinderGeometry(4.32,4.32,.8,tS(48,96)),
   new THREE.MeshStandardMaterial({color:0xe9c463,metalness:1,roughness:.24,
-   bumpMap:tEngraveBand(["BALLON D'OR"],{oneLine:true}),bumpScale:.04}));
+   bumpMap:tEngraveBand(["WORLD PLAYER OF THE YEAR"],{oneLine:true}),bumpScale:.04}));
  band.position.y=.66;g.add(band);
  g.add(tFillet(1.36,4.33,.09,M.gold));
  g.add(tLathe2([[2.4,2.45],[1.15,3.3],[.6,4.6],[.55,6.6],[1.0,7.6]],GW));
@@ -54602,41 +54602,13 @@ dugPose=function(id,sp,swing,bob,face){
 /* ---------------------------------------------------------------------
    0. THE SIGNATURES
    ---------------------------------------------------------------------
-   CELEB_SIG is a const, but a const array is still an array — the table
-   is edited in place rather than shadowed, so celebFor keeps reading the
-   one table and nothing has to be rewired.
+   Nobody's celebration is written down by name: every player is given
+   one of his own from the list, the same one every time. This only adds
+   the newer shapes to the list they are drawn from.
    --------------------------------------------------------------------- */
 (function celebFix(){
  try{
   if(typeof CELEB_SIG==='undefined')return;
-  const kill=/cunha|martinelli/i;
-  for(let i=CELEB_SIG.length-1;i>=0;i--)
-   if(kill.test(String(CELEB_SIG[i][0])))CELEB_SIG.splice(i,1);
-  CELEB_SIG.unshift(
-   [/cunha/i,'surf'],                 /* the surfboard is his */
-   [/martinelli/i,'wings'],
-   [/garnacho/i,'sky'],
-   [/rashford/i,'point'],
-   [/h[oø]jlund|hojlund/i,'pump'],
-   [/mount/i,'heart'],
-   [/isak/i,'calm'],
-   [/wirtz/i,'shush'],
-   [/gy[oö]kere/i,'mask'],
-   [/yamal/i,'point'],
-   [/bellingham/i,'wings'],
-   [/kane/i,'pump'],
-   [/heung.?min|son heung/i,'camera'],
-   [/watkins|wissa/i,'slide'],
-   [/eze|olise/i,'cold'],
-   [/semenyo|mateta/i,'pump'],
-   [/lewandowski/i,'calm'],
-   [/grealish/i,'heart'],
-   [/n[uú][nñ]ez|nunez/i,'shush'],
-   [/de bruyne/i,'point'],
-   [/saliba|van dijk|konat[eé]/i,'pump'],
-   [/schade/i,'wings'],
-   [/[cs]a[il]cedo|caicedo/i,'knee'],
-   [/rice/i,'bow']);
   if(typeof CELEBS!=='undefined'&&CELEBS.push){
    ['point','mask','camera','knee','bow'].forEach(k=>{
     if(CELEBS.indexOf(k)<0)CELEBS.push(k)})}

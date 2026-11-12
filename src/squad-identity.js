@@ -31,7 +31,7 @@
 
    ---------------------------------------------------------------------
    CODEX'S OWN DATA ALREADY SOLVES IT. The biography pass they ran stores
-   an `aliases` array per player against an ESPN id:
+   an `aliases` array per player against a source id:
 
      355980  Billy Atherton   [ "Billy Atherton", "Jérémy Guérin" ]
      258491  Segun Ezenwa     [ "Segun Ezenwa", "Chinedu Babatunde" ]
@@ -110,7 +110,7 @@
     const key = fold(player && player.name);
     if (!key) return null;
     const known = aliasIndex.get(key);
-    return known ? 'espn:' + known.id : 'name:' + key;
+    return known ? 'src:' + known.id : 'name:' + key;
   }
 
   function canonicalName(player) {
@@ -176,7 +176,7 @@
       G.clubs.forEach((club) => {
         (club.players || []).forEach((p) => {
           const id = identityOf(p);
-          if (!id || id.indexOf('espn:') !== 0) return;
+          if (!id || id.indexOf('src:') !== 0) return;
           const held = best.get(id);
           if (!held) { best.set(id, { player: p, club }); return; }
           const home = homeClub(p);
@@ -192,7 +192,7 @@
         const before = (club.players || []).length;
         club.players = (club.players || []).filter((p) => {
           const id = identityOf(p);
-          if (!id || id.indexOf('espn:') !== 0) return true;
+          if (!id || id.indexOf('src:') !== 0) return true;
           const keep = best.get(id);
           if (keep && keep.player !== p) {
             dropped.add(p.id);

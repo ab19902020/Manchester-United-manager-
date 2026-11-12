@@ -127,7 +127,7 @@
       const men = ['James Cooper', 'Danny Whitmore', 'Tom Beckett', 'Marcus Reeve',
         'Dean Whitlock', 'Terry Docherty', 'Ollie Grant', 'Gareth Vaughan',
         'Ian Mercer', 'Ross Kilbride', 'Neil Ashworth', 'Paul Ferriday',
-        'Steve Nolan', 'Clive Bannerman', 'Rory Maguire', 'Alan Prosser'];
+        'Steve Nolan', 'Clive Bannerman', 'Rory Malone', 'Alan Prosser'];
       REPORTERS.length = 0;
       men.forEach((name) => REPORTERS.push(name));
     }
