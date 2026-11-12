@@ -92,12 +92,13 @@ val releaseStore = signingValue("storeFile", "RB_KEYSTORE_FILE")
 
 android {
     namespace = "com.resultsbusiness.manager"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.resultsbusiness.manager"
         minSdk = 24
-        targetSdk = 35
+        /* Google Play only accepts new apps that target a recent Android. */
+        targetSdk = 36
         versionCode = buildNumber
         versionName = gameVersion
     }

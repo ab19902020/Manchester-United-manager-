@@ -112,6 +112,11 @@ public final class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
         createdAt = SystemClock.uptimeMillis();
 
+        if (Build.VERSION.SDK_INT >= 33) {
+            getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
+                    android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT, this::handleBack);
+        }
+
         /* Edge to edge only where the insets API can keep the page clear of
            the notch; older Android keeps its own cutout handling. */
         if (Build.VERSION.SDK_INT >= 30) {
@@ -633,10 +638,13 @@ public final class MainActivity extends Activity {
        BACK, LIFECYCLE, AND THE SCREEN
        ------------------------------------------------------------------ */
 
-    @Override
-    @SuppressWarnings("deprecation")
-    public void onBackPressed() {
-        if (web == null) { super.onBackPressed(); return; }
+    /* Back is the page's to answer first: it closes a sheet, leaves a room
+       or steps up a section, and only says "native" when there is nothing
+       left to close. From Android 13 the system delivers back through a
+       callback instead of onBackPressed, and an app that targets Android
+       16 gets nothing else -- so both doors lead here. */
+    private void handleBack() {
+        if (web == null) { moveTaskToBack(true); return; }
         web.evaluateJavascript(
                 "(function(){try{return window.AndroidShellBack?window.AndroidShellBack():'native'}"
                         + "catch(e){return 'native'}})()",
@@ -648,6 +656,12 @@ public final class MainActivity extends Activity {
                        page, so an autosave still being written finishes. */
                     moveTaskToBack(true);
                 });
+    }
+
+    @Override
+    @SuppressWarnings("deprecation")
+    public void onBackPressed() {
+        handleBack();
     }
 
     @Override
