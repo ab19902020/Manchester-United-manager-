@@ -3,12 +3,12 @@
 /* =====================================================================
    ONE MAN, ONE JOB
    ---------------------------------------------------------------------
-   Yann Fontaine was managing Real Madrid and Benfica at the same time.
+   Yann Fontaine was managing Madrid Blancos and União Lisboa at the same time.
    So were fourteen other men, in pairs, across the world:
 
-       Nathan Aubert    Tottenham Hotspur  |  Marseille
-       Kévin Deschamps         Crystal Palace     |  RC Lens
-       Yann Fontaine       Real Madrid        |  Benfica
+       Nathan Aubert    Haringey Whites  |  Marseille
+       Kévin Deschamps         Croydon Rovers     |  Entente Lens
+       Yann Fontaine       Madrid Blancos        |  União Lisboa
        ... and twelve more
 
    TWO CAUSES, and they need different answers.
@@ -27,7 +27,7 @@
 
    THE RULE. A club named in `MANAGERS` keeps its man, because that list
    is the curated one and it is the one the director confirmed: Fontaine
-   is at Real Madrid. Otherwise the club that comes first in the world
+   is at Madrid Blancos. Otherwise the club that comes first in the world
    keeps him, which is arbitrary but stable. Whoever loses gets a fresh
    name from his own country's pool, drawn off a different seed. He does
    not inherit a real person's job by default, and no real manager is

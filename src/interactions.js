@@ -202,7 +202,7 @@
   /* THE SQUAD YOU ACTUALLY HAVE.
 
      `expectPos` ranks a division by reputation, and reputation does not
-     move when you sell people. Measured: Manchester United sold Bruno
+     move when you sell people. Measured: Manchester Reds sold Bruno
      Esteves, Jesse Koster and Joël Tchami in one window — the top
      sixteen dropped from 85.2 to 83.7 — and the board still asked for
      <b>5th</b>. Not one place. The same blindness covers an injury crisis
@@ -221,7 +221,7 @@
   const SQUAD_WEIGHT = 0.5;    /* how much of the expectation is the squad, not the badge */
   const EXPECT_SWING = 5;      /* most places the squad may move it from reputation */
   /* A board notices a weakened squad faster than it rewards a strengthened
-     one. Symmetric weighting also moved the default Manchester United
+     one. Symmetric weighting also moved the default Manchester Reds
      target from 5th to 3rd before the manager had done anything, which is
      a difficulty change nobody asked for; this keeps the response to
      selling your best players while leaving day one roughly where it was. */
@@ -1056,13 +1056,13 @@
      and never mentioned the Champions Cup — while the club had eight
      Champions Cup fixtures already on the calendar.
 
-     Reproduced at Manchester United:
+     Reproduced at Manchester Reds:
 
          mail: "This season the club competes in the League Cup and FA Cup."
          G.euroEntry.CL includes this club:  true
          Champions Cup fixtures on the calendar: 8
-         English clubs in the Champions Cup: Liverpool, Arsenal, Man City,
-                                             Man Utd, Chelsea   (five)
+         English clubs in the Champions Cup: Mersey Reds, Islington, Man Blues,
+                                             Man Reds, W London   (five)
 
      The cause is a world that gets built twice. The letter is written by
      an early `newGame` layer, at a point where `G.clSpots` is still empty;
@@ -1136,8 +1136,8 @@
      -------------------------------------------------------------------
      Measured over four hundred generated intakes per level:
 
-         Manchester United, academy level 1 -> mean potential 85.2
-         Manchester United, academy level 5 -> mean potential 85.8
+         Manchester Reds, academy level 1 -> mean potential 85.2
+         Manchester Reds, academy level 5 -> mean potential 85.8
 
      Five levels of investment, worth 0.6. The board hands academy
      upgrades out as a reward and the facility is on the stadium screen
@@ -1164,7 +1164,7 @@
      club and a level-5 academy stretches what its best prospects might
      become. Level 1 is exactly what it is today, so nothing is nerfed.
      ------------------------------------------------------------------- */
-  /* Sized twice. 0.13 applied from level 1 upward put Manchester United's
+  /* Sized twice. 0.13 applied from level 1 upward put Manchester Reds's
      mean intake potential at 94.2 with a top decile of 97 — a world-class
      player every year, and a decade of that inflates the world. And every
      club in the world has an academy level, not just yours: 92 at level 1,

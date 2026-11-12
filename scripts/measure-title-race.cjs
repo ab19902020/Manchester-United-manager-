@@ -207,8 +207,8 @@ const BAL = process.argv[5] ? JSON.parse(process.argv[5]) : null;
          back while its nineteen opponents played one each. The clubs
          sit in the array strongest first, so the best squads burned
          through their home fixtures exhausted against fresh opposition
-         and the table came out inverted — Arsenal on 49 points and
-         Sunderland on 74 — which read exactly like an engine that
+         and the table came out inverted — Islington on 49 points and
+         Wearside on 74 — which read exactly like an engine that
          ignores quality. It was the schedule.
 
          rrPairs is the game's own Berger round robin, home and away,

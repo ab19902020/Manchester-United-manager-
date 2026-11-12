@@ -8,7 +8,7 @@ const { createGame, startCareer } = require('./game-harness.cjs');
  *
  * Every price on the stadium screen used to be a flat Premier League
  * number charged to all 484 clubs: £380,000,000 to rebuild, whether you
- * were Manchester United or a National League side with £376,000 in the
+ * were Manchester Reds or a National League side with £376,000 in the
  * bank. Nobody below the Championship could lay a single seat.
  *
  * These tests pin the shape rather than the exact figures, because the
@@ -105,8 +105,8 @@ test('the same job costs more the higher up you are', async () => {
 test('the biggest grounds are still a serious amount of money', async () => {
   const game = await world();
   try {
-    /* the point was never to make everything cheap. Manchester United
-       rebuilding Old Trafford should still be a once-in-a-career
+    /* the point was never to make everything cheap. Manchester Reds
+       rebuilding Westgate Stadium should still be a once-in-a-career
        decision — it was £380m before and should be near that. */
     const big = game.eval(`(function () {
       const api = window.RBSStadiumCosts;

@@ -9,7 +9,7 @@ const { createGame, startCareer } = require('./game-harness.cjs');
  *
  * The duplicates came from the summer-2026 signing list looking a player
  * up with `x.name === nm`. Two spellings of one man are two men to that
- * test, so Liverpool carried both "Jérémy Guérin" and "Billy Atherton",
+ * test, so Mersey Reds carried both "Jérémy Guérin" and "Billy Atherton",
  * and the dedupe sweep that exists to catch exactly this could not see it
  * either. Segun Ezenwa and Chinedu Babatunde are the same player under two
  * different names, which no string comparison would ever join.

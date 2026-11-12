@@ -6,7 +6,7 @@
    ---------------------------------------------------------------------
    Reported: "too many injuries, I had four games and five injuries
    straight at the start". Reproduced exactly on the first try — a fresh
-   Manchester United career, four matches in:
+   Manchester Reds career, four matches in:
 
        match injuries     2
        training injuries  3

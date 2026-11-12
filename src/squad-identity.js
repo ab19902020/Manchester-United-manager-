@@ -17,16 +17,16 @@
    — and the duplicate sweep that follows it key on the exact string. So
    two spellings of one man are two men:
 
-     Liverpool  "Jérémy Guérin"   (base squad)
+     Mersey Reds  "Jérémy Guérin"   (base squad)
                 "Billy Atherton"   (the signing list)
 
    The signing is not found, so it is created rather than moved, and the
    sweep that exists specifically to catch this cannot see it either
-   because the strings differ by two accents. Liverpool play the season
+   because the strings differ by two accents. Mersey Reds play the season
    with both.
 
    The harder case is a man under two different names rather than two
-   spellings of one: Segun Ezenwa is listed at Brentford and Ogochukwu
+   spellings of one: Segun Ezenwa is listed at Hounslow and Ogochukwu
    Ezenwa at Coventry. No amount of string folding joins those.
 
    ---------------------------------------------------------------------
@@ -130,7 +130,7 @@
      9,908 to 8,023. It "fixed" Jacquet and Ezenwa and gutted nineteen
      per cent of the squads doing it, because the generated name pool
      collides: Sebastian Wagner at Bayern and Sebastian Wagner at
-     Schalke are two different made-up men, and real football is full of
+     Gelsenkirchen are two different made-up men, and real football is full of
      this too — two Adam Smiths, two Ben Davieses, both in the sourced
      data.
 
@@ -156,10 +156,10 @@
       /* ---- pass one: identified players, across the whole world ----
          WHICH COPY SURVIVES IS DECIDED BY THE SOURCE, NOT BY RATING.
          Keeping the better-rated record looks reasonable and is wrong:
-         it took a man off Fleetwood Town because his other copy sat at
+         it took a man off Fleetwood Rovers because his other copy sat at
          a bigger club with a higher number beside it, and a sourced
          roster is supposed to be exactly what the source says. The test
-         that caught it — "Fleetwood Town squad depth changed, 18 where
+         that caught it — "Fleetwood Rovers squad depth changed, 18 where
          19 was expected" — is guarding that on purpose.
 
          The source already records which club he plays for. So that

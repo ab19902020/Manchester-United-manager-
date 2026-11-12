@@ -29,7 +29,7 @@
    flat £6.5M base was added to every club before that divisor, which put
    a Premier League floor under the whole pyramid. And commercial income
    was counted twice — once through the sponsorship-deals system, which
-   is well calibrated (Arsenal £216M against a real £218M), and again
+   is well calibrated (Islington £216M against a real £218M), and again
    through a `rep x 1150` stream worth another £132M on top.
 
    The costs were worse in the other direction. Operating costs were
@@ -126,7 +126,7 @@
      biggest name in the league, 0 the smallest. Corporate income and
      crowds both track this rather than raw reputation, which is why a
      Premier League club at the bottom of the table still fills its
-     ground and a big Championship club does not charge Arsenal prices. */
+     ground and a big Championship club does not charge Islington prices. */
   function standing(c) {
     return guard('standing', () => {
       const mem = divMembers(c.league) || [];
@@ -194,9 +194,9 @@
      and a good mid-table side sells them in one town. Measured across the
      Premier League against published 2023/24 figures:
 
-         Arsenal    £216M model / £218M real   0.99
-         Chelsea    £192M / £211M              0.91
-         Palace     £133M / £40M               3.33
+         Islington    £216M model / £218M real   0.99
+         W London    £192M / £211M              0.91
+         Croydon     £133M / £40M               3.33
          Brighton   £139M / £27M               5.15
          Bournemouth £127M / £24M              5.29
 
@@ -403,7 +403,7 @@
            ground, the matchdays, everything that is not a wage — and
            nothing ever debited it. Only wages left the account, so the
            screen and the bank disagreed by the whole of that line: about
-           £165M a year at Manchester United. It is charged now, so the
+           £165M a year at Manchester Reds. It is charged now, so the
            projection you are shown is the money that actually moves. */
         const ops = Math.round(costsFor(me).ops / 12);
         me.bank += central + com - ops;
@@ -2005,8 +2005,8 @@
          £160,300,000 a year in sponsorship
          £13,358,333 a month, against £795,516 it could actually sign
 
-     which is Manchester United's four contracts, verbatim, 202 times what
-     the club is worth. Northampton Town went from £1.5M to £174M in one
+     which is Manchester Reds's four contracts, verbatim, 202 times what
+     the club is worth. Northampton Rovers went from £1.5M to £174M in one
      League Two season on it.
 
      The cause is the career-start path, not an exotic one. `newGame(key)`

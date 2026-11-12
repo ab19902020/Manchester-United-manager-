@@ -13,7 +13,7 @@ const { createGame, startCareer } = require('./game-harness.cjs');
  *
  * The second is the fault that check turned up. A generated player had
  * been given the name of a real one — a 66-rated Emil Eide at
- * Bodø/Glimt alongside the real 91-rated one at Manchester City —
+ * Bodø alongside the real 91-rated one at Manchester Blues —
  * because the name generator does not know which names the authored
  * squads used, and 'Erling' and 'Eide' are both ordinary Norwegian
  * names sitting in the Norwegian pools.

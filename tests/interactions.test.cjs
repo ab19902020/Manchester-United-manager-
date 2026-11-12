@@ -467,7 +467,7 @@ test('the dressing room knows what match it is', async (t) => {
 
 /*
  * The academy facility had no effect at all. Measured over 400 generated
- * intakes: Manchester United level 1 -> mean potential 85.2, level 5 -> 85.8.
+ * intakes: Manchester Reds level 1 -> mean potential 85.2, level 5 -> 85.8.
  * The bonus lived in a wrapper that a later layer overwrote by assigning
  * genYouthPlayer outright instead of wrapping it.
  */
@@ -510,7 +510,7 @@ test('the academy you pay for changes what comes out of it', async (t) => {
 
 /*
  * The board's target ranked a division by reputation, and reputation does not
- * move when you sell people. Measured: Manchester United sold Miguel Esteves,
+ * move when you sell people. Measured: Manchester Reds sold Miguel Esteves,
  * Jesse Koster and Joël Tchami in one window — the top sixteen dropped
  * from 85.2 to 83.7 — and the board still asked for 5th. Not one place.
  *

@@ -12,11 +12,11 @@
    world, smallest ground in each English tier:
 
      tier  club              ground    bank     a rebuild cost
-     NL    AFC Hornchurch     3,500    £376k    £380,000,000
-     L2    Salford City       5,108    £1.6m    £380,000,000
+     NL    Hornchurch Athletic     3,500    £376k    £380,000,000
+     L2    Salford Athletic       5,108    £1.6m    £380,000,000
      L1    Bromley            5,000    £2.3m    £380,000,000
-     CH    Lincoln City      10,669    £6.6m    £380,000,000
-     PL    AFC Bournemouth   11,300  £134.6m    £380,000,000
+     CH    Lincoln Rovers      10,669    £6.6m    £380,000,000
+     PL    Bournemouth Rovers   11,300  £134.6m    £380,000,000
 
    A thousand times a non-league club's entire bank, for the same
    building. The training centre (£22m), the academy (£18m) and the
@@ -49,7 +49,7 @@
 
    THE REBUILD IS PRICED OFF THE GROUND, NOT THE REPUTATION, because it
    is a building job: four times the next expansion phase, which is
-   itself now capacity-scaled. That keeps Old Trafford's rebuild at about
+   itself now capacity-scaled. That keeps Westgate Stadium's rebuild at about
    the £380m it has always been while a non-league ground costs a few
    million — the same formula at both ends.
 
@@ -90,7 +90,7 @@
     /* A REBUILD IS A BUILDING JOB, SO IT IS PRICED LIKE ONE. Four phases
        of expansion is what tearing the ground down and starting again is
        worth, and seatCost() is already capacity-scaled — so this lands
-       near the original £380m at Old Trafford and at a few million for a
+       near the original £380m at Westgate Stadium and at a few million for a
        non-league ground, from one formula. */
     try {
       if (typeof seatCost === 'function') {

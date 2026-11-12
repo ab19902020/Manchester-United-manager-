@@ -16,8 +16,8 @@
    That work is done.
 
    THE CHECK FOUND SOMETHING ELSE, which nobody had reported: a second
-   Emil Eide. A 66-rated one, generated, at Bodø/Glimt, in the same
-   world as the real 91-rated one at Manchester City.
+   Emil Eide. A 66-rated one, generated, at Bodø, in the same
+   world as the real 91-rated one at Manchester Blues.
 
    The cause is that the name generator does not know which names the
    authored squads already used. `wName` picks a first name and a surname

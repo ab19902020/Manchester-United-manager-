@@ -502,11 +502,11 @@ test('the budget slider moves money both ways and never lies about the wage bill
 /*
  * Found by tracing every change to a club's bank balance over a season.
  * Start a career at Worthing — National League, £348,000 in the bank — and
- * the club drew £160,300,000 a year in sponsorship: Manchester United's four
+ * the club drew £160,300,000 a year in sponsorship: Manchester Reds's four
  * contracts, verbatim, 202 times what the club could sign.
  *
  * `newGame(key)` — how you pick a club, and how you start one you have built
- * — runs newGame(0) first, so the world is built around Manchester United and
+ * — runs newGame(0) first, so the world is built around Manchester Reds and
  * ensureCommercial() writes United's deals; only then does it takeOverClub()
  * you into the club you chose. Nothing cleared G.deals, and ensureCommercial
  * only ever fills empty slots.
@@ -607,7 +607,7 @@ test('the rest of the world banks what it earns, and neither goes bust nor hoard
 });
 
 /* the Finances screen showed a running-costs line that nothing ever debited —
-   about £165M a year at Manchester United, which is where a user's bank
+   about £165M a year at Manchester Reds, which is where a user's bank
    compounding to £900M over four seasons came from */
 test('the running costs on the Finances screen actually leave the account', async (t) => {
   const game = await createGame();
@@ -760,7 +760,7 @@ test('going up is worth money', async (t) => {
  * The sponsorship model was linear in reputation and real commercial revenue
  * is nothing like linear — a global brand sells shirts in Asia, a good
  * mid-table side sells them in one town. Measured against published 2023/24
- * figures the top of the Premier League was already right (Arsenal £216M
+ * figures the top of the Premier League was already right (Islington £216M
  * model / £218M real) and everything under it was three to five times too
  * generous (Bournemouth £127M / £24M), giving a top-to-bottom spread of 2.5x
  * against a real 14.3x.

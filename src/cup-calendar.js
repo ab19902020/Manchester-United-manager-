@@ -7,7 +7,7 @@
    that says, out loud, which round of which cup you are in and when it
    is. On 26 May of the first season it said this:
 
-       League Cup — Third Round · Millwall away · 16 Sept    STILL IN
+       League Cup — Third Round · Bermondsey away · 16 Sept    STILL IN
 
    Which is true, and is the bug. Sixteen League Cup ties were sitting
    unplayed with a September date on them, in May.

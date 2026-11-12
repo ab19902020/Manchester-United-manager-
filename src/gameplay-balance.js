@@ -45,8 +45,8 @@
      4. THE TRANSFER NEWS. rumourMill only ever looked at players rated
         76 or better, skipped League Two and the National League
         entirely, and only ever picked a suitor from the Premier League
-        or Europe. Whoever you manage, your inbox is Arsenal and
-        Manchester United.
+        or Europe. Whoever you manage, your inbox is Islington and
+        Manchester Reds.
 
      5. CARDS. The suspension itself was right — two matches for a
         straight red, one for two yellows, one every fifth booking. It
@@ -446,7 +446,7 @@
     if (p.listed) rate *= 0.5;
 
     /* 0 = a small club, 4 = one of the biggest in the world. A lending
-       club charges Manchester United and lets a National League side
+       club charges Manchester Reds and lets a National League side
        have him for the wages — the old multiplier had this backwards
        and billed the small club eighteen per cent more. */
     let k = 2;

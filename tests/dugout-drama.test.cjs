@@ -23,7 +23,7 @@ test('the classifier separates the moments worth stopping for', async () => {
 
     assert.equal(kind('GOAL! Winstanley slots it home', 'goal'), 'goal');
     assert.equal(kind('Martínez is sent off after a second yellow', 'big'), 'red');
-    assert.equal(kind('PENALTY to Manchester United', 'big'), 'pen');
+    assert.equal(kind('PENALTY to Manchester Reds', 'big'), 'pen');
     assert.equal(kind('The referee is going to the monitor for a VAR check', 'big'), 'var');
     assert.equal(kind('Off the woodwork! Inches away', 'big'), 'post');
     assert.equal(kind('Miranda is booked for that', 'big'), 'card');

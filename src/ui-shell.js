@@ -11,8 +11,8 @@
    Three things about the approach.
 
    IT IS TINTED FROM THE CLUB, NOT PAINTED RED. The reference is a
-   Manchester United screen, so the obvious reading is "make it red".
-   That would be wrong the moment somebody manages Everton. Every accent
+   Manchester Reds screen, so the obvious reading is "make it red".
+   That would be wrong the moment somebody manages Mersey Blues. Every accent
    here is derived at render time from `c1` on the club you are actually
    managing, so the same design serves all 484 of them and a club you
    built yourself. Red is what United happens to produce.
@@ -60,7 +60,7 @@
   }
 
   /* A club colour has to survive being used as text on a dark panel.
-     Newcastle's black and Juventus's black would vanish, so anything
+     Tyneside's black and Vigor Torino's black would vanish, so anything
      too dark is lifted toward white until it reads. */
   function legible(colour) {
     const [r, g, b] = rgb(colour);

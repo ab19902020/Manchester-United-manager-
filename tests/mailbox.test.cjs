@@ -189,7 +189,7 @@ test('a player named in a letter opens his card, and nothing else does', async (
     const c = G.clubs[G.my];
     const one = c.players[3], two = c.players[5];
     const html = '<div><b>' + one.name + '</b> has knocked on your door. ' +
-      '<b>Manchester United</b> are fourth and <b>' + two.name + '</b> is fit again. ' +
+      '<b>Manchester Reds</b> are fourth and <b>' + two.name + '</b> is fit again. ' +
       'The fee was <b>£12.5M</b>.</div>';
     const out = api.linkify(html);
     const ids = (out.match(/data-id="([^"]+)"/g)||[])
@@ -211,7 +211,7 @@ test('a player named in a letter opens his card, and nothing else does', async (
       openedRight = sheet.indexOf(playerById(ids[0]).name) >= 0;
     }
     return {ids, wanted: [String(one.id), String(two.id)],
-      linkedClub: /data-action="profile"[^>]*>Manchester United/.test(out),
+      linkedClub: /data-action="profile"[^>]*>Manchester Reds/.test(out),
       linkedMoney: /data-action="profile"[^>]*>£/.test(out),
       inboxLinks: api.linkedCount(body), opened, openedRight};
   })()`);

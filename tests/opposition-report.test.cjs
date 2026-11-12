@@ -128,7 +128,7 @@ test('it is on the home screen, under the fixture', async (t) => {
    below the club above them when every other adjacent pair in the
    division differs by 200-350. aiMentality reads that gap, and anything
    past -700 is Counter -- so the promoted three set up to counter-attack
-   even against Sunderland and Leeds, the games a promoted side targets.
+   even against Wearside and Leeds, the games a promoted side targets.
    ===================================================================== */
 
 test('a promoted club arrives as a Premier League club', async (t) => {

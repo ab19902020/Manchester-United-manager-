@@ -267,7 +267,7 @@ input[type=range]{width:100%;accent-color:var(--red-hot);height:30px}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 <style id="v4hero">
-/* ============ TITLE SCREEN — Old Trafford under lights ============ */
+/* ============ TITLE SCREEN — Westgate Stadium under lights ============ */
 .hero-v4{position:relative;overflow:hidden;justify-content:flex-start;padding-top:max(7vh,34px);min-height:100dvh}
 .hero-sky{position:absolute;inset:0;background:
  radial-gradient(120% 65% at 50% 108%,rgba(218,41,28,.42) 0%,rgba(122,19,12,.20) 38%,transparent 66%),
@@ -2175,7 +2175,7 @@ const CUP_DEFS={
 function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
 function initCups(){
  const eng=[...Array(32).keys()]; // PL 0-19 + CH 20-31
- if(!G.clSpots)G.clSpots=[3,2,1,0]; // 25/26 qualifiers: Arsenal (champions), Liverpool, Man City, Man Utd
+ if(!G.clSpots)G.clSpots=[3,2,1,0]; // 25/26 qualifiers: Islington (champions), Mersey Reds, Man Blues, Man Reds
  const euro=[...G.clSpots,...G.clubs.filter(c=>c.league==='EU').map(c=>c.i)];
  G.cups={
   LC:{key:'LC',round:0,winner:null,ties:[],history:[]},
@@ -3349,7 +3349,7 @@ newGame=function(i){
  if(ug){ug.injury={name:'Knee ligament damage',days:112};ug.cond=35;
   if(ug.club===G.my)mail('injury','Farías out long-term','<b>Valentín Farías</b> suffered knee ligament damage at the World Cup and faces around <b>4 months</b> out. The medical staff will manage his rehabilitation.')}
  G.tacs.xi=autoPick(G.my,G.tacs.formation); // re-pick now that injuries are known
- if(G.my===0)mail('board','The Yardley era continues','Fresh from securing Champions Cup qualification, the board has backed you with <b>Douglas Tavares</b> (\u00a348m), <b>Stijn De Smet</b> (\u00a335m) and keeper <b>Jake Lister</b>. Academy sensation <b>Joel Yardley</b>, 15, trains with the first team \u2014 fans are calling him the next big thing. Arsenal are reigning champions; the board expects a real title challenge.');
+ if(G.my===0)mail('board','The Yardley era continues','Fresh from securing Champions Cup qualification, the board has backed you with <b>Douglas Tavares</b> (\u00a348m), <b>Stijn De Smet</b> (\u00a335m) and keeper <b>Jake Lister</b>. Academy sensation <b>Joel Yardley</b>, 15, trains with the first team \u2014 fans are calling him the next big thing. Islington are reigning champions; the board expects a real title challenge.');
 };
 
 /* =====================================================================
@@ -3487,7 +3487,7 @@ function initCups(){
  if((G.clubs[G.my].league==='L1'||G.clubs[G.my].league==='L2')&&!lcPool.includes(G.my)){
   const weakest=lcPool.map(i=>G.clubs[i]).filter(c=>c.league==='CH').sort((a,b)=>a.rep-b.rep)[0];
   lcPool=lcPool.filter(i=>i!==weakest.i);lcPool.push(G.my)}
- if(!G.clSpots)G.clSpots=[3,2,1,0]; // 25/26 qualifiers: Arsenal (champions), Liverpool, Man City, Man Utd
+ if(!G.clSpots)G.clSpots=[3,2,1,0]; // 25/26 qualifiers: Islington (champions), Mersey Reds, Man Blues, Man Reds
  const euTop=G.clubs.filter(c=>c.league==='EU').sort((a,b)=>b.rep-a.rep).slice(0,12).map(c=>c.i);
  const euro=[...G.clSpots,...euTop];
  if(SUPPRESS_CUPS){G.cups=null;return}
@@ -3689,7 +3689,7 @@ dailyTickCore=function(){
   const c=G.clubs[pr.club];
   if(pr.type==='seats'){c.cap+=8000;mail('board','\ud83c\udf89 Expansion complete','The new stand is open \u2014 capacity is now <b>'+c.cap.toLocaleString()+'</b>. Matchday income rises immediately.')}
   else if(pr.type==='rebuild'){c.cap=Math.round(c.cap*1.28/100)*100;c.stad.tier=4;c.stad.modern=true;c.rep=Math.min(9900,c.rep+280);
-   c.stadium=c.key==='MUN'?'New Old Trafford':'The '+c.short+' Arena';
+   c.stadium=c.key==='MUN'?'New Westgate Stadium':'The '+c.short+' Arena';
    mail('board','\ud83c\udfdf\ufe0f A NEW HOME','<b>'+esc(c.stadium)+'</b> opens its doors \u2014 a '+c.cap.toLocaleString()+'-seat, state-of-the-art bowl. One of the finest grounds in world football.')}
   else if(pr.type==='tier'){c.stad.tier=Math.min(4,c.stad.tier+1);c.rep=Math.min(9900,c.rep+150);
    mail('board','\ud83c\udf89 Redevelopment complete','The rebuilt '+esc(c.stadium)+' is a sight to behold. Reputation grows across the game.')}
@@ -3779,7 +3779,7 @@ function vStadium(){
  return h}
 
 /* =====================================================================
-   START SCREEN 2.0 — manage anyone from Old Trafford to Moss Lane
+   START SCREEN 2.0 — manage anyone from Westgate Stadium to Whitegate Park
    ===================================================================== */
 function vClubFinal(){
  const tabs=[['table','Table'],['cups','Cups'],['stats','Stats'],['staff','Staff'],['stadium','Stadium'],['fixtures','Fixtures'],['finances','Finances'],['training','Training'],['save','Save']];
@@ -3811,7 +3811,7 @@ function showStart(){
  G=null;
  UI.startDiv=UI.startDiv||'PL';
  UI._cat=startCatalogue();
- UI.startSel=0; // Man Utd
+ UI.startSel=0; // Man Reds
  const ss=$('#startScreen');
  ss.style.display='flex';
  ss.innerHTML='<div class="logo">RED DEVIL<br><em>MANAGER</em></div>'+
@@ -3822,8 +3822,8 @@ function paintStart(){
  const cat=UI._cat,sel=cat.find(c=>c.i===UI.startSel)||cat[0];
  const divTabs=[['PL','Premier League'],['CH','Championship'],['L1','League One'],['L2','League Two'],['NL','National Lge'],['EU','Europe']];
  let h='';
- if(UI.startSel!==0)h+='<button class="chip" style="margin-bottom:10px" data-action="pickClub" data-v="0">\ud83d\udd34 Featured save: rebuild Manchester United \u2192</button>';
- else h+='<div class="card tight" style="border-color:rgba(218,41,28,.5);margin-bottom:10px"><div class="small" style="font-weight:800;color:var(--gold)">\ud83d\udd34 FEATURED \u2014 THE UNITED REBUILD</div><div class="xs muted" style="margin-top:3px">Santos & De Smet signed, Joel Yardley in the building, Champions Cup football back at Old Trafford. Bring the glory home.</div></div>';
+ if(UI.startSel!==0)h+='<button class="chip" style="margin-bottom:10px" data-action="pickClub" data-v="0">\ud83d\udd34 Featured save: rebuild Manchester Reds \u2192</button>';
+ else h+='<div class="card tight" style="border-color:rgba(218,41,28,.5);margin-bottom:10px"><div class="small" style="font-weight:800;color:var(--gold)">\ud83d\udd34 FEATURED \u2014 THE UNITED REBUILD</div><div class="xs muted" style="margin-top:3px">Santos & De Smet signed, Joel Yardley in the building, Champions Cup football back at Westgate Stadium. Bring the glory home.</div></div>';
  h+='<div class="chips" style="margin-bottom:10px">'+divTabs.map(d=>'<button class="chip'+(UI.startDiv===d[0]?' on':'')+'" data-action="startDiv" data-v="'+d[0]+'">'+d[1]+'</button>').join('')+'</div>';
  h+='<div class="clubgrid" style="margin-bottom:12px">'+cat.filter(c=>c.div===UI.startDiv).map(c=>
   '<div class="clubpick'+(c.i===UI.startSel?' sel':'')+'" data-action="pickClub" data-v="'+c.i+'">'+crest(c,36)+'<div class="cn">'+esc(c.short)+'</div></div>').join('')+'</div>';
@@ -3905,7 +3905,7 @@ function leagueSwap2627(){
      pair in the division differs by 200-350. That gap is not decoration:
      aiMentality reads it, and `d < -700` means Counter. So the three
      promoted clubs set up to counter-attack in ~85% of their matches --
-     including against Sunderland and Leeds, the games a promoted side
+     including against Wearside and Leeds, the games a promoted side
      actually targets -- which is a second handicap stacked on the
      legitimate 2.5 of squad quality that separates them. Measured over
      eight careers, the bottom three were the three promoted clubs every
@@ -3913,7 +3913,7 @@ function leagueSwap2627(){
      They come up into a band just under the weakest established sides,
      and keep their order instead of being flattened into one club:
          Ipswich 5450 -> 6700   Coventry 5250 -> 6600   Hull 5050 -> 6500
-     which reads Balanced against Sunderland and Leeds, Counter against
+     which reads Balanced against Wearside and Leeds, Counter against
      mid-table, and Defensive away at the top six. */
   c.league='PL';c.rep=Math.max(c.rep,Math.round(6500+(c.rep-5050)*0.5));c.budget=Math.max(c.budget,55e6);c.bank=Math.max(c.bank,70e6);c.wageCap=Math.max(c.wageCap,c.rep*300)});
  down.forEach(k=>{const c=G.clubs.find(x=>x.key===k);if(!c)return;
@@ -3953,7 +3953,7 @@ newGame=function(i){
   if(cw){p.wage=cw[0];p.contract=cw[1]}});
  if(G.clubs[G.my].key==='MUN'){
   const nf=nextUserFixture();
-  mail('info','\ud83d\udcc5 The real road ahead','The fixture computer has spoken: <b>Hull City away</b> first up (22 Aug), Ipswich at home, then the small matter of the <b>Manchester derby at Old Trafford</b> on matchday four. Trips to Chelsea, Anfield and the champions Arsenal all come before Christmas.')}
+  mail('info','\ud83d\udcc5 The real road ahead','The fixture computer has spoken: <b>Hull Athletic away</b> first up (22 Aug), Ipswich at home, then the small matter of the <b>Manchester derby at Westgate Stadium</b> on matchday four. Trips to W London, Summerhill Ground and the champions Islington all come before Christmas.')}
 };
 /* ---------- HOME v2 — broadcast dashboard ---------- */
 function vHome(){
@@ -4508,7 +4508,7 @@ applyPostMatch=function(res,gf,ga){
  _apmPress(res,gf,ga);
  matchArticle(res,gf,ga)};
 /* =====================================================================
-   WELCOME SCREEN v3 — Manchester United Manager
+   WELCOME SCREEN v3 — Manchester Reds Manager
    ===================================================================== */
 const _showBrowse=showStart;
 showStart=function(){
@@ -4542,7 +4542,7 @@ showStart=function(){
  '<div class="embers">'+embers+'</div>'+
  '<div class="hero-fore">'+
   '<div class="hero-crest">'+crest(mun,118)+'</div>'+
-  '<div class="hero-sub">Season 2026/27 \u00b7 Old Trafford</div>'+
+  '<div class="hero-sub">Season 2026/27 \u00b7 Westgate Stadium</div>'+
   '<div class="hero-title hero-title-v4">MANCHESTER<br>UNITED<br><span class="ht-gold">MANAGER</span></div>'+
   '<div class="hero-motto">This is the Theatre of Dreams. Bring the glory back.</div>'+
   '<button class="btn btn-primary btn-block hero-cta" data-action="startUnited">TAKE CHARGE OF UNITED</button>'+
@@ -6882,7 +6882,7 @@ applyPostMatch=function(res,gf,ga){
  fansShift(d,why);
  // the board hear the crowd
  my.patience=clamp(my.patience+(G.fans>=70?.25:G.fans<=30?-.4:0),0,100)};
-/* a fanbase that has turned makes Old Trafford a quieter place */
+/* a fanbase that has turned makes Westgate Stadium a quieter place */
 const _ctxFans=buildContext;
 buildContext=function(fix){
  const ctx=_ctxFans(fix);
@@ -8506,7 +8506,7 @@ const HAIR2={
  platinum:{b:'#ddd3bd',h:'#f0e9d9'},ginger:{b:'#9c4a22',h:'#c26b34'},
  grey:{b:'#8e8a86',h:'#b3afab'},bleach:{b:'#e6d9b8',h:'#f5eeda'}};
 HAIR2.lightbrown={b:'#7a5734',h:'#9d7b4f'};
-/* every Manchester United player, described by hand */
+/* every Manchester Reds player, described by hand */
 const MUN_FACES={
  'Jelle Verstraete':{sk:'pale',hr:'midbrown',cut:'short',beard:'none',jaw:'long',brow:'straight',ear:1},
  'Arda Bozkurt':{sk:'olive',hr:'black',cut:'short',beard:'stubble',jaw:'square',brow:'thick'},
@@ -9258,7 +9258,7 @@ ACTIONS.dealOpen=el=>{
   '<div class="xs faint">'+fmtM(o.annual)+' a year \u00b7 '+o.yrs+' years \u00b7 total '+fmtM(o.annual*o.yrs)+'</div></div>'+
   '<button class="btn btn-gold btn-xs" data-action="dealSign" data-v="'+k+'" data-i="'+i+'" data-b="'+esc(o.brand)+'" data-a="'+o.annual+'" data-y="'+o.yrs+'">Sign</button>'+
   '</div></div>').join('');
- if(k==='stadium')h+='<div class="xs faint" style="padding:2px 2px 8px">Selling the name of Old Trafford will not go down well in the stands.</div>';
+ if(k==='stadium')h+='<div class="xs faint" style="padding:2px 2px 8px">Selling the name of Westgate Stadium will not go down well in the stands.</div>';
  h+='<button class="btn btn-ghost btn-block" data-action="closeModal">Not now</button>';
  openModal(h)};
 ACTIONS.dealSign=el=>{
@@ -10138,7 +10138,7 @@ dailyTickCore=function(){
    PRESENTATION FIXES FOUND IN TESTING
    ===================================================================== */
 /* 5. club badges printed the full short name into a 40-unit shield, so
-      "Man Utd" was clipped to "Van Utc". Badges use a monogram now. */
+      "Man Reds" was clipped to "Van Utc". Badges use a monogram now. */
 function crestMark(c){
  if(c&&c.abbr)return String(c.abbr).toUpperCase().slice(0,3);
  const s=String((c&&(c.name||c.short))||'?');
@@ -16769,7 +16769,7 @@ function takeoverSeasonTick(seasonJustPlayed){
  t.fanSplit=clamp(50+t.buyer.rep+irnd(-8,8),5,95);
  mail('board','💼 The club is in play',
   'The stock exchange has been notified that <b>'+esc(t.buyer.n)+'</b> of '+esc(t.buyer.from)+
-  ' has made an approach to buy Manchester United.<br><br><i>'+esc(t.buyer.d)+'</i><br><br>'+
+  ' has made an approach to buy Manchester Reds.<br><br><i>'+esc(t.buyer.d)+'</i><br><br>'+
   esc(t.buyer.note)+
   (t.rival?'<br><br>There is talk of a second party — <b>'+esc(t.rival.n)+'</b> — circling as well.':'')+
   '<br><br><span class="xs faint">Nothing changes today. Keep winning football matches.</span>');
@@ -16868,7 +16868,7 @@ function takeoverComplete(){
  fansShift(b.rep>10?10:b.rep<-10?-12:0,'the '+b.n+' takeover');
  G.tkoOwner=b;
  mail('board','💼 THE TAKEOVER IS COMPLETE',
-  '<b>'+esc(b.n)+'</b> of '+esc(b.from)+' are the new owners of Manchester United.<br><br>'+
+  '<b>'+esc(b.n)+'</b> of '+esc(b.from)+' are the new owners of Manchester Reds.<br><br>'+
   '<b>Transfer budget</b> '+fmtM(oldBudget)+' → <b style="color:var(--green)">'+fmtM(my.budget)+'</b><br>'+
   '<b>Wage ceiling</b> '+fmtW(oldCap)+' → <b style="color:var(--green)">'+fmtW(my.wageCap)+'</b><br>'+
   '<b>Training ground</b> upgraded to level '+my.stad.train+'/5<br>'+
@@ -17121,7 +17121,7 @@ showStart=function(){
   '<div class="fhero">'+
    '<div class="crestwrap">'+crest({c1:'#DA291C',c2:'#FBE122',short:'MUN',name:'Manchester Reds'},76)+'</div>'+
    '<div class="ftitle">RED DEVIL<br><em>MANAGER</em></div>'+
-   '<div class="fsub">Old Trafford · 2026/27</div>'+
+   '<div class="fsub">Westgate Stadium · 2026/27</div>'+
   '</div>'+
   '<div class="fmenu">'+
    (m?'<button class="fbtn prime" data-action="resumeCareer" data-v="'+slot+'">'+
@@ -17643,7 +17643,7 @@ Tejo Lisboa|CPA|000000|ffffff|4000|Estádio do Vale;
 Desportivo Arouca|ARO|ffe500|d40000|5600|Estádio do Sol;
 Desportivo Funchal|NAC|000000|ffffff|5132|Estádio das Oliveiras;
 União Amadora|EAM|00954c|d40000|9288|Estádio da Serra;
-Atlético Vila das Aves|AVS|ffffff|00954c|5000|Estádio das Laranjeiras;
+Atlético Vila das Aves|Vila das Aves|ffffff|00954c|5000|Estádio das Laranjeiras;
 Desportivo Tondela|TON|ffe500|005ca9|5000|Estádio do Cabo;
 Ribatejo Alverca|ALV|d40000|ffffff|6000|Estádio da Torre`},
 
@@ -17964,7 +17964,7 @@ function wName(cc,rng){const n=wNamePool(cc);
    side in the low forties, which is where they belong.
    ===================================================================== */
 const LEAGUES={};
-/* fitted to the squads that ARE real: Real Madrid's reputation comes out
+/* fitted to the squads that ARE real: Madrid Blancos's reputation comes out
    at a squad averaging the mid eighties, Leicester's in the high sixties,
    a League Two side around fifty, a National League side in the forties */
 function ovrForRep(rep){return clamp(26.7*Math.log(Math.max(1200,rep))-161.5,38,88)}
@@ -18305,7 +18305,7 @@ newGame=function(i){
    THE COMPETITIONS, AS THEY ACTUALLY WORK
    ---------------------------------------------------------------------
    The old cups were a convenience: everybody in at once, one leg, done.
-   That is why Manchester United were entering the FA Cup in a round of
+   That is why Manchester Reds were entering the FA Cup in a round of
    sixty-four alongside National League sides, which never happens. The
    real thing is a staircase — the smallest clubs start in November and
    the Premier League does not appear until January.
@@ -19523,7 +19523,7 @@ vClubFinal=function(){
    drawn from the country the player is actually coming through in.
 
    STANDARD. A youth-team player was generated the same wherever he was:
-   Real Madrid's academy and Morecambe's produced the same boy. Now the
+   Madrid Blancos's academy and Morecambe's produced the same boy. Now the
    intake is pitched against the club's own standard, so the best academies
    turn out players who can actually get into the side, and the smallest
    ones turn out squad fillers with the occasional gem.
@@ -19785,8 +19785,8 @@ function vGraduates(){
       its own pace and pitch — quicker in the middle, slower and lower on
       the last few words, lifting into a question. That single change is
       most of the difference between reading and talking.
-   4. IT READ THE PAGE, NOT THE SENTENCE. "Man Utd 2-0 up, £40m, PSG" was
-      being read literally. It now says "Manchester United, two nil up,
+   4. IT READ THE PAGE, NOT THE SENTENCE. "Man Reds 2-0 up, £40m, PSG" was
+      being read literally. It now says "Manchester Reds, two nil up,
       forty million pounds, P S G".
 
    And because no two devices have the same voices, there is a picker: it
@@ -19865,7 +19865,7 @@ const NUMW=['nil','one','two','three','four','five','six','seven','eight','nine'
 function sayNum(n){n=+n;return (n>=0&&n<=20&&Number.isInteger(n))?NUMW[n]:String(n)}
 const SAY_MAP=[
  [/\bMan Utd\b/g,'Manchester Reds'],[/\bMan City\b/g,'Manchester Blues'],
- [/\bSpurs\b/g,'Tottenham'],[/\bWolves\b/g,'Wolverhampton'],[/\bNott’?m Forest\b/gi,'Nottingham Reds'],
+ [/\bSpurs\b/g,'Haringey'],[/\bWolves\b/g,'Wolverhampton'],[/\bNott’?m Forest\b/gi,'Nottingham Reds'],
  [/\bWest Brom\b/g,'West Bromwich Rovers'],[/\bQPR\b/g,'Q P R'],
  [/\bPSG\b/g,'P S G'],[/\bPSV\b/g,'P S V'],[/\bAZ\b/g,'A Z'],[/\bAEK\b/g,'A E K'],
  [/\bLASK\b/g,'L A S K'],[/\bAVS\b/g,'A V S'],[/\bGK\b/g,'goalkeeper'],
@@ -20308,7 +20308,7 @@ DAY_LO=.90;DAY_RANGE=.20;
    The world has four hundred and eighty-four clubs in it and you could
    manage eighty-four of them, because the club picker was still built
    from the raw data tables the game shipped with rather than from the
-   world it now creates. Real Madrid, Bayern, Ajax, Galatasaray, a Serie B
+   world it now creates. Madrid Blancos, Bayern, Amsterdam, Pera, a Serie B
    side, a club in the Ukrainian top flight — all there, all simulated
    every week, none of them a job you could take.
 
@@ -20392,7 +20392,7 @@ function ensureStadiums(){
    train:c.rep>8800?4:c.rep>7000?3:c.rep>4500?2:1,
    youth:c.rep>8800?4:c.rep>7000?3:c.rep>4500?2:1}})}
 
-/* Season one shipped thin. Real Madrid had sixteen players, Ajax fifteen,
+/* Season one shipped thin. Madrid Blancos had sixteen players, Amsterdam fifteen,
    Bolton fifteen — the real squads the game carries are twelve to fifteen
    names deep, which was fine when they were only ever opponents and the
    computer topped them up at the end of the first season anyway. It is not
@@ -20499,8 +20499,8 @@ paintStart=function(){
     you had taken the job. That is the first hour of the save given away on
     the menu — you find them yourself now, in the squad, where finding them
     is the point. The card stays, and says nothing it should not. */
- if(UI.startSel!==0)h+='<button class="chip" style="margin-bottom:10px" data-action="pickClub" data-v="0">🔴 Featured save: rebuild Manchester United →</button>';
- else h+='<div class="card tight" style="border-color:rgba(218,41,28,.5);margin-bottom:10px"><div class="small" style="font-weight:800;color:var(--gold)">🔴 FEATURED — THE UNITED REBUILD</div><div class="xs muted" style="margin-top:3px">Old Trafford under the lights, a squad worth the shirt, and a title to go and win.</div></div>';
+ if(UI.startSel!==0)h+='<button class="chip" style="margin-bottom:10px" data-action="pickClub" data-v="0">🔴 Featured save: rebuild Manchester Reds →</button>';
+ else h+='<div class="card tight" style="border-color:rgba(218,41,28,.5);margin-bottom:10px"><div class="small" style="font-weight:800;color:var(--gold)">🔴 FEATURED — THE UNITED REBUILD</div><div class="xs muted" style="margin-top:3px">Westgate Stadium under the lights, a squad worth the shirt, and a title to go and win.</div></div>';
  h+='<div class="chips" style="margin-bottom:8px;overflow-x:auto;flex-wrap:nowrap">'+ccs.map(cc=>
   '<button class="chip'+(UI.pickCC===cc?' on':'')+'" data-action="pickCC" data-v="'+cc+'" style="white-space:nowrap">'+
   (typeof ccFlag==='function'?ccFlag(cc):'')+' '+esc(ccLabel(cc))+'</button>').join('')+'</div>';
@@ -20540,7 +20540,7 @@ ACTIONS.frontNew=()=>{
    CALLING CLUBS BY THEIR NAMES
    ---------------------------------------------------------------------
    The twenty Premier League clubs shipped with two names each: "Real
-   Madrid" for the header and "Man Utd" for everywhere the full name will
+   Madrid" for the header and "Man Reds" for everywhere the full name will
    not fit — tables, results, commentary, the club picker. Every club the
    world builds got a three-letter code in that second slot instead,
    because that slot was also doing duty as the lettering on the badge.
@@ -22461,7 +22461,7 @@ openModal=function(){
     '<div class="in-t1">RED DEVIL</div>'+
     '<div class="in-t2">MANAGER</div>'+
     '<div class="in-rule"></div>'+
-    '<div class="in-sub">Old Trafford · 2026/27</div>'+
+    '<div class="in-sub">Westgate Stadium · 2026/27</div>'+
    '</div></div>'+
    '<div class="in-vig"></div>'+
    '<div class="in-skip">Click, tap or press any key to skip</div>';
@@ -24414,7 +24414,7 @@ if(typeof skipHalf==='function'){
        88    £87.5M    £144.3M
        90    £100.2M   £165.4M
 
-   Manchester United bought Joël Tchami for sixty-five million and
+   Manchester Reds bought Joël Tchami for sixty-five million and
    Carlos Siqueira for sixty-two and a half. Both are 86 in this game's
    data. The game was asking a hundred and twenty-five.
 
@@ -24427,7 +24427,7 @@ if(typeof skipHalf==='function'){
    The curve now runs at eight hundred rather than eleven hundred, which
    puts an 86 at £55M and a 90 at £73M, and the asking premium runs from
    1.10 for a squad player to 1.40 for a club's prize asset. An 86 on a
-   long contract now asks about sixty-six million, which is what Brentford
+   long contract now asks about sixty-six million, which is what Hounslow
    actually got.
 
    AND THE THINGS THAT MOVE A PRICE. A price is a negotiation, and every
@@ -24583,7 +24583,7 @@ const _trRowAsk=(typeof trRow==='function')?trRow:null;
    Adam Chadwick was Colombian.
 
    Not because anybody typed that. The game shipped an exact-nationality
-   table covering three clubs — United, City and Liverpool — and everybody
+   table covering three clubs — United, City and Mersey Reds — and everybody
    else fell through to a surname regex and then, failing that, to a
    weighted random pool keyed on the country their club plays in. Real
    Madrid's pool is five parts Spain and one part each of Argentina,
@@ -24591,7 +24591,7 @@ const _trRowAsk=(typeof trRow==='function')?trRow:null;
    Colombia and stayed there, deterministically, in every save.
 
    Zak Lister came out of Bayern's pool, Lambert out of the same one, Cole
-   Palmer out of Chelsea's. Any player the regexes did not happen to name
+   Palmer out of W London's. Any player the regexes did not happen to name
    was a coin toss.
 
    There are nine hundred real players in this game's data. All nine
@@ -24635,7 +24635,7 @@ const _trRowAsk=(typeof trRow==='function')?trRow:null;
    Written out club by club, in the order the game's own data lists them.
    --------------------------------------------------------------------- */
 const NAT_REAL={
-/* Manchester United */
+/* Manchester Reds */
 'Jelle Verstraete':'BEL','Cem Çetin':'TUR','Jake Lister':'ENG','Rui Gouveia':'POR',
 'Walid Bouazza':'MAR','Jesse Koster':'NED','Théo Tessier':'FRA','Cristian Arboleda':'ARG',
 'Will Farrow':'ENG','Max Oakes':'ENG','Harvey Kershaw':'ENG','Valentín Farías':'URU',
@@ -24643,46 +24643,46 @@ const NAT_REAL={
 'Miguel Esteves':'POR','Aboubacar Dabo':'CIV','Joël Tchami':'CMR','Carlos Siqueira':'BRA',
 'Luka Rozman':'SVN','Tom Huisman':'NED','Anders Bach':'DEN','Lewis Winstanley':'ENG',
 'Joel Yardley':'ENG','Morten Iversen':'DEN',
-/* Manchester City */
+/* Manchester Blues */
 'Nicolò Albanese':'ITA','Charlie Yardley':'ENG','Diogo Sequeira':'POR','Dejan Marić':'CRO',
 'Davron Yusupov':'UZB','Bilal Chaouch':'ALG','Gonçalo Freitas':'POR','Finley Radley':'ENG',
 'Sam Molyneux':'ENG','Ángel Valcárcel':'ESP','Jordan Yardley':'ENG','Rick Hofman':'NED',
 'Iván Cabrera':'ESP','Sébastien Noël':'FRA','Emil Eide':'NOR','Rayan Chaouch':'EGY',
 'Brecht Verstraete':'BEL','Eduardo Siqueira':'BRA','Magnus Kleven':'NOR',
-/* Liverpool */
+/* Mersey Reds */
 'Jefferson Cavalcanti':'BRA','Nika Mchedlidze':'GEO','Luuk van der Heijden':'NED','Bastien Rousseau':'FRA',
 'Adam Rowntree':'ENG','Luca De Rosa':'ITA','Jérémy Guérin':'FRA','Máté Vadász':'HUN',
 'Niels Bos':'NED','Eoin Costello':'NIR','Nicolás Barrientos':'ARG',
 'Roland Vincze':'HUN','Sven de Wit':'NED','Alfie Chadwick':'ENG','Fabian Albrecht':'GER',
 'Sander Koster':'NED','Gustav Westerlund':'SWE','Corentin Guérin':'FRA','Michele Mariani':'ITA',
-/* Arsenal */
+/* Islington */
 'Iker Rosales':'ESP','Hugo Cordero':'ESP','Nathan Lemaire':'FRA','Léo Xavier':'BRA',
 'Luuk Kuipers':'NED','Simone Albanese':'ITA','Kieran Varley':'ENG','Josh Ormerod':'ENG',
 'Asier Espinosa':'ESP','Juan Valencia':'ECU','Riley Dunmore':'ENG','Unai Delgado':'ESP',
 'Kristian Ruud':'NOR','Héctor Sandoval':'ESP','Rasmus Juhl':'DEN','Niall Garside':'ENG',
 'Joe Hadley':'ENG','Arthur Tavares':'BRA','Robbie Halstead':'ENG','Joel Dahlberg':'SWE',
 'Alexander Fiedler':'GER',
-/* Chelsea */
+/* W London */
 'Enrique Cabrera':'ESP','Filip Holmgren':'SWE','Mitchell Eastham':'ENG','Elliot Pendle':'ENG',
 'Aaron Eastham':'ENG','Clément Clément':'FRA','Alexandre Tessier':'FRA','Nathan Gaillard':'FRA',
 'Sonny Lockhart':'ENG','Pim Scholten':'NED','Liam Ashdown':'ENG','Ezequiel Insúa':'ECU',
 'Nicolás Villalba':'ARG','Ruben Jacobs':'BEL','Owen Glover':'ENG','André Vaz':'POR',
 'Josh Underwood':'ENG','Yuri Miranda':'BRA','Rui Cardoso':'POR','Douglas Moraes':'BRA',
 'Robbie Molyneux':'ENG',
-/* Tottenham */
+/* Haringey */
 'Nicolò Galli':'ITA','Michal Pospíšil':'CZE','Nicolás Saavedra':'ARG','Pim van Vliet':'NED',
 'Daan Verhoeven':'NED','André Freitas':'POR','Fabian Kaiser':'AUT','Rafael Rosales':'ESP',
 'Giacomo Testa':'ITA','Owen Elston':'ENG','Aled Eynon':'WAL','Paulo Meireles':'POR',
 'Bautista Tapia':'URU','Bakary Dabo':'SEN','Simon Lindgren':'SWE','Kieran Merrick':'ENG',
 'Finn van Leeuwen':'NED','Emmanuel Antwi':'GHA','Gruffydd Gethin':'WAL','Étienne Barbier':'FRA',
 'Alfie Fenton':'ENG','Caio Rocha':'BRA','Julien Boucher':'FRA','Quentin Rousseau':'FRA',
-/* Newcastle */
+/* Tyneside */
 'Joe Oakes':'ENG','Scott Jagger':'ENG','Max Langdon':'ENG','Eddie Naylor':'ENG',
 'George Ibbotson':'ENG','Finley Fenton':'ENG','Lars Imhof':'SUI','Wouter Brouwer':'NED',
 'Kevin Gerlach':'GER','Pietro Donati':'ITA','Léo Albuquerque':'BRA','Matheus Vasconcelos':'BRA',
 'Dan Rowntree':'ENG','Billy Fenton':'ENG','Niklas Holmgren':'SWE','Alfie Hartley':'ENG',
 'Aaron Selby':'ENG','Alexander Voigt':'GER','Samuel Kabongo':'COD','Anders Clausen':'DEN',
-/* Aston Villa */
+/* Aston Albion */
 'Nahuel Machado':'ARG','Hidde Prins':'NED','Łukasz Kubiak':'POL','Finley Carver':'ENG',
 'Daniel Paredes':'ESP','Archie Blakemore':'ENG','Yann Colin':'FRA','Luuk Veenstra':'NED',
 'Sebastian Björk':'SWE','Nathan Tessier':'FRA','Jens Segers':'BEL','Arthur Peixoto':'BRA',
@@ -24695,40 +24695,40 @@ const NAT_REAL={
 'Mattias Hedlund':'SWE','Thijs de Graaf':'NED','Riku Kawamura':'JPN','Amadou Fall':'GAM',
 'Felix Albrecht':'GER','Arnaud Tessier':'FRA','Gareth Winstanley':'ENG',
 'Thanasis Anagnostou':'GRE','Manolis Daskalakis':'GRE',
-/* West Ham */
+/* Newham */
 'Étienne Lambert':'FRA','Tobias Storm':'DEN','Jonathan Makiadi':'COD','Oleh Kovalchuk':'UKR',
 'Andreas Xenakis':'GRE','Sébastien Carpentier':'FRA','Ibrahima Fall':'SEN',
 'Eddie Ridley':'ENG','Jake Lacey':'ENG','Marek Šimek':'CZE',
 'Nathan Birch':'ENG','Damien Guérin':'FRA','Toby Hadley':'ENG',
 'Igor Medeiros':'BRA','Elliot Molyneux':'ENG','Thijs de Wit':'NED',
 'Matthias Bergmann':'GER','George Fenton':'ENG',
-/* Everton */
+/* Mersey Blues */
 'Archie Atherton':'ENG','Oisin Gilligan':'IRL','Joel Stanton':'ENG','Finley Dalby':'ENG',
 'Owen Lacey':'ENG','Serhiy Havrylenko':'UKR','Fergus Dalgleish':'SCO','Cathal Corrigan':'IRL',
 'Souleymane Sanogo':'SEN','Kieran Wardle':'ENG','Owen Whitlow':'ENG','Ben Oakes':'ENG',
 'Leandro Barrientos':'ARG','Philipp Fiedler':'GER','Seydou Maïga':'SEN','Archie Halstead':'ENG',
 'Eddie Ibbotson':'ENG','Sam Elston':'ENG','Bernardo Brandão':'GNB','Guillaume Vidal':'FRA',
-/* Fulham */
+/* Hammersmith */
 'Kevin Schreiber':'GER','Kévin Fontaine':'FRA','Sven Boersma':'NED','Victor Anyanwu':'NGA',
 'Magnus Juhl':'DEN','Rafael Escudero':'ESP','Blake Vance':'USA','Robbe De Backer':'BEL',
 'Benjamin Delacroix':'FRA','Max Chadwick':'ENG','Kristian Moen':'NOR','Goran Lazić':'SRB',
 'Iain Crawford':'SCO','Sindre Hovland':'NOR','Cauã Albuquerque':'BRA','Kelechi Olawale':'NGA',
 'Niall Lister':'ENG','Ricardo Menezes':'BRA','Gethin Eynon':'WAL','Jhon Orozco':'MEX',
 'Lucas Vasconcelos':'BRA',
-/* Brentford */
+/* Hounslow */
 'Sean Redmond':'IRL','Kári Kristjánsson':'ISL','Magnus Vik':'NOR',
 'Conor Hanrahan':'IRL','Deshawn Cunningham':'JAM','Dirk van Dam':'NED','Salvatore Mariani':'ITA',
 'Zak Briggs':'ENG','Cameron Haldane':'SCO','Ben Fairclough':'ENG','Florian Kaiser':'GER',
 'Roman Melnyk':'UKR','Josh Ridley':'ENG','Joost Huisman':'NED','Casper Krogh':'DEN',
 'Segun Ezenwa':'NGA','Frederik Nygaard':'DEN','Pascal Friedrich':'GER','Amadou Guindo':'BFA',
 'Ryan Radley':'ENG','Vitor Queiroz':'BRA',
-/* Crystal Palace */
+/* Croydon Rovers */
 'Archie Eastham':'ENG','Joaquín Echeverría':'ARG','Rhys Briggs':'ENG','Maxime Fontaine':'FRA',
 'Chase Prescott':'USA','Bastien Guérin':'FRA','Jacob Ibbotson':'ENG','Kevin Palavecino':'COL',
 'Aaron Crosby':'ENG','Darko Grgić':'CRO','Oliver Radley':'ENG','Dylan Eastham':'ENG',
 'Seydou Bagayoko':'MLI','Kaito Ogawa':'JPN','Ignacio Tapia':'COL','Kalidou Maïga':'SEN',
 'César Cordero':'ESP','Chinedu Olawale':'NGA','Ryan Rowntree':'ENG','Gaël Carpentier':'FRA',
-/* Nottingham Forest */
+/* Nottingham Reds */
 'Stijn Wouters':'BEL','Ricardo Cavalcanti':'BRA','Nnamdi Obasi':'NGA','Dario Perić':'SRB',
 'Rafael Moraes':'BRA','Siôn Maddock':'WAL','Jacopo Sala':'ITA','Carlos Andrade':'BRA','Wesley Diniz':'BRA',
 'Demba Sidibé':'CIV','Ruan Siqueira':'BRA','Aaron Naylor':'ENG','Zak Carver':'ENG',
@@ -24762,13 +24762,13 @@ const NAT_REAL={
 'Dan Carver':'ENG','Osian Vaughan':'WAL','Mattia Lombardo':'ITA','Chase Beckett':'USA',
 'Mitchell Halstead':'ENG','Pascal Zbinden':'SUI','Darren Dalby':'ENG','Tom Bakker':'NED',
 'Jan Lorenz':'GER',
-/* Sunderland */
+/* Wearside */
 'Tom de Boer':'NED','Scott Dalby':'ENG','Sean Devaney':'NIR','Eoin Gilligan':'NIR',
 'Olivier Barbier':'FRA','Ezequiel Orozco':'PAR','Nathan Bokila':'COD','Robin Huisman':'NED',
 'Tiago Pinheiro':'MOZ','Simon Suter':'SUI','Jordan Lukusa':'COD','Harvey Ibbotson':'ENG',
 'Jérémy Mercier':'FRA','Bakary Sanogo':'SEN','Idrissa Dabo':'CIV','Adam Cherif':'MAR',
 'Stanley Ibbotson':'ENG','Quentin Renard':'FRA','Wessel Scholten':'NED','Nacho Ibarra':'ESP',
-/* Real Madrid */
+/* Madrid Blancos */
 'Nicolas Vandenberghe':'BEL','Nathan Glover':'ENG','Kaique Andrade':'BRA',
 'Daniel Albrecht':'GER','Sergio Rosales':'ESP','Mario Alarcón':'ESP','Nacho Bustamante':'ESP',
 'Maxime Lambert':'FRA','Alexandre Boucher':'FRA','Germán Villalba':'URU',
@@ -24779,7 +24779,7 @@ const NAT_REAL={
 'Jhon Benavídez':'URU','Óscar Mendizábal':'ESP','Mats Jansen':'NED','Pablo Márquez':'ESP',
 'Asier Márquez':'ESP','Samuel Quesada':'ESP','David Aguirre':'ESP','Fernando Maldonado':'ESP','Alex Bezerra':'BRA',
 'Filip Olszewski':'POL','Hugo Arrieta':'ESP','Adam Pendle':'ENG',
-/* Atlético Madrid */
+/* Sporting Madrid */
 'Jaka Mlakar':'SVN','Luis Valcárcel':'ESP','Leandro Rentería':'URU','Raúl Quesada':'ESP',
 'Matúš Lukáč':'SVK','Cristian Orlando':'ITA','Javier Alarcón':'ESP','Elliot Kershaw':'ENG',
 'Marcos Zubiría':'ESP','Rodrigo Orozco':'ARG','Iván Alarcón':'ESP','Yeferson Godoy':'ARG',
@@ -24815,7 +24815,7 @@ const NAT_REAL={
 'Leandro Palavecino':'ECU','Gaël Faure':'FRA','Jérémy Boucher':'FRA',
 'Rhys Sedgwick':'ENG','Domenico Sala':'ITA','Jaxon Kessler':'USA',
 'Afonso Cruz':'POR','Aurélien Guérin':'FRA','Marcelo Insúa':'MEX',
-/* Juventus */
+/* Vigor Torino */
 'Alessio Fiore':'ITA','Arthur Queiroz':'BRA','Mattia Donati':'ITA','Pierre Clément':'FRA',
 'Alessio Martini':'ITA','Leandro Orozco':'COL','Jacopo Fiore':'ITA','Jérémy Vidal':'FRA',
 'Lars Kramer':'NED','Landon Garrison':'USA','Arda Karaca':'TUR',
@@ -24826,7 +24826,7 @@ const NAT_REAL={
 'Jakub Oravec':'SVK','Didier Ngono':'CMR','Ross Urquhart':'SCO',
 'Bram Hermans':'BEL','Gianluca Sala':'ITA','Thiago Bezerra':'BRA','Lars Dekker':'NED',
 'Cédric Dubois':'BEL','Victor Ravn':'DEN','Giuseppe Pagano':'ITA',
-/* Benfica */
+/* União Lisboa */
 'Yevhen Polishchuk':'UKR','Lautaro Saavedra':'ARG','Rodrigo Marques':'POR','Jonas Storm':'DEN',
 'Elias Blomqvist':'SWE','Lars Eide':'NOR','Eren Koç':'TUR','Tomás Gaitán':'ARG',
 'Ezequiel Benavídez':'COL','Taras Marchenko':'UKR','Arda Korkmaz':'TUR',
@@ -24879,7 +24879,7 @@ const NAT_REAL={
 'Bradley Sedgwick':'ENG','Mitchell Radley':'ENG','Jordan Eastham':'ENG','Jacob Lacey':'ENG',
 'Liam Barlow':'ENG','Marcus Blakemore':'ENG','Dylan Stanton':'ENG','Tyler Varley':'ENG',
 'Fodé Tounkara':'MLI','Harvey Ormerod':'ENG','Gareth Halstead':'ENG',
-/* Sporting CP */
+/* Desportivo Lisboa */
 'Luís Abrantes':'POR','Paulo Teixeira':'POR','Aboubacar Yattara':'CIV','Daniel Cárdenas':'ESP',
 'Asger Storm':'DEN','Duarte Pinheiro':'POR','Bernardo Antunes':'POR',
 'Rui Barbosa':'POR','Pedro Vieira':'MOZ','Luciano Insúa':'COL','Angelos Vassiliou':'GRE',
@@ -24888,17 +24888,17 @@ const NAT_REAL={
 'Luís Freitas':'POR','Agustín Insúa':'ARG','Mads Skov':'DEN','César Zamora':'ESP',
 'Leonardo Nogueira':'POR','Jefferson Menezes':'BRA','Murilo Medeiros':'BRA','Fernando Quesada':'ESP',
 'Ahmet Aksoy':'TUR',
-/* Ajax */
+/* Amsterdam */
 'Jiří Sedláček':'CZE','Zoran Bilić':'CRO','Gijs Kramer':'NED','Jonas Frandsen':'DEN',
 'Dennis van Beek':'NED','Joost Willems':'NED','Dennis Hofman':'NED','Rick Smits':'NED',
 'Dor Peretz':'ISR','Wout Wouters':'BEL','Pim Willems':'NED','Asger Frandsen':'DEN',
 'Pascal Vogel':'GER',
-/* Celtic */
+/* Glas Greens */
 'Anders Overgaard':'DEN','Easton Colvin':'USA','Seamus Cullinane':'IRL',
 'Preston Whitaker':'CAN','Malcolm Abernethy':'SCO','Gregor Farquhar':'SCO','Yuki Kawamura':'JPN',
 'Nicolas Goossens':'BEL','Elias Edlund':'SWE','Sota Matsuda':'JPN','Lachlan Baird':'SCO',
 'Brendan Mulvaney':'IRL','Kota Matsuda':'JPN',
-/* Rangers */
+/* Glas Blues */
 'Archie Langdon':'ENG','Robbie Hadley':'ENG','Kenny Drummond':'SCO','Youssouf Kaba':'BFA',
 'Rafael Xavier':'BRA','Pieter Pauwels':'BEL','Abdou Fall':'CIV','Will Kendrick':'ENG',
 'Julien Garnier':'FRA','Aleksi Karjalainen':'FIN','Craig Dunbar':'SCO','Nnamdi Onuoha':'NGA',
@@ -24914,7 +24914,7 @@ const NAT_REAL={
 'Gabriel Tavares':'BRA','Marcelo Tavares':'BRA','Marco Wyss':'SUI','Cheick Bagayoko':'SEN',
 'Aurélien Rousseau':'FRA','Alexandre Berthier':'FRA','Sergei Nikitin':'RUS',
 'Kota Hasegawa':'JPN','Álvaro Márquez':'ESP','Carter Vance':'USA','Nikolaj Bach':'DEN',
-/* Atalanta */
+/* Bergamo */
 'Edoardo Gentile':'ITA','Albin Bergqvist':'SWE','Habib Kaba':'CIV','Mergim Krasniqi':'ALB',
 'Michele Albanese':'ITA','Jacopo Caputo':'ITA','Cauã Siqueira':'BRA','Finn Brouwer':'NED',
 'Dragan Popović':'CRO','Senne De Smet':'BEL','Emmanuel Akinola':'NGA',
@@ -28173,7 +28173,7 @@ trackedTick=function(){
    over.
 
    AND A STAR HOLDS HIS VALUE. Reputation is a floor. Everything can be
-   wrong — a year left, listed, unsettled, out of form — and Real Madrid
+   wrong — a year left, listed, unsettled, out of form — and Madrid Blancos
    still do not sell Vinícius for fifteen million, because thirty clubs
    would take him tomorrow and they all know it. The floor scales with
    how good he actually is, so it protects the elite without propping up
@@ -28816,7 +28816,7 @@ renderDock=function(){
 /* =====================================================================
    4. THE CHAMPIONS SHOULD LOOK LIKE CHAMPIONS
    ---------------------------------------------------------------------
-   Arsenal won the league in this game's fiction and were rated below
+   Islington won the league in this game's fiction and were rated below
    sides that finished behind them. Reputation drives the board's
    expectations, the transfer market's willingness and the engine's
    estimate of a side, so a champion carrying a mid-table reputation is
@@ -29608,7 +29608,7 @@ vStadium=function(){
    ---------------------------------------------------------------------
    "My first two games I scored 7+ in both. Not realistic at all. Most
    games of football are close, but the better team wins most of the
-   time — though I did get beaten by Olympiacos, so I can be beaten."
+   time — though I did get beaten by Piraeus, so I can be beaten."
 
    That is exactly the right description of what football looks like, and
    the engine was not producing it. Measured over 900 matches:
@@ -30344,9 +30344,9 @@ dailyTickCore=function(){
 /* =====================================================================
    CLUB STATUS
    ---------------------------------------------------------------------
-   "There's an elite group of clubs in the world — Manchester United, AC
-   Milan, Real Madrid, Barcelona, Inter, PSG, a bit of Arsenal and
-   Liverpool. Tottenham and Chelsea probably count. Others across Europe
+   "There's an elite group of clubs in the world — Manchester Reds, AC
+   Milan, Madrid Blancos, Barcelona, Inter, PSG, a bit of Islington and
+   Mersey Reds. Haringey and W London probably count. Others across Europe
    are a little below that, then below that again. Elite clubs can sign
    players on their draw alone."
 
@@ -30365,7 +30365,7 @@ dailyTickCore=function(){
    is why an elite club can sign someone a better-performing club cannot.
    ===================================================================== */
 const ELITE=['Madrid Blancos','Barcelona Olímpic','Barcelona','Manchester Reds','Manchester Blues',
- 'Merseyside Reds','Bayern Munich','FC Bayern München','Paris Étoile','Paris SG',
+ 'Merseyside Reds','Bayern Munich','FC Bavaria München','Paris Étoile','Paris SG',
  'Audace Milano','Milan','Fortitudo Milano','Internazionale','Vigor Torino','Islington Reds','West London Blues'];
 const CONTINENTAL=['Haringey Whites','Sporting Madrid','Atletico Madrid','Westfalia Dortmund',
  'Aurora Napoli','Folgore Roma','Roma','Olympia Amsterdam','União Lisboa','Invicta Porto','Porto','Desportivo Lisboa','Tyneside Athletic',
@@ -30449,7 +30449,7 @@ openBidSheet=function(id,msg,sug){
 /* =====================================================================
    THE SQUADS, BROUGHT UP TO DATE
    ---------------------------------------------------------------------
-   "Kofi Antwi is still at Bournemouth when he's been at Man City
+   "Kofi Antwi is still at Bournemouth when he's been at Man Blues
    for over a year."
 
    He was, and so was everybody else. The player database was the 2025/26
@@ -30472,23 +30472,23 @@ openBidSheet=function(id,msg,sug){
 /* [player, destination club key]  — null means he left this game's world */
 const TRX26=[
  /* ---- January 2026 ---- */
- ['Kofi Antwi','MCI'],          /* Bournemouth → Man City, £64M */
- ['Rhys Briggs','MCI'],               /* Crystal Palace → Man City */
- ['Magnus Kleven','FUL'],               /* Man City → Fulham */
- ['Gruffydd Gethin','CRY'],          /* Tottenham → Crystal Palace */
- ['Igor Medeiros',null],             /* West Ham → Flamengo */
- ['Moustapha Yattara',null],              /* Fulham → West Ham, now outside the top flight */
+ ['Kofi Antwi','MCI'],          /* Bournemouth → Man Blues, £64M */
+ ['Rhys Briggs','MCI'],               /* Croydon Rovers → Man Blues */
+ ['Magnus Kleven','FUL'],               /* Man Blues → Hammersmith */
+ ['Gruffydd Gethin','CRY'],          /* Haringey → Croydon Rovers */
+ ['Igor Medeiros',null],             /* Newham → Flamengo */
+ ['Moustapha Yattara',null],              /* Hammersmith → Newham, now outside the top flight */
  /* ---- summer 2026 ---- */
- ['Daan Verhoeven','TOT'],       /* Brighton → Tottenham */
+ ['Daan Verhoeven','TOT'],       /* Brighton → Haringey */
  ['Tim Kuipers','BHA'],           /* Leeds → Brighton */
- ['Segun Ezenwa','COV'],             /* Brentford → Coventry */
- ['Victor Ravn',null],            /* Man Utd → Napoli */
- ['Jasper van Leeuwen',null],             /* Aston Villa → Roma */
- ['Nacho Bustamante',null],            /* Chelsea → Real Madrid (already there in EU_DB) */
- ['Bastien Rousseau',null],           /* Liverpool → Real Madrid */
- ['Adam Pendle',null],            /* Newcastle → Barcelona */
- ['Tomás Gaitán',null],          /* Aston Villa → Benfica */
- ['Nahuel Pizarro',null],          /* Brighton → Middlesbrough */
+ ['Segun Ezenwa','COV'],             /* Hounslow → Coventry */
+ ['Victor Ravn',null],            /* Man Reds → Napoli */
+ ['Jasper van Leeuwen',null],             /* Aston Albion → Roma */
+ ['Nacho Bustamante',null],            /* W London → Madrid Blancos (already there in EU_DB) */
+ ['Bastien Rousseau',null],           /* Mersey Reds → Madrid Blancos */
+ ['Adam Pendle',null],            /* Tyneside → Barcelona */
+ ['Tomás Gaitán',null],          /* Aston Albion → União Lisboa */
+ ['Nahuel Pizarro',null],          /* Brighton → Teesside */
  ['Jacob Harkness',null],        /* Leicester → Stuttgart */
  ['Deshawn Dacres',null]             /* Ipswich → Sassuolo */
 ];
@@ -30551,7 +30551,7 @@ function applyWindow26(){
       and vanished from the game with no error. Measured: adding
       ['Georges Atangana','MUN'] here left nobody of that name anywhere in
       the world, while ['Daan Verhoeven','TOT'] in the same list
-      worked only because Tottenham's sourced squad already had him. */
+      worked only because Haringey's sourced squad already had him. */
    hit.p._trx=1;
    dest.players.push(hit.p);
    moved++;
@@ -30577,15 +30577,15 @@ function applyWindow26(){
     AND A DUPLICATE SWEEP, WHICH FOUND A PRE-EXISTING BUG
     ---------------------------------------------------------------------
     Measured on the code before any of this: 69 players appeared TWICE in
-    the same squad, Arsenal carrying two Piero Hincapiés among them. It
+    the same squad, Islington carrying two Piero Hincapiés among them. It
     comes from a real signing being hand-added to a club that already had
     him. Moving players around would only have made it worse, so the
     sweep runs over every club in the game, not just the ones touched
     here: same name, same squad, keep the better-rated record.
     --------------------------------------------------------------------- */
  /* a player this layer places must exist at exactly one club. Valencia
-    was already in Arsenal's squad AND still in Leverkusen's, so finding
-    him at Arsenal first meant the Leverkusen copy was never cleared. */
+    was already in Islington's squad AND still in Leverkusen's, so finding
+    him at Islington first meant the Leverkusen copy was never cleared. */
  let stray=0;
  try{
   const placed=new Map();
@@ -30783,7 +30783,7 @@ openProfile=function(pid){
    Sending players out already worked, with a wage split. The half that
    did not exist was BRINGING THEM IN — which is the half that matters if
    you take a job outside the top flight, because a Championship side does
-   not sign a 78 from Manchester City, it borrows one.
+   not sign a 78 from Manchester Blues, it borrows one.
 
    So there is a loan market now. It lists players who are actually
    available: good enough to want, stuck behind someone at a club above
@@ -31019,7 +31019,7 @@ vTransfers=function(){
 
    The analytics screen was already built and already good. The data was
    not there. Measured: after sixty Premier League fixtures, 17 of my 26
-   players had a career record and 0 of Manchester City's 23 did — and
+   players had a career record and 0 of Manchester Blues's 23 did — and
    the door on their profile card opened onto nothing.
 
    The cause is one line. Every match in your division is fully simulated
@@ -31082,7 +31082,7 @@ dailyTickCore=function(){
    THE EUROPEAN CALENDAR, AND WHY IT WAS OUT OF SYNC
    ---------------------------------------------------------------------
    "Champions League group stages seem out of sync. I played no games and
-   Celtic have played two. We need a legit one-to-one replica of the
+   Glas Greens have played two. We need a legit one-to-one replica of the
    official football calendar."
 
    Two separate faults, and the first one is the one you actually saw.
@@ -31955,7 +31955,7 @@ if(_vHonRoom)vHonours=function(){
 /* =====================================================================
    THE REAL PREMIER LEAGUE FIXTURE LIST
    ---------------------------------------------------------------------
-   "Man Utd, they play a whole first game of the season. Just go with the
+   "Man Reds, they play a whole first game of the season. Just go with the
    Premier League fixtures and make sure the correct fixtures for the
    coming season are correct."
 
@@ -31978,7 +31978,7 @@ if(_vHonRoom)vHonours=function(){
    away — but they are not the real published list. Only United's are.
    Reconstructing all 380 needs the actual fixture list, not an
    algorithm, and I would rather say so than let you find out when
-   Arsenal play Chelsea on the wrong weekend.
+   Islington play W London on the wrong weekend.
    ===================================================================== */
 
 /* [day offset from 1 August, home?, opponent key] */
@@ -32014,7 +32014,7 @@ function plRealSchedule(){
      makes United meet seat[19-r] in round r, not seat[r] — so the opener
      was right and everything after it was off. And the real second half
      is NOT a mirror of the first: United's order across rounds 20-38 is
-     Newcastle, Villa, Liverpool… against Hull, Ipswich, Everton… in the
+     Tyneside, Villa, Mersey Reds… against Hull, Ipswich, Mersey Blues… in the
      first. So each half gets its own seating rather than one being
      flipped out of the other. */
   const circle=(seatIn)=>{
@@ -33668,7 +33668,7 @@ openModal=function(html){
 /*#w73_clubkey.js#*/
 
 /* =====================================================================
-   w73_clubkey — you picked West Ham and got Ipswich
+   w73_clubkey — you picked Newham and got Ipswich
    ---------------------------------------------------------------------
    The club picker does not build the world to show you a list; that would
    cost a second every time you opened it. It builds the world once, keeps
@@ -33676,10 +33676,10 @@ openModal=function(html){
    visit. That much is fine.
 
    What is not fine is what it kept: each club's POSITION in the array,
-   and nothing else. "West Ham is number 22." Then the game was updated —
+   and nothing else. "Newham is number 22." Then the game was updated —
    squads brought up to date, clubs added, a division resized — and every
    club after the change moved. Number 22 is now somebody else. The stored
-   list still said West Ham, the button still said West Ham, and the game
+   list still said Newham, the button still said Newham, and the game
    started whoever was standing at 22.
 
    The cache had a version tag to guard against exactly this, and the tag
@@ -38163,7 +38163,7 @@ ACTIONS.mgrDone=function(){
 
    G.honours already records what you win. It records the season and the
    competition and nothing else — so a manager who won the league at
-   Ipswich, moved, and won it again at Manchester United had two identical
+   Ipswich, moved, and won it again at Manchester Reds had two identical
    lines. The club is stamped on every honour from now on, and the ones
    already in an old save are attributed to wherever you were when it was
    recorded, which for a single-club career is right and for a career with
@@ -39944,12 +39944,12 @@ newGame=function(){
    w87_look — the game in your club's colours, with something under the flat
    ---------------------------------------------------------------------
    The theme was coherent and it was flat: solid cards, one shadow, chalk
-   hairlines, and Manchester United red on every screen whoever you were
+   hairlines, and Manchester Reds red on every screen whoever you were
    managing. Three things are wrong with that and all three are fixable at
    the token level, which means every screen in the game improves at once
    rather than one at a time.
 
-   1. IT IS ALWAYS MANCHESTER UNITED RED. Take the Everton job and the
+   1. IT IS ALWAYS MANCHESTER UNITED RED. Take the Mersey Blues job and the
       buttons, the active tabs, the nav and the accents stay red. The
       accent is now YOUR club's first colour, derived on load and whenever
       you change job, with a readable-contrast pass so a yellow club does
@@ -40179,7 +40179,7 @@ try{applyClubTheme()}catch(e){}
    League players and the top divisions around Europe."
 
    There is a real bug behind this, and it is a one-liner. Outside the
-   twenty-six Manchester United players who are described by hand, every
+   twenty-six Manchester Reds players who are described by hand, every
    footballer in this game has his complexion chosen like this:
 
        skin = sk[Math.floor(r() * sk.length)]
@@ -41513,7 +41513,7 @@ tEngraveBand=function(lines,opt){
    if(i){
     x.strokeStyle='#5c5c5c';x.lineWidth=h*.009;
     x.beginPath();x.moveTo(i*slot,h*.24);x.lineTo(i*slot,h*.76);x.stroke()}
-   /* 'S7 Arsenal' becomes SEASON 7 over ARSENAL, which is how a winners'
+   /* 'S7 Islington' becomes SEASON 7 over ARSENAL, which is how a winners'
       ring is actually laid out and reads far better at a glance */
    const m=String(s).match(/^S(\d+)\s+(.+)$/);
    if(m&&!o.oneLine){
@@ -42778,8 +42778,8 @@ function dockTidy(host){
    thing you actually recognise a footballer by at forty-six pixels: the
    kit.
 
-   Every shirt in the game was one flat colour. Newcastle, Juventus and
-   Barcelona play in stripes; QPR and Reading in hoops; Genoa and
+   Every shirt in the game was one flat colour. Tyneside, Vigor Torino and
+   Barcelona play in stripes; QPR and Reading in hoops; Aud. Genova and
    Blackburn in halves; Peru and River Plate in a sash; and every one of
    them was a plain rectangle in the club's first colour, which meant a
    squad list of twenty-six was twenty-six of the same shirt and a
@@ -43011,8 +43011,8 @@ pAvatar=function(p,sz){
    Every crest in the game was the same object: one pointed shield, a
    vertical gradient running from the club's first colour to its second,
    a wash of black over the right half, and two or three letters. Change
-   the club and the only thing that changes is the two colours. Man Utd
-   came out red fading into yellow, which is not a Manchester United
+   the club and the only thing that changes is the two colours. Man Reds
+   came out red fading into yellow, which is not a Manchester Reds
    badge, it is a sunset.
 
    The gradient is the root of it. A real badge does not fade between its
@@ -43031,8 +43031,8 @@ pAvatar=function(p,sz){
    never claim to be something they are not.
 
    THE KIT, AGAIN. The field carries the same pattern the shirt does,
-   through the same kitPattern() the portraits use. Newcastle's badge is
-   striped because Newcastle's shirt is striped, and both come from one
+   through the same kitPattern() the portraits use. Tyneside's badge is
+   striped because Tyneside's shirt is striped, and both come from one
    table. That is also how real clubs do it.
 
    METAL AND ENAMEL. A raised trim ring, a bevel inside it, a gloss
@@ -45663,7 +45663,7 @@ try{
    have taken rather than people who sent for you.
 
    THEN THE PEOPLE. boardPeople() invented three names from a hash of
-   the club key, so Manchester United was owned by whoever the random
+   the club key, so Manchester Reds was owned by whoever the random
    number generator produced. The clubs whose ownership people actually
    know are named. Everything else keeps the generator.
 
@@ -46051,7 +46051,7 @@ dailyTickCore=function(){
 
    TWO, REACTION IN PROPORTION. A fan shift is now multiplied by what
    the fixture was worth, and the reason recorded against it says which
-   competition it happened in. Beating Arsenal in the FA Cup quarter-
+   competition it happened in. Beating Islington in the FA Cup quarter-
    final and beating them in the League Cup second round are no longer
    the same event. A final is worth roughly twice a league game; a first
    round tie against lower-league opposition is worth a third of one.
@@ -46624,7 +46624,7 @@ compLabel=function(fix){
    12. AND THE HOME SCREEN COUNTS DOWN TO THE RIGHT THING
    ---------------------------------------------------------------------
    A one-line badge on the next fixture saying what is riding on it,
-   because "Everton, in 3d" tells you nothing about whether it is a
+   because "Mersey Blues, in 3d" tells you nothing about whether it is a
    quarter-final.
    --------------------------------------------------------------------- */
 (function ctxCSS(){
@@ -47153,10 +47153,10 @@ dailyTickCore=function(){
    wA9_ratings — how good everybody actually is
    ---------------------------------------------------------------------
    Audited every squad in the game against what the division should look
-   like. The named players are right: Bowen is 80 at West Ham, Eide
+   like. The named players are right: Bowen is 80 at Newham, Eide
    91, Hadley 89, Rice 88, Kovalchuk 76, Aubert and Maldonado 92 at the top of the
-   world. The Premier League as a whole is right — Arsenal 83.2 average,
-   City 82.8, Liverpool 81.5, the bottom half between 75 and 77.
+   world. The Premier League as a whole is right — Islington 83.2 average,
+   City 82.8, Mersey Reds 81.5, the bottom half between 75 and 77.
 
    Three things are not.
 
@@ -47171,7 +47171,7 @@ dailyTickCore=function(){
    NOTHING BELOW THE CHAMPIONSHIP KNOWS WHO IT IS. Every League One club
    drew its players from the same flat band, so Bolton, with the biggest
    ground and the biggest budget in the division, had exactly the squad
-   Wimbledon had: 53.7 against 53.4, which is noise. Same in League Two,
+   Merton had: 53.7 against 53.4, which is noise. Same in League Two,
    same in the National League. A division where every club is identical
    has no promotion race in it, only a random number generator.
 
@@ -47514,7 +47514,7 @@ function dlMakeBargains(){
  for(let k=0;k<26&&out.length<4;k++){
   const c=pool[Math.floor(rng()*pool.length)];
   /* A club in trouble sells from the squad, not from the spine. Without
-     this the pool picked uniformly and Galatasaray were offering an
+     this the pool picked uniformly and Pera were offering an
      85-rated winger at forty per cent off, which is not a panic sale,
      it is a going-out-of-business sale. The two best players stay. */
   const all=(c.players||[]).filter(p=>!p.loan).sort((a,b)=>b.ovr-a.ovr);
@@ -47752,7 +47752,7 @@ ACTIONS.dlToutGo=el=>{
  const rng=mulberry(hashStr('tout|'+p.id+'|'+G.day+'|'+G.dl.hour));
  /* Who would actually want him: somebody with the money and the room.
     The wage test has to be the wage HE WOULD BE ON THERE, not the one
-    he is on here — the first version compared a Manchester United salary
+    he is on here — the first version compared a Manchester Reds salary
     against a Championship wage budget, so a 78-rated first-teamer got
     offered around the whole country and nobody could afford to answer.
     A player takes the going rate at the club he joins. */
@@ -48309,7 +48309,7 @@ ccStory=function(beat,arg){
     '<b>'+esc(c.name)+'</b> go up again. '+age+' season'+(age===1?'':'s')+
     ' since the club did not exist.'+
     '<br><br>'+(div==='PL'
-     ?'“There is a fixture list coming with Anfield and Old Trafford on it. '+
+     ?'“There is a fixture list coming with Summerhill Ground and Westgate Stadium on it. '+
       'I want you to know that I have not slept.”'
      :div==='CH'
      ?'“The Championship. People have heard of the Championship.”'
@@ -48448,9 +48448,9 @@ packG=function(g){
    bottom of it — everything at 52 and below — at the floor. Measured
    across the world, that meant:
 
-     Premier League   Man City 4.31 down to Ipswich 2.73
-     Championship     West Ham 2.94 down to Wrexham 1.48
-     League One       Bolton 1.03 down to Leyton Orient 0.50
+     Premier League   Man Blues 4.31 down to Ipswich 2.73
+     Championship     Newham 2.94 down to Wrexham 1.48
+     League One       Bolton 1.03 down to Leyton Athletic 0.50
      League Two       every single club 0.50
      National League  every single club 0.50
 
@@ -48462,7 +48462,7 @@ packG=function(g){
    The replacement is a curve through fixed points rather than a
    straight line, anchored where a star should mean something:
 
-     Manchester United        4.5
+     Manchester Reds        4.5
      the bottom of the PL     3.0
      the top of the           3.0   — the same standard, correctly
        Championship                   arriving at the same number
@@ -48490,7 +48490,7 @@ const STAR_CURVE=[
  [74,3.00],   /* the top of the Championship and the bottom of the PL */
  [78,3.50],
  [82,4.00],
- [85,4.50],   /* Manchester United */
+ [85,4.50],   /* Manchester Reds */
  [88,4.80],
  [92,5.00]];
 
@@ -49043,7 +49043,7 @@ newGame=function(){
  try{
   if(!installCustomClub()){
    /* the one failure mode worth handling out loud rather than dumping
-      somebody into Manchester United by accident */
+      somebody into Manchester Reds by accident */
    toast('Could not place the club. Starting at the bottom of the league instead.')}
  }catch(e){}
  return r};
@@ -49397,7 +49397,7 @@ valueFor=function(p){
    ---------------------------------------------------------------------
    The rating sets the going rate; the club decides how far above or
    below it he is paid. A National League club pays about two thirds of
-   the going rate and Manchester City about ten per cent over, which is
+   the going rate and Manchester Blues about ten per cent over, which is
    roughly the real spread once you account for the fact that the good
    players are at the good clubs already.
    --------------------------------------------------------------------- */
@@ -50447,7 +50447,7 @@ if(typeof ACTIONS.faOpen==='function'){
    eight hundred and seventy-nine players are listed. Every single one of
    them is unaffordable. Not most of them — all of them, measured:
 
-     Truro City    budget £120,000    players you can buy: 0
+     Truro Athletic    budget £120,000    players you can buy: 0
 
    Two separate faults stack up to produce that.
 
@@ -50671,7 +50671,7 @@ ACTIONS.offerCounter=el=>{
    ---------------------------------------------------------------------
    A filter is only useful if its rungs bracket the numbers you care
    about. £5M / £15M / £30M brackets nothing for a club with £120,000,
-   and £10k / £25k / £50k would bracket nothing for Manchester City.
+   and £10k / £25k / £50k would bracket nothing for Manchester Blues.
 
    So the rungs are chosen from one ladder of round numbers, and where
    the window sits on that ladder is decided by your budget and your
@@ -52730,8 +52730,8 @@ drawDugout=function(){
    FOUR THINGS, in the order they matter.
 
    THE KITS. Every shirt in the game is one flat club colour, so
-   Newcastle, Juventus and Sheffield United all run out in plain black
-   and Celtic in plain green. The game already knows better — kitPattern()
+   Tyneside, Vigor Torino and Sheffield Reds all run out in plain black
+   and Glas Greens in plain green. The game already knows better — kitPattern()
    has read the club name and returned 'stripe', 'hoop', 'half', 'sash',
    'band' or 'sleeve' since the badge work, and nothing on the pitch has
    ever asked it. Asking it is the single biggest thing that makes this
@@ -52828,7 +52828,7 @@ drawDugout=function(){
 /* ---------------------------------------------------------------------
    2. THE SHIRT HE ACTUALLY WEARS
    ---------------------------------------------------------------------
-   kitPattern() has been sitting there knowing that Newcastle play in
+   kitPattern() has been sitting there knowing that Tyneside play in
    stripes. The shirt is drawn as a path, so the pattern is drawn inside
    that same path with a clip — which means it follows the shoulders and
    the hem for free and can never leak onto the grass.
@@ -53629,8 +53629,8 @@ render=function(){
    Measured, auto-picked XI against a better assignment of the same
    squad to the same formation:
 
-     Arsenal      6 of 11 out of position    2.5 rating lost
-     Liverpool    9 of 11                   11.8
+     Islington      6 of 11 out of position    2.5 rating lost
+     Mersey Reds    9 of 11                   11.8
      Sheffield    6 of 11                    8.5
      Doncaster    8 of 11                   21.1
 
@@ -54163,7 +54163,7 @@ renderDock=function(){
    1. WHO CAN ACTUALLY DO IT
    ---------------------------------------------------------------------
    Five stars is deliberately rare. The first thresholds tried here gave
-   three hundred and fifty-two of them, eight in Manchester United's
+   three hundred and fifty-two of them, eight in Manchester Reds's
    squad alone, which is not "the ones you would name" — it is most of
    the good players. Raised until it lands on a few dozen in the world.
    --------------------------------------------------------------------- */
@@ -56674,7 +56674,7 @@ budLimits=function(c){
    ---------------------------------------------------------------------
    Four hundred positions along the bar, snapped to a round number, so the
    thumb always lands somewhere you would say out loud. £1k at a created
-   club, £1M at Manchester United.
+   club, £1M at Manchester Reds.
    --------------------------------------------------------------------- */
 function budStep(range){
  const raw=Math.max(1,range/400);
@@ -56974,8 +56974,8 @@ face=function(p,sz){
    Measured in a live world before touching anything: 9,906 players,
    8,271 with a nationality and 1,635 without. Seventeen per cent of the
    game, spread almost perfectly evenly at about seven men per club, in
-   every division including the biggest — City, Liverpool, Chelsea,
-   Bayern, Milan, Ajax. They are the players who pad an authored squad
+   every division including the biggest — City, Mersey Reds, W London,
+   Bayern, Milan, Amsterdam. They are the players who pad an authored squad
    out to a full twenty-two.
 
    That matters more than it sounds, because nationality is what drives a

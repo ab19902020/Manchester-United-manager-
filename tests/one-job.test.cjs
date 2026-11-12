@@ -6,7 +6,7 @@ const { createGame, startCareer } = require('./game-harness.cjs');
 /*
  * One man, one job.
  *
- * Yann Fontaine was managing Real Madrid and Benfica at the same time,
+ * Yann Fontaine was managing Madrid Blancos and União Lisboa at the same time,
  * and fourteen other men were in two jobs with him. Two causes: three
  * real managers appear in both of the game's manager lists, which
  * nothing reconciles, and twelve generated names collide because 450
@@ -40,7 +40,7 @@ test('no manager is in charge of two clubs', async (t) => {
     `managers holding two jobs:\n  ${Array.from(run.dupes).join('\n  ')}`);
 });
 
-test('Fontaine is at Real Madrid, and only there', async (t) => {
+test('Fontaine is at Madrid Blancos, and only there', async (t) => {
   const game = await createGame();
   t.after(() => game.close());
   await startCareer(game);
@@ -59,14 +59,14 @@ test('Fontaine is at Real Madrid, and only there', async (t) => {
 
   assert.equal(Array.from(run.where).join(', '), 'Madrid Blancos',
     `Fontaine is at: ${Array.from(run.where).join(', ') || 'nowhere'}`);
-  assert.ok(run.benfica, 'Benfica has no manager at all');
+  assert.ok(run.benfica, 'União Lisboa has no manager at all');
   assert.doesNotMatch(run.benfica, /Fontaine/,
-    'Benfica is still managed by Fontaine');
+    'União Lisboa is still managed by Fontaine');
 });
 
 test('the clubs the game names keep the man it named', async (t) => {
   /* The replacement has to fall on the club that is not the curated one.
-     If a collision took Fontaine off Real Madrid instead of off Benfica
+     If a collision took Fontaine off Madrid Blancos instead of off União Lisboa
      the duplicate count would still be zero and the game would still be
      wrong. */
   const game = await createGame();
