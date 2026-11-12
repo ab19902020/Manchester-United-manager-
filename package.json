@@ -5,9 +5,6 @@
   "description": "A mobile-first football management career game.",
   "scripts": {
     "serve": "node scripts/serve.cjs",
-    "data:lower-leagues": "node scripts/fetch-lower-league-squads.cjs",
-    "data:player-facts": "node scripts/fetch-lower-league-squads.cjs",
-    "data:fixtures": "node scripts/fetch-authentic-fixtures.cjs",
     "lint": "eslint src tests scripts service-worker.js",
     "test": "node --test --test-reporter=spec --test-concurrency=2",
     "sweep": "node scripts/sweep-screens.cjs",

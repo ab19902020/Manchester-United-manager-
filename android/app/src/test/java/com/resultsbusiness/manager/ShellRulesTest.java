@@ -25,7 +25,7 @@ public class ShellRulesTest {
     @Test
     public void everyGameFileIsServedAsWhatItIs() {
         assertEquals("text/html", MainActivity.mimeOf("index.html"));
-        assertEquals("text/javascript", MainActivity.mimeOf("src/lower-league-data.js"));
+        assertEquals("text/javascript", MainActivity.mimeOf("src/simulation-model.js"));
         assertEquals("application/manifest+json", MainActivity.mimeOf("manifest.webmanifest"));
         assertEquals("image/svg+xml", MainActivity.mimeOf("assets/results-business-icon.svg"));
         assertEquals("image/png", MainActivity.mimeOf("assets/results-business-icon-512.png"));
