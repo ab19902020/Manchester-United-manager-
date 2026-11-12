@@ -2069,7 +2069,7 @@ function showStart(){
 function paintStart(){
  const ss=$('#startScreen');
  let h='<div class="logo">RED DEVIL<br><em>MANAGER</em> <span style="font-size:.55em;vertical-align:middle">26/27</span></div>'+
- '<div class="tag">20 clubs · 400+ real players · full match engine · transfers, training & newgens.<br>Pick your club — the board is waiting.</div>'+
+ '<div class="tag">20 clubs · 400+ players · full match engine · transfers, training & newgens.<br>Pick your club — the board is waiting.</div>'+
  '<div class="clubgrid">';
  DB.forEach((c,i)=>{const fake={i:900+i,short:c[2],c1:c[3],c2:c[4]};
   h+='<div class="clubpick'+(i===START_SEL?' sel':'')+'" data-action="pickClub" data-v="'+i+'">'+crest(fake,34)+'<div class="cn">'+esc(c[2])+'</div></div>'});
@@ -55935,7 +55935,7 @@ ACTIONS.sfxVoicePick=()=>{
 /* =====================================================================
    wD8_storewarn — say so when the save upgrade did not load
    ---------------------------------------------------------------------
-   red-devil-manager.html is no longer self-contained. It loads three
+   The game file is no longer self-contained. It loads three
    scripts from src/, and one of them owns the IndexedDB career store.
 
    Copy the HTML somewhere on its own — email it, drop it on a stick,
@@ -57534,6 +57534,7 @@ showStart();
 <script src="src/visual-upgrade.js"></script>
 <script src="src/manager-experience.js"></script>
 <script src="src/decision-dock.js"></script>
+<script src="src/original-trophies.js"></script>
 <script src="src/crazygames.js"></script>
 <script src="src/android-shell.js"></script>
 </body>

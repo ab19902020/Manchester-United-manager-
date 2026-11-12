@@ -101,7 +101,7 @@ async function main() {
   await page.goto('http://127.0.0.1:' + port + '/parent.html');
   await page.waitForTimeout(6000);
 
-  const frame = page.frames().find((f) => /red-devil-manager|index/.test(f.url()));
+  const frame = page.frames().find((f) => /index/.test(f.url()));
   if (!frame) {
     console.log('the game never loaded in the frame');
     await browser.close(); server.close(); process.exit(1);

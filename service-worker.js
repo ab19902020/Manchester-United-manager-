@@ -1,9 +1,8 @@
 const CACHE_PREFIX = 'results-business:' + encodeURIComponent(self.registration.scope) + ':';
-const CACHE_NAME = CACHE_PREFIX + 'v60';
+const CACHE_NAME = CACHE_PREFIX + 'v61';
 const CORE_ASSETS = [
   './',
   './index.html',
-  './red-devil-manager.html',
   './manifest.webmanifest',
   './src/simulation-model.js',
   './src/career-store.js',
@@ -69,6 +68,7 @@ const CORE_ASSETS = [
   './src/visual-upgrade.js',
   './src/manager-experience.js',
   './src/decision-dock.js',
+  './src/original-trophies.js',
   './src/crazygames.js',
   './src/android-shell.js',
   './vendor/three.min.js',

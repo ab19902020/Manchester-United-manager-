@@ -125,7 +125,7 @@ async function runsFromTheZip(root) {
 
   await page.goto('http://127.0.0.1:' + port + '/parent.html');
   await page.waitForTimeout(6000);
-  const frame = page.frames().find((f) => /red-devil-manager|index/.test(f.url()));
+  const frame = page.frames().find((f) => /index/.test(f.url()));
 
   let clubs = 0;
   let adapter = false;
