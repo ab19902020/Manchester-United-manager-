@@ -9,7 +9,7 @@
     like that. The only match engine now will be the pitch view, the
     text, and the stats, and all of that will be displaying the same
     information no matter what. It needs to go back to the proper core
-    of a football manager game -- your decisions, the fitness, the
+    of a football management game -- your decisions, the fitness, the
     attributes will decide the game."
 
    That is the right call and it was mine to make badly. A 3D broadcast
