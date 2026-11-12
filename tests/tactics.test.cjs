@@ -249,8 +249,8 @@ test('build-up leans the way the squad can actually play', async (t) => {
 
   const playOut = (d) => spread[d].build['Play out'] || 0;
   assert.ok(playOut('PL') > playOut('NL'),
-    `Premier League sides should play out more than National League ones (${playOut('PL')} vs ${playOut('NL')})`);
-  assert.ok(Object.keys(spread.NL.build).length >= 1, 'the National League should have a plan too');
+    `Premier Division sides should play out more than National Division ones (${playOut('PL')} vs ${playOut('NL')})`);
+  assert.ok(Object.keys(spread.NL.build).length >= 1, 'the National Division should have a plan too');
   // and the final third is not one plan copied across the world
   const kinds = new Set();
   ['PL', 'L2', 'NL'].forEach((d) => Object.keys(spread[d].third).forEach((k) => kinds.add(k)));

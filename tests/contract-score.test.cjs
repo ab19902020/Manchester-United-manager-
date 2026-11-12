@@ -10,7 +10,7 @@ const { createGame, startCareer } = require('./game-harness.cjs');
  * the player is asking except the goal bonus, which was measured against
  * a flat £8,000. That broke it at both ends of the pyramid: a National
  * League sheet opens at £50 a goal and scored 0.02 of the four points it
- * is worth, while a Premier League sheet opens at £7,500 and scored 3.75
+ * is worth, while a Premier Division sheet opens at £7,500 and scored 3.75
  * — pinned near the ceiling before you touched it. Dead either way.
  *
  * These are written against the shape rather than against any division's
@@ -26,11 +26,11 @@ const { createGame, startCareer } = require('./game-harness.cjs');
  */
 
 const WEEKLY_WAGES = [
-  ['Premier League', 150000],
-  ['Championship', 18000],
-  ['League One', 5000],
-  ['League Two', 2200],
-  ['National League', 800],
+  ['Premier Division', 150000],
+  ['Second Division', 18000],
+  ['Third Division', 5000],
+  ['Fourth Division', 2200],
+  ['National Division', 800],
 ];
 
 /* the four points the term is worth, on the scale the formula uses */
@@ -62,7 +62,7 @@ test('a goal bonus is worth the same at every level of the pyramid', async () =>
       );
 
       /* and the defect this replaced: measured against the old flat
-         £8,000, everything below the Premier League scored ~nothing */
+         £8,000, everything below the Premier Division scored ~nothing */
       const legacy = Math.min(4, (opening / 8000) * 4);
       if (weekly <= 18000) {
         assert.ok(legacy < 0.5, `${division}: the old scale should have been near-dead here`);

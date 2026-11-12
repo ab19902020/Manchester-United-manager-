@@ -29,7 +29,7 @@
  * words whether it reproduced.
  *
  * The reference column is real English football. The champion's average
- * over the thirty Premier League seasons before 2025-26 is 87.6 and
+ * over the thirty Premier Division seasons before 2025-26 is 87.6 and
  * second is 80.5 (Opta/premierleague.com); fourth has averaged about 70
  * over the last decade; the club that finishes bottom has averaged
  * about 21 over the last ten seasons — 17, 24, 31, 16, 21, 23, 22, 25,
@@ -256,7 +256,7 @@ const CANDIDATES = [
       });
       /* WHAT A LEAGUE TABLE IS MADE OF. Points are downstream of goal
          difference, and goal difference is where real football gives
-         unambiguous targets: over the last decade a Premier League
+         unambiguous targets: over the last decade a Premier Division
          champion has scored about 1.7 times the division's average and
          conceded about 0.6 times it, and the club finishing bottom has
          been the mirror of that. If the game's best squad is nearer the

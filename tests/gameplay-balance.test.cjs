@@ -45,7 +45,7 @@ test('cards are served, loans are affordable and squad unrest cannot loop', asyn
   assert.equal(bans.servedOncePerDay, 1, 'and it is served once per match, not once per call');
 
   /* --------------------------------------------------------------
-     A National League club can shop in the loan market.
+     A National Division club can shop in the loan market.
      -------------------------------------------------------------- */
   const loans = game.eval(`(function(){
     const nl = G.clubs.filter(c => c.league === 'NL').sort((a,b) => a.rep - b.rep)[0];
@@ -64,7 +64,7 @@ test('cards are served, loans are affordable and squad unrest cannot loop', asyn
 
   assert.ok(loans.count > 0, 'there has to be a loan market to shop in');
   assert.ok(loans.max <= loans.budget * 0.2,
-    `no single loan should cost a fifth of a National League budget (worst was £${loans.max})`);
+    `no single loan should cost a fifth of a National Division budget (worst was £${loans.max})`);
   assert.ok(loans.free > 0, 'some loans below the Football League carry no fee at all');
   loans.viaLoanTerms.forEach((fee) => {
     assert.ok(fee <= loans.budget * 0.2,
@@ -77,7 +77,7 @@ test('cards are served, loans are affordable and squad unrest cannot loop', asyn
   const bonus = game.eval('({nonLeague: RBSBalance.goalBonusFor(1053), premier: RBSBalance.goalBonusFor(205000)})');
   assert.ok(bonus.nonLeague >= 20 && bonus.nonLeague <= 100,
     `a non-league goal bonus should be tens of pounds, got £${bonus.nonLeague}`);
-  assert.ok(bonus.premier >= 4000, `a Premier League goal bonus should be thousands, got £${bonus.premier}`);
+  assert.ok(bonus.premier >= 4000, `a Premier Division goal bonus should be thousands, got £${bonus.premier}`);
 
   /* --------------------------------------------------------------
      The transfer news is about the league you manage in.
@@ -94,7 +94,7 @@ test('cards are served, loans are affordable and squad unrest cannot loop', asyn
 
   // joined rather than deep-equalled: the array comes out of the JSDOM realm
   assert.equal(Array.from(news.near).join(','), 'L2,NL',
-    'a National League club reads about League Two and its own division');
+    'a National Division club reads about Fourth Division and its own division');
   assert.ok(news.stories.length > 0, 'the rumour mill has to produce something');
   const local = news.stories.filter((s) => news.near.includes(s.from) && news.near.includes(s.to)).length;
   assert.ok(local / news.stories.length >= 0.5,
@@ -310,8 +310,8 @@ test('nobody loses morale for not playing before he is allowed to complain', asy
  * simFixture sends anything that is not a cup tie and not one of the divisions
  * the real engine runs to fastSim, which accrues appearances, goals, assists,
  * ratings and injuries — and no cards. Measured over thirty matchdays before
- * this fix: Premier League 5.07 bookings a match and 10 suspensions, League
- * One 0.39 and none, League Two 0.33 and none, National League 0.19 and none.
+ * this fix: Premier Division 5.07 bookings a match and 10 suspensions, League
+ * One 0.39 and none, Fourth Division 0.33 and none, National Division 0.19 and none.
  */
 test('discipline exists in every division, not just the one you are in', async (t) => {
   const game = await createGame();

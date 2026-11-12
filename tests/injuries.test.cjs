@@ -6,7 +6,7 @@ const { createGame, startCareer } = require('./game-harness.cjs');
 /*
  * Reported: five injuries in the first four matches. Reproduced exactly —
  * two in matches, three in training — with 19 across the season. The
- * season total was close to a real Premier League squad's; the shape was
+ * season total was close to a real Premier Division squad's; the shape was
  * not, because nothing in the model knew the treatment room was already
  * full. After: 10, 10 and 11 across three seasons, and 1, 2 and 1 in the
  * first four matches.

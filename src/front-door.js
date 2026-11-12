@@ -17,11 +17,11 @@
    So: pick a league, see its clubs, and press one to read the job before
    you take it. Money, ground, standing, the size of the task, and the
    squad where the game has one to show. The two ways in — take a job, or
-   build a club from nothing in the National League — sit at the top as
+   build a club from nothing in the National Division — sit at the top as
    equals, because they are.
 
    WHAT THIS DOES NOT DO. It does not invent anything. A club outside the
-   Premier League has no squad list until the world is generated, so it
+   Premier Division has no squad list until the world is generated, so it
    is not shown one; it gets its standing and its money, which are real
    and already there. Nothing here fabricates a player to fill a panel.
    ===================================================================== */
@@ -36,8 +36,8 @@
   /* The English pyramid first and in order, then the rest of Europe by
      how many people would recognise it. */
   var ENGLISH = [
-    ['PL', 'Premier League'], ['CH', 'Championship'], ['L1', 'League One'],
-    ['L2', 'League Two'], ['NL', 'National League'],
+    ['PL', 'Premier Division'], ['CH', 'Second Division'], ['L1', 'Third Division'],
+    ['L2', 'Fourth Division'], ['NL', 'National Division'],
   ];
 
   function style() {
@@ -114,7 +114,7 @@
   }
 
   /* Squad, only where the game genuinely has one before the world is
-     built. The Premier League carries its real squads in DB; nothing
+     built. The Premier Division carries its real squads in DB; nothing
      else does, and nothing is invented to fill the gap. */
   function squadOf(club) {
     try {

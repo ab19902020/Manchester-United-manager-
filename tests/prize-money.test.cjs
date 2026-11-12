@@ -52,7 +52,7 @@ test('every match of the European league phase pays, and the table pays again on
         && /What it pays/.test(m.body||''))};
   })()`);
 
-  assert.ok(!run.skipped, 'the probe career should be in the Champions League');
+  assert.ok(!run.skipped, 'the probe career should be in the Champions Cup');
 
   const wins = run.rows.filter((r) => r.outcome === 'W');
   const draws = run.rows.filter((r) => r.outcome === 'D');
@@ -61,7 +61,7 @@ test('every match of the European league phase pays, and the table pays again on
 
   // 1. a win pays, a draw pays less, a defeat pays nothing
   assert.ok(wins.every((r) => r.bank === run.fees.win),
-    `a Champions League win should pay ${run.fees.win}, saw ${wins.map((r) => r.bank).join('/')}`);
+    `a Champions Cup win should pay ${run.fees.win}, saw ${wins.map((r) => r.bank).join('/')}`);
   assert.ok(draws.every((r) => r.bank === run.fees.draw),
     `a draw should pay ${run.fees.draw}, saw ${draws.map((r) => r.bank).join('/')}`);
   assert.ok(run.fees.draw > 0 && run.fees.draw < run.fees.win,
@@ -175,8 +175,8 @@ test('the league pays for the place you finish in, all the way down the pyramid'
       `(${pay[0]} vs ${pay[pay.length - 1]})`);
   });
 
-  // the pyramid holds: a Premier League place is worth far more than a
-  // Championship one, and so on down
+  // the pyramid holds: a Premier Division place is worth far more than a
+  // Second Division one, and so on down
   const order = ['PL', 'CH', 'L1', 'L2', 'NL'].filter((d) => ladders[d]);
   for (let i = 1; i < order.length; i += 1) {
     assert.ok(ladders[order[i - 1]].pay[0] > ladders[order[i]].pay[0],

@@ -31,11 +31,11 @@ test('a new career is already playing for a league and two cups', async () => {
       };
     }())`);
 
-    /* the division you are in, plus the FA Cup and the League Cup, which
+    /* the division you are in, plus the Challenge Cup and the League Cup, which
        every English club is in whether or not it has played in them yet */
     assert.ok(result.codes.includes(result.league),
       'the board should lead with the division you are actually in, not a generic one');
-    assert.ok(result.codes.includes('FA'), 'and the FA Cup');
+    assert.ok(result.codes.includes('FA'), 'and the Challenge Cup');
     assert.ok(result.codes.includes('LC'), 'and the League Cup');
 
     /* nothing has been played, so nothing can be out */
@@ -140,7 +140,7 @@ test('the empty room stands up what you are playing for', async () => {
 
     /* nothing won, so every trophy in the room is a preview — and the ones
        standing at the front are this season's, not a catalogue of the game
-       that opens with the World Cup */
+       that opens with the World Championship */
     assert.deepEqual(result.head, result.wanted,
       'the season\'s competitions should be at the front of the shelf');
     assert.ok(result.all > result.wanted.length,

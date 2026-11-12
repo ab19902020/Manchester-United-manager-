@@ -6,7 +6,7 @@
    PRIZE MONEY — winning things pays, and the money reaches the budget
    ---------------------------------------------------------------------
    Three separate holes, all measured in a live career with Manchester
-   United in the Champions League.
+   the Reds in the Champions Cup.
 
    1. THE LEAGUE PHASE PAID NOTHING AT ALL.
 
@@ -18,14 +18,14 @@
 
       The data to fix it was already sitting in the file. `EURO_DEFS`
       carries `pot:[a,b]` per competition, and `b` is, to the pound, the
-      real UEFA per-win fee: £2.1M in the Champions League, £400K in the
-      Europa League. Nothing read it. `CUP_DEFS[key].prize[0]` is derived
+      real European per-win fee: £2.1M in the Champions Cup, £400K in the
+      Continental Cup. Nothing read it. `CUP_DEFS[key].prize[0]` is derived
       from it as `pot[1] * 3`, so the per-win fee can be recovered from
       the competition itself without this file naming a single
       competition or hardcoding a figure — which matters, because the
       leagues and the clubs in them are being rebuilt elsewhere.
 
-      Against the published 2024/25 UEFA distribution:
+      Against the published 2024/25 European distribution:
 
           win            £2.1M model   €2.10M real
           draw           £700K model   €0.70M real   (a third of a win)
@@ -33,7 +33,7 @@
 
    2. NOBODY WAS PAID FOR WHERE THEY FINISHED IN THAT TABLE.
 
-      UEFA pays a ranking bonus of one share per place: thirty-six shares
+      The organisers pay a ranking bonus of one share per place: thirty-six shares
       for finishing first of thirty-six, one share for finishing last.
       First in the league phase is worth £9.9M on top of the results
       themselves. The game paid a flat £11M to the top eight and nothing
@@ -48,7 +48,7 @@
       European run is for. Every prize this file can see now moves the
       budget as well, including the ones paid by the original code — a
       wrapper watches the bank across `progressCups` and moves the same
-      amount into the budget, so FA Cup and League Cup rounds, the
+      amount into the budget, so Challenge Cup and League Cup rounds, the
       knockout ladder and the winners' cheque are all covered without
       touching any of the code that pays them.
 
@@ -74,7 +74,7 @@
     }
   }
 
-  /* A draw is worth a third of a win, in every UEFA competition and at
+  /* A draw is worth a third of a win, in every European competition and at
      every level of it. The ranking share is an eighth of that again. */
   const DRAW_SHARE = 1 / 3;
   const RANK_SHARE = 0.131;
@@ -205,7 +205,7 @@
           if (!paid) return;
           say('award', fees.def.icon + ' League phase ranking money: ' + fmtM(paid),
             'You finished <b>' + ordinal(ix + 1) + ' of ' + size + '</b> in the ' +
-            esc(fees.def.name) + ' league phase. UEFA pays a share for every club ' +
+            esc(fees.def.name) + ' league phase. The organisers pay a share for every club ' +
             'you finished above as well as one for being there — <b>' + shares +
             ' shares</b> at <b>' + fmtM(fees.rank) + '</b> each, <b>' + fmtM(paid) +
             '</b> in all, on the budget as well as in the bank.');
@@ -257,7 +257,7 @@
   /* ---- 4. and the accounts admit it happened ------------------------
      Cup and European money has never appeared in `seasonRevenue`, so the
      Finances screen showed a club that had won £100M in Europe exactly
-     the same revenue as one that had not qualified. UEFA money is
+     the same revenue as one that had not qualified. European money is
      broadcast money, and the parachute layer above already puts its
      payments in the same bucket, so it goes on the broadcast line where
      the PSR position and every screen pick it up without being told. */

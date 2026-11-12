@@ -5,13 +5,13 @@ const { createGame, startCareer } = require('./game-harness.cjs');
 
 /*
  * An audit for the shape of mistake the boardroom had — a question, a
- * promise or a target written for one twenty-club Premier League and then
+ * promise or a target written for one twenty-club Premier Division and then
  * asked of a twenty-four-club division with different rules. Measured in a
  * live career before these fixes:
  *
- *   4th in League Two, an automatic promotion place:
+ *   4th in Fourth Division, an automatic promotion place:
  *     "4th and in the mix. Is Europe the target or the minimum?"
- *   14th of 24 in the National League, mid-table:
+ *   14th of 24 in the National Division, mid-table:
  *     "Is this a relegation fight?" — in a division nobody is relegated from
  *   the weakest club in every division:
  *     "The board expects 24th or better"
@@ -50,10 +50,10 @@ test('every division reports its real shape, read from the world', async (t) => 
     assert.ok(s.floor < s.size, `${div} target floor ${s.floor} of ${s.size}`);
   });
 
-  // the National League relegates nobody in this game
+  // the National Division relegates nobody in this game
   assert.equal(shapes.NL.down, 0);
   assert.equal(shapes.NL.dropFrom, null);
-  // and League One relegates four, not three
+  // and Third Division relegates four, not three
   assert.equal(shapes.L1.down, 4);
   assert.equal(shapes.L1.dropFrom, 21);
 });
@@ -117,13 +117,13 @@ test('the press room asks about the thing that decides your division', async (t)
   const idsOf = (r) => r.rules.map((x) => x.id);
   const textOf = (r) => r.rules.map((x) => x.lines.join(' ')).join(' ');
 
-  // 2nd in League Two is an automatic promotion place, not a European one.
-  // (This used to say 4th. League Two promotes four, but only three of them
+  // 2nd in Fourth Division is an automatic promotion place, not a European one.
+  // (This used to say 4th. Fourth Division promotes four, but only three of them
   // automatically — the fourth is the play-off place, which is the whole
   // point of the play-offs existing.)
   assert.equal(asked.l2Promo.zone, 'promotion');
   assert.ok(idsOf(asked.l2Promo).includes('pos-promo'), idsOf(asked.l2Promo).join());
-  assert.ok(!idsOf(asked.l2Promo).includes('pos-euro'), 'Europe must not be mentioned in League Two');
+  assert.ok(!idsOf(asked.l2Promo).includes('pos-euro'), 'Europe must not be mentioned in Fourth Division');
   assert.ok(/promotion/i.test(textOf(asked.l2Promo)));
   assert.ok(!/Europe/i.test(textOf(asked.l2Promo)));
 
@@ -136,7 +136,7 @@ test('the press room asks about the thing that decides your division', async (t)
   assert.equal(asked.l2Chase.zone, 'chasing');
   assert.ok(idsOf(asked.l2Chase).includes('pos-promo'));
 
-  // 14th of 24 in the National League is mid-table, and nobody is relegated
+  // 14th of 24 in the National Division is mid-table, and nobody is relegated
   assert.equal(asked.nlMid.zone, 'mid');
   assert.ok(!idsOf(asked.nlMid).includes('pos-bad'), 'no relegation fight in mid-table');
   assert.ok(!/relegation/i.test(textOf(asked.nlMid)));
@@ -146,13 +146,13 @@ test('the press room asks about the thing that decides your division', async (t)
   assert.ok(idsOf(asked.nlNothing).includes('pos-nothing'));
   assert.ok(!/relegation/i.test(textOf(asked.nlNothing)));
 
-  // League One relegates four, and the question says four
+  // Third Division relegates four, and the question says four
   assert.equal(asked.l1Down.zone, 'relegation');
   assert.ok(idsOf(asked.l1Down).includes('pos-bad'));
   assert.ok(/bottom 4/.test(textOf(asked.l1Down)), textOf(asked.l1Down));
   assert.equal(asked.l1Safe.zone, 'mid');
 
-  // the Premier League keeps the questions it always had
+  // the Premier Division keeps the questions it always had
   assert.equal(asked.plEuro.zone, 'europe');
   assert.ok(idsOf(asked.plEuro).includes('pos-euro'));
   assert.equal(asked.plDown.zone, 'relegation');
@@ -250,16 +250,16 @@ test('a promise to stay up is judged against the real relegation zone', async (t
     return out;
   })()`);
 
-  // League One relegates four: 21st is down, and used to be judged as safe
-  assert.equal(verdicts.L1.p21, true, 'League One 21st is relegated');
+  // Third Division relegates four: 21st is down, and used to be judged as safe
+  assert.equal(verdicts.L1.p21, true, 'Third Division 21st is relegated');
   assert.equal(verdicts.L1.p20, false);
-  // League Two relegates two: 22nd is safe, and used to be judged as relegated
-  assert.equal(verdicts.L2.p22, false, 'League Two 22nd stays up');
+  // Fourth Division relegates two: 22nd is safe, and used to be judged as relegated
+  assert.equal(verdicts.L2.p22, false, 'Fourth Division 22nd stays up');
   assert.equal(verdicts.L2.p23, true);
-  // the National League relegates nobody
+  // the National Division relegates nobody
   assert.equal(verdicts.NL.p23, false);
   assert.equal(verdicts.NL.down, 0);
-  // the Premier League is unchanged
+  // the Premier Division is unchanged
   assert.equal(verdicts.PL.p20, true);
 
   // and the promise itself resolves the right way in a division with no drop
@@ -267,7 +267,7 @@ test('a promise to stay up is judged against the real relegation zone', async (t
     const before=(G.pledges||[]).length;
     G.pledges=[{id:'t1',kind:'survive',state:'open',season:G.season,label:'keep this club up'}];
     const realShape=RBSShape.divShape;
-    // judge it as if the club were in the National League, bottom of the table
+    // judge it as if the club were in the National Division, bottom of the table
     const club=G.clubs[G.my];
     const wasLeague=club.league;
     judgeSeasonPledges();
@@ -298,7 +298,7 @@ test('a transfer target asks for the division he would be joining', async (t) =>
   // 15th of 24 is mid-table and must not be scored as relegation form
   assert.equal(wants.L2.midTerm, 0, 'mid-table in a 24-club division is neutral');
   assert.equal(wants.NL.midTerm, 0);
-  // the Premier League still penalises 15th, which really is trouble there
+  // the Premier Division still penalises 15th, which really is trouble there
   assert.ok(wants.PL.midTerm < 0, '15th of 20 is close to the drop');
   // promotion is worth as much as Europe, in the division that has it
   assert.ok(wants.L2.promotionTerm > 0);
@@ -323,16 +323,16 @@ test('the supporters react to money that is big for this club', async (t) => {
     return out;
   })()`);
 
-  // a threshold that only the Premier League can reach is not a threshold
+  // a threshold that only the Premier Division can reach is not a threshold
   assert.ok(levels.PL.bigFee > levels.CH.bigFee);
   assert.ok(levels.CH.bigFee > levels.L1.bigFee);
   assert.ok(levels.L1.bigFee > levels.L2.bigFee);
   assert.ok(levels.L2.bigFee > levels.NL.bigFee);
-  assert.ok(levels.NL.bigFee <= 2e5, 'a National League record must be reachable');
+  assert.ok(levels.NL.bigFee <= 2e5, 'a National Division record must be reachable');
   ['PL', 'CH', 'L1', 'L2', 'NL'].forEach((d) => {
     assert.ok(levels[d].starOvr > levels[d].goodOvr, `${d} star vs good`);
   });
-  assert.ok(levels.NL.goodOvr < 70, 'nobody in the National League is rated 82');
+  assert.ok(levels.NL.goodOvr < 70, 'nobody in the National Division is rated 82');
 });
 
 test('a career runs a season with the new layers and stays clean', async (t) => {
@@ -371,8 +371,8 @@ test('a career runs a season with the new layers and stays clean', async (t) => 
 
 /*
  * Three weeks of a scout's time produced one sentence — the numbers already
- * on the player's card — and read identically whether a Premier League scout
- * was watching a superstar or a National League scout was watching a
+ * on the player's card — and read identically whether a Premier Division scout
+ * was watching a superstar or a National Division scout was watching a
  * non-league centre half. A scout is sent to answer one question: is he any
  * good, and is he any good FOR US.
  */
@@ -420,9 +420,9 @@ test('a scout report is about your squad and your money', async (t) => {
   })()`);
 
   assert.equal(contrast.div, 'NL');
-  // a National League club must not be told to sign the best player on earth
+  // a National Division club must not be told to sign the best player on earth
   assert.ok(!/Sign him/.test(contrast.body),
-    `a National League club was told to sign a world superstar: ${contrast.body.slice(0, 240)}`);
+    `a National Division club was told to sign a world superstar: ${contrast.body.slice(0, 240)}`);
   assert.ok(/cannot|Ask me again|distance/i.test(contrast.body),
     `the report should say the money is impossible: ${contrast.body.slice(0, 240)}`);
 });
@@ -516,7 +516,7 @@ test('the academy you pay for changes what comes out of it', async (t) => {
  *
  * (Promotion itself was already handled: a promoted club carries a low
  * reputation into its new division, so the promoted trio all sit on the
- * Premier League floor of 17th. That half of the finding was wrong.)
+ * Premier Division floor of 17th. That half of the finding was wrong.)
  */
 test('the board looks at the squad you actually have', async (t) => {
   const game = await createGame();
@@ -658,7 +658,7 @@ test('nobody is asked why they have not signed anyone on the first day', async (
 });
 
 /*
- * Reported: the competitions email listed the League Cup and the FA Cup and
+ * Reported: the competitions email listed the League Cup and the Challenge Cup and
  * never mentioned the Champions Cup — while the club had eight Champions Cup
  * fixtures already on the calendar.
  *
@@ -692,7 +692,7 @@ test('the competitions letter lists the competitions you are actually in', async
   // the letter has to agree with the calendar
   assert.ok(/Champions/i.test(top.body),
     `eight Champions Cup fixtures and the letter says: ${top.body}`);
-  assert.ok(/FA Cup/i.test(top.body) && /League Cup/i.test(top.body), top.body);
+  assert.ok(/Challenge Cup/i.test(top.body) && /League Cup/i.test(top.body), top.body);
   assert.ok(!/undefined|NaN/.test(top.body), top.body);
 
   // England's Champions Cup places — five, as the game already allocates
@@ -712,6 +712,6 @@ test('the competitions letter lists the competitions you are actually in', async
   assert.equal(lower.inCL, false);
   assert.ok(lower.body, 'every club gets the letter');
   assert.ok(!/Champions|Europa|Conference/i.test(lower.body),
-    `a National League club was told it is in Europe: ${lower.body}`);
-  assert.ok(/FA Cup/i.test(lower.body), lower.body);
+    `a National Division club was told it is in Europe: ${lower.body}`);
+  assert.ok(/Challenge Cup/i.test(lower.body), lower.body);
 });

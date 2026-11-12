@@ -91,7 +91,7 @@ test('the last promotion place is decided by a play-off, and you play it', async
 
     // 1. the right clubs: the ones just below the automatic places. A
     // division sending only one club up automatically runs the wider
-    // six-club version, which is what the National League does.
+    // six-club version, which is what the National Division does.
     // (joined rather than deep-compared: these arrays come back from the
     // page's realm, so a strict deep equal fails on the prototype alone)
     const count = d.wide ? 6 : 4;

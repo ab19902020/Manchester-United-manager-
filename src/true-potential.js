@@ -7,11 +7,11 @@
    so every player is given a hidden REALISED CEILING between 80% and
    100% of it, drawn deterministically from his own id. The gap between
    the two is the interesting part -- the boy everyone said would play
-   for England who ends up a solid Championship player.
+   for England who ends up a solid Second Division player.
 
    It was implemented by writing the ceiling over `p.pot`, which deletes
    the gap it was built to create. Measured on the shipped build: 96 of
-   136 under-24s in the Premier League had potential equal to ability.
+   136 under-24s in the Premier Division had potential equal to ability.
    Théo Tessier read 83/83 where the data says 83/92, Rozman 87/87 against
    87/93, Georges Atangana 84/84 against 84/91. So the scout could not tell
    you what a young player might become and the academy list could not
@@ -25,7 +25,7 @@
    eight separate places, so with the true potential there the gates let
    a player keep growing inside every session and the pull-back
    afterwards does not undo the attribute churn. Five seasons, same
-   seed, Premier League mean ability:
+   seed, Premier Division mean ability:
 
        as shipped     77.68 -> 79.69     +2.01
        with the stop moved  77.68 -> 81.54     +3.86

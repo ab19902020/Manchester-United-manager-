@@ -6,17 +6,17 @@
    "we just have a top goal scorer in each league, and then the golden
     boot should only go to the top goal scorer from the top league of
     each country... it's the top goal scorer across all competitions as
-    well. So it could be FA Cup, League Cup, Champions League, Europa,
+    well. So it could be Challenge Cup, League Cup, Champions Cup, Europa,
     wherever it is, and it's that who has the most goals all combined
     will be the top goal scorer with the golden boot."
 
    Measured over three played seasons, the Golden Boot went to a
-   National League striker on 38 and a League One striker on 31, with a
-   Premier League player winning it only once. That is not a bug in the
+   National Division striker on 38 and a Third Division striker on 31, with a
+   Premier Division player winning it only once. That is not a bug in the
    scoring — it is a bug in who was allowed to win. The award was picked
    from every senior player in the world, and the lower a division is
    the more freely it scores, so the fifth tier wins a trophy the
-   Premier League is supposed to.
+   Premier Division is supposed to.
 
    Two things follow, and they are different awards:
 
@@ -24,21 +24,21 @@
        fact about a division and it belongs to that division.
 
      * THE GOLDEN BOOT IS ONE AWARD, and only the top flight of a
-       country can win it — the Premier League, La Liga, Serie A, the
-       Bundesliga, Ligue 1. Between those, most goals wins.
+       country can win it — the Premier Division, Primera División, Prima Divisione, the
+       Erste Liga, Première Division. Between those, most goals wins.
 
    THE TALLY WAS ALREADY RIGHT. `p.stats.goals` is added up in
    MatchSim.finish(), which every competition runs through: the league,
-   the FA Cup, the League Cup and Europe alike. So "across all
+   the Challenge Cup, the League Cup and Europe alike. So "across all
    competitions" needed nothing built — it needed saying, because the
    old mail called them "league goals" and they never were.
    ===================================================================== */
 
 (function goldenBoot() {
   /* The top division of every country. `tier` is 1 for the Premier
-     League, La Liga, Serie A, the Bundesliga and Ligue 1, and 2 or more
+     League, Primera División, Prima Divisione, the Erste Liga and Première Division, and 2 or more
      for everything below them; Europe has no tier at all, which is
-     right — the Champions League is a competition, not a league, and
+     right — the Champions Cup is a competition, not a league, and
      its goals are already counted in whichever league its players play
      in. */
   function topFlights() {
@@ -143,7 +143,7 @@
 
   /* THE SEASON AWARDS PICK THE SAME MAN. buildAwards chose the boot
      from every senior player outside Europe, which is the whole pyramid
-     — so the National League won it there too, and the trophy room, the
+     — so the National Division won it there too, and the trophy room, the
      player's honours and the ceremony all followed it down. */
   try {
     if (typeof buildAwards === 'function') {

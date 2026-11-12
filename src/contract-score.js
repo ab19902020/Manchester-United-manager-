@@ -19,13 +19,13 @@
    bonus, which is measured against a flat £8,000. That is a Premier
    League number, and it breaks the lever at both ends of the pyramid:
 
-     NATIONAL LEAGUE. The sheet opens at £50 a goal, because Agent One
+     NATIONAL DIVISION. The sheet opens at £50 a goal, because Agent One
      scaled the opening offer to 5% of the weekly wage. £50 against a
      £8,000 yardstick is 0.025 of the four points it is worth. You can
      type any bonus a club at that level could afford and the number
      will not move the decision. A dead lever.
 
-     PREMIER LEAGUE. The opposite failure, and the reason this is worth
+     PREMIER DIVISION. The opposite failure, and the reason this is worth
      fixing rather than special-casing the bottom. The sheet opens at
      £7,500 there, which already scores 3.75 of 4 — so the term is
      pinned near its ceiling before you touch it and there is nothing to
@@ -39,7 +39,7 @@
      the sheet's opening bonus  -> 2 of 4 points
      twice the opening bonus    -> 4 of 4 points
 
-   So the term means the same thing to a National League winger as to an
+   So the term means the same thing to a National Division winger as to an
    international, there is always room to improve it, and it is tied to
    Agent One's constant rather than to a second one of mine that would
    drift out of step the first time they retune it.

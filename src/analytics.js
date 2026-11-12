@@ -25,7 +25,7 @@
 
      Players   every player in a division, sortable on any column, five
                metric groups, filtered by position and by minimum
-               appearances. Sort by tackle percentage in League Two if
+               appearances. Sort by tackle percentage in Fourth Division if
                you want to.
      Teams     every club in a division: the league table numbers, plus
                what the squad behind them is — age, rating, wage bill,
@@ -568,7 +568,7 @@
      Kept for your own squad only. Twenty numbers a man is free; twenty
      numbers for ten thousand players in the world is a megabyte the
      save cannot spare, and nobody is going to scroll a form graph for a
-     reserve left-back in the National League.
+     reserve left-back in the National Division.
      ------------------------------------------------------------------- */
   const FORM_KEEP = 20;
 

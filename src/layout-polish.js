@@ -117,7 +117,7 @@
        a phone, and that is a density decision worth keeping. What it
        does not account for is a chip whose label is two characters:
        "GK" comes out 39x32 and "All" 36x32, which is both hard to hit
-       and visibly lopsided next to "Premier League".
+       and visibly lopsided next to "Premier Division".
 
        A floor on the width evens the rail up and widens the target;
        the height is extended the same way as the star, so the rail

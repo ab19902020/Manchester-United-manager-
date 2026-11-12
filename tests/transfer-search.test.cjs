@@ -254,8 +254,8 @@ test('the search comes before the money on the transfers screen', async () => {
  *   "It only shows me the top twenty, and I can't see the rest"
  *
  * Both were mine. The wage rungs slid up with the club's money, which
- * fixed the original problem — Premier League brackets are useless to a
- * non-league club — and broke the mirror image: managing United the
+ * fixed the original problem — Premier Division brackets are useless to a
+ * non-league club — and broke the mirror image: managing the Reds the
  * cheapest bracket on offer was £15,000 a week, so a rich club could not
  * ask for anybody cheap. And the free-agent list stopped at twenty and
  * told you to tighten the filters, while the market tab beside it paged

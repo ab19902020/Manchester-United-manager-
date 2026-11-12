@@ -8,7 +8,7 @@
     each league"
 
    Every price on the stadium screen was a flat number written for a
-   Premier League club and then charged to all 484. Measured on a fresh
+   Premier Division club and then charged to all 484. Measured on a fresh
    world, smallest ground in each English tier:
 
      tier  club              ground    bank     a rebuild cost
@@ -32,7 +32,7 @@
 
        multiplier = (rep / 7950) ^ 2.5      clamped to 0.03 … 1.25
 
-   7,950 is the measured median Premier League reputation. The exponent
+   7,950 is the measured median Premier Division reputation. The exponent
    was fitted to the five English tiers rather than guessed:
 
      tier  median rep   multiplier   academy    training   redevelopment
@@ -59,7 +59,7 @@
    ===================================================================== */
 
 (function stadiumCosts() {
-  /* the Premier League median reputation, measured, not guessed */
+  /* the Premier Division median reputation, measured, not guessed */
   const PL_REP = 7950;
   const CURVE = 2.5;
   const FLOOR = 0.03;

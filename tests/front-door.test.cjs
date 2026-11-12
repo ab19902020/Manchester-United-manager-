@@ -60,7 +60,7 @@ test('you can read the job before you take it', async (t) => {
   assert.ok(run.clubs >= 10, `only ${run.clubs} clubs listed`);
 });
 
-test('the whole pyramid can be browsed, not just the Premier League', async (t) => {
+test('the whole pyramid can be browsed, not just the Premier Division', async (t) => {
   const game = await openPicker();
   t.after(() => game.close());
 

@@ -222,7 +222,7 @@ async function main() {
     }, club);
     if (!picked.ok) {
       const keys = await page.evaluate(() => ((typeof ROSTER !== 'undefined' && ROSTER) || []).filter((c) => c.league === 'NL').map((c) => c.key).slice(0, 30));
-      throw new Error(`No club ${club}. National League keys, for example: ${keys.join(' ')}`);
+      throw new Error(`No club ${club}. National Division keys, for example: ${keys.join(' ')}`);
     }
     await page.waitForTimeout(200);
   }

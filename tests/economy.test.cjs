@@ -38,16 +38,16 @@ test('the money has the shape of the pyramid, and every club can pay its bills',
   // 1. the pyramid has a cliff in it. Real central distribution runs
   //    roughly £110M : £11M : £2M : £1.5M : £0.15M.
   assert.ok(mid('PL').central > mid('CH').central * 5,
-    `Premier League central money should dwarf the Championship (£${Math.round(mid('PL').central/1e6)}M vs £${Math.round(mid('CH').central/1e6)}M)`);
+    `Premier Division central money should dwarf the Second Division (£${Math.round(mid('PL').central/1e6)}M vs £${Math.round(mid('CH').central/1e6)}M)`);
   assert.ok(mid('CH').central > mid('L1').central * 2.5,
-    'the Championship should be several times League One');
+    'the Second Division should be several times Third Division');
   assert.ok(mid('L2').central > mid('NL').central * 2,
-    'League Two should be well clear of the National League');
+    'Fourth Division should be well clear of the National Division');
 
-  // 2. a National League club is a National League club, not a rich one.
+  // 2. a National Division club is a National Division club, not a rich one.
   assert.ok(mid('NL').revenue < 6e6,
-    `a mid-table National League club should turn over single-digit millions at most, got £${(mid('NL').revenue/1e6).toFixed(1)}M`);
-  assert.ok(mid('PL').revenue > 100e6, 'a Premier League club turns over nine figures');
+    `a mid-table National Division club should turn over single-digit millions at most, got £${(mid('NL').revenue/1e6).toFixed(1)}M`);
+  assert.ok(mid('PL').revenue > 100e6, 'a Premier Division club turns over nine figures');
 
   // 3. wages are the dominant single cost everywhere — that is what
   //    makes the wage bill a decision rather than a detail.
@@ -157,9 +157,9 @@ test('promotion and relegation are the financial events they really are', async 
   })()`);
 
   assert.ok(cliff.PL.central > cliff.CH.central * 5,
-    `promotion to the Premier League should transform a club: £${Math.round(cliff.CH.central/1e6)}M -> £${Math.round(cliff.PL.central/1e6)}M`);
-  assert.ok(cliff.CH.central > cliff.L1.central * 2.5, 'and the Championship should be worth leaving League One for');
-  assert.ok(cliff.L2.central > cliff.NL.central * 2, 'and getting out of the National League should matter');
+    `promotion to the Premier Division should transform a club: £${Math.round(cliff.CH.central/1e6)}M -> £${Math.round(cliff.PL.central/1e6)}M`);
+  assert.ok(cliff.CH.central > cliff.L1.central * 2.5, 'and the Second Division should be worth leaving Third Division for');
+  assert.ok(cliff.L2.central > cliff.NL.central * 2, 'and getting out of the National Division should matter');
 
   // 2. the parachute taper, and the rule that decides its length.
   const chute = game.eval(`(function(){
@@ -192,12 +192,12 @@ test('promotion and relegation are the financial events they really are', async 
   })()`);
 
   assert.ok(relegated.bare < 0,
-    'a relegated club carrying a Premier League wage bill on Championship income should be losing money');
+    'a relegated club carrying a Premier Division wage bill on Second Division income should be losing money');
   assert.ok(relegated.withChute > 0,
     'and the parachute should be what stops it going under');
 });
 
-test('the lower leagues run the wage cap the EFL actually runs', async (t) => {
+test('the lower leagues run the wage cap the lower divisions actually runs', async (t) => {
   const game = await createGame();
   t.after(() => game.close());
   await startCareer(game);
@@ -216,7 +216,7 @@ test('the lower leagues run the wage cap the EFL actually runs', async (t) => {
     return out;
   })()`);
 
-  // Profit & Sustainability is a top-two-division rule; the EFL runs the
+  // Profit & Sustainability is a top-two-division rule; the lower divisions runs the
   // Salary Cost Management Protocol below it.
   positions.filter((p) => p.div === 'PL' || p.div === 'CH').forEach((p) => {
     assert.equal(p.applies, false, `${p.div} runs Profit & Sustainability, not a wage cap`);
@@ -225,9 +225,9 @@ test('the lower leagues run the wage cap the EFL actually runs', async (t) => {
     assert.equal(p.applies, true, `${p.div} should run a wage cap`);
   });
 
-  // 2026/27 figures: League One 50% of turnover including coaching, League Two 55%.
-  assert.equal(positions.find((p) => p.div === 'L1').cap, 0.50, 'League One is capped at 50% of turnover');
-  assert.equal(positions.find((p) => p.div === 'L2').cap, 0.55, 'League Two is capped at 55%');
+  // 2026/27 figures: Third Division 50% of turnover including coaching, Fourth Division 55%.
+  assert.equal(positions.find((p) => p.div === 'L1').cap, 0.50, 'Third Division is capped at 50% of turnover');
+  assert.equal(positions.find((p) => p.div === 'L2').cap, 0.55, 'Fourth Division is capped at 55%');
 
   // No career may open under embargo — a club that inherits a bill above
   // the cap gets the compliance path, not a frozen transfer window.
@@ -293,7 +293,7 @@ test('the chairman you picked when you built the club is the chairman you keep',
 
     // 2. but it grows with the club, so he does not freeze you either.
     assert.ok(c.ceilingInL2 > c.wage,
-      `${c.name}: promotion to League Two should lift the ceiling above £${c.wage}`);
+      `${c.name}: promotion to Fourth Division should lift the ceiling above £${c.wage}`);
 
     // 3. and nobody is insolvent or embargoed on day one.
     assert.ok(c.profit > 0, `${c.name}: a built club should not be losing money before it has played`);
@@ -303,7 +303,7 @@ test('the chairman you picked when you built the club is the chairman you keep',
   // 4. a ceiling above what the club can earn is an owner GUARANTEEING
   //    turnover, which is what makes the ceiling legal under the wage
   //    cap. That guarantee is not the same as cash: paying it into the
-  //    bank every month put £22.5M a season into a National League club
+  //    bank every month put £22.5M a season into a National Division club
   //    that had no use for it and compounded to £410M by season six.
   //    He covers what the club loses, and nothing more.
   const tight = chairmen.find((c) => c.name === 'Tight');
@@ -353,16 +353,16 @@ test('a club you build can actually climb out of the division it starts in', asy
   assert.ok(tightest.squad > climb.NL + 6,
     `the tightest chairman builds a ${tightest.squad.toFixed(1)} squad for a ${climb.NL.toFixed(1)} division — that is not a promotion push`);
   assert.ok(tightest.squad > climb.L2 + 2,
-    `and it should still be ahead of League Two (${climb.L2.toFixed(1)}) so the second promotion follows`);
+    `and it should still be ahead of Fourth Division (${climb.L2.toFixed(1)}) so the second promotion follows`);
 
-  // "a budget of a League One club" — the brief, checked against League One
+  // "a budget of a Third Division club" — the brief, checked against Third Division
   assert.ok(tightest.budget >= climb.l1Budget * 0.9,
-    `the smallest built-club budget (£${tightest.budget}) should be League One money (£${climb.l1Budget})`);
+    `the smallest built-club budget (£${tightest.budget}) should be Third Division money (£${climb.l1Budget})`);
 
-  // and the most generous should be able to look at the Championship
+  // and the most generous should be able to look at the Second Division
   const richest = climb.chairmen.reduce((a, b) => (a.wage >= b.wage ? a : b));
   assert.ok(richest.squad > climb.L1,
-    `the most generous chairman should out-build League One (${climb.L1.toFixed(1)}), got ${richest.squad.toFixed(1)}`);
+    `the most generous chairman should out-build Third Division (${climb.L1.toFixed(1)}), got ${richest.squad.toFixed(1)}`);
 });
 
 test('a transfer is paid for the way transfers are actually paid for', async (t) => {
@@ -501,13 +501,13 @@ test('the budget slider moves money both ways and never lies about the wage bill
 
 /*
  * Found by tracing every change to a club's bank balance over a season.
- * Start a career at Worthing — National League, £348,000 in the bank — and
+ * Start a career at Worthing — National Division, £348,000 in the bank — and
  * the club drew £160,300,000 a year in sponsorship: Manchester Reds's four
  * contracts, verbatim, 202 times what the club could sign.
  *
  * `newGame(key)` — how you pick a club, and how you start one you have built
  * — runs newGame(0) first, so the world is built around Manchester Reds and
- * ensureCommercial() writes United's deals; only then does it takeOverClub()
+ * ensureCommercial() writes the Reds' deals; only then does it takeOverClub()
  * you into the club you chose. Nothing cleared G.deals, and ensureCommercial
  * only ever fills empty slots.
  */
@@ -520,7 +520,7 @@ test('the sponsorship belongs to the club, not to the save', async (t) => {
     return {club:G.clubs[G.my].name,div:myDiv(),commercial:Math.round(commercialIncome())};
   })()`);
   assert.equal(united.div, 'PL');
-  assert.ok(united.commercial > 5e7, `a Premier League giant should have real sponsorship, got ${united.commercial}`);
+  assert.ok(united.commercial > 5e7, `a Premier Division giant should have real sponsorship, got ${united.commercial}`);
 
   const bottom = game.eval(`(function(){
     const nl=divMembers('NL');
@@ -534,7 +534,7 @@ test('the sponsorship belongs to the club, not to the save', async (t) => {
 
   assert.equal(bottom.div, 'NL');
   assert.ok(bottom.commercial < 3e6,
-    `a National League club drew ${bottom.commercial} in sponsorship`);
+    `a National Division club drew ${bottom.commercial} in sponsorship`);
   assert.ok(bottom.commercial <= bottom.market * 2.5,
     'sponsorship must be within reach of what this club could actually sign');
   assert.ok(bottom.commercial > 0, 'but it should still have deals');
@@ -548,13 +548,13 @@ test('the sponsorship belongs to the club, not to the save', async (t) => {
   })()`);
   assert.equal(moved.div, 'PL');
   assert.ok(moved.after > moved.before * 5,
-    `taking a Premier League job should be worth more than ${moved.before}, got ${moved.after}`);
+    `taking a Premier Division job should be worth more than ${moved.before}, got ${moved.after}`);
 });
 
 /*
  * The same trace showed the other half: the world loop paid every AI club its
  * REVENUE and never took a penny of its costs. After one season the median
- * Premier League club held £442M; by season four the richest club in the world
+ * Premier Division club held £442M; by season four the richest club in the world
  * had £2.2 billion. They are paid what they clear now, with a floor so nobody
  * goes bust and a ceiling so nobody becomes a sovereign wealth fund.
  */
@@ -597,12 +597,12 @@ test('the rest of the world banks what it earns, and neither goes bust nor hoard
   assert.equal(after.overHoarded, 0, 'no AI club may reach two billion');
 
   // the pyramid keeps its shape rather than flattening or exploding
-  assert.ok(after.PL.median > after.CH.median, 'Premier League above Championship');
-  assert.ok(after.CH.median > after.L2.median, 'Championship above League Two');
+  assert.ok(after.PL.median > after.CH.median, 'Premier Division above Second Division');
+  assert.ok(after.CH.median > after.L2.median, 'Second Division above Fourth Division');
   assert.ok(after.L2.median > 0 && after.NL.median > 0, 'the bottom stays solvent');
   // and it does not run away: three seasons must not multiply the median tenfold
   assert.ok(after.PL.median < before.PL.median * 6,
-    `Premier League median went ${before.PL.median} -> ${after.PL.median}`);
+    `Premier Division median went ${before.PL.median} -> ${after.PL.median}`);
   assert.deepEqual(game.errors, []);
 });
 
@@ -643,7 +643,7 @@ test('the running costs on the Finances screen actually leave the account', asyn
 /*
  * The owner of a club you build underwrites enough turnover for his own wage
  * ceiling to be legal. That guarantee was also being paid into the bank as
- * cash every month — thirteen payments of £1,733,764 on a National League
+ * cash every month — thirteen payments of £1,733,764 on a National Division
  * club with the generous chairman, £22.5M a season it had no use for,
  * compounding to £410M by season six. An owner covers what the club loses.
  */
@@ -704,7 +704,7 @@ test('a club you build is funded, not showered', async (t) => {
     return {before,after:Math.round(c.bank)};
   })()`);
   assert.ok(season.after < season.before * 4,
-    `a National League season took the bank from ${season.before} to ${season.after}`);
+    `a National Division season took the bank from ${season.before} to ${season.after}`);
   assert.ok(season.after > 0, 'and it must not go bust either');
 });
 
@@ -716,7 +716,7 @@ test('going up is worth money', async (t) => {
   await startCareer(game);
 
   const climbed = game.eval(`(function(){
-    // drop into a National League club, then win the division outright
+    // drop into a National Division club, then win the division outright
     const nl=divMembers('NL');
     newGame(G.clubs[nl[Math.floor(nl.length/2)]].key);
     const before={div:myDiv(),commercial:Math.round(commercialIncome())};
@@ -748,7 +748,7 @@ test('going up is worth money', async (t) => {
       return {before,after:Math.round(commercialIncome())};
     })()`);
     assert.ok(direct.after > direct.before * 2,
-      `a Championship club should out-earn a National League one, ${direct.before} -> ${direct.after}`);
+      `a Second Division club should out-earn a National Division one, ${direct.before} -> ${direct.after}`);
     return;
   }
 
@@ -760,7 +760,7 @@ test('going up is worth money', async (t) => {
  * The sponsorship model was linear in reputation and real commercial revenue
  * is nothing like linear — a global brand sells shirts in Asia, a good
  * mid-table side sells them in one town. Measured against published 2023/24
- * figures the top of the Premier League was already right (Islington £216M
+ * figures the top of the Premier Division was already right (Islington £216M
  * model / £218M real) and everything under it was three to five times too
  * generous (Bournemouth £127M / £24M), giving a top-to-bottom spread of 2.5x
  * against a real 14.3x.
@@ -792,7 +792,7 @@ test('commercial income climbs the way it really climbs', async (t) => {
   assert.ok(spread < 22, `top-to-bottom spread of ${spread.toFixed(1)}x is steeper than reality`);
   // nobody in the top flight is on non-league money
   assert.ok(bottom.com > 8e6,
-    `the smallest Premier League club draws only £${Math.round(bottom.com / 1e6)}M`);
+    `the smallest Premier Division club draws only £${Math.round(bottom.com / 1e6)}M`);
   // it must stay monotonic in reputation
   for (let i = 1; i < pl.length; i += 1) {
     assert.ok(pl[i].com <= pl[i - 1].com + 1, 'a smaller club must not out-earn a bigger one');
@@ -875,7 +875,7 @@ test('a pre-season tour funds the summer instead of vanishing into the bank', as
     'the training camp should pay something and still return them fit');
 });
 
-/* the old scale had a floor of 0.10 on reputation, so a National League club
+/* the old scale had a floor of 0.10 on reputation, so a National Division club
    earned £2,000,000 from a North American tour — two and a half times its
    entire annual revenue. Nobody in Los Angeles buys a ticket to watch them. */
 test('tour money is sized by who you are', async (t) => {
@@ -907,7 +907,7 @@ test('tour money is sized by who you are', async (t) => {
   });
 
   // and the money follows the standing, steeply
-  assert.ok(levels.PL.usa > levels.CH.usa * 2, 'a giant must out-earn a Championship club');
+  assert.ok(levels.PL.usa > levels.CH.usa * 2, 'a giant must out-earn a Second Division club');
   assert.ok(levels.CH.usa > levels.L1.usa, 'and so on down');
   assert.ok(levels.L1.usa > levels.L2.usa);
   assert.ok(levels.L2.usa > levels.NL.usa);

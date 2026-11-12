@@ -15,7 +15,7 @@
    That would be wrong the moment somebody manages Mersey Blues. Every accent
    here is derived at render time from `c1` on the club you are actually
    managing, so the same design serves all 484 of them and a club you
-   built yourself. Red is what United happens to produce.
+   built yourself. Red is what the Reds happens to produce.
 
    IT RESTYLES, IT DOES NOT REBUILD. The home screen carries things the
    season will not move on without — the board asking to see you, a bid
@@ -148,7 +148,7 @@ body{
    The desktop layer already builds a 270px sidebar with the icon and
    the label on one line, which is what the reference shows, so there is
    nothing to rebuild here. Two things it does not do: the active state
-   is hardcoded to United's red, and the club name in the brand block
+   is hardcoded to the Reds' red, and the club name in the brand block
    truncates to "M..." because it is given no room to wrap. */
 @media (min-width:1024px){
   #app>.nav .nav-inner>button.on{

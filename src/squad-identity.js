@@ -129,7 +129,7 @@
      and removed 1,884 players across 354 clubs, taking the game from
      9,908 to 8,023. It "fixed" Jacquet and Ezenwa and gutted nineteen
      per cent of the squads doing it, because the generated name pool
-     collides: Sebastian Wagner at Bayern and Sebastian Wagner at
+     collides: Sebastian Wagner at München and Sebastian Wagner at
      Gelsenkirchen are two different made-up men, and real football is full of
      this too — two Adam Smiths, two Ben Davieses, both in the sourced
      data.

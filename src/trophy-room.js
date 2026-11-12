@@ -63,8 +63,8 @@
    past your last one (out). Nothing here mentions `phase`, `top8` or
    `euroTable`, so none of that can drift out of step with it.
 
-   And the entry lists are read too: a Premier League club is not in the
-   FA Cup draw in August, it is in `entryLater` for the third round in
+   And the entry lists are read too: a Premier Division club is not in the
+   Challenge Cup draw in August, it is in `entryLater` for the third round in
    January. It is in the competition — it says so, with the round it
    comes in at.
    ===================================================================== */
@@ -124,7 +124,7 @@
       };
     }
 
-    /* not entered yet — a Premier League club in August is in the FA Cup,
+    /* not entered yet — a Premier Division club in August is in the Challenge Cup,
        it simply does not play in it until January */
     if (!mine.length) {
       return {
@@ -149,8 +149,8 @@
   /* WHAT THE LEAGUE POSITION MEANS depends entirely on which league it
      is, and the game does not carry a per-division table of what fourth
      place is worth. So this says only what it can defend: where you are,
-     out of how many, and how far through. Inventing "Champions League
-     places" for League Two would be worse than saying nothing. */
+     out of how many, and how far through. Inventing "Champions Cup
+     places" for Fourth Division would be worse than saying nothing. */
   function leagueStanding() {
     try {
       const me = G.clubs[G.my];
@@ -205,7 +205,7 @@
 
   /* THE COMPETITION'S OWN GLYPH, not a generic cup. `trophyBadge` falls
      back to 🏆 for everything, so the first render put four identical
-     gold cups down the board and the Champions League looked like the
+     gold cups down the board and the Champions Cup looked like the
      League Cup. The art, when a PNG exists, still wins — this only
      changes what stands in for it, and `trophyArt` patches the element
      by its data-trophy attribute if the file turns up later. */
@@ -282,9 +282,9 @@
   }
 
   /* WHAT STANDS IN THE ROOM BEFORE YOU HAVE WON ANYTHING.
-     It used to be a curated fifteen — the Ballon d'Or, the World Cup,
-     La Liga — which is a catalogue of the game rather than anything to
-     do with you. A National League manager was being shown the Champions
+     It used to be a curated fifteen — the World Player of the Year, the World Championship,
+     Primera División — which is a catalogue of the game rather than anything to
+     do with you. A National Division manager was being shown the Champions
      League as his preview. Now the empty room holds exactly the
      competitions you are in this season, so walking in shows you the
      five things you could actually lift, at their real sizes, next to
@@ -300,8 +300,8 @@
         /* REORDER, DO NOT REBUILD. The preview list is the set of
            trophies the room can actually sculpt, and only the room knows
            what that set is — an early cut of this filtered against
-           TROPHY_ALL instead and quietly dropped League Two from a
-           League Two manager's cabinet, because the two lists are not
+           TROPHY_ALL instead and quietly dropped Fourth Division from a
+           Fourth Division manager's cabinet, because the two lists are not
            the same list. So the season's competitions are moved to the
            front of whatever the room already offered, and anything it
            cannot build was never in there to move. */

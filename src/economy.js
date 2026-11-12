@@ -13,38 +13,38 @@
    ECONOMY — what football clubs actually earn, and what it costs them
    ---------------------------------------------------------------------
    Phase one of the economy rebuild. Measured before touching anything:
-   the Premier League was close to right and everything underneath it was
+   the Premier Division was close to right and everything underneath it was
    inflated, more so the further down you went.
 
      central distribution, per club   game        real 2024/25
-       Premier League champion        £169.7M     £174.9M   ok
-       Premier League bottom          £135.1M     £109.2M   1.2x
-       Championship                   £38-48M     ~£11M     4x
-       League One                     £12-13M     ~£2M      6x
-       League Two                     £5.7-6.0M   ~£1.5M    4x
-       National League                £2.7-2.9M   ~£150K    18x
+       Premier Division champion        £169.7M     £174.9M   ok
+       Premier Division bottom          £135.1M     £109.2M   1.2x
+       Second Division                   £38-48M     ~£11M     4x
+       Third Division                     £12-13M     ~£2M      6x
+       Fourth Division                     £5.7-6.0M   ~£1.5M    4x
+       National Division                £2.7-2.9M   ~£150K    18x
 
    Three separate things caused it. The divisor {CH:.32, L1:.11, L2:.055,
    NL:.028} is nothing like the real 1 : 0.08 : 0.014 : 0.011 : 0.001. A
    flat £6.5M base was added to every club before that divisor, which put
-   a Premier League floor under the whole pyramid. And commercial income
+   a Premier Division floor under the whole pyramid. And commercial income
    was counted twice — once through the sponsorship-deals system, which
    is well calibrated (Islington £216M against a real £218M), and again
    through a `rep x 1150` stream worth another £132M on top.
 
    The costs were worse in the other direction. Operating costs were
    `cap x 760 + rep x 14000 + wages x 0.30`, and that middle term is a
-   Premier League constant: it charged a National League club with a
-   4,000-seat ground £28.7M a year to run. So every club from League One
+   Premier Division constant: it charged a National Division club with a
+   4,000-seat ground £28.7M a year to run. So every club from Third Division
    down showed a £35-50M annual loss and sat permanently IN BREACH of
    Profit & Sustainability on day one of a career, before the manager had
    done anything at all.
 
    WHAT THIS IS CALIBRATED TO, AND WHAT IT DELIBERATELY IS NOT. The
-   shape is real: the money falls off a cliff below the Premier League,
+   shape is real: the money falls off a cliff below the Premier Division,
    wages are far and away the largest cost, and a wage bill you cannot
    support will put you in trouble. The level is not real: in actual
-   football the Championship spends 94p of every pound on wages and the
+   football the Second Division spends 94p of every pound on wages and the
    division lost £436M last season. A club here runs a modest profit at
    every level if it is sensibly managed, because this is a game and you
    are supposed to be able to win it. Overspend and you will still feel
@@ -73,7 +73,7 @@
      1. WHAT A DIVISION IS WORTH
      -------------------------------------------------------------------
      central   equal-share broadcast and central commercial money, a
-               season, per club. The Premier League figure is the real
+               season, per club. The Premier Division figure is the real
                2024/25 equal share: £29.8M domestic + £59.2M
                international + £7.9M central commercial, plus facility
                fees, rounded to £106M. Merit money is separate and paid
@@ -85,7 +85,7 @@
      fill      how full a mid-sized club in that division gets.
      corp      how much the biggest club in the division can charge over
                the smallest. Corporate money is a top-flight phenomenon;
-               a National League club sells tickets and pies.
+               a National Division club sells tickets and pies.
      seat      annual cost of owning and running a seat.
      runs      everything else — travel, academy, medical, admin,
                matchday operations — as a share of revenue.
@@ -99,8 +99,8 @@
   };
   const EU_FALLBACK = { central: 3e7, merit: 12e5, ticket: 26, fill: 0.80, corp: 0.45, seat: 520, runs: 0.19, grant: 15e5 };
 
-  /* The rest of Europe from its UEFA coefficient: La Liga, Serie A and
-     the Bundesliga distribute £55-80M a club, Ligue 1 about £28M, and a
+  /* The rest of Europe from its European coefficient: Primera División, Prima Divisione and
+     the Erste Liga distribute £55-80M a club, Première Division about £28M, and a
      one-division country in the game is somewhere below that. */
   function divFinance(div) {
     if (DIV_FIN[div]) return DIV_FIN[div];
@@ -108,7 +108,7 @@
     if (!L) return EU_FALLBACK;
     const co = L.coef || 2;
     /* Second tiers abroad are not all the same size either — the Segunda
-       División and 2. Bundesliga distribute real money and carry real
+       División and Zweite Liga distribute real money and carry real
        wage bills, and a flat £4M for all of them was what sent a dozen
        Spanish clubs into an overdraft they could never climb out of. */
     if (L.tier !== 1) {
@@ -125,8 +125,8 @@
   /* Where a club sits inside its own division on reputation: 1 is the
      biggest name in the league, 0 the smallest. Corporate income and
      crowds both track this rather than raw reputation, which is why a
-     Premier League club at the bottom of the table still fills its
-     ground and a big Championship club does not charge Islington prices. */
+     Premier Division club at the bottom of the table still fills its
+     ground and a big Second Division club does not charge Islington prices. */
   function standing(c) {
     return guard('standing', () => {
       const mem = divMembers(c.league) || [];
@@ -192,7 +192,7 @@
      The sponsorship model is linear in reputation, and real commercial
      revenue is nothing like linear — a global brand sells shirts in Asia
      and a good mid-table side sells them in one town. Measured across the
-     Premier League against published 2023/24 figures:
+     Premier Division against published 2023/24 figures:
 
          Islington    £216M model / £218M real   0.99
          W London    £192M / £211M              0.91
@@ -217,10 +217,10 @@
     return guard('repshape', () => {
       const L = (typeof LEAGUES !== 'undefined' && LEAGUES[c.league]) || null;
       /* Only in a top flight. The power law is a global-brand effect — a
-         League Two club's sponsorship is local, its range across the
+         Fourth Division club's sponsorship is local, its range across the
          division is nothing like fourteen to one, and the lower divisions
          were measured and calibrated in cycle 2. Applying the curve to
-         them took the smallest League Two club to a £205K annual loss,
+         them took the smallest Fourth Division club to a £205K annual loss,
          which a regression test caught before it shipped. */
       if (!L || L.tier !== 1) return linear;
       const top = L.repTop || 9400;
@@ -281,7 +281,7 @@
      A game should not contain clubs that cannot exist. Wage bills are
      set from reputation, and reputation and revenue do not track each
      other everywhere — a Spanish second-tier squad is paid like a
-     Championship one on a fraction of the income, and eight of them
+     Second Division one on a fraction of the income, and eight of them
      ended the third simulated season between £13M and £48M overdrawn.
 
      The first version of this measured each club's own costs, which was
@@ -289,7 +289,7 @@
      that scales with your own wage bill is an unlimited bailout, so
      overspending pays for itself and the whole point of wages being the
      binding constraint disappears. It also flattened the cliff between
-     divisions, because a relegated club kept a Premier League income.
+     divisions, because a relegated club kept a Premier Division income.
 
      So it is measured on the MEDIAN club in the division and handed to
      everybody in it equally. A league that cannot pay its way gets
@@ -331,7 +331,7 @@
   }
 
   /* Merit money for a finishing position, paid at the end of the season.
-     Twentieth in the Premier League is worth one step, first is worth
+     Twentieth in the Premier Division is worth one step, first is worth
      twenty — the real shape. */
   function meritFor(c, pos) {
     return guard('merit', () => {
@@ -389,8 +389,8 @@
      Central and commercial money is paid monthly; matchday is paid at
      the turnstile; merit money is paid in May. And it is paid to every
      club in the world, not only to yours — the old code credited the
-     user alone while `dailyWages` debited everybody, so a League Two
-     club lost £614K in 120 days and a National League club was down to
+     user alone while `dailyWages` debited everybody, so a Fourth Division
+     club lost £614K in 120 days and a National Division club was down to
      its last £65K before Christmas.
      ------------------------------------------------------------------- */
   if (has(monthlyIncome)) {
@@ -418,7 +418,7 @@
            This paid every AI club its REVENUE and never took a penny of
            its costs, which is a different bug from the one it was fixing:
            a club with income and no wage bill compounds. Measured after a
-           single season, the median Premier League club held £442M and the
+           single season, the median Premier Division club held £442M and the
            richest club in the world reached £2.2 billion by season four.
            They are paid what they actually clear now — the same revenue
            and cost model the Finances screen shows you, so an AI club's
@@ -430,7 +430,7 @@
           const rev = revenueFor(c);
           /* Every club in this world clears a small profit — the user's
              rule, and the whole reason this economy is calibrated soft.
-             The real Championship lost £436M last season; here the shape of
+             The real Second Division lost £436M last season; here the shape of
              the pyramid is real and the level is kind, so a club that would
              genuinely lose money instead banks three per cent of turnover.
              It is a floor, not a payment: a club earning properly keeps
@@ -508,8 +508,8 @@
      7. MERIT MONEY IN MAY
      -------------------------------------------------------------------
      The season-end prize was `(places below you x £2.2M + £9M)` scaled
-     by division, which paid a National League champion £927K and a
-     Premier League champion £53M — the second of those is the real
+     by division, which paid a National Division champion £927K and a
+     Premier Division champion £53M — the second of those is the real
      merit figure, and it was being paid on top of broadcast money that
      already included it. It is now the merit payment proper.
      ------------------------------------------------------------------- */
@@ -567,10 +567,10 @@
    Promotion and relegation were modelled as a multiplier on whatever the
    club happened to have: `budget x 2.4 + £8,000,000` going up and
    `budget x 0.55, wageCap x 0.7` coming down. The £8M is flat, so a
-   National League club promoted to League Two banked the same eight
-   million as a Championship club promoted to the Premier League.
+   National Division club promoted to Fourth Division banked the same eight
+   million as a Second Division club promoted to the Premier Division.
 
-   In real football the promotion from the Championship is the single
+   In real football the promotion from the Second Division is the single
    largest financial event in the sport — roughly £110M of central money
    the following season against £11M — and relegation from the Premier
    League is a £100M hole in the accounts that parachute payments only
@@ -586,7 +586,7 @@
 
    They follow the club, not the manager, so they are stored on the club
    and appear as central income for whoever holds them — which means a
-   Championship rival with a parachute is genuinely harder to compete
+   Second Division rival with a parachute is genuinely harder to compete
    with, as it is in life.
    ===================================================================== */
 
@@ -721,10 +721,10 @@
             c.plSeasons = 0;
             if (c.i === G.my) {
               mail('board', '🪂 Parachute payments confirmed',
-                `Relegation costs the club its Premier League central distribution. The parachute is confirmed at ` +
+                `Relegation costs the club its Premier Division central distribution. The parachute is confirmed at ` +
                 `<b>${fmtM(PARACHUTE[0])}</b> this coming season and <b>${fmtM(PARACHUTE[1])}</b> the season after` +
                 (c.chute.left > 2 ? `, with a third year of <b>${fmtM(PARACHUTE[2])}</b> because we were up for more than one season.` : '.') +
-                (c.chute.left <= 2 ? '<br><br>There is no third year. One season in the Premier League does not earn one.' : '') +
+                (c.chute.left <= 2 ? '<br><br>There is no third year. One season in the Premier Division does not earn one.' : '') +
                 '<br><br>It does not replace what has gone. The wage bill has to come down to meet it.');
             }
           }
@@ -733,7 +733,7 @@
             c.chute = null;
             if (c.i === G.my) {
               mail('board', '💰 What promotion is worth',
-                'The club joins the Premier League central distribution. Equal share, international rights and ' +
+                'The club joins the Premier Division central distribution. Equal share, international rights and ' +
                 'central commercial money come to roughly <b>£106M</b> a season before a ball is kicked, against ' +
                 'the <b>£11M</b> we have been living on, and merit money on top of that in May.' +
                 '<br><br>Every one of it is at risk the moment we go back down, so spend it like a club that ' +
@@ -753,7 +753,7 @@
             c.chute = null;
             if (c.i === G.my) {
               mail('board', '🪂 The parachute has run out',
-                'The last parachute payment has been made. From this season the club lives on its Championship ' +
+                'The last parachute payment has been made. From this season the club lives on its Second Division ' +
                 'central distribution and what it earns for itself. If the wage bill has not come down to meet ' +
                 'it by now, it has to come down quickly.');
             }
@@ -766,18 +766,18 @@
 }());
 
 /* =====================================================================
-   ECONOMY PHASE THREE — the rule the EFL actually uses
+   ECONOMY PHASE THREE — the rule the lower divisions actually uses
    ---------------------------------------------------------------------
-   Profit & Sustainability is a Premier League and Championship rule. It
-   was being applied to League One, League Two and the National League,
+   Profit & Sustainability is a Premier Division and Second Division rule. It
+   was being applied to Third Division, Fourth Division and the National Division,
    where the real regulation is the Salary Cost Management Protocol: a
    cap on player wages as a share of turnover, monitored on projections,
    and enforced by a transfer embargo until the club is compliant again
    rather than by a points deduction.
 
-   The game is set in 2026/27 and the League One figure changed for that
+   The game is set in 2026/27 and the Third Division figure changed for that
    season — down from 60% of turnover to 50%, with manager and coaching
-   costs folded into the cap for the first time. League Two stays at 55%
+   costs folded into the cap for the first time. Fourth Division stays at 55%
    of player wages. Both are modelled as published.
 
    This is deliberately a guard rail rather than a noose. Measured across
@@ -795,9 +795,9 @@
 
   /* share of turnover, and whether the backroom counts towards it */
   const SCMP = {
-    L1: { share: 0.50, coaching: true, name: 'League One' },
-    L2: { share: 0.55, coaching: false, name: 'League Two' },
-    NL: { share: 0.65, coaching: false, name: 'National League' },
+    L1: { share: 0.50, coaching: true, name: 'Third Division' },
+    L2: { share: 0.55, coaching: false, name: 'Fourth Division' },
+    NL: { share: 0.65, coaching: false, name: 'National Division' },
   };
 
   function guard(context, fn, fallback) {
@@ -829,9 +829,9 @@
       const spend = committed + Math.round((extra || 0) * 52);
 
       /* A club can inherit a bill it did not agree to — the smallest
-         League One side in the game starts at 65% of turnover against a
+         Third Division side in the game starts at 65% of turnover against a
          50% cap, and a career that opens under embargo is a bug, not a
-         difficulty setting. The EFL agrees a compliance path with a club
+         difficulty setting. the lower divisions agrees a compliance path with a club
          in that position rather than freezing it. So the ceiling is the
          cap or what you walked into, whichever is higher, snapshotted at
          the start of the season: you can replace what you have, you
@@ -971,14 +971,14 @@
        c.wageCap = Math.max(c.wageCap, c.rep * 90)
 
    which has no idea a club can have been given a deliberately small
-   ceiling by its own board. Measured on a National League club with the
+   ceiling by its own board. Measured on a National Division club with the
    Tight chairman, one season end and no promotion:
 
        wageCap   £22,000  ->  £169,020     (rep 1878 x 90, exactly)
        budget    £150,000 ->  £651,000
 
    So the shoestring career the chairman promised became a mid-table
-   Championship wage bill in ten months, and the choice stopped meaning
+   Second Division wage bill in ten months, and the choice stopped meaning
    anything.
 
    The floor exists for a good reason — it stops a generated club
@@ -991,7 +991,7 @@
    to go. That multiple is measured once and then reapplied every season
    against what the club has become, so the ceiling grows as you climb
    without the chairman changing character. Tight stays tight in the
-   Championship.
+   Second Division.
 
    AND WHERE THE MONEY COMES FROM. A ceiling above what the club turns
    over is an owner writing cheques, which is exactly what bankrolls a
@@ -1047,10 +1047,10 @@
   /* What the division itself pays, rather than what this particular club
      can earn. A club you built has a 2,400-seat ground, so its own
      revenue stays small however high it climbs — measured, a tight
-     chairman's ceiling went £90K in the National League to £108K in
-     League Two to £112K in League One, while what it takes to win those
+     chairman's ceiling went £90K in the National Division to £108K in
+     Fourth Division to £112K in Third Division, while what it takes to win those
      divisions roughly doubles at every step. Fielding a squad 6.5
-     rating points above League Two finished eleventh on 67 points;
+     rating points above Fourth Division finished eleventh on 67 points;
      the top four were on 74 to 78. So the owner has to keep pace with
      the division, not with the turnstiles. */
   let capCache = { season: -1, cap: {}, bud: {} };
@@ -1077,7 +1077,7 @@
      numbers stay sane at the top. */
   const OWNER_REACH = { NL: 1.0, L2: 0.85, L1: 0.70, CH: 0.45, PL: 0.15 };
   /* The transfer budget fades faster than the wage ceiling. A ceiling is
-     what lets you field a side; a budget on top of what a Premier League
+     what lets you field a side; a budget on top of what a Premier Division
      club already gets is just a cheat code. */
   const OWNER_REACH_BUD = { NL: 1.0, L2: 0.70, L1: 0.50, CH: 0.30, PL: 0.08 };
 
@@ -1096,11 +1096,11 @@
     const db = divisionMedianBudget(c.league);
     c.chairBudDivMult = db > 0 ? clamp(c.chairBud0 / db, 1, 4) : 1;
     /* What the owner is putting in, as an amount rather than a multiple.
-       A multiple compounds: ten times a National League budget is a
-       fortune, and ten times a Premier League one is half a billion. An
+       A multiple compounds: ten times a National Division budget is a
+       fortune, and ten times a Premier Division one is half a billion. An
        amount behaves the way an owner actually does — it transforms a
-       non-league club, it is useful in League One, and by the time the
-       club is in the Premier League its own income has made the owner's
+       non-league club, it is useful in Third Division, and by the time the
+       club is in the Premier Division its own income has made the owner's
        money irrelevant, which is exactly the arc. */
     c.chairCapAdd = Math.max(0, c.chairCap0 - t);
     c.chairBudAdd = Math.max(0, c.chairBud0 - b);
@@ -1119,7 +1119,7 @@
   }
 
   /* The transfer budget drifted the same way and for the same reason:
-     every summer adds `rep x 9000` to it, which is a Premier League
+     every summer adds `rep x 9000` to it, which is a Premier Division
      formula, and it took the Tight chairman's £150,000 to £613,000 in
      one season without the club being promoted. The chairman allocates
      a budget in proportion to what the club is, exactly as he does the
@@ -1151,7 +1151,7 @@
   /* WHAT THE OWNER GUARANTEES, which is not the same as what he pays in.
 
      A ceiling you are not allowed to spend is not a ceiling. Below the
-     Championship the wage cap is a share of turnover, so the owner has to
+     Second Division the wage cap is a share of turnover, so the owner has to
      underwrite enough turnover for his own ceiling to be legal — which is
      exactly what a bankrolled non-league club does, and why one can field
      a squad its division could not otherwise afford. That is a guarantee
@@ -1175,7 +1175,7 @@
   /* AND WHAT HE ACTUALLY WIRES OVER.
 
      This was the same number as the guarantee, paid into the bank every
-     month. Measured on a built National League club with the generous
+     month. Measured on a built National Division club with the generous
      chairman: thirteen payments of £1,733,764 — £22.5M a season it had no
      use for — compounding to £410M by season six. An owner covers what
      the club loses; he does not send you the wage ceiling in cash and
@@ -1275,7 +1275,7 @@
   /* THE BUDGET STOPS COMPOUNDING. The base game re-levels every club's
      transfer budget each summer except yours — `if(c.i!==G.my)` — and
      then adds `rep x 9000` to everybody including you. Nothing ever
-     takes it back, so across three simulated seasons a Premier League
+     takes it back, so across three simulated seasons a Premier Division
      budget went £135M, £266M, £411M, £563M without a single player
      being sold. A board allocates a budget from the accounts each
      summer; it does not hand you a cumulative total of every budget it
@@ -1327,13 +1327,13 @@
      A BACKROOM THE CLUB CAN AFFORD
      -------------------------------------------------------------------
      `defaultStaff` pays every role `(4 + rep/900) x £1,000` a week, so
-     the floor is £4,000 a head whoever you are. At a National League
+     the floor is £4,000 a head whoever you are. At a National Division
      club that is a backroom costing more than twice the playing squad,
      debited daily, and it is why a built club went £12.8M overdrawn in
      two seasons while its accounts said it was profitable.
 
      Only ever scaled down, and only when it is out of proportion — a
-     Premier League backroom is a small fraction of a Premier League
+     Premier Division backroom is a small fraction of a Premier Division
      wage bill already and is left exactly as it is. The staff screen,
      the daily debit and the accounts all read from the same numbers, so
      correcting the numbers keeps all three honest at once.
@@ -1675,7 +1675,7 @@
 /* =====================================================================
    WHAT THE CHAIRMAN ACTUALLY PUTS IN
    ---------------------------------------------------------------------
-   A club you build starts in the National League with no players, and
+   A club you build starts in the National Division with no players, and
    the chairman's money is the only thing that decides how fast you can
    get out of it. Measured against what you have to beat and what the
    free-agent market will sell you — the market is deep, 238 players up
@@ -1690,20 +1690,20 @@
 
    and what each division is:
 
-     National League 41.8 · League Two 47.7 · League One 53.2
-     Championship 63.5 · Premier League 76.9
+     National Division 41.8 · Fourth Division 47.7 · Third Division 53.2
+     Second Division 63.5 · Premier Division 76.9
 
    At £22,000 a week you assemble a 43.4 squad to beat a 41.8 division.
    That is a coin toss, not a project, and it is why climbing took a
-   decade. The three chairmen are now anchored on what a League One club
+   decade. The three chairmen are now anchored on what a Third Division club
    actually has — £993,000 of budget and £142,000 a week of ceiling —
-   so the tightest of them fields a side that walks the National League
+   so the tightest of them fields a side that walks the National Division
    and the most generous fields one that could hold its own in the
-   Championship on day one.
+   Second Division on day one.
 
    It stays honest at the top because the owner's contribution is an
-   amount, not a multiple: it is transformative in the National League,
-   useful in League One, and by the Premier League the club's own income
+   amount, not a multiple: it is transformative in the National Division,
+   useful in Third Division, and by the Premier Division the club's own income
    has swallowed it.
    ===================================================================== */
 
@@ -1717,32 +1717,32 @@
     };
 
     /* Sized on what actually wins a division rather than on a round
-       number. The wage cap below the Championship is a share of
+       number. The wage cap below the Second Division is a share of
        turnover, so a ceiling has to be underwritten by an owner putting
        in enough turnover to make it legal — £600,000 a week in the
        fifth tier would need £48M of it, which is beyond even a
        heavily-bankrolled non-league club. These land between £6M and
        £19M a year of owner money, which is Wrexham territory, and they
-       buy squads of roughly 52, 55 and 58 against a National League of
-       41.8, a League Two of 47.7 and a League One of 53.2. */
+       buy squads of roughly 52, 55 and 58 against a National Division of
+       41.8, a Fourth Division of 47.7 and a Third Division of 53.2. */
     set('gen', {
       budget: 9e6, bank: 45e5, wage: 26e4, patience: 74,
       who: 'a hedge fund founder who watched this club from the terraces as a boy and has just had a very good decade',
-      blurb: 'A squad that would finish mid-table in League One, in the fifth tier. Three divisions in three years is the plan.',
+      blurb: 'A squad that would finish mid-table in Third Division, in the fifth tier. Three divisions in three years is the plan.',
       warn: 'He is not funding a project. He wants promotions, and he wants the first one this season.',
       target: 1,
     });
     set('sen', {
       budget: 35e5, bank: 18e5, wage: 15e4, patience: 68,
       who: 'a supporters’ trust that sold its stake in the ground to a member who never wanted it back',
-      blurb: 'A League One wage bill and better, in the National League. Enough to go up at the first attempt and keep going.',
+      blurb: 'A Third Division wage bill and better, in the National Division. Enough to go up at the first attempt and keep going.',
       warn: 'They want promotion and they want the books to balance while it happens.',
       target: 2,
     });
     set('tig', {
       budget: 125e4, bank: 7e5, wage: 9e4, patience: 60,
       who: 'a local haulage family who have quietly underwritten this club for thirty years',
-      blurb: 'A League One transfer budget in the fifth tier — the smallest of the three, and still more than anyone you will play this season.',
+      blurb: 'A Third Division transfer budget in the fifth tier — the smallest of the three, and still more than anyone you will play this season.',
       warn: 'They will not give you more. What you have is what the climb has to be built on.',
       target: 3,
     });
@@ -1999,7 +1999,7 @@
      12. THE SPONSORSHIP BELONGS TO THE CLUB, NOT TO THE SAVE
      -------------------------------------------------------------------
      Found by tracing every change to a club's bank balance over a season.
-     Start a career at Worthing — National League, £348,000 in the bank,
+     Start a career at Worthing — National Division, £348,000 in the bank,
      reputation 2,050 — and the club draws
 
          £160,300,000 a year in sponsorship
@@ -2007,12 +2007,12 @@
 
      which is Manchester Reds's four contracts, verbatim, 202 times what
      the club is worth. Northampton Rovers went from £1.5M to £174M in one
-     League Two season on it.
+     Fourth Division season on it.
 
      The cause is the career-start path, not an exotic one. `newGame(key)`
      — which is how you pick a club and how you start one you have built —
      runs `newGame(0)` first, so the world is built around Manchester
-     United and `ensureCommercial()` writes United's deals; only then does
+     the Reds and `ensureCommercial()` writes the Reds' deals; only then does
      it `takeOverClub()` you into the club you actually chose. Nothing
      clears `G.deals`, and `ensureCommercial()` only ever fills slots that
      are empty, so the contracts are never revalued. They lapse after one
@@ -2170,7 +2170,7 @@
      read as a punishment rather than a choice.
 
      AND THE FEE IS SIZED BY WHO YOU ARE. The old scale had a floor of
-     0.10 on reputation, so a National League club earned **£2,000,000**
+     0.10 on reputation, so a National Division club earned **£2,000,000**
      from a North American tour — two and a half times its entire annual
      revenue. Nobody in Los Angeles is buying a ticket to watch a
      non-league side. The curve is steeper now, which also makes the far

@@ -17,14 +17,14 @@
    be" because it graded on `pos < target` and there is nothing above
    first. Auditing the rest of the game for the same shape of mistake
    turned up seven more, all of them the same idea: a question, a promise
-   or a target written for one twenty-club Premier League and then asked
+   or a target written for one twenty-club Premier Division and then asked
    of a twenty-four-club division with different rules.
 
    Measured in a live career:
 
-     4th in League Two — an automatic promotion place —
+     4th in Fourth Division — an automatic promotion place —
        "4th and in the mix. Is Europe the target or the minimum?"
-     14th of 24 in the National League — mid-table —
+     14th of 24 in the National Division — mid-table —
        "You are closer to the bottom than the top. Is this a relegation
         fight?", in a division this game relegates nobody from
      the weakest club in every division —
@@ -104,7 +104,7 @@
         dropFrom: down > 0 ? (size - down + 1) : null,
         /* The worst finish a board would ever ask for. Where clubs go down
            it is the last safe place, which explains itself. Where none do —
-           the National League — it is "not the bottom two", which is a real
+           the National Division — it is "not the bottom two", which is a real
            ask without being a punishment: boardHealth() scores (exp - pos)
            at 1.6 a place every month, so a floor set too high turns the
            weakest club in a division into an unsackable one and a floor set
@@ -211,7 +211,7 @@
      (Promotion itself was already handled and did not need touching: a
      promoted club carries a low reputation into its new division, so
      Ipswich, Coventry and Hull all sit on the floor of 17th in the
-     Premier League. Worth saying, because I had it on the open list as a
+     Premier Division. Worth saying, because I had it on the open list as a
      defect and it is not one.)
 
      So the expectation is now half what the club is and half what it can
@@ -566,11 +566,11 @@
      -------------------------------------------------------------------
      judgeSeasonPledges used `pos > rows.length - 3` in every division:
 
-       League One relegates 4 — finish 21st, go down, and "we will stay
+       Third Division relegates 4 — finish 21st, go down, and "we will stay
          up" was marked KEPT
-       League Two relegates 2 — finish 22nd, stay up, and the same
+       Fourth Division relegates 2 — finish 22nd, stay up, and the same
          promise was marked BROKEN
-       the National League relegates nobody — and the promise broke for a
+       the National Division relegates nobody — and the promise broke for a
          relegation that cannot happen
 
      Breaking one costs 7 fan approval and 6 patience, so it is not
@@ -633,7 +633,7 @@
      -------------------------------------------------------------------
      A target's demands listed "European football" whenever the club was
      not in the Champions Cup — which is every club outside the top four,
-     all the way down to the National League. And the interest score used
+     all the way down to the National Division. And the interest score used
      `pos<=4 => +5, pos>=15 => -5`, so 15th of 24 — mid-table — was
      penalised as if it were relegation form, with "Your league position
      puts him off" shown as the reason.
@@ -737,7 +737,7 @@
     };
   }
 
-  /* the Cups screen told a National League manager to "finish top four"
+  /* the Cups screen told a National Division manager to "finish top four"
      to reach the Champions Cup */
   if (has(vCups)) {
     const previousCups = vCups;
@@ -748,7 +748,7 @@
         const s = divShape(myDiv());
         const line = s.hasEurope
           ? `Not qualified this season — finish in the top ${s.euro || 4}.`
-          : `Not qualified this season — the Champions Cup is entered from the Premier League, `
+          : `Not qualified this season — the Champions Cup is entered from the Premier Division, `
             + `and you are in ${s.name}.`;
         h = h.replace('Not qualified this season — finish top four.', line)
           .replace('Not qualified this season — finish top four.', line);
@@ -761,7 +761,7 @@
      6. A SUPPORTERS' FEED WITH A SENSE OF SCALE
      -------------------------------------------------------------------
      "HERE WE GO" fired at £40M and "what a signing" at overall 82, so a
-     National League club-record signing and the best player in League Two
+     National Division club-record signing and the best player in Fourth Division
      never registered at all. The thresholds now come from the division
      the club is in, the same way the goal bonus and the loan fee do.
      ------------------------------------------------------------------- */
@@ -862,8 +862,8 @@
         68, potential ★★★. Attributes are now fully revealed."
 
      which is the numbers you can already see on his card, and reads
-     identically whether a Premier League scout is watching a superstar or
-     a National League scout is watching a non-league centre half. A scout
+     identically whether a Premier Division scout is watching a superstar or
+     a National Division scout is watching a non-league centre half. A scout
      is sent to answer one question — is he any good, and is he any good
      FOR US — and nothing in there answered it.
 
@@ -871,7 +871,7 @@
      cost against what you have, what kind of professional he is, how far
      he is likely to actually get, and then gives a verdict. Every figure
      is measured against your club and your division rather than against
-     the Premier League.
+     the Premier Division.
      ------------------------------------------------------------------- */
   function bestAtPosition(club, pos) {
     const grouper = (typeof POSGROUP === 'function') ? POSGROUP : null;
@@ -934,8 +934,8 @@
 
     /* The verdict is about THIS squad and THIS club's money, in that
        order. A first pass ranked it on raw overall against the division's
-       star threshold, which told a National League club to sign Kylian
-       Aubert — a player it could not afford by three orders of magnitude
+       star threshold, which told a National Division club to sign the best
+       forward in the world — a player it could not afford by three orders of magnitude
        — and told the same club that a man eleven better than anything it
        owned "would not transform us". What a scout answers is: could we
        have him, and would he improve us. */
@@ -1052,13 +1052,13 @@
   /* -------------------------------------------------------------------
      10. THE LETTER THAT TELLS YOU WHAT YOU ARE PLAYING IN
      -------------------------------------------------------------------
-     Reported: the competitions email listed the League Cup and the FA Cup
+     Reported: the competitions email listed the League Cup and the Challenge Cup
      and never mentioned the Champions Cup — while the club had eight
      Champions Cup fixtures already on the calendar.
 
      Reproduced at Manchester Reds:
 
-         mail: "This season the club competes in the League Cup and FA Cup."
+         mail: "This season the club competes in the League Cup and Challenge Cup."
          G.euroEntry.CL includes this club:  true
          Champions Cup fixtures on the calendar: 8
          English clubs in the Champions Cup: Mersey Reds, Islington, Man Blues,
@@ -1078,7 +1078,7 @@
 
      Rewritten from the finished world instead, and from what the club is
      actually entered in rather than from a flag: the domestic cups, plus
-     whichever of the Champions Cup, Europa League and Conference the
+     whichever of the Champions Cup, Continental Cup and Conference the
      European allocation actually put you in. It is refreshed every time
      the cups are set up, so a season you qualify for Europe tells you so.
      ------------------------------------------------------------------- */
@@ -1160,7 +1160,7 @@
 
      Reapplied here against the reach the current generator produces
      rather than as a flat number, so it works at every level of the
-     pyramid: a National League intake is pitched at a National League
+     pyramid: a National Division intake is pitched at a National Division
      club and a level-5 academy stretches what its best prospects might
      become. Level 1 is exactly what it is today, so nothing is nerfed.
      ------------------------------------------------------------------- */

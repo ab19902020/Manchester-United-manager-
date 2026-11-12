@@ -35,7 +35,7 @@
 
    THE CUT POINTS ARE MEASURED, AND TWICE NOW THEY HAVE BEEN THE WHOLE
    STORY. Each facet is compared against the squad's own average of the
-   four, so a National League side can be "a pressing team" without being
+   four, so a National Division side can be "a pressing team" without being
    held up against Manchester Blues -- but those differences are not
    centred on zero, and a threshold guessed at rather than measured
    simply never fires. The quartiles are in the table beside LOW/HIGH.

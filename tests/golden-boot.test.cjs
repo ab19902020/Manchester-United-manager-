@@ -13,8 +13,8 @@ const { createGame } = require('./game-harness.cjs');
    It used to be picked from every senior player in the world, and the
    lower a division is the more freely it scores, so the fifth tier kept
    winning it. Measured over three played seasons the award went to a
-   National League striker on 38 and a League One striker on 31, with a
-   Premier League player taking it once.
+   National Division striker on 38 and a Third Division striker on 31, with a
+   Premier Division player taking it once.
 
    Two separate things are wanted, and this checks both: every division
    has its own top scorer, and only a top division can win the award.
@@ -39,7 +39,7 @@ test('the Golden Boot goes to a top-flight scorer, however many the fifth tier s
       return c?c.players.find(p=>!p.loan&&!p.youth):null;
     };
     /* the fifth tier outscores everybody, which is what actually
-       happens: 42 in League Two against 34 in the Premier League */
+       happens: 42 in Fourth Division against 34 in the Premier Division */
     const nl=firstIn('NL'), l2=firstIn('L2'), pl=firstIn('PL'), esp=firstIn('ESP');
     nl.stats.goals=38; l2.stats.goals=42; pl.stats.goals=30; esp.stats.goals=25;
 
@@ -78,18 +78,18 @@ test('the Golden Boot goes to a top-flight scorer, however many the fifth tier s
     assert.equal(out.beforeAnyFootball, null,
       'before a ball is kicked nobody is top scorer');
     assert.equal(out.winner, out.wantWinner,
-      'the Premier League man wins it on 30 against a League Two man on 42');
+      'the Premier Division man wins it on 30 against a Fourth Division man on 42');
     assert.equal(out.winnerDiv, 'PL');
     assert.equal(out.worldBest, out.wantWorldBest,
-      'and the League Two man is still the leading scorer in the world');
+      'and the Fourth Division man is still the leading scorer in the world');
     assert.equal(out.nlTop, out.wantNlTop,
-      'the National League keeps its own top scorer');
+      'the National Division keeps its own top scorer');
     assert.equal(out.plTop, out.wantWinner);
     assert.equal(out.foreignWinner, out.wantForeign,
-      'a La Liga striker on 61 wins it — the award is not English');
+      'a Primera División striker on 61 wins it — the award is not English');
     assert.equal(out.foreignDiv, 'ESP');
-    assert.ok(out.hasEnglishTop, 'the Premier League is a top flight');
-    assert.ok(out.excludesChampionship, 'the Championship is not');
+    assert.ok(out.hasEnglishTop, 'the Premier Division is a top flight');
+    assert.ok(out.excludesChampionship, 'the Second Division is not');
     assert.ok(out.countries >= 5, 'and the pool is every country, not just one');
     assert.ok(/^1(,1)*$/.test(out.tiers), 'every league in the pool is a first tier');
   });

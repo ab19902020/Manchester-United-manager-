@@ -24,18 +24,18 @@
  * finished on, what the gap to second and to fourth was, and how tight
  * the whole thing is. Real English football, for reference:
  *
- *   Premier League   champion 87.6   2nd 80.5   4th 70   17th 38   20th 21
- *   Championship     champion 95     2nd 90     6th 78   21st 46
+ *   Premier Division   champion 87.6   2nd 80.5   4th 70   17th 38   20th 21
+ *   Second Division     champion 95     2nd 90     6th 78   21st 46
  *
  * WHERE THE BOTTOM NUMBER CAME FROM, AND WHY IT CHANGED. This rig used
  * to carry 24 for the bottom club and 52 for the spread, and both were
- * wrong. The club that finishes bottom of the Premier League has
+ * wrong. The club that finishes bottom of the Premier Division has
  * averaged about 21 over the last ten seasons — 17, 24, 31, 16, 21, 23,
  * 22, 25, 16, 12 — so the spread from first to last is about 67, not
  * 52. That mistake mattered: it made the game's bottom club, on 20.3,
  * look four points too weak when it was already right, and it hid where
  * the real fault is. The top figures are the ones to trust — the
- * champion's 87.6 is the average of the thirty Premier League seasons
+ * champion's 87.6 is the average of the thirty Premier Division seasons
  * before 2025-26 and second's 80.5 is the same measure; fourth has
  * averaged about 70 over the last decade and the survival line, 18th
  * plus one, about 36.
@@ -229,7 +229,7 @@ const BAL = process.argv[5] ? JSON.parse(process.argv[5]) : null;
          goalless; play a season and it draws 27.3% and finishes 9.6%
          goalless. The difference is not the match engine, it is what
          the players are carrying by the time they take the field, so
-         measure that against real football: a Premier League squad has
+         measure that against real football: a Premier Division squad has
          about three or four men unavailable at a time. */
       const wear = { n: 0, out: 0, cond: 0, sharp: 0, morale: 0, men: 0 };
       rounds.forEach((round) => {

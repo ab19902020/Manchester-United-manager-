@@ -160,7 +160,7 @@ test('a squad in form beats the same squad out of form',
    so each recompute took a ceiling OF A CEILING. Tessier traced 92 -> 85 ->
    83 in one world build, and again every season after that, which
    collapsed potential onto ability for 96 of 136 under-24s in the
-   Premier League.
+   Premier Division.
 
    The true potential is kept on `p.potMax` and every recompute is taken
    from that. This is the guard: applying it twice has to land on the

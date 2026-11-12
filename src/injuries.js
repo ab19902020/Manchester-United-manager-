@@ -16,7 +16,7 @@
    across a 26-man squad over 38 league matches, or 0.50 a match.
 
    THE SEASON TOTAL WAS NOT THE PROBLEM. Nineteen a season is close to
-   what a real Premier League squad gets. What is wrong is the shape:
+   what a real Premier Division squad gets. What is wrong is the shape:
    five of them landed in the first four matches — a quarter of the
    season's injuries in a tenth of its football — because nothing in the
    model knows or cares that the treatment room is already full.

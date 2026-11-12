@@ -19,7 +19,7 @@
 
      1. THE MINUTES LOOP. Every player you had not explicitly given a
         role to was treated as a promised "squad player" — forty-two per
-        cent of the matches — so a National League club that had just
+        cent of the matches — so a National Division club that had just
         signed twenty free agents was in breach of twenty promises it
         never made. The complaint mail is typed 'board', which is a
         BLOCKING type, and weeklyTraining can raise a fresh one every
@@ -31,20 +31,20 @@
         it.
 
      2. LOAN FEES. loanTerms priced a season loan at max(£200,000, 7% of
-        value) rounded to £100,000. A National League club with a
+        value) rounded to £100,000. A National Division club with a
         £150,000 transfer budget was quoted £200,000 for everybody, so
         the loan market — the one market that exists for a small club —
         was shut. (wB6_finance already fixed loanFeeFor, the OTHER loan
         path, and the fee inside loanTerms was missed.)
 
      3. GOAL BONUSES. The contract sheet opens with £5,000 a goal typed
-        into it whoever you are. That is a Premier League number on a
+        into it whoever you are. That is a Premier Division number on a
         non-league contract, where the going rate is nearer fifty
         pounds.
 
      4. THE TRANSFER NEWS. rumourMill only ever looked at players rated
-        76 or better, skipped League Two and the National League
-        entirely, and only ever picked a suitor from the Premier League
+        76 or better, skipped Fourth Division and the National Division
+        entirely, and only ever picked a suitor from the Premier Division
         or Europe. Whoever you manage, your inbox is Islington and
         Manchester Reds.
 
@@ -159,7 +159,7 @@
 
   /* How long a league season is where you manage, so that "a third of
      the way in" means the same thing in a thirty-eight match Premier
-     League and a forty-six match National League. Divisions of twelve
+     League and a forty-six match National Division. Divisions of twelve
      or fewer play each other three times rather than twice, which is
      the difference between a thirty-three match season and a
      twenty-two match one. */
@@ -425,7 +425,7 @@
 
   /* Seven per cent of a player's value is the right shape and it was
      never the problem. The problems were a floor written for the
-     Premier League, a rounding step of £100,000 that turns every small
+     Premier Division, a rounding step of £100,000 that turns every small
      number into the same number, and no reference at all to whether the
      club doing the borrowing could pay it. A lending club also charges
      a big borrower more than a small one, and the old multiplier had
@@ -446,7 +446,7 @@
     if (p.listed) rate *= 0.5;
 
     /* 0 = a small club, 4 = one of the biggest in the world. A lending
-       club charges Manchester Reds and lets a National League side
+       club charges Manchester Reds and lets a National Division side
        have him for the wages — the old multiplier had this backwards
        and billed the small club eighteen per cent more. */
     let k = 2;
@@ -457,7 +457,7 @@
 
     /* below this it is not worth drawing up a contract for, and it is
        priced off who is borrowing: two thousand pounds is a real fee in
-       the National League and rounding error in the Premier League */
+       the National Division and rounding error in the Premier Division */
     if (fee < 2000 * (1 + k * 3)) return 0;
 
     const step = fee >= 1e6 ? 5e4 : fee >= 1e5 ? 1e4 : fee >= 1e4 ? 1000 : 250;
@@ -516,8 +516,8 @@
      =================================================================== */
 
   /* Five per cent of a week's wage, which is roughly the real ratio at
-     both ends: about fifty pounds on a National League contract and a
-     few thousand on a Premier League one. */
+     both ends: about fifty pounds on a National Division contract and a
+     few thousand on a Premier Division one. */
   function goalBonusFor(weekly) {
     const raw = Math.max(0, (+weekly || 0)) * 0.05;
     const step = raw >= 2000 ? 500 : raw >= 200 ? 50 : 10;
@@ -538,8 +538,8 @@
 
   /* THE SIGN-ON FEE HAD ONE STEP FOR THE WHOLE PYRAMID.
      The field was `step="50000"`, defaulting to three weeks' wages
-     ROUNDED TO THE NEAREST FIFTY THOUSAND. In the Premier League that is
-     sensible. In the National League, where the asking wage is about
+     ROUNDED TO THE NEAREST FIFTY THOUSAND. In the Premier Division that is
+     sensible. In the National Division, where the asking wage is about
      £1,200 a week, three weeks is £3,600 — which rounds to ZERO, and the
      smallest offer the control would accept was £50,000: forty-one weeks
      of his wages, and more than most budgets at that level hold. So the
@@ -579,7 +579,7 @@
           sign.value = String(signOnFor(exp, opt && opt.renew));
         }
         /* and the release clause, fixed at a million a click — more than
-           the whole squad is worth in the National League */
+           the whole squad is worth in the National Division */
         const clause = document.getElementById('tClause');
         if (clause) clause.step = String(stepFor(Math.max(0, (p && p.value) || 0)));
         if (!(opt && opt.renew)) return;
@@ -672,7 +672,7 @@
   }
 
   /* "One of the better players in his division" instead of a fixed 76,
-     which below the Championship is nobody at all. Cached for a day
+     which below the Second Division is nobody at all. Cached for a day
      because it walks every squad in the division. */
   let standardCache = { day: -1, by: {} };
   function divisionStandard(div) {
@@ -1001,11 +1001,11 @@
      appearances, goals, assists, ratings, clean sheets and injuries — and
      no cards at all. Measured over thirty matchdays:
 
-         Premier League   5.07 bookings a match, 10 players suspended
-         Championship     4.22 a match,           8 suspended
-         League One       0.39 a match,           0 suspended
-         League Two       0.33 a match,           0 suspended
-         National League  0.19 a match,           0 suspended
+         Premier Division   5.07 bookings a match, 10 players suspended
+         Second Division     4.22 a match,           8 suspended
+         Third Division       0.39 a match,           0 suspended
+         Fourth Division       0.33 a match,           0 suspended
+         National Division  0.19 a match,           0 suspended
 
      The handful below the top two come from cup ties, which always get
      the real engine. Nobody outside your own corner of the world has ever

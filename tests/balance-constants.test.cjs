@@ -29,7 +29,7 @@ const { createGame } = require('./game-harness.cjs');
    value drifting while everyone assumes it did not.
 
    For the record, what the shipped numbers produce over thirty seeded
-   seasons of the Premier League: a champion on 85.3 against a real
+   seasons of the Premier Division: a champion on 85.3 against a real
    87.6, second on 80.0 against 80.5, fourth on 71.8 against 70.1,
    mid-table 48.7, the bottom club 21.5 against 20.7, and eight
    different champions in thirty seasons.

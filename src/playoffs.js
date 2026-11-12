@@ -10,13 +10,13 @@
    `endSeason` promoted whoever was in the top N of the table and that
    was the whole mechanism. The counts were already right —
    `PYRAMIDS.ENG` moves three, three, four and two — but three of those
-   three, and the last of those four, are decided at Wembley in the real
+   three, and the last of those four, are decided at the National Stadium in the real
    world and were being handed out on goal difference here.
 
-       Championship   2 automatic + play-off between 3rd and 6th
-       League One     2 automatic + play-off between 3rd and 6th
-       League Two     3 automatic + play-off between 4th and 7th
-       National League 1 automatic + six-club play-off, 2nd to 7th
+       Second Division   2 automatic + play-off between 3rd and 6th
+       Third Division     2 automatic + play-off between 3rd and 6th
+       Fourth Division     3 automatic + play-off between 4th and 7th
+       National Division 1 automatic + six-club play-off, 2nd to 7th
 
    Nothing about the number going up changes. What changes is who.
 
@@ -52,7 +52,7 @@
    will want its country adding to the list.
 
    A division that sends only one club up automatically runs the wider
-   six-club version instead, which is what the National League does:
+   six-club version instead, which is what the National Division does:
    second and third stand out of a one-off eliminator round and come in
    at the semi-finals, and the final is at a neutral ground. The engine
    draws each round at random, so a small correction after the semi-final
@@ -103,7 +103,7 @@
   }
 
   /* A division that sends only one club up automatically runs the wider
-     six-club version, which is what the National League does: 2nd and 3rd
+     six-club version, which is what the National Division does: 2nd and 3rd
      stand out of an eliminator round and enter at the semi-finals. */
   function isWide(rung) {
     return rung.up - 1 === 1;
@@ -111,8 +111,8 @@
 
   /* ---- what it is worth --------------------------------------------
      Scaled off the division's own top merit payment, so a National
-     League final is worth a National League afternoon and a
-     Championship one is worth a Championship afternoon, and neither
+     League final is worth a National Division afternoon and a
+     Second Division one is worth a Second Division afternoon, and neither
      figure is written down here. */
   function purse(div) {
     return guard('purse', () => {
@@ -130,7 +130,7 @@
     CUP_DEFS[KEY(div)] = wide ? {
       name: (DIV_NAMES[div] || div) + ' play-offs',
       icon: '🎟️',
-      venue: 'Wembley Stadium',
+      venue: 'National Stadium',
       /* eliminator, semi-final, final — all one-off ties, which is how the
          six-club version is actually played */
       days: [start + FIRST_LEG, start + SECOND_LEG, start + FINAL],
@@ -143,7 +143,7 @@
     } : {
       name: (DIV_NAMES[div] || div) + ' play-offs',
       icon: '🎟️',
-      venue: 'Wembley Stadium',
+      venue: 'National Stadium',
       days: [start + FIRST_LEG, start + SECOND_LEG, start + FINAL],
       rn: ['Play-off semi-final', 'Play-off semi-final, second leg', 'Play-off final'],
       prize: money,
@@ -163,7 +163,7 @@
   }
 
   /* The last league match of the season, which is not `seasonLastDay()`:
-     the real Premier League schedule runs ten days past it. Anchoring on
+     the real Premier Division schedule runs ten days past it. Anchoring on
      the fixture list means the play-offs cannot be scheduled into a
      division that is still playing, whatever the calendar says. */
   function lastLeagueDay() {

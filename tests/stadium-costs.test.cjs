@@ -6,10 +6,10 @@ const { createGame, startCareer } = require('./game-harness.cjs');
 /*
  * What a ground costs depends on whose ground it is.
  *
- * Every price on the stadium screen used to be a flat Premier League
+ * Every price on the stadium screen used to be a flat Premier Division
  * number charged to all 484 clubs: £380,000,000 to rebuild, whether you
- * were Manchester Reds or a National League side with £376,000 in the
- * bank. Nobody below the Championship could lay a single seat.
+ * were Manchester Reds or a National Division side with £376,000 in the
+ * bank. Nobody below the Second Division could lay a single seat.
  *
  * These tests pin the shape rather than the exact figures, because the
  * figures are balance and balance moves: the ladder must rise with the
@@ -54,7 +54,7 @@ test('a club at the bottom can actually afford to build', async () => {
   const game = await world();
   try {
     const nl = priceIn(game, 'NL');
-    assert.ok(nl, 'the National League exists');
+    assert.ok(nl, 'the National Division exists');
 
     /* THE FIGURE THAT STARTED THIS: £44m of seats against £376k of bank,
        a hundred and seventeen times everything the club had. */

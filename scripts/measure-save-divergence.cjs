@@ -13,7 +13,7 @@
  * 32-bit seed (src/world-seed.js), so a save does not have to carry what
  * can be regenerated — only what has CHANGED since. That is still a fully
  * lossless save: reload it and you get back exactly what you left, down
- * to the last attribute of the last player in the National League. It
+ * to the last attribute of the last player in the National Division. It
  * simply does not spend bytes restating what the seed already says.
  *
  * So: play a career, rebuild the world from its own seed, and measure
@@ -47,7 +47,7 @@ const DAYS_PER_SEASON = 340;
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
   const errors = [];
   page.on('pageerror', (e) => errors.push(String(e).slice(0, 200)));
-  await page.goto('file:///home/user/Manchester-United-manager-/index.html');
+  await page.goto('file:///home/user/Manchester-the Reds-manager-/index.html');
   await page.waitForTimeout(2500);
 
   const r = await page.evaluate(async ({ seasons, daysPerSeason }) => {

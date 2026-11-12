@@ -131,7 +131,7 @@ test('it is on the home screen, under the fixture', async (t) => {
    even against Wearside and Leeds, the games a promoted side targets.
    ===================================================================== */
 
-test('a promoted club arrives as a Premier League club', async (t) => {
+test('a promoted club arrives as a Premier Division club', async (t) => {
   const game = await createGame();
   t.after(() => game.close());
   game.eval('newGame(0)');

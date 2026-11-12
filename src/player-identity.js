@@ -22,7 +22,7 @@
    AND WHAT HE IS GOOD AT, IN CONTEXT. Fourteen for pace means one thing
    for a centre-half and another for a winger, so every attribute is
    ranked against the players in HIS position in HIS division. "Quick"
-   on this card means quick for a Championship left-back, which is the
+   on this card means quick for a Second Division left-back, which is the
    only sense in which the word is useful.
 
    ---------------------------------------------------------------------
@@ -135,8 +135,8 @@
   /* ---- what he is good at, against his own kind -------------------- */
 
   /* The players he is really compared to: the same position, in the same
-     division. Ranking a League Two centre-half against the Premier
-     League tells you he is slow; ranking him against League Two centre-
+     division. Ranking a Fourth Division centre-half against the Premier
+     League tells you he is slow; ranking him against Fourth Division centre-
      halves tells you whether to play him. */
   function peers(p) {
     try {

@@ -35,7 +35,7 @@ const N = +(process.argv[2] || 8);
     args:['--no-sandbox','--mute-audio','--use-gl=swiftshader','--enable-unsafe-swiftshader','--ignore-gpu-blocklist'] });
   const p = await b.newPage({ viewport:{width:640,height:300} });
   const errs=[]; p.on('pageerror',e=>errs.push(String(e).slice(0,200)));
-  await p.goto('file://' + path.resolve('/home/user/Manchester-United-manager-','index.html'));
+  await p.goto('file://' + path.resolve('/home/user/Manchester-the Reds-manager-','index.html'));
   await p.waitForTimeout(3000);
   const booted = await p.evaluate(async () => {
     const clear=()=>['startScreen','frontScreen','introScreen','splash'].forEach(i=>{const e=document.getElementById(i);if(e)e.remove()});

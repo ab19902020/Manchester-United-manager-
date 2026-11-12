@@ -126,7 +126,7 @@ const OUT = path.resolve(__dirname, '..', 'league-history.json');
 
   const first = seasons[0];
   if (first && first.load) {
-    console.log('\nWHAT A SEASON COSTS — Premier League, season ' + first.season);
+    console.log('\nWHAT A SEASON COSTS — Premier Division, season ' + first.season);
     console.log('  club                         pts   league   all   squad fresh   out');
     first.load.forEach((r) => console.log('  ' + r.club.padEnd(26)
       + String(r.pts).padStart(5) + String(r.league).padStart(9)
@@ -134,8 +134,8 @@ const OUT = path.resolve(__dirname, '..', 'league-history.json');
       + String(r.out).padStart(6)));
   }
 
-  const NAMES = { PL: 'Premier League', CH: 'Championship', L1: 'League One',
-    L2: 'League Two', NL: 'National League' };
+  const NAMES = { PL: 'Premier Division', CH: 'Second Division', L1: 'Third Division',
+    L2: 'Fourth Division', NL: 'National Division' };
   for (const s of seasons.slice(0, REPORT)) {
     console.log('================ SEASON ' + s.season + ' ================');
     for (const d of Object.keys(s.divs)) {
@@ -171,7 +171,7 @@ const OUT = path.resolve(__dirname, '..', 'league-history.json');
         + (allP ? (drawn / allP * 100).toFixed(1) : '0') + '% drawn  (real 24%)');
     }
     console.log('\n  cups   League Cup: ' + (s.cups.LC || '—')
-      + '   FA Cup: ' + (s.cups.FA || '—') + '   Europe: ' + (s.cups.CL || '—'));
+      + '   Challenge Cup: ' + (s.cups.FA || '—') + '   Europe: ' + (s.cups.CL || '—'));
     if (s.boot) console.log('  golden boot   ' + s.boot.name + ', ' + s.boot.club
       + ' (' + s.boot.div + ') — ' + s.boot.goals);
     console.log('  your club   ' + s.me.club + ', ' + s.me.div + ', '
@@ -198,7 +198,7 @@ const OUT = path.resolve(__dirname, '..', 'league-history.json');
     const p = rows.reduce((t, r) => t + r.p, 0) / 2;
     return p ? g / p : 0;
   });
-  console.log('\nPremier League goals a game, season by season:');
+  console.log('\nPremier Division goals a game, season by season:');
   console.log('  ' + gpg.map((v) => v.toFixed(2)).join('  '));
   console.log('\npage errors: ' + (errors.length ? errors.slice(0, 3).join(' | ') : 'none'));
   await browser.close();

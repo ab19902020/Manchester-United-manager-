@@ -15,7 +15,7 @@
    The highlights reel has been able to play anybody's match since it was
    built: `playFixture()` takes a fixture, builds both sides from their
    real squads, seats the men who actually scored and plays the goals.
-   Brighton 1-3 Villa was watched back that way while it was being
+   Brighton 1-3 Aston was watched back that way while it was being
    tested. There was simply nothing anywhere in the game that would hand
    it a fixture that was not yours.
 
@@ -203,7 +203,7 @@
     };
 
     /* CHANGING DIVISION HAS TO CHANGE THE ROUND WITH IT, or the
-       Championship opens on the Premier League's matchday 27 and shows an
+       Second Division opens on the Premier Division's matchday 27 and shows an
        empty card. The two rails are the game's own actions, so they are
        wrapped rather than reimplemented. */
     ['tblCC', 'tblDiv'].forEach((name) => {

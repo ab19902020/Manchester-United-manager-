@@ -8,12 +8,12 @@ const { createGame, startCareer } = require('./game-harness.cjs');
  *
  * The goal bonus was fixed first: `Math.min(4, bonus/8e3*4)` measured a
  * bonus against eight thousand pounds regardless of who you were, so the
- * most generous realistic offer in the National League scored 0.06 of a
+ * most generous realistic offer in the National Division scored 0.06 of a
  * possible 4 and the lever did nothing.
  *
  * The sign-on fee had the same shape in the control rather than the
  * formula. The field was `step="50000"` defaulting to three weeks' wages
- * rounded to the nearest fifty thousand, so at a National League wage of
+ * rounded to the nearest fifty thousand, so at a National Division wage of
  * about £1,200 a week the default rounded to ZERO and the smallest offer
  * the control accepted was £50,000 — forty-one weeks of his wages. The
  * acceptance formula was fine; the control was unusable, which amounts
@@ -85,7 +85,7 @@ test('a sign-on fee can be offered in every division, not just the rich ones', a
   // the top of the pyramid must not have been dragged down to fix the bottom
   const top = run.find((r) => r.div === 'PL');
   assert.ok(top.signStep >= 5000,
-    `the Premier League sign-on step fell to £${top.signStep}, which is fiddly at £${top.weekly} a week`);
+    `the Premier Division sign-on step fell to £${top.signStep}, which is fiddly at £${top.weekly} a week`);
 });
 
 test('the bottom two divisions were the ones that were broken', async (t) => {
