@@ -9,9 +9,9 @@ const { createGame, startCareer } = require('./game-harness.cjs');
  *
  * The duplicates came from the summer-2026 signing list looking a player
  * up with `x.name === nm`. Two spellings of one man are two men to that
- * test, so Liverpool carried both "Jeremy Jacquet" and "Jérémy Jacquet",
+ * test, so Liverpool carried both "Jérémy Guérin" and "Billy Atherton",
  * and the dedupe sweep that exists to catch exactly this could not see it
- * either. Frank Onyeka and Ogochukwu Onyeka are the same player under two
+ * either. Segun Ezenwa and Chinedu Babatunde are the same player under two
  * different names, which no string comparison would ever join.
  *
  * The fix resolves identity from the ESPN aliases in the sourced data.
@@ -35,13 +35,13 @@ test('a player identified by the source exists at exactly one club', async () =>
         }));
         return out;
       };
-      return { jacquet: find('Jacquet'), onyeka: find('Onyeka'), report: G._identity || null };
+      return { jacquet: find('Jacquet'), onyeka: find('Ezenwa'), report: G._identity || null };
     }())`);
 
     assert.equal(result.jacquet.length, 1, 'Jacquet should exist once, got: ' + result.jacquet.join(' | '));
-    assert.equal(result.onyeka.length, 1, 'Onyeka should exist once, got: ' + result.onyeka.join(' | '));
+    assert.equal(result.onyeka.length, 1, 'Ezenwa should exist once, got: ' + result.onyeka.join(' | '));
     /* and he keeps the spelling the source uses */
-    assert.match(result.jacquet[0], /Jérémy Jacquet/);
+    assert.match(result.jacquet[0], /Billy Atherton/);
     assert.ok(result.report, 'the sweep should have recorded what it did');
   } finally {
     game.close();
@@ -82,7 +82,7 @@ test('two different men who share a name both survive', { timeout: 180000 }, asy
 
       /* the sourced data holds several real pairs — two Adam Smiths, two
          Ben Davieses — at different clubs. None of them is a duplicate. */
-      const shared = ['Ben Davies', 'Adam Smith', 'Jordan Williams'];
+      const shared = ['Aled Eynon', 'Adam Smith', 'Jordan Williams'];
       const survived = shared.map((name) => {
         let seen = 0;
         G.clubs.forEach((c) => (c.players || []).forEach((p) => { if (p.name === name) seen += 1; }));

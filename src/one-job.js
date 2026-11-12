@@ -3,12 +3,12 @@
 /* =====================================================================
    ONE MAN, ONE JOB
    ---------------------------------------------------------------------
-   José Mourinho was managing Real Madrid and Benfica at the same time.
+   Yann Fontaine was managing Real Madrid and Benfica at the same time.
    So were fourteen other men, in pairs, across the world:
 
-       Roberto De Zerbi    Tottenham Hotspur  |  Marseille
-       Pierre Sage         Crystal Palace     |  RC Lens
-       José Mourinho       Real Madrid        |  Benfica
+       Nathan Aubert    Tottenham Hotspur  |  Marseille
+       Kévin Deschamps         Crystal Palace     |  RC Lens
+       Yann Fontaine       Real Madrid        |  Benfica
        ... and twelve more
 
    TWO CAUSES, and they need different answers.
@@ -17,7 +17,7 @@
    two separate lists that nothing reconciles: `MANAGERS`, keyed by club
    code and curated for 2026/27, and a second list keyed by club name
    that carries a manager and an assistant for the rest of Europe. Put
-   Mourinho in both and he holds both jobs.
+   Fontaine in both and he holds both jobs.
 
    The other twelve are generated. A club with no entry in either list
    draws a name from its country's pool, seeded off its own key. Four
@@ -26,7 +26,7 @@
    was checking.
 
    THE RULE. A club named in `MANAGERS` keeps its man, because that list
-   is the curated one and it is the one the director confirmed: Mourinho
+   is the curated one and it is the one the director confirmed: Fontaine
    is at Real Madrid. Otherwise the club that comes first in the world
    keeps him, which is arbitrary but stable. Whoever loses gets a fresh
    name from his own country's pool, drawn off a different seed. He does

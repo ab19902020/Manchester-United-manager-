@@ -203,7 +203,7 @@
 
      `expectPos` ranks a division by reputation, and reputation does not
      move when you sell people. Measured: Manchester United sold Bruno
-     Fernandes, Matthijs de Ligt and Bryan Mbeumo in one window — the top
+     Esteves, Jesse Koster and Joël Tchami in one window — the top
      sixteen dropped from 85.2 to 83.7 — and the board still asked for
      <b>5th</b>. Not one place. The same blindness covers an injury crisis
      and a promoted side that never strengthened.
@@ -935,7 +935,7 @@
     /* The verdict is about THIS squad and THIS club's money, in that
        order. A first pass ranked it on raw overall against the division's
        star threshold, which told a National League club to sign Kylian
-       Mbappé — a player it could not afford by three orders of magnitude
+       Aubert — a player it could not afford by three orders of magnitude
        — and told the same club that a man eleven better than anything it
        owned "would not transform us". What a scout answers is: could we
        have him, and would he improve us. */

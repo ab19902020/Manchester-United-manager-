@@ -258,8 +258,8 @@
      the story really is made out of your results and not out of a
      script. But WITHIN a career it repeated itself word for word:
 
-       Lammens reaches 50 appearances — made his 50th appearance this week.
-       Mbeumo reaches 50 appearances — made his 50th appearance this week.
+       Verstraete reaches 50 appearances — made his 50th appearance this week.
+       Tchami reaches 50 appearances — made his 50th appearance this week.
 
      Same sentence, different name, a fortnight apart. And the reporter
      was given a temperament that reached exactly one line of the whole

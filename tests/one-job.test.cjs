@@ -6,7 +6,7 @@ const { createGame, startCareer } = require('./game-harness.cjs');
 /*
  * One man, one job.
  *
- * José Mourinho was managing Real Madrid and Benfica at the same time,
+ * Yann Fontaine was managing Real Madrid and Benfica at the same time,
  * and fourteen other men were in two jobs with him. Two causes: three
  * real managers appear in both of the game's manager lists, which
  * nothing reconciles, and twelve generated names collide because 450
@@ -40,7 +40,7 @@ test('no manager is in charge of two clubs', async (t) => {
     `managers holding two jobs:\n  ${Array.from(run.dupes).join('\n  ')}`);
 });
 
-test('Mourinho is at Real Madrid, and only there', async (t) => {
+test('Fontaine is at Real Madrid, and only there', async (t) => {
   const game = await createGame();
   t.after(() => game.close());
   await startCareer(game);
@@ -51,22 +51,22 @@ test('Mourinho is at Real Madrid, and only there', async (t) => {
     G.clubs.forEach(c => {
       let n = null;
       try { n = managerOf(c); } catch (e) { n = null; }
-      if (n && /Mourinho/.test(n)) where.push(c.name);
+      if (n && /Fontaine/.test(n)) where.push(c.name);
       if (c.name === 'União Lisboa') benfica = n;
     });
     return { where, benfica };
   })()`);
 
   assert.equal(Array.from(run.where).join(', '), 'Madrid Blancos',
-    `Mourinho is at: ${Array.from(run.where).join(', ') || 'nowhere'}`);
+    `Fontaine is at: ${Array.from(run.where).join(', ') || 'nowhere'}`);
   assert.ok(run.benfica, 'Benfica has no manager at all');
-  assert.doesNotMatch(run.benfica, /Mourinho/,
-    'Benfica is still managed by Mourinho');
+  assert.doesNotMatch(run.benfica, /Fontaine/,
+    'Benfica is still managed by Fontaine');
 });
 
 test('the clubs the game names keep the man it named', async (t) => {
   /* The replacement has to fall on the club that is not the curated one.
-     If a collision took Mourinho off Real Madrid instead of off Benfica
+     If a collision took Fontaine off Real Madrid instead of off Benfica
      the duplicate count would still be zero and the game would still be
      wrong. */
   const game = await createGame();

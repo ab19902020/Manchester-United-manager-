@@ -7,9 +7,9 @@ const { createGame } = require('./game-harness.cjs');
    A SURNAME WITH A PARTICLE IS ONE NAME
    ---------------------------------------------------------------------
    Wherever the game has room for one word it took the last one, so the
-   team shape on the home screen labelled Matthijs de Ligt "Ligt". The
-   same rule turns Kevin De Bruyne into "Bruyne" and Virgil van Dijk into
-   "Dijk" -- names no commentator has ever said.
+   team shape on the home screen labelled Jesse de Wit "Wit". The
+   same rule turns Bram De Backer into "Backer" and Luuk van Dam into
+   "Dam" -- names no commentator has ever said.
 
    The two halves of this are equally important: the particles come
    along, and nothing else moves. A rule that grabbed too much would put
@@ -21,21 +21,21 @@ test('a surname keeps the particle that belongs to it', async (t) => {
   t.after(() => game.close());
 
   const got = game.eval(`(function(){
-    const names=['Matthijs de Ligt','Virgil van Dijk','Kevin De Bruyne',
-      'Frenkie de Jong','Marc-André ter Stegen','Robin van Persie',
-      'Alexis Mac Allister'];
+    const names=['Jesse de Wit','Luuk van Dam','Bram De Backer',
+      'Mats de Graaf','Jan-Erik ter Horst','Pim van Vliet',
+      'Tomás Mac Evoy'];
     const out={};
     names.forEach(n=>{ out[n]=surname(n); });
     return out;
   })()`);
 
-  assert.equal(got['Matthijs de Ligt'], 'De Ligt');
-  assert.equal(got['Virgil van Dijk'], 'Van Dijk');
-  assert.equal(got['Kevin De Bruyne'], 'De Bruyne');
-  assert.equal(got['Frenkie de Jong'], 'De Jong');
-  assert.equal(got['Marc-André ter Stegen'], 'Ter Stegen');
-  assert.equal(got['Robin van Persie'], 'Van Persie');
-  assert.equal(got['Alexis Mac Allister'], 'Mac Allister');
+  assert.equal(got['Jesse de Wit'], 'De Wit');
+  assert.equal(got['Luuk van Dam'], 'Van Dam');
+  assert.equal(got['Bram De Backer'], 'De Backer');
+  assert.equal(got['Mats de Graaf'], 'De Graaf');
+  assert.equal(got['Jan-Erik ter Horst'], 'Ter Horst');
+  assert.equal(got['Pim van Vliet'], 'Van Vliet');
+  assert.equal(got['Tomás Mac Evoy'], 'Mac Evoy');
 });
 
 test('every other name is left exactly as it was', async (t) => {
@@ -43,13 +43,13 @@ test('every other name is left exactly as it was', async (t) => {
   t.after(() => game.close());
 
   const got = game.eval(`(function(){
-    const names=['Erling Haaland','Bruno Fernandes','Achraf Hakimi','Nathan Aké',
-      'Riyad Mahrez','Youri Tielemans','Carlos Baleba','Sandro Tonali',
-      'Cristiano Ronaldo dos Santos Aveiro'];
+    const names=['Emil Brekke','Miguel Esteves','Amine Tazi','Koen Maas',
+      'Khalid Aouad','Stijn Goossens','Georges Atangana','Pietro Donati',
+      'Duarte Leal dos Reis Moura'];
     const out={};
     names.forEach(n=>{ out[n]=surname(n); });
     /* a single name is a whole name */
-    out.mono=['Rodrygo','Casemiro','Fred'].map(n=>surname(n)).join(',');
+    out.mono=['Caio','Renan','Dudu'].map(n=>surname(n)).join(',');
     /* and nothing falls over on the edges */
     out.empty=surname('');
     out.blank=surname('   ');
@@ -57,21 +57,21 @@ test('every other name is left exactly as it was', async (t) => {
     return out;
   })()`);
 
-  assert.equal(got['Erling Haaland'], 'Haaland');
-  assert.equal(got['Bruno Fernandes'], 'Fernandes');
-  assert.equal(got['Achraf Hakimi'], 'Hakimi');
-  assert.equal(got['Nathan Aké'], 'Aké');
-  assert.equal(got['Riyad Mahrez'], 'Mahrez');
-  assert.equal(got['Youri Tielemans'], 'Tielemans');
-  assert.equal(got['Carlos Baleba'], 'Baleba');
-  assert.equal(got['Sandro Tonali'], 'Tonali');
+  assert.equal(got['Emil Brekke'], 'Brekke');
+  assert.equal(got['Miguel Esteves'], 'Esteves');
+  assert.equal(got['Amine Tazi'], 'Tazi');
+  assert.equal(got['Koen Maas'], 'Maas');
+  assert.equal(got['Khalid Aouad'], 'Aouad');
+  assert.equal(got['Stijn Goossens'], 'Goossens');
+  assert.equal(got['Georges Atangana'], 'Atangana');
+  assert.equal(got['Pietro Donati'], 'Donati');
   /* "dos" sits mid-name here, not in front of the last one, so the
      surname is still the final word */
-  assert.equal(got['Cristiano Ronaldo dos Santos Aveiro'], 'Aveiro');
-  assert.equal(got.mono, 'Rodrygo,Casemiro,Fred');
+  assert.equal(got['Duarte Leal dos Reis Moura'], 'Moura');
+  assert.equal(got.mono, 'Caio,Renan,Dudu');
 });
 
-test('the real squad reads the way a team sheet does', async (t) => {
+test('the authored squad reads the way a team sheet does', async (t) => {
   const game = await createGame();
   t.after(() => game.close());
   game.eval('newGame(0)');

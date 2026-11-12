@@ -113,7 +113,7 @@
       if (!side) return null;
       /* no keeper: "mark their goalkeeper" is not an instruction anybody
          has ever given, and offering it made the first tap in testing
-         put a man on Stuart Butland for the afternoon */
+         put a man on Stuart Langdon for the afternoon */
       return {
         side: side,
         men: (side.onfield || []).filter(function (x) {

@@ -21,16 +21,16 @@ test('the classifier separates the moments worth stopping for', async () => {
   try {
     const kind = (text, cls) => game.window.RBSDrama.dramaKind({ text, cls });
 
-    assert.equal(kind('GOAL! Rashford slots it home', 'goal'), 'goal');
+    assert.equal(kind('GOAL! Winstanley slots it home', 'goal'), 'goal');
     assert.equal(kind('Martínez is sent off after a second yellow', 'big'), 'red');
     assert.equal(kind('PENALTY to Manchester United', 'big'), 'pen');
     assert.equal(kind('The referee is going to the monitor for a VAR check', 'big'), 'var');
     assert.equal(kind('Off the woodwork! Inches away', 'big'), 'post');
-    assert.equal(kind('Casemiro is booked for that', 'big'), 'card');
+    assert.equal(kind('Miranda is booked for that', 'big'), 'card');
 
     /* a substitution is an event, but stopping for every one of them
        would make the last twenty minutes of every match crawl */
-    assert.equal(kind('Mainoo comes on for Fernandes', 'big'), null);
+    assert.equal(kind('Stanton comes on for Esteves', 'big'), null);
     assert.equal(kind('United knock it around in midfield', ''), null);
 
     /* a sending-off inside a goal sequence is the more specific event */

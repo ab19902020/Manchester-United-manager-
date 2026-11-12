@@ -55,7 +55,7 @@
     return byName;
   }
 
-  /* `<b>Bruno Fernandes</b>` and nothing else. Deliberately narrow: the
+  /* `<b>Miguel Esteves</b>` and nothing else. Deliberately narrow: the
      bold tag is how the game marks a name, and matching bare text would
      rewrite the middle of sentences and player names inside attributes. */
   const BOLD = /<b>([^<>]{3,40})<\/b>/g;

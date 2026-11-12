@@ -10,24 +10,24 @@
 
    Which is right for most of a squad and wrong for the players a
    supporter would notice first. On the team shape on the home screen,
-   Matthijs de Ligt is labelled "Ligt". Put Kevin De Bruyne, Virgil van
-   Dijk or Achraf Hakimi's team-mates through it and you get "Bruyne",
-   "Dijk", "Weghorst" -- names no commentator has ever said out loud.
+   Jesse de Wit is labelled "Wit". Put Bram De Backer, Virgil van
+   Dam or Amine Tazi's team-mates through it and you get "Backer",
+   "Dam", "Vliet" -- names no commentator has ever said out loud.
 
    A surname carrying a particle is one name, not two: the tussenvoegsel
    in Dutch, the nobiliary particle in French, Spanish and Portuguese,
    the Arabic article. The rule is simply to keep walking back while the
-   word in front is one of them, so "Matthijs de Ligt" gives "de Ligt"
-   and "Vincent Aboubakar" still gives "Aboubakar".
+   word in front is one of them, so "Jesse de Wit" gives "de Wit"
+   and "Serge Atangana" still gives "Atangana".
 
-   The particle is printed the way the name itself spells it -- van Dijk
+   The particle is printed the way the name itself spells it -- van Dam
    keeps its small v mid-name -- except at the start of the label, where
-   it is capitalised the way a shirt or a team sheet would: De Ligt, Van
-   Dijk. That is what makes it read as a name rather than a fragment.
+   it is capitalised the way a shirt or a team sheet would: De Wit, Van
+   Dam. That is what makes it read as a name rather than a fragment.
 
    Everything the page does with the result is unchanged; this only
-   decides where the name is cut. Anyone with a single name -- Rodrygo,
-   Casemiro, Fred -- comes back exactly as before.
+   decides where the name is cut. Anyone with a single name -- Caio,
+   Renan, Dudu -- comes back exactly as before.
    ===================================================================== */
 (function surnames() {
   'use strict';
@@ -52,7 +52,7 @@
   }
 
   /* A name is capitalised at the head of a label even when it is spelled
-     small inside the full name: van Dijk on his passport, Van Dijk on
+     small inside the full name: van Dam on his passport, Van Dam on
      the back of the shirt. */
   function head(word) {
     if (!word) return word;
@@ -70,7 +70,7 @@
       let i = parts.length - 1;
       while (i > 1 && isParticle(parts[i - 1])) i--;
 
-      /* `i > 1` above keeps the first word as a given name: "De Bruyne"
+      /* `i > 1` above keeps the first word as a given name: "De Backer"
          on its own would otherwise swallow the lot and return the whole
          string for a two-word name that happens to start with one. */
       if (i === parts.length - 1) return passSurname(n);
@@ -141,7 +141,7 @@
   /* -------------------------------------------------------------------
      AND THE BUTTONS ON A PLAYER'S CARD
 
-     "Have a word with Ligt". "Ligt replies". "Back to Ligt". Three more
+     "Have a word with Wit". "Wit replies". "Back to Wit". Three more
      inline `p.name.split(' ').pop()` in the game file, on the card where
      you actually talk to the man. There is no function to wrap for those
      either, so the modal is corrected on its way out -- and only for the
@@ -150,8 +150,8 @@
      what any word in the markup might be.
 
      The full name is put behind a placeholder first, because it CONTAINS
-     the short one: replacing "Ligt" in a card headed "Matthijs de Ligt"
-     would otherwise produce "Matthijs de De Ligt".
+     the short one: replacing "Wit" in a card headed "Jesse de Wit"
+     would otherwise produce "Jesse de De Wit".
      ------------------------------------------------------------------- */
   function fixModalNames(html, p) {
     try {
@@ -172,8 +172,8 @@
   }
 
   /* Text nodes only, so no markup can be damaged, and never a node that
-     carries the man's full name -- replacing "Ligt" inside "Matthijs de
-     Ligt" would read "Matthijs de De Ligt". */
+     carries the man's full name -- replacing "Wit" inside "Jesse de
+     Wit" would read "Jesse de De Wit". */
   function fixSheet(p) {
     if (!p || !p.name) return;
     const parts = String(p.name).trim().split(/\s+/);
@@ -212,7 +212,7 @@
         card = null;
         /* The game wraps openProfile itself to prepend the chat button,
            and writes it straight into the sheet AFTER the modal is built
-           -- so "Have a word with Ligt" never passes through openModal.
+           -- so "Have a word with Wit" never passes through openModal.
            The sheet is corrected once the whole chain has run. */
         try { fixSheet(who); } catch (error) { /* the card is still readable */ }
       }

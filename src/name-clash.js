@@ -12,17 +12,17 @@
      two players sharing one internal id             0
 
    All twelve recorded roster conflicts resolve to a single club, and
-   Jacquet and Onyeka each appear once with both spellings as aliases.
+   Jacquet and Ezenwa each appear once with both spellings as aliases.
    That work is done.
 
    THE CHECK FOUND SOMETHING ELSE, which nobody had reported: a second
-   Erling Haaland. A 66-rated one, generated, at Bodø/Glimt, in the same
+   Emil Eide. A 66-rated one, generated, at Bodø/Glimt, in the same
    world as the real 91-rated one at Manchester City.
 
    The cause is that the name generator does not know which names the
    authored squads already used. `wName` picks a first name and a surname
    from that country's pools, and the Norwegian pools contain both
-   'Erling' and 'Haaland' — because they are ordinary Norwegian names,
+   'Erling' and 'Eide' — because they are ordinary Norwegian names,
    which is exactly why they are in there. Sooner or later it puts them
    together.
 
@@ -52,8 +52,8 @@
   let taboo = null;
 
   /* the real men, from the roster data that ships with the game. Aliases
-     count too: a generated 'Jeremy Jacquet' is as wrong as a generated
-     'Jérémy Jacquet'. */
+     count too: a generated 'Jérémy Guérin' is as wrong as a generated
+     'Billy Atherton'. */
   function realNames() {
     if (taboo) return taboo;
     taboo = new Set();

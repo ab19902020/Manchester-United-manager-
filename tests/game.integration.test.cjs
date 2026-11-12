@@ -5,7 +5,7 @@ const lowerLeagueData = require('../src/lower-league-data.js');
 const authenticFixtureData = require('../src/authentic-fixture-data.js');
 
 function playerNameKey(value) {
-  const aliases = { 'Ogochukwu Onyeka': 'Frank Onyeka' };
+  const aliases = { 'Chinedu Babatunde': 'Segun Ezenwa' };
   return String(aliases[value] || value || '')
     .normalize('NFKD')
     .replace(/[\u0300-\u036f]/g, '')
@@ -57,7 +57,7 @@ function checkLowerLeagueSquads(game) {
   }
   assert.ok(divisionAverages.L1 > divisionAverages.L2);
   assert.ok(divisionAverages.L2 > divisionAverages.NL);
-  assert.ok(live.find((club) => club.name === 'Leicester Rovers').names.includes('Wout Faes'));
+  assert.ok(live.find((club) => club.name === 'Leicester Rovers').names.includes('Pieter De Smet'));
 }
 
 function checkEnglishPlayerFacts(game) {
@@ -117,12 +117,12 @@ function checkEnglishPlayerFacts(game) {
     liveNames.set(key, player);
   }
 
-  const darlow = live.find((player) => player.club === 'Manchester Reds' && player.name === 'Karl Darlow');
+  const darlow = live.find((player) => player.club === 'Manchester Reds' && player.name === 'Jake Lister');
   assert.deepEqual(
     { nat: darlow.nat, nationality: darlow.nationality, dob: darlow.dob, heightCm: darlow.heightCm },
     { nat: 'WAL', nationality: 'Wales', dob: '1990-10-08', heightCm: 191 },
   );
-  const mazraoui = live.find((player) => player.club === 'Manchester Reds' && player.name === 'Noussair Mazraoui');
+  const mazraoui = live.find((player) => player.club === 'Manchester Reds' && player.name === 'Walid Bouazza');
   assert.equal(mazraoui.nat, 'MAR', 'ESPN provider code MOR was not canonicalised for the game');
   assert.deepEqual(
     live.filter((player) => player.club === 'Merseyside Reds' && playerNameKey(player.name) === 'jeremyjacquet')
@@ -139,7 +139,7 @@ function checkEnglishPlayerFacts(game) {
     ['Manchester Reds'],
   );
   assert.ok(lowerLeagueData.misplacedPremierLeague.some((player) =>
-    player.name === 'Karl Darlow' && player.club === 'Leeds Whites' && player.currentClub === 'Manchester Reds'));
+    player.name === 'Jake Lister' && player.club === 'Leeds Whites' && player.currentClub === 'Manchester Reds'));
   assert.equal(lowerLeagueData.unresolvedPremierLeague.length, 0);
   assert.doesNotMatch(JSON.stringify(lowerLeagueData), /"(?:headshot|skin|hairStyle)"/);
 }
@@ -274,7 +274,7 @@ test('new careers save the complete world and manual slots never evict one anoth
 
       const coventry=G.clubs.find(club=>club.name==='Coventry Athletic');
       const onyeka=coventry.players.find(player=>String(player.espnId)==='258491');
-      const aliasCopy={...onyeka,id:maxId+2,name:'Ogochukwu Onyeka'};
+      const aliasCopy={...onyeka,id:maxId+2,name:'Chinedu Babatunde'};
       for(const key of ['espnId','nat','nationality','dob','heightCm','weightKg','displayHeight',
         'displayWeight','playerProfile','playerFactsSource','playerFactsReadDate'])delete aliasCopy[key];
       coventry.players.push(aliasCopy);

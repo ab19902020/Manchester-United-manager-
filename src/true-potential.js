@@ -12,8 +12,8 @@
    It was implemented by writing the ceiling over `p.pot`, which deletes
    the gap it was built to create. Measured on the shipped build: 96 of
    136 under-24s in the Premier League had potential equal to ability.
-   Leny Yoro read 83/83 where the data says 83/92, Šeško 87/87 against
-   87/93, Carlos Baleba 84/84 against 84/91. So the scout could not tell
+   Théo Tessier read 83/83 where the data says 83/92, Rozman 87/87 against
+   87/93, Georges Atangana 84/84 against 84/91. So the scout could not tell
    you what a young player might become and the academy list could not
    sort on it -- the number was gone before anybody saw it.
 

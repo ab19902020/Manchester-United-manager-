@@ -22,7 +22,7 @@
 
      1. THE CHROME STOPS LEAKING. The bottom navigation is frosted at
         0.86 alpha, so fourteen per cent of the page reads through it:
-        photographed on the transfer market, "Jude Bellingham", "Real
+        photographed on the transfer market, "Adam Chadwick", "Real
         Madrid" and an 87 are all legible THROUGH the tab bar. Chrome
         that you can see the page through is the single thing that makes
         an interface look unfinished, and it is on every screen.

@@ -12,10 +12,10 @@ const { createGame, startCareer } = require('./game-harness.cjs');
  * identity or internal id is seated twice anywhere in a 484-club world.
  *
  * The second is the fault that check turned up. A generated player had
- * been given the name of a real one — a 66-rated Erling Haaland at
+ * been given the name of a real one — a 66-rated Emil Eide at
  * Bodø/Glimt alongside the real 91-rated one at Manchester City —
  * because the name generator does not know which names the authored
- * squads used, and 'Erling' and 'Haaland' are both ordinary Norwegian
+ * squads used, and 'Erling' and 'Eide' are both ordinary Norwegian
  * names sitting in the Norwegian pools.
  */
 
@@ -125,14 +125,14 @@ test('the sweep renames a clash and leaves everybody else alone', async () => {
       const before = victim.name;
 
       /* plant the exact fault that was found in the wild */
-      victim.name = 'Erling Haaland';
+      victim.name = 'Emil Eide';
       const others = G.clubs[0].players.map((p) => p.name).join('|');
 
       const renamed = api.sweep();
 
       return {
         renamed,
-        stillHaaland: victim.name === 'Erling Haaland',
+        stillHaaland: victim.name === 'Emil Eide',
         gotAName: !!victim.name && victim.name.split(' ').length >= 2,
         newName: victim.name,
         before,
@@ -144,7 +144,7 @@ test('the sweep renames a clash and leaves everybody else alone', async () => {
 
     assert.ok(result.renamed >= 1, 'the sweep found the planted clash');
     assert.equal(result.stillHaaland, false,
-      `he should not still be Erling Haaland, was ${result.newName}`);
+      `he should not still be Emil Eide, was ${result.newName}`);
     assert.equal(result.gotAName, true,
       `and he needs a real name, got "${result.newName}"`);
     assert.equal(result.othersUntouched, true, 'nobody else was touched');

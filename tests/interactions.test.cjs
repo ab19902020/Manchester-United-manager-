@@ -510,8 +510,8 @@ test('the academy you pay for changes what comes out of it', async (t) => {
 
 /*
  * The board's target ranked a division by reputation, and reputation does not
- * move when you sell people. Measured: Manchester United sold Bruno Fernandes,
- * Matthijs de Ligt and Bryan Mbeumo in one window — the top sixteen dropped
+ * move when you sell people. Measured: Manchester United sold Miguel Esteves,
+ * Jesse Koster and Joël Tchami in one window — the top sixteen dropped
  * from 85.2 to 83.7 — and the board still asked for 5th. Not one place.
  *
  * (Promotion itself was already handled: a promoted club carries a low

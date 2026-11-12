@@ -257,9 +257,9 @@ body{
      one source rather than a second copy of the shape.
      --------------------------------------------------------------- */
   /* The page's own `surname` knows that a particle belongs to the name
-     behind it -- de Ligt, van Dijk, De Bruyne -- and this panel used a
+     behind it -- Koster, van der Heijden, Hermans -- and this panel used a
      private copy that did not, so the eleven on the home screen read
-     "Ligt" while the same man read "De Ligt" everywhere else. It defers
+     "Koster" while the same man read "De Koster" everywhere else. It defers
      to the shared rule and keeps the last-word fallback for a page that
      has not defined one. */
   function surname(name) {

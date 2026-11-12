@@ -30,7 +30,7 @@
    missing from these cards and the obvious thing to add -- the game has
    no notion of footedness anywhere. But this game ships real players,
    and the only way to fill that column is to invent it from a hash of
-   the player's id. Getting it wrong for Bruno Fernandes is exactly the
+   the player's id. Getting it wrong for Miguel Esteves is exactly the
    sort of thing the people who play this will notice, and a card that
    states a fact confidently and wrongly is worse than a card that leaves
    it out. It needs sourcing, not generating.

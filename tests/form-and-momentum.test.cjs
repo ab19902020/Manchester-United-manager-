@@ -157,7 +157,7 @@ test('a squad in form beats the same squad out of form',
    his potential, because almost nobody reaches their ceiling. It was
    written into `p.pot`, and the ceiling is recomputed deliberately in
    two places -- after the ratings pass and at the end of every season --
-   so each recompute took a ceiling OF A CEILING. Yoro traced 92 -> 85 ->
+   so each recompute took a ceiling OF A CEILING. Tessier traced 92 -> 85 ->
    83 in one world build, and again every season after that, which
    collapsed potential onto ability for 96 of 136 under-24s in the
    Premier League.

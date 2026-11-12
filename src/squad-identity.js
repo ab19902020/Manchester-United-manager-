@@ -17,8 +17,8 @@
    — and the duplicate sweep that follows it key on the exact string. So
    two spellings of one man are two men:
 
-     Liverpool  "Jeremy Jacquet"   (base squad)
-                "Jérémy Jacquet"   (the signing list)
+     Liverpool  "Jérémy Guérin"   (base squad)
+                "Billy Atherton"   (the signing list)
 
    The signing is not found, so it is created rather than moved, and the
    sweep that exists specifically to catch this cannot see it either
@@ -26,15 +26,15 @@
    with both.
 
    The harder case is a man under two different names rather than two
-   spellings of one: Frank Onyeka is listed at Brentford and Ogochukwu
-   Onyeka at Coventry. No amount of string folding joins those.
+   spellings of one: Segun Ezenwa is listed at Brentford and Ogochukwu
+   Ezenwa at Coventry. No amount of string folding joins those.
 
    ---------------------------------------------------------------------
    CODEX'S OWN DATA ALREADY SOLVES IT. The biography pass they ran stores
    an `aliases` array per player against an ESPN id:
 
-     355980  Jérémy Jacquet   [ "Jérémy Jacquet", "Jeremy Jacquet" ]
-     258491  Frank Onyeka     [ "Frank Onyeka", "Ogochukwu Onyeka" ]
+     355980  Billy Atherton   [ "Billy Atherton", "Jérémy Guérin" ]
+     258491  Segun Ezenwa     [ "Segun Ezenwa", "Chinedu Babatunde" ]
 
    Thirty-six players carry more than one alias. So identity does not
    have to be guessed from spelling — it can be looked up. Every alias
@@ -54,8 +54,8 @@
      --------------------------------------------------------------- */
 
   /* Accents, case, punctuation and double spaces removed. "Jérémy
-     Jacquet" and "Jeremy Jacquet" land on the same string; "Frank
-     Onyeka" and "Ogochukwu Onyeka" do not, which is what the alias
+     Jacquet" and "Jérémy Guérin" land on the same string; "Frank
+     Ezenwa" and "Chinedu Babatunde" do not, which is what the alias
      table is for. */
   function fold(name) {
     return String(name || '')
@@ -127,7 +127,7 @@
      -----------------------------------------------------------------
      The first version of this swept the whole world on the folded name
      and removed 1,884 players across 354 clubs, taking the game from
-     9,908 to 8,023. It "fixed" Jacquet and Onyeka and gutted nineteen
+     9,908 to 8,023. It "fixed" Jacquet and Ezenwa and gutted nineteen
      per cent of the squads doing it, because the generated name pool
      collides: Sebastian Wagner at Bayern and Sebastian Wagner at
      Schalke are two different made-up men, and real football is full of

@@ -138,7 +138,7 @@ test('the card carries the role, and the buttons use his real surname', async (t
       hasBand:!!band,
       role:band?(band.querySelector('.pid-role')||{}).textContent:null,
       /* the chat button is written straight into the sheet AFTER
-         openModal, so it is the one that used to say "Ligt" */
+         openModal, so it is the one that used to say "Koster" */
       stray: right===wrong ? 0 :
         [...sheet.querySelectorAll('button')]
           .filter(b=>new RegExp('(^|[^\\\\w])'+wrong+'(?![\\\\w])').test(b.textContent)

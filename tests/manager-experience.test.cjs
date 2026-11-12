@@ -9,7 +9,7 @@ test('portraits are stable, self-contained and bounded, with distinct appearance
   const out = game.eval(`(() => {
     const c=G.clubs[G.my], p=c.players.find(p=>p.pos!=='GK');
     const authored=JSON.stringify(MUN_FACES);
-    const tielemans=faceSpec({id:910000,name:'Youri Tielemans',age:29});
+    const tielemans=faceSpec({id:910000,name:'Stijn De Smet',age:29});
     const before=JSON.stringify(p), first=face(p,120), second=face(p,120);
     const parser=new DOMParser(); const doc=parser.parseFromString(first,'text/html');
     const image=doc.querySelector('img');
