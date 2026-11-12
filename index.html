@@ -10140,9 +10140,9 @@ dailyTickCore=function(){
 /* 5. club badges printed the full short name into a 40-unit shield, so
       "Man Utd" was clipped to "Van Utc". Badges use a monogram now. */
 function crestMark(c){
- let k=String(c.key||'').replace(/[^A-Za-z]/g,'').toUpperCase().slice(0,3);
- if(k.length>=2)return k;
- const s=String(c.short||c.name||'?');
+ if(c&&c.abbr)return String(c.abbr).toUpperCase().slice(0,3);
+ const s=String((c&&(c.name||c.short))||'?');
+ if(typeof abbrCandidates==='function')return abbrCandidates(s)[0].slice(0,3);
  const w=s.split(/\s+/).filter(Boolean);
  return (w.length>1?w.map(x=>x[0]).join(''):s).toUpperCase().slice(0,3)}
 crest=function(c,size){
@@ -20326,7 +20326,7 @@ DAY_LO=.90;DAY_RANGE=.20;
    now starts the season at a placeholder and hands the job over the
    moment the rest of the world is in place.
    ===================================================================== */
-const ROSTER_KEY='rdmRoster3';
+const ROSTER_KEY='rdmRoster4';
 let ROSTER=null;
 function rosterStars(c){
  const xi=c.players.slice().sort((a,b)=>b.ovr-a.ovr).slice(0,11);
@@ -20347,7 +20347,7 @@ function buildRoster(){
   mail=function(){};
   if(realToast)toastQuiet=function(){};
   newGame(0);
-  ROSTER=G.clubs.map(c=>({i:c.i,key:c.key,name:c.name,short:c.short,c1:c.c1,c2:c.c2,
+  ROSTER=G.clubs.map(c=>({i:c.i,key:c.key,name:c.name,short:c.short,abbr:c.abbr,c1:c.c1,c2:c.c2,
    rep:c.rep,budget:Math.round(c.budget/1e6),league:c.league,cc:c.cc||'ENG',
    stadium:c.stadium,cap:c.cap,stars:rosterStars(c)}));
   try{localStorage.setItem(ROSTER_KEY,JSON.stringify({v:3,list:ROSTER}))}catch(e){}}
@@ -20754,7 +20754,36 @@ function shortenClub(name){
   const w=s.split(' ');
   s=w.length>1?w[0]:s.slice(0,15)}
  return s||name}
-/* the badge keeps its three letters; everything else gets a name */
+/* THE BADGE WEARS THE CLUB'S OWN LETTERS.
+   The lettering is worked out from the club's name, never from its key:
+   the key is an internal handle, and a handle is not something to print
+   on a badge. Two letters of the first word and one of the second
+   ("Manchester Reds" is MAR, "Manchester Blues" is MAB), falling back
+   through other readings of the same name until one is free in that
+   country, so no two clubs a manager meets in the same league share a
+   monogram. Clubs are walked in world order, which makes it stable. */
+function abbrWords(name){
+ return String(name||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+  .replace(/[^A-Za-z ]+/g,' ').split(/\s+/)
+  .filter(w=>w&&!/^(de|la|le|do|da|das|dos|del|den|der|van|of|the|and)$/i.test(w))}
+function abbrCandidates(name){
+ const w=abbrWords(name),out=[],add=s=>{s=String(s||'').toUpperCase();if(s.length>=2&&out.indexOf(s)<0)out.push(s)};
+ if(!w.length)return ['FC'];
+ const a=w[0],b=w[1]||'',z=w[w.length-1];
+ if(w.length>=3)add(w[0][0]+w[1][0]+w[2][0]);
+ if(b){add(a.slice(0,2)+b[0]);add(a[0]+b.slice(0,2));add(z.slice(0,3));add(a.slice(0,3));
+  add(a[0]+b[0]+b[b.length-1]);add(a[0]+a[a.length-1]+b[0])}
+ else{add(a.slice(0,3));add(a.slice(0,2)+a[a.length-1]);add(a[0]+a.slice(2,4))}
+ return out}
+function assignAbbrs(list){
+ const used={};
+ (list||[]).forEach(c=>{
+  if(!c||c.mark)return;
+  const cc=c.cc||'ENG',u=used[cc]||(used[cc]={});
+  const cands=abbrCandidates(c.name);
+  let pick=cands.find(x=>!u[x]);
+  if(!pick){const base=cands[0].slice(0,2);for(let n=2;n<10&&!pick;n++)if(!u[base+n])pick=base+n}
+  pick=pick||cands[0];u[pick]=1;c.abbr=pick})}
 const _crestAbbr=crest;
 crest=function(c,size){
  if(!c)return _crestAbbr(c,size);
@@ -20763,12 +20792,9 @@ crest=function(c,size){
  finally{c.short=nm}};
 function nameTheWorld(){
  (G.clubs||[]).forEach(c=>{
-  if(!c.abbr){
-   // whatever was in the short slot is the badge lettering from now on
-   c.abbr=(c.short&&c.short.length<=4)?c.short.toUpperCase():
-    (c.key||c.name).replace(/\d+$/,'').slice(0,3).toUpperCase()}
   if(!c.longShort){c.longShort=1;
-   if(c.short&&c.short.length<=4&&c.short===c.abbr)c.short=shortenClub(c.name)}})}
+   c.short=shortenClub(c.name)}});
+ assignAbbrs(G.clubs)}
 const _newGameNames=newGame;
 newGame=function(i){_newGameNames(i);try{nameTheWorld()}catch(e){}};
 const _loadNames=loadSlot;
@@ -20777,9 +20803,7 @@ loadSlot=function(s){const ok=_loadNames(s);if(ok)try{nameTheWorld()}catch(e){}r
 const _rosterNames=buildRoster;
 buildRoster=function(){
  const r=_rosterNames();
- if(r)r.forEach(c=>{
-  if(!c.abbr){c.abbr=(c.short&&c.short.length<=4)?c.short.toUpperCase():(c.key||c.name).replace(/\d+$/,'').slice(0,3).toUpperCase();
-   if(c.short&&c.short.length<=4)c.short=shortenClub(c.name)}});
+ if(r){r.forEach(c=>{if(!c.longShort){c.longShort=1;c.short=shortenClub(c.name)}});assignAbbrs(r)}
  return r};
 
 /*#w18_names.js#*//*#w19_tablefit.js#*/
@@ -33711,7 +33735,7 @@ buildRoster=function(){
   mail=function(){};
   if(realToast)toastQuiet=function(){};
   newGame(0);
-  ROSTER=G.clubs.map(c=>({i:c.i,key:c.key,name:c.name,short:c.short,c1:c.c1,c2:c.c2,
+  ROSTER=G.clubs.map(c=>({i:c.i,key:c.key,name:c.name,short:c.short,abbr:c.abbr,c1:c.c1,c2:c.c2,
    rep:c.rep,budget:Math.round(c.budget/1e6),league:c.league,cc:c.cc||'ENG',
    stadium:c.stadium,cap:c.cap,stars:rosterStars(c)}));
   try{localStorage.setItem(ROSTER_KEY2,JSON.stringify({fp,list:ROSTER}))}catch(e){}
