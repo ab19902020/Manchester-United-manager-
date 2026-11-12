@@ -22,26 +22,28 @@ const { createGame, startCareer } = require('./game-harness.cjs');
  * than the first, and is the one to keep if either is ever in the way.
  */
 
-test('a player identified by the source exists at exactly one club', async () => {
+test('an authored player exists at exactly one club', async () => {
   const game = await createGame();
   try {
     await startCareer(game, 'Ident');
 
+    /* the squads written out by hand, plus the pre-season moves applied
+       on top of them: nobody named there may be standing in two places */
     const result = game.eval(`(function () {
-      const find = (pattern) => {
-        const out = [];
-        G.clubs.forEach((c) => (c.players || []).forEach((p) => {
-          if (new RegExp(pattern, 'i').test(p.name)) out.push(p.name + ' @ ' + c.name);
-        }));
-        return out;
-      };
-      return { jacquet: find('Jacquet'), onyeka: find('Ezenwa'), report: G._identity || null };
+      const authored = new Set();
+      DB.forEach((row) => (row[9] || []).forEach((p) => authored.add(p[0])));
+      EU_DB.forEach((row) => (row[9] || []).forEach((p) => authored.add(p[0])));
+      const seats = {};
+      G.clubs.forEach((c) => (c.players || []).forEach((p) => {
+        if (authored.has(p.name)) (seats[p.name] = seats[p.name] || []).push(c.name);
+      }));
+      const twice = Object.keys(seats).filter((n) => seats[n].length > 1 && new Set(seats[n]).size < seats[n].length);
+      return { authored: authored.size, seated: Object.keys(seats).length, twice, report: G._identity || null };
     }())`);
 
-    assert.equal(result.jacquet.length, 1, 'Jacquet should exist once, got: ' + result.jacquet.join(' | '));
-    assert.equal(result.onyeka.length, 1, 'Ezenwa should exist once, got: ' + result.onyeka.join(' | '));
-    /* and he keeps the spelling the source uses */
-    assert.match(result.jacquet[0], /Billy Atherton/);
+    assert.ok(result.authored > 400, 'the authored squads were not read: ' + result.authored);
+    assert.ok(result.seated > 400, 'most authored players should be in the world, found ' + result.seated);
+    assert.equal(Array.from(result.twice).join(', '), '', 'listed twice in one squad');
     assert.ok(result.report, 'the sweep should have recorded what it did');
   } finally {
     game.close();

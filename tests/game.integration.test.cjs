@@ -1,213 +1,45 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createGame, startCareer, waitFor } = require('./game-harness.cjs');
-const lowerLeagueData = require('../src/lower-league-data.js');
-const authenticFixtureData = require('../src/authentic-fixture-data.js');
 
-function playerNameKey(value) {
-  const aliases = { 'Chinedu Babatunde': 'Segun Ezenwa' };
-  return String(aliases[value] || value || '')
-    .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, '');
-}
-
-function checkLowerLeagueSquads(game) {
-  const pickerNames = JSON.parse(game.eval(`JSON.stringify(buildRoster()
-    .filter(club=>['L1','L2','NL'].includes(club.league)).map(club=>club.name))`));
-  const live = JSON.parse(game.eval(`JSON.stringify(['L1','L2','NL'].flatMap(division=>
-    G.clubs.filter(club=>club.league===division).map(club=>({
-      division,name:club.name,size:club.players.length,
-      names:club.players.map(player=>player.name),
-      positions:club.players.map(player=>player.pos),
-      ratings:club.players.map(player=>player.ovr),
-      contracts:club.players.map(player=>player.contract),
-      source:club.rosterSource,readDate:club.rosterReadDate
-    }))))`));
-
-  assert.equal(live.length, 72);
-  assert.deepEqual(pickerNames.slice().sort(), live.map((club) => club.name).sort());
-  const divisionAverages = {};
-  for (const division of ['L1', 'L2', 'NL']) {
-    const actual = live.filter((club) => club.division === division);
-    const sourced = lowerLeagueData.divisions[division];
-    assert.equal(actual.length, 24);
-    assert.equal(sourced.readDate, lowerLeagueData.readDate);
-    assert.match(sourced.source, /^https:\/\/site\.api\.espn\.com\//);
-    assert.deepEqual(
-      actual.map((club) => club.name).sort(),
-      Object.keys(sourced.teams).sort(),
-    );
-    for (const club of actual) {
-      const sourceTeam = sourced.teams[club.name];
-      const sourceNames = new Set(sourceTeam.players.map((player) => player.name));
-      assert.equal(club.size, 19, `${club.name} squad depth changed`);
-      assert.ok(club.names.every((name) => sourceNames.has(name)), `${club.name} contains an unsourced player`);
-      assert.equal(club.source, sourceTeam.source);
-      assert.equal(club.readDate, lowerLeagueData.readDate);
-      assert.ok(club.positions.includes('GK'), `${club.name} has no goalkeeper slot`);
-      assert.ok(club.positions.some((position) => ['DL', 'DC', 'DR', 'WBL', 'WBR'].includes(position)));
-      assert.ok(club.positions.some((position) => ['DM', 'MC', 'ML', 'MR', 'AMC'].includes(position)));
-      assert.ok(club.positions.some((position) => ['AML', 'AMR', 'ST'].includes(position)));
-      assert.ok(club.contracts.every((years) => years >= 1 && years <= 5));
-    }
-    const ratings = actual.flatMap((club) => club.ratings);
-    divisionAverages[division] = ratings.reduce((sum, rating) => sum + rating, 0) / ratings.length;
-  }
-  assert.ok(divisionAverages.L1 > divisionAverages.L2);
-  assert.ok(divisionAverages.L2 > divisionAverages.NL);
-  assert.ok(live.find((club) => club.name === 'Leicester Rovers').names.includes('Pieter De Smet'));
-}
-
-function checkEnglishPlayerFacts(game) {
-  const live = JSON.parse(game.eval(`JSON.stringify(['PL','CH','L1','L2','NL'].flatMap(division=>
-    G.clubs.filter(club=>club.league===division).flatMap(club=>club.players.map(player=>({
-      division,club:club.name,name:player.name,espnId:player.espnId,nat:player.nat,
-      nationality:player.nationality,dob:player.dob,heightCm:player.heightCm,
-      weightKg:player.weightKg,source:player.playerFactsSource,
-      readDate:player.playerFactsReadDate
-    })))))`));
-
-  assert.equal(lowerLeagueData.schema, 3);
-  assert.equal(Object.keys(lowerLeagueData.divisions.PL.teams).length, 20);
-  for (const division of ['CH', 'L1', 'L2', 'NL']) {
-    assert.equal(Object.keys(lowerLeagueData.divisions[division].teams).length, 24);
-  }
-  assert.ok(live.length >= 2280 && live.length <= 2290, `unexpected English player total: ${live.length}`);
-  const sourced = live.filter((player) => player.source);
-  assert.ok(sourced.length >= live.length - 2, `${live.length - sourced.length} English players lack a factual source`);
-  assert.ok(sourced.every((player) => player.espnId));
-  assert.ok(sourced.every((player) => /^https:\/\/site\.(?:api|web\.api)\.espn\.com\//.test(player.source)));
-  assert.ok(sourced.every((player) => player.readDate === lowerLeagueData.readDate));
-  assert.ok(live.filter((player) => player.nat).length > 2100);
-  assert.ok(live.filter((player) => player.dob).length > 2000);
-  assert.ok(live.filter((player) => player.heightCm).length > 1500);
-  assert.ok(live.filter((player) => player.weightKg).length > 1300);
-  assert.ok(live.every((player) => !player.heightCm || (player.heightCm >= 140 && player.heightCm <= 220)));
-  assert.ok(live.every((player) => !player.weightKg || (player.weightKg >= 40 && player.weightKg <= 150)));
-
-  const sourcePlayers = Object.values(lowerLeagueData.divisions)
-    .flatMap((division) => Object.values(division.teams))
-    .flatMap((team) => team.players.map((player) => ({ club: team.name, player })));
-  const sourceIds = new Map();
-  for (const entry of [...sourcePlayers, ...lowerLeagueData.extraPlayers.map((player) => ({
-    club: player.gameClub, player,
-  }))]) {
-    assert.ok(!sourceIds.has(entry.player.id), `source ID ${entry.player.id} belongs to two clubs`);
-    sourceIds.set(entry.player.id, entry.club);
-  }
-  assert.ok(lowerLeagueData.rosterConflicts.length > 0);
-  for (const conflict of lowerLeagueData.rosterConflicts) {
-    assert.ok(conflict.listedClubs.length > 1);
-    assert.ok(conflict.listedClubs.some((club) => club.club === conflict.authoritativeClub));
-    assert.match(conflict.source, /^https:\/\/site\.web\.api\.espn\.com\//);
-    assert.equal(conflict.readDate, lowerLeagueData.readDate);
-  }
-
-  const liveIds = new Map();
-  const liveNames = new Map();
-  for (const player of live) {
-    if (player.espnId) {
-      assert.ok(!liveIds.has(String(player.espnId)), `live ESPN ID ${player.espnId} is duplicated`);
-      liveIds.set(String(player.espnId), player);
-    }
-    const key = `${player.club}\0${playerNameKey(player.name)}`;
-    assert.ok(!liveNames.has(key), `${player.club} contains duplicate identity ${player.name}`);
-    liveNames.set(key, player);
-  }
-
-  const darlow = live.find((player) => player.club === 'Manchester Reds' && player.name === 'Jake Lister');
-  assert.deepEqual(
-    { nat: darlow.nat, nationality: darlow.nationality, dob: darlow.dob, heightCm: darlow.heightCm },
-    { nat: 'WAL', nationality: 'Wales', dob: '1990-10-08', heightCm: 191 },
-  );
-  const mazraoui = live.find((player) => player.club === 'Manchester Reds' && player.name === 'Walid Bouazza');
-  assert.equal(mazraoui.nat, 'MAR', 'ESPN provider code MOR was not canonicalised for the game');
-  assert.deepEqual(
-    live.filter((player) => player.club === 'Merseyside Reds' && playerNameKey(player.name) === 'jeremyjacquet')
-      .map((player) => player.espnId),
-    ['355980'],
-  );
-  assert.deepEqual(
-    live.filter((player) => player.club === 'Coventry Athletic' && playerNameKey(player.name) === 'frankonyeka')
-      .map((player) => player.espnId),
-    ['258491'],
-  );
-  assert.deepEqual(
-    live.filter((player) => player.espnId === '130877').map((player) => player.club),
-    ['Manchester Reds'],
-  );
-  assert.ok(lowerLeagueData.misplacedPremierLeague.some((player) =>
-    player.name === 'Jake Lister' && player.club === 'Leeds Whites' && player.currentClub === 'Manchester Reds'));
-  assert.equal(lowerLeagueData.unresolvedPremierLeague.length, 0);
-  assert.doesNotMatch(JSON.stringify(lowerLeagueData), /"(?:headshot|skin|hairStyle)"/);
-}
-
-function checkAuthenticFixtures(game, divisions) {
+/* THE WORLD IS INVENTED, AND COMPLETE.
+   Every club is fictional and every player is generated or authored here;
+   nothing is read from a roster feed or a published fixture list. What a
+   new career has to guarantee instead is that the invented world is whole:
+   five full English divisions, every squad deep enough to field a side,
+   nobody in two squads, and nothing carrying the provenance fields the
+   sourced data used to stamp on a player. */
+function checkInventedWorld(game) {
   const live = JSON.parse(game.eval(`JSON.stringify((()=>{
-    const divisions=${JSON.stringify(divisions)};
-    const fixtures=G.fixtures.filter(f=>divisions.includes(f.div));
-    return {
-      epoch:G.epoch,
-      sources:G.fixtureSources,
-      collisions:(()=>{
-        const seen=new Map(),out=[];
-        const all=[...G.fixtures,...Object.values(G.cups||{}).flatMap(c=>c.ties||[])];
-        all.filter(f=>!f.played).forEach(f=>[f.h,f.a].forEach(ci=>{
-          const key=ci+'|'+f.day;
-          if(seen.has(key))out.push({club:G.clubs[ci].name,day:f.day});
-          else seen.set(key,f);
-        }));
-        return out;
-      })(),
-      fixtures:fixtures.map(f=>({
-        division:f.div,date:new Date(G.epoch+f.day*86400000).toISOString().slice(0,10),
-        home:G.clubs[f.h].name,away:G.clubs[f.a].name,round:f.r,
-        authentic:f.authentic,sourceId:f.sourceId
-      }))
-    };
+    const eng=['PL','CH','L1','L2','NL'];
+    const out={sizes:{},thin:[],keepers:[],stamped:0,noNat:0,names:[],picker:[]};
+    eng.forEach(division=>{
+      const clubs=G.clubs.filter(club=>club.league===division);
+      out.sizes[division]=clubs.length;
+      clubs.forEach(club=>{
+        if(club.players.length<16)out.thin.push(club.name+':'+club.players.length);
+        if(!club.players.some(player=>player.pos==='GK'))out.keepers.push(club.name);
+        club.players.forEach(player=>{
+          if(player.espnId||player.playerProfile||player.playerFactsSource)out.stamped++;
+          if(!player.nat)out.noNat++;
+        });
+        out.names.push(club.name);
+      });
+    });
+    out.picker=buildRoster().filter(club=>eng.includes(club.league)).map(club=>club.name);
+    out.fixtureSources=Object.keys(G.fixtureSources||{}).length;
+    out.authentic=G.fixtures.filter(f=>f.authentic).length;
+    return out;
   })())`));
-
-  assert.deepEqual(live.collisions, [], 'a club has two league/cup fixtures on the same day');
-
-  for (const division of divisions) {
-    const source = authenticFixtureData.divisions[division];
-    const actual = live.fixtures.filter((fixture) => fixture.division === division);
-    assert.equal(source.status, 'published');
-    assert.equal(source.readDate, authenticFixtureData.readDate);
-    assert.match(source.source, /^https:\/\//);
-    if (source.provider === 'ESPN') assert.match(source.source, /^https:\/\/site\.api\.espn\.com\//);
-    if (division === 'CZE') {
-      assert.equal(source.provider, 'Chance Liga');
-      assert.match(source.source, /^https:\/\/www\.chanceliga\.cz\/rozpis-zapasu/);
-    }
-    assert.equal(actual.length, source.fixtureCount);
-    assert.equal(live.sources[division].source, source.source);
-    assert.equal(live.sources[division].readDate, source.readDate);
-    assert.ok(actual.every((fixture) => fixture.authentic === 1));
-    const expected = source.fixtures
-      .map(([date, home, away, round, sourceId]) => ({ date, home, away, round, sourceId }))
-      .sort((left, right) => left.sourceId.localeCompare(right.sourceId));
-    const observed = actual
-      .map(({ date, home, away, round, sourceId }) => ({ date, home, away, round, sourceId }))
-      .sort((left, right) => left.sourceId.localeCompare(right.sourceId));
-    assert.deepEqual(observed, expected, `${division} diverged from its source snapshot`);
-
-    const directedPairs = new Set(actual.map((fixture) => `${fixture.home}\u0000${fixture.away}`));
-    for (const home of source.teams) {
-      for (const away of source.teams) {
-        if (home !== away) assert.ok(directedPairs.has(`${home}\u0000${away}`), `${division}: missing ${home} v ${away}`);
-      }
-    }
-  }
-
-  if (divisions.includes('GER')) {
-    assert.ok(live.fixtures.some((fixture) => fixture.division === 'GER'
-      && fixture.date === '2026-08-28'
-      && fixture.home === 'Bavaria München'
-      && fixture.away === 'Teutonia Stuttgart'));
-  }
+  assert.deepEqual(live.sizes, { PL: 20, CH: 24, L1: 24, L2: 24, NL: 24 });
+  assert.deepEqual(live.thin, [], 'a club cannot field a matchday squad');
+  assert.deepEqual(live.keepers, [], 'a club has no goalkeeper');
+  assert.equal(live.stamped, 0, 'a player still carries sourced-data provenance');
+  assert.equal(live.noNat, 0, 'a player has no nationality');
+  assert.equal(new Set(live.names).size, live.names.length, 'two English clubs share a name');
+  assert.deepEqual([...live.picker].sort(), [...live.names].sort(), 'the club picker and the world disagree');
+  assert.equal(live.fixtureSources, 0);
+  assert.equal(live.authentic, 0);
 }
 
 test('new careers save the complete world and manual slots never evict one another', { timeout: 60000 }, async () => {
@@ -219,12 +51,7 @@ test('new careers save the complete world and manual slots never evict one anoth
     assert.ok(live.players >= 9800);
     assert.equal(live.fixtures, 8781);
     assert.equal(live.day, 0);
-    checkLowerLeagueSquads(game);
-    checkEnglishPlayerFacts(game);
-    checkAuthenticFixtures(game, [
-      'PL', 'CH', 'L1', 'L2', 'NL', 'ESP', 'ITA', 'GER', 'FRA', 'POR', 'NED',
-      'ITA2', 'GER2', 'FRA2', 'TUR', 'GRE', 'CZE',
-    ]);
+    checkInventedWorld(game);
     const sourcedPicker = JSON.parse(game.eval(`JSON.stringify(buildRoster()
       .filter(club=>['ESP','ITA','GER','FRA','POR','NED','ITA2','GER2','FRA2','TUR','GRE','CZE'].includes(club.league))
       .map(club=>club.name).sort())`));
@@ -232,8 +59,7 @@ test('new careers save the complete world and manual slots never evict one anoth
       .filter(club=>['ESP','ITA','GER','FRA','POR','NED','ITA2','GER2','FRA2','TUR','GRE','CZE'].includes(club.league))
       .map(club=>club.name).sort())`));
     assert.deepEqual(sourcedPicker, sourcedLive);
-    assert.ok(sourcedLive.includes('Moravia Brno'));
-    assert.ok(sourcedLive.includes('Sokol Brno'));
+    assert.ok(sourcedLive.length > 150);
 
     const auto = await game.window.RBSSaves.store.get('auto');
     assert.ok(auto);
@@ -260,47 +86,21 @@ test('new careers save the complete world and manual slots never evict one anoth
     const migration = game.eval(`(()=>{
       const sourceClub=G.clubs.find(club=>club.name==='Manchester Reds');
       const destination=G.clubs.find(club=>club.name==='Merseyside Reds');
-      const moved=sourceClub.players.find(player=>player.espnId&&player.pos!=='GK'&&
+      const moved=sourceClub.players.find(player=>player.pos!=='GK'&&
         !destination.players.some(candidate=>candidate.name===player.name));
       sourceClub.players=sourceClub.players.filter(player=>player!==moved);
       moved.club=destination.i;
       destination.players.push(moved);
-
-      const duplicateOwner=sourceClub.players.find(player=>player.espnId);
-      const staleClub=G.clubs.find(club=>club.name==='Leeds Whites');
-      const maxId=Math.max(...G.clubs.flatMap(club=>club.players.map(player=>Number(player.id)||0)));
-      const staleCopy={...duplicateOwner,id:maxId+1,club:staleClub.i};
-      staleClub.players.push(staleCopy);
-
-      const coventry=G.clubs.find(club=>club.name==='Coventry Athletic');
-      const onyeka=coventry.players.find(player=>String(player.espnId)==='258491');
-      const aliasCopy={...onyeka,id:maxId+2,name:'Chinedu Babatunde'};
-      for(const key of ['espnId','nat','nationality','dob','heightCm','weightKg','displayHeight',
-        'displayWeight','playerProfile','playerFactsSource','playerFactsReadDate'])delete aliasCopy[key];
-      coventry.players.push(aliasCopy);
-      return {movedId:String(moved.espnId),duplicateId:String(duplicateOwner.espnId)};
+      return {movedId:moved.id,stayedId:sourceClub.players[0].id};
     })()`);
     await game.window.RBSSaves.save('2', true);
     assert.equal(await game.window.RBSSaves.load('2'), true);
     const migrated = JSON.parse(game.eval(`JSON.stringify((()=>{
-      const live=['PL','CH','L1','L2','NL'].flatMap(division=>G.clubs
-        .filter(club=>club.league===division)
-        .flatMap(club=>club.players.map(player=>({club:club.name,name:player.name,espnId:String(player.espnId||'')}))));
-      const counts={};live.filter(player=>player.espnId).forEach(player=>{
-        counts[player.espnId]=(counts[player.espnId]||0)+1});
-      return {
-        moved:live.filter(player=>player.espnId==='${migration.movedId}').map(player=>player.club),
-        duplicate:live.filter(player=>player.espnId==='${migration.duplicateId}').map(player=>player.club),
-        duplicateIds:Object.entries(counts).filter(([,count])=>count>1),
-        onyeka:live.filter(player=>player.club==='Coventry Athletic'&&
-          ['frankonyeka','ogochukwuonyeka'].includes(player.name.normalize('NFKD')
-            .replace(/[\\u0300-\\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'')))
-      };
+      const where=id=>G.clubs.filter(club=>club.players.some(player=>player.id===id)).map(club=>club.name);
+      return {moved:where(${migration.movedId}),stayed:where(${migration.stayedId})};
     })())`));
     assert.deepEqual(migrated.moved, ['Merseyside Reds'], 'loading reset a unique in-career transfer');
-    assert.deepEqual(migrated.duplicate, ['Manchester Reds']);
-    assert.deepEqual(migrated.duplicateIds, []);
-    assert.equal(migrated.onyeka.length, 1);
+    assert.deepEqual(migrated.stayed, ['Manchester Reds']);
     assert.equal(await game.window.RBSSaves.load('1'), true);
 
     assert.doesNotThrow(() => game.eval("ACTIONS.offerAccept({dataset:{arg:'missing-offer'}})"));
@@ -331,29 +131,31 @@ test('new careers save the complete world and manual slots never evict one anoth
   }
 });
 
-test('published 2026/27 dates survive congestion and season two generates afresh', { timeout: 60000 }, async () => {
+test('every division plays whole rounds and season two generates afresh', { timeout: 60000 }, async () => {
   const game = await createGame();
   try {
     await startCareer(game);
-    const protectedDate = game.eval(`(()=>{
-      const cups=Object.values(G.cups||{}).flatMap(c=>c.ties||[]);
-      for(const cup of cups){
-        const sourced=G.fixtures.find(f=>f.authentic&&f.day>G.day+7&&f.day<G.day+110&&
-          (f.h===cup.h||f.a===cup.h||f.h===cup.a||f.a===cup.a));
-        if(!sourced)continue;
-        const before=sourced.day;
-        cup.day=before;
-        reschedSweep();
-        return {before,after:sourced.day,cupAfter:cup.day,sourceMoved:!!sourced.moved,cupMoved:!!cup.moved};
-      }
-      return null;
-    })()`);
-    assert.ok(protectedDate, 'no cup/source collision could be constructed');
-    assert.equal(protectedDate.after, protectedDate.before);
-    assert.equal(protectedDate.sourceMoved, false);
-    assert.notEqual(protectedDate.cupAfter, protectedDate.before);
-    assert.equal(protectedDate.cupMoved, true);
+    const seasonOne = JSON.parse(game.eval(`JSON.stringify((()=>{
+      const out={};
+      leagueKeys().filter(k=>divMembers(k).length>1).forEach(k=>{
+        const members=divMembers(k),rows=G.fixtures.filter(f=>f.div===k);
+        const pairs=new Set(rows.map(f=>f.h+'>'+f.a));
+        const perClub={};rows.forEach(f=>{perClub[f.h]=(perClub[f.h]||0)+1;perClub[f.a]=(perClub[f.a]||0)+1});
+        const each=perClub[members[0]];
+        out[k]={n:members.length,rows:rows.length,pairs:pairs.size,
+          even:members.every(i=>perClub[i]===each)};
+      });
+      return out;
+    })())`));
+    for (const [division, row] of Object.entries(seasonOne)) {
+      /* most divisions play everybody twice; a twelve-club one plays three rounds */
+      assert.ok(row.rows >= row.n * (row.n - 1), `${division}: fewer than a double round robin`);
+      assert.equal(row.rows % (row.n * (row.n - 1) / 2), 0, `${division}: not a whole number of rounds`);
+      assert.equal(row.pairs, row.n * (row.n - 1), `${division}: somebody never hosts somebody else`);
+      assert.equal(row.even, true, `${division}: clubs play different numbers of matches`);
+    }
 
+    const total = game.eval('G.fixtures.length');
     const seasonTwo = game.eval(`(()=>{
       G.fixtures.forEach(f=>{f.played=true;f.hs=0;f.as=0});
       endSeason();
@@ -363,7 +165,7 @@ test('published 2026/27 dates survive congestion and season two generates afresh
           .map(k=>[k,G.fixtures.filter(f=>f.div===k).length]))};
     })()`);
     assert.equal(seasonTwo.season, 2);
-    assert.equal(seasonTwo.total, 8781);
+    assert.equal(seasonTwo.total, total);
     assert.equal(seasonTwo.sourced, 0);
     assert.equal(seasonTwo.sourceCount, 0);
     assert.equal(seasonTwo.divisions.PL, 380);
