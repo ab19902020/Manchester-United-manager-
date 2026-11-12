@@ -36,7 +36,7 @@
     const colour = safeHex(club && club.c1, '#536875');
     const trim = safeHex(club && club.c2, '#e8eced');
     const kit = p.pos === 'GK' ? '#b9bd52' : colour;
-    const rng = mulberry(hashStr('portrait-studio|' + (p.id || 0) + '|' + (p.name || '')));
+    const rng = mulberry(hashStr('portrait-studio|' + (p.id || 0) + '|' + (p._n0 || p.name || '')));
     const width = { long: 8.5, oval: 9, round: 9.6, square: 9.4, wide: 10 }[spec.jaw] || 9;
     const chin = spec.jaw === 'long' ? 29.1 : spec.jaw === 'round' ? 27.5 : 28.4;
     const jaw = spec.jaw === 'square' || spec.jaw === 'wide' ? 6.2 : 4.8;

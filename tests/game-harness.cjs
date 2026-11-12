@@ -86,6 +86,7 @@ function gameHtml() {
     'src/manager-experience.js',
     'src/decision-dock.js',
     'src/original-trophies.js',
+    'src/name-editor.js',
     'src/crazygames.js',
     'src/android-shell.js',
   ]) {

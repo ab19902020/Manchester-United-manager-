@@ -2671,7 +2671,7 @@ window.addEventListener('resize',()=>{if(MU.tab==='dugout')sizeDugCanvas();if(MU
 const TRAIT_INFO={Finisher:'Deadly in front of goal',Playmaker:'Creates chances others can\u2019t see',Engine:'Runs all day, tires slowly',Leader:'Lifts the dressing room',Wall:'A giant between the posts'};
 function ensureTraits(p){
  if(p.traits)return p.traits;
- const rng=mulberry(hashStr('tr'+p.id+p.name));
+ const rng=mulberry(hashStr('tr'+p.id+(p._n0||p.name)));
  const g=POSGROUP(p.pos);
  const pool=g==='GK'?['Wall','Leader']:g==='DEF'?['Leader','Engine']:g==='MID'?['Playmaker','Engine','Leader']:['Finisher','Playmaker','Engine'];
  p.traits=[];
@@ -3580,8 +3580,8 @@ const SKINS=['#f0c8a0','#e8b48c','#d69c6c','#c98e62','#a8724c','#8d5a3b','#6b422
 const HAIRC=['#151210','#241a12','#3b2a18','#57432a','#7a5c34','#a88a52','#c9c2b8','#8a2f1e'];
 function face(p,sz){
  sz=sz||28;
- const r=mulberry(hashStr('face'+p.id+p.name));
- const fm=(typeof FACE_MAP!=='undefined'&&FACE_MAP[p.name])||null;
+ const r=mulberry(hashStr('face'+p.id+(p._n0||p.name)));
+ const fm=(typeof FACE_MAP!=='undefined'&&FACE_MAP[(p._n0||p.name)])||null;
  const skin=SKINS[fm&&fm.s!=null?fm.s:Math.floor(r()*SKINS.length)];
  const hc=HAIRC[fm&&fm.h!=null?fm.h:Math.floor(r()*HAIRC.length)];
  const style=fm&&fm.st!=null?fm.st:Math.floor(r()*6); // 0 short 1 buzz 2 afro 3 fringe 4 bald 5 top-knot
@@ -3949,7 +3949,7 @@ newGame=function(i){
  // exact the Reds contracts & salaries
  const mun=G.clubs.find(c=>c.key==='MUN');
  [...mun.players,...(mun.youth||[])].forEach(p=>{
-  const cw=MUN_CONTRACTS[p.name];
+  const cw=MUN_CONTRACTS[(p._n0||p.name)];
   if(cw){p.wage=cw[0];p.contract=cw[1]}});
  if(G.clubs[G.my].key==='MUN'){
   const nf=nextUserFixture();
@@ -8549,13 +8549,13 @@ const MUN_FACES={
  'Harvey Ormerod':{sk:'brown',hr:'black',cut:'fade',beard:'none',jaw:'round'},
  'Gareth Halstead':{sk:'deep',hr:'black',cut:'curls',beard:'none',jaw:'oval'}};
 function faceSpec(p){
- const named=MUN_FACES[p.name];
+ const named=MUN_FACES[(p._n0||p.name)];
  if(named)return Object.assign({},named);
  // everyone else is generated, but from the same richer palette
- const r=mulberry(hashStr('fc2'+p.id+p.name));
+ const r=mulberry(hashStr('fc2'+p.id+(p._n0||p.name)));
  const sk=Object.keys(SKIN2),hr=Object.keys(HAIR2);
  const cuts=['short','mid','buzz','fade','curls','curtains','bun','bald'];
- const old=(typeof FACE_MAP!=='undefined'&&FACE_MAP[p.name])||null;
+ const old=(typeof FACE_MAP!=='undefined'&&FACE_MAP[(p._n0||p.name)])||null;
  let skin;
  if(old&&old.s!=null)skin=sk[clamp(old.s,0,sk.length-1)];
  else skin=sk[Math.floor(r()*sk.length)];
@@ -8663,7 +8663,7 @@ function face(p,sz){
 const _specGuard=faceSpec;
 faceSpec=function(p){
  const s=_specGuard(p);
- if(MUN_FACES[p.name])return s;
+ if(MUN_FACES[(p._n0||p.name)])return s;
  const deep=['brown','deep','dark'].indexOf(s.sk)>=0;
  if(deep&&['blond','platinum','bleach','ginger','dirtyblond','lightbrown'].indexOf(s.hr)>=0)s.hr='black';
  if(s.sk==='tan'&&['platinum','bleach'].indexOf(s.hr)>=0)s.hr='darkbrown';
@@ -9494,13 +9494,13 @@ const NAME_ORIGIN=[
  {re:/(smith|jones|taylor|brown|wilson|davies|evans|thomas|roberts|walker|wright|robinson|thompson|white|hughes|edwards|green|lewis|wood |harris|clarke|jackson|clark |turner|hill |cooper|ward |morris|moore|king |baker|shaw |henderson|gordon)/i,sk:['pale','fair','light'],hr:['midbrown','darkbrown','lightbrown','blond','ginger','black'],cut:['short','buzz','mid','fade']}];
 const _specNat=faceSpec;
 faceSpec=function(p){
- if(MUN_FACES[p.name])return _specNat(p);
+ if(MUN_FACES[(p._n0||p.name)])return _specNat(p);
  const s=_specNat(p);
- const nm=' '+p.name.toLowerCase()+' ';
+ const nm=' '+String(p._n0||p.name).toLowerCase()+' ';
  for(let i=0;i<NAME_ORIGIN.length;i++){
   const o=NAME_ORIGIN[i];
   if(!o.re.test(nm))continue;
-  const r=mulberry(hashStr('nat'+p.id+p.name));
+  const r=mulberry(hashStr('nat'+p.id+(p._n0||p.name)));
   s.sk=o.sk[Math.floor(r()*o.sk.length)];
   s.hr=o.hr[Math.floor(r()*o.hr.length)];
   s.cut=o.cut[Math.floor(r()*o.cut.length)];
@@ -12621,7 +12621,7 @@ const WORLD_CHARACTER={
 function applyCharacters(){
  G.clubs.forEach(c=>{
   [...c.players,...(c.youth||[])].forEach(p=>{
-   const ch=MUN_CHARACTER[p.name];
+   const ch=MUN_CHARACTER[(p._n0||p.name)];
    if(ch){
     p.pers=ch.pers;
     if(ch.amb!=null)p.ambition=ch.amb;
@@ -12629,7 +12629,7 @@ function applyCharacters(){
     if(ch.pre!=null)p.pressure=ch.pre;
     if(ch.note)p.persNote=ch.note;
     return}
-   const w=WORLD_CHARACTER[p.name];
+   const w=WORLD_CHARACTER[(p._n0||p.name)];
    if(w)p.pers=w})})}
 /* everyone else: a spread that is not all model professionals */
 const _persOfX=personalityOf;
@@ -12638,7 +12638,7 @@ personalityOf=function(p){
  const k=_persOfX(p);
  // the old derivation buries half the archetypes; sprinkle the rest in
  // deterministically so a squad reads like a squad
- const r=mulberry(hashStr('pers2'+p.id+p.name))();
+ const r=mulberry(hashStr('pers2'+p.id+(p._n0||p.name)))();
  let out=k;
  if(k==='model'&&r<.45)out=r<.22?'quietleader':'joker';
  else if(k==='leader'&&r<.5)out=r<.25?'vocal':'quietleader';
@@ -19197,11 +19197,11 @@ const NAT_POOL_BY_CC={ENG:['ENG','ENG','ENG','ENG','ENG','ENG','IRL','SCO','WAL'
  UKR:['UKR','UKR','UKR','GEO','BRA'],
  CRO:['CRO','CRO','CRO','BIH','SRB','MNE']};
 function natGuess(p,c){
- if(NAT_EXACT[p.name])return NAT_EXACT[p.name];
- const nm=' '+String(p.name||'').toLowerCase()+' ';
+ if(NAT_EXACT[(p._n0||p.name)])return NAT_EXACT[(p._n0||p.name)];
+ const nm=' '+String(p._n0||p.name||'').toLowerCase()+' ';
  for(let i=0;i<NAT_HINT.length;i++)if(NAT_HINT[i][0].test(nm))return NAT_HINT[i][1];
  const pool=NAT_POOL_BY_CC[(c&&c.cc)||'ENG']||['ENG'];
- const r=mulberry(hashStr('nat|'+p.name+'|'+p.id));
+ const r=mulberry(hashStr('nat|'+(p._n0||p.name)+'|'+p.id));
  const pick=pool[Math.floor(r()*pool.length)];
  return NAT_BY[pick]?pick:pool[0]}
 function natOf(p){
@@ -20181,7 +20181,7 @@ managerOf=function(c){
  if(c.i===G.my)return 'You';
  if(G.mgrOverride&&G.mgrOverride[c.key])return G.mgrOverride[c.key];
  if(MANAGERS[c.key])return MANAGERS[c.key];
- const m=MGR_BY_NAME[c.name];
+ const m=MGR_BY_NAME[c._n0||c.name];
  if(m)return m[0];
  return _managerOfWorld(c)};
 function assistantOf(c){
@@ -20189,7 +20189,7 @@ function assistantOf(c){
  if(G.assistOverride&&G.assistOverride[c.key])return G.assistOverride[c.key];
  if(c.i===G.my)return (G.staff&&G.staff.assistant)?G.staff.assistant.name:'—';
  if(ASSIST_BY_KEY[c.key])return ASSIST_BY_KEY[c.key];
- const m=MGR_BY_NAME[c.name];
+ const m=MGR_BY_NAME[c._n0||c.name];
  if(m&&m[1])return m[1];
  const rng=mulberry(hashStr('asst'+c.key));
  return wName(c.cc||'ENG',rng)}
@@ -20202,7 +20202,7 @@ clubStaffHtml=function(c){
   '<div class="spread" style="padding:5px 2px;border-bottom:1px solid var(--chalk)">'+
   '<span class="small" style="font-weight:700">'+role+'</span>'+
   '<span class="small">'+esc(name)+' '+starHtml(stars)+'</span></div>';
- const known=!!(MANAGERS[c.key]||MGR_BY_NAME[c.name]);
+ const known=!!(MANAGERS[c.key]||MGR_BY_NAME[c._n0||c.name]);
  const top=clamp(Math.round(2+rng()*1.5+c.rep/2600),1,5);
  let h=row('Manager',managerOf(c),top)+row('Assistant Manager',assistantOf(c),clamp(top-1,1,5));
  ['First-team Coach','Goalkeeping Coach','Head Physio','Sports Scientist','Data Analyst','Head of Youth']
@@ -23023,8 +23023,8 @@ faceSpec=function(p){
  const s=_specCuts(p);
  try{
   // a face described by hand keeps every choice that was made for it
-  if(typeof MUN_FACES==='object'&&MUN_FACES[p.name])return s;
-  const r=mulberry(hashStr('cut4'+p.id+p.name));
+  if(typeof MUN_FACES==='object'&&MUN_FACES[(p._n0||p.name)])return s;
+  const r=mulberry(hashStr('cut4'+p.id+(p._n0||p.name)));
   const deep=['brown','deep','dark'].indexOf(s.sk)>=0;
   const pool=deep?CUT_POOL_DEEP:CUT_POOL;
   s.cut=pool[Math.floor(r()*pool.length)];
@@ -23307,7 +23307,7 @@ function mgrOf(c){
  let nm='';
  try{nm=(G.mgrOverride&&G.mgrOverride[c.key])||
    (typeof MANAGERS==='object'&&MANAGERS[c.key])||
-   ((typeof MGR_BY_NAME==='object'&&MGR_BY_NAME[c.name])||[])[0]||''}
+   ((typeof MGR_BY_NAME==='object'&&MGR_BY_NAME[c._n0||c.name])||[])[0]||''}
  catch(e){}
  const rng=mulberry(hashStr('mgr9'+c.key));
  if(!nm)nm=wName(c.cc||'ENG',rng);
@@ -24933,7 +24933,7 @@ for(const k in NAT_REAL)NAT_EXACT[k]=NAT_REAL[k];
    ===================================================================== */
 function restampNations(){
  try{let n=0;
-  const hit=p=>{const t=NAT_REAL[p.name];if(t&&p.nat!==t){p.nat=t;n++}};
+  const hit=p=>{const t=NAT_REAL[(p._n0||p.name)];if(t&&p.nat!==t){p.nat=t;n++}};
   /* eachPlayer only walks senior squads — the academy and the free agents
      hold real names too, and a released veteran is exactly where you would
      notice the wrong flag */
@@ -28824,7 +28824,7 @@ renderDock=function(){
   'Newham Town':7550,'Wolverhampton Town':7350,'Leeds Whites':7250,
   'Burnley Rovers':7050,'Wearside Athletic':7050};
  const apply=()=>{try{
-  (G.clubs||[]).forEach(c=>{const r=REP[c.name];if(r)c.rep=Math.max(c.rep||0,r)});
+  (G.clubs||[]).forEach(c=>{const r=REP[c._n0||c.name];if(r)c.rep=Math.max(c.rep||0,r)});
  }catch(e){}};
  const _ngRep=newGame;newGame=function(){const r=_ngRep.apply(this,arguments);apply();return r};
  const _lsRep=loadSlot;loadSlot=function(){const ok=_lsRep.apply(this,arguments);if(ok)apply();return ok};
@@ -28971,10 +28971,10 @@ const _specBeard=faceSpec;
 faceSpec=function(p){
  const s=_specBeard.apply(this,arguments);
  try{
-  const r=mulberry(hashStr('bd3|'+p.id+'|'+p.name));
+  const r=mulberry(hashStr('bd3|'+p.id+'|'+(p._n0||p.name)));
   /* a named face keeps whatever it was given; everyone else is redrawn
      from a proper set of styles rather than none/stubble/full */
-  if(!MUN_FACES[p.name]){
+  if(!MUN_FACES[(p._n0||p.name)]){
    s.beard=BEARDS[Math.floor(r()*BEARDS.length)];
    if(p.age<=19&&s.beard!=='none'&&r()<.7)s.beard=r()<.5?'none':'stubble';
   }else if(s.beard==='full'&&r()<.35)s.beard='goatee';
@@ -30375,7 +30375,7 @@ const TIERS=[
 function clubTier(c){
  try{
   if(!c)return TIERS[3];
-  const n=c.name||'';
+  const n=c._n0||c.name||'';
   if(ELITE.includes(n))return TIERS[0];
   if(CONTINENTAL.includes(n))return TIERS[1];
   const r=c.rep||0;
@@ -40339,13 +40339,13 @@ const _specNatReal=faceSpec;
 faceSpec=function(p){
  const s=_specNatReal.apply(this,arguments);
  try{
-  if(!p||MUN_FACES[p.name])return s;          /* described by hand: leave it */
+  if(!p||MUN_FACES[(p._n0||p.name)])return s;          /* described by hand: leave it */
   let code=p.nat;
   if(!code&&typeof natOf==='function')try{code=natOf(p)}catch(e){}
   if(!code)return s;
   const look=natLook(code);
   if(!look)return s;
-  const r=mulberry(hashStr('nat9|'+code+'|'+p.id+'|'+p.name));
+  const r=mulberry(hashStr('nat9|'+code+'|'+p.id+'|'+(p._n0||p.name)));
   s.sk=pickWeighted(look.sk,r);
   s.hr=pickWeighted(look.hr,r);
   /* the cut follows from the hair, not from a separate roll */
@@ -40566,8 +40566,8 @@ const _specNamed=faceSpec;
 faceSpec=function(p){
  const s=_specNamed.apply(this,arguments);
  try{
-  if(!p||!p.name||MUN_FACES[p.name])return s;
-  const v=PLAYER_LOOK[p.name];
+  if(!p||!p.name||MUN_FACES[(p._n0||p.name)])return s;
+  const v=PLAYER_LOOK[(p._n0||p.name)];
   if(!v)return s;
   const bits=String(v).split('|');
   if(bits[0]&&SKIN2[bits[0]])s.sk=bits[0];
@@ -44093,8 +44093,8 @@ faceSpec=function(p){
  try{
   if(!p)return s;
   /* the hand-authored the Reds faces keep the cut they were given */
-  if(typeof MUN_FACES!=='undefined'&&MUN_FACES&&MUN_FACES[p.name])return s;
-  const r=mulberry(hashStr('cut2|'+(p.id||0)+'|'+(p.name||'')));
+  if(typeof MUN_FACES!=='undefined'&&MUN_FACES&&MUN_FACES[(p._n0||p.name)])return s;
+  const r=mulberry(hashStr('cut2|'+(p.id||0)+'|'+((p._n0||p.name)||'')));
   const v=r(), age=p.age||27;
   if(s.cut==='bald'){
    if(age<35&&v<.55)s.cut='receding'}
@@ -44562,7 +44562,7 @@ buildTrophyRoom=function(host){
 function playerCeiling(p){
  try{
   const pot=p.pot||p.ovr||60;
-  const r=mulberry(hashStr('ceil|'+(p.id||0)+'|'+(p.name||'')))();
+  const r=mulberry(hashStr('ceil|'+(p.id||0)+'|'+((p._n0||p.name)||'')))();
   /* pow<1 pushes the mass toward the top of the range: plenty of players
      get close, a few realise everything, and a tail never do */
   const f=.80+Math.pow(r,.62)*.20;
@@ -56693,10 +56693,10 @@ faceSpec=function(p){
  const s=_specFinal.apply(this,arguments);
  try{
   if(!p||!s)return s;
-  if(typeof MUN_FACES!=='undefined'&&MUN_FACES&&MUN_FACES[p.name])return s;
+  if(typeof MUN_FACES!=='undefined'&&MUN_FACES&&MUN_FACES[(p._n0||p.name)])return s;
   const deep=['brown','deep','dark'].indexOf(s.sk)>=0;
   if(!deep&&DEEP_ONLY.indexOf(s.cut)>=0){
-   const r=mulberry(hashStr('cutfix|'+(p.id||0)+'|'+(p.name||'')));
+   const r=mulberry(hashStr('cutfix|'+(p.id||0)+'|'+((p._n0||p.name)||'')));
    /* nearest equivalent in look rather than a re-roll, so the player
       does not change completely because of one corrected field */
    const swap={cornrows:['buzz','fade','short'],afro:['curls','mid','short'],
@@ -56715,7 +56715,7 @@ face=function(p,sz){
   svg=hairFixes(svg);
   const sp=faceSpec(p);
   const S=SKIN2[sp.sk]||SKIN2.light;
-  const r=mulberry(hashStr('real1|'+(p.id||0)+'|'+(p.name||'')));
+  const r=mulberry(hashStr('real1|'+(p.id||0)+'|'+((p._n0||p.name)||'')));
   const age=p.age||27;
   /* Fifty-six pixels is the line between a portrait you look at and an
      icon beside a name. Below it the sub-pixel detail costs nodes on
@@ -57049,9 +57049,9 @@ faceSpec=function(p){
  try{
   if(!p)return s;
   /* a hand-drawn the Reds face keeps every choice it was given */
-  if(typeof MUN_FACES!=='undefined'&&MUN_FACES&&MUN_FACES[p.name])return s;
+  if(typeof MUN_FACES!=='undefined'&&MUN_FACES&&MUN_FACES[(p._n0||p.name)])return s;
   const t=buildOf(p);
-  const r=mulberry(hashStr('bld|'+(p.id||0)+'|'+(p.name||'')));
+  const r=mulberry(hashStr('bld|'+(p.id||0)+'|'+((p._n0||p.name)||'')));
   /* the build sets where on the list to aim; the hash moves it one
      either way, so the shape is a tendency and not a rule */
   const aim=t*(JAW_ORDER.length-1);
@@ -57507,6 +57507,7 @@ showStart();
 <script src="src/manager-experience.js"></script>
 <script src="src/decision-dock.js"></script>
 <script src="src/original-trophies.js"></script>
+<script src="src/name-editor.js"></script>
 <script src="src/crazygames.js"></script>
 <script src="src/android-shell.js"></script>
 </body>

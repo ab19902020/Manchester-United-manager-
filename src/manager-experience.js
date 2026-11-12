@@ -65,7 +65,7 @@
   function openSearch() {
     if (!active()) return;
     openModal('<section class="rbs-search"><h3>Find in your career</h3><label for="rbsCareerSearch">Player, club or screen</label>'
-      + '<input id="rbsCareerSearch" type="search" autocomplete="off" placeholder="Try Bruno, training or save…">'
+      + '<input id="rbsCareerSearch" type="search" autocomplete="off" placeholder="Try a surname, training or save…">'
       + '<div id="rbsCareerResults">' + searchResults('') + '</div></section>');
     requestAnimationFrame(() => { const input = document.getElementById('rbsCareerSearch'); if (input) input.focus(); });
   }
