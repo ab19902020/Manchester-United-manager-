@@ -57,7 +57,7 @@ function checkLowerLeagueSquads(game) {
   }
   assert.ok(divisionAverages.L1 > divisionAverages.L2);
   assert.ok(divisionAverages.L2 > divisionAverages.NL);
-  assert.ok(live.find((club) => club.name === 'Leicester City').names.includes('Wout Faes'));
+  assert.ok(live.find((club) => club.name === 'Leicester Rovers').names.includes('Wout Faes'));
 }
 
 function checkEnglishPlayerFacts(game) {
@@ -117,29 +117,29 @@ function checkEnglishPlayerFacts(game) {
     liveNames.set(key, player);
   }
 
-  const darlow = live.find((player) => player.club === 'Manchester United' && player.name === 'Karl Darlow');
+  const darlow = live.find((player) => player.club === 'Manchester Reds' && player.name === 'Karl Darlow');
   assert.deepEqual(
     { nat: darlow.nat, nationality: darlow.nationality, dob: darlow.dob, heightCm: darlow.heightCm },
     { nat: 'WAL', nationality: 'Wales', dob: '1990-10-08', heightCm: 191 },
   );
-  const mazraoui = live.find((player) => player.club === 'Manchester United' && player.name === 'Noussair Mazraoui');
+  const mazraoui = live.find((player) => player.club === 'Manchester Reds' && player.name === 'Noussair Mazraoui');
   assert.equal(mazraoui.nat, 'MAR', 'ESPN provider code MOR was not canonicalised for the game');
   assert.deepEqual(
-    live.filter((player) => player.club === 'Liverpool' && playerNameKey(player.name) === 'jeremyjacquet')
+    live.filter((player) => player.club === 'Merseyside Reds' && playerNameKey(player.name) === 'jeremyjacquet')
       .map((player) => player.espnId),
     ['355980'],
   );
   assert.deepEqual(
-    live.filter((player) => player.club === 'Coventry City' && playerNameKey(player.name) === 'frankonyeka')
+    live.filter((player) => player.club === 'Coventry Athletic' && playerNameKey(player.name) === 'frankonyeka')
       .map((player) => player.espnId),
     ['258491'],
   );
   assert.deepEqual(
     live.filter((player) => player.espnId === '130877').map((player) => player.club),
-    ['Manchester United'],
+    ['Manchester Reds'],
   );
   assert.ok(lowerLeagueData.misplacedPremierLeague.some((player) =>
-    player.name === 'Karl Darlow' && player.club === 'Leeds United' && player.currentClub === 'Manchester United'));
+    player.name === 'Karl Darlow' && player.club === 'Leeds Whites' && player.currentClub === 'Manchester Reds'));
   assert.equal(lowerLeagueData.unresolvedPremierLeague.length, 0);
   assert.doesNotMatch(JSON.stringify(lowerLeagueData), /"(?:headshot|skin|hairStyle)"/);
 }
@@ -205,8 +205,8 @@ function checkAuthenticFixtures(game, divisions) {
   if (divisions.includes('GER')) {
     assert.ok(live.fixtures.some((fixture) => fixture.division === 'GER'
       && fixture.date === '2026-08-28'
-      && fixture.home === 'Bayern München'
-      && fixture.away === 'VfB Stuttgart'));
+      && fixture.home === 'Bavaria München'
+      && fixture.away === 'Teutonia Stuttgart'));
   }
 }
 
@@ -232,8 +232,8 @@ test('new careers save the complete world and manual slots never evict one anoth
       .filter(club=>['ESP','ITA','GER','FRA','POR','NED','ITA2','GER2','FRA2','TUR','GRE','CZE'].includes(club.league))
       .map(club=>club.name).sort())`));
     assert.deepEqual(sourcedPicker, sourcedLive);
-    assert.ok(sourcedLive.includes('Zbrojovka Brno'));
-    assert.ok(sourcedLive.includes('Artis Brno'));
+    assert.ok(sourcedLive.includes('Moravia Brno'));
+    assert.ok(sourcedLive.includes('Sokol Brno'));
 
     const auto = await game.window.RBSSaves.store.get('auto');
     assert.ok(auto);
@@ -258,8 +258,8 @@ test('new careers save the complete world and manual slots never evict one anoth
     assert.equal(game.eval('G.day'), 8);
 
     const migration = game.eval(`(()=>{
-      const sourceClub=G.clubs.find(club=>club.name==='Manchester United');
-      const destination=G.clubs.find(club=>club.name==='Liverpool');
+      const sourceClub=G.clubs.find(club=>club.name==='Manchester Reds');
+      const destination=G.clubs.find(club=>club.name==='Merseyside Reds');
       const moved=sourceClub.players.find(player=>player.espnId&&player.pos!=='GK'&&
         !destination.players.some(candidate=>candidate.name===player.name));
       sourceClub.players=sourceClub.players.filter(player=>player!==moved);
@@ -267,12 +267,12 @@ test('new careers save the complete world and manual slots never evict one anoth
       destination.players.push(moved);
 
       const duplicateOwner=sourceClub.players.find(player=>player.espnId);
-      const staleClub=G.clubs.find(club=>club.name==='Leeds United');
+      const staleClub=G.clubs.find(club=>club.name==='Leeds Whites');
       const maxId=Math.max(...G.clubs.flatMap(club=>club.players.map(player=>Number(player.id)||0)));
       const staleCopy={...duplicateOwner,id:maxId+1,club:staleClub.i};
       staleClub.players.push(staleCopy);
 
-      const coventry=G.clubs.find(club=>club.name==='Coventry City');
+      const coventry=G.clubs.find(club=>club.name==='Coventry Athletic');
       const onyeka=coventry.players.find(player=>String(player.espnId)==='258491');
       const aliasCopy={...onyeka,id:maxId+2,name:'Ogochukwu Onyeka'};
       for(const key of ['espnId','nat','nationality','dob','heightCm','weightKg','displayHeight',
@@ -292,13 +292,13 @@ test('new careers save the complete world and manual slots never evict one anoth
         moved:live.filter(player=>player.espnId==='${migration.movedId}').map(player=>player.club),
         duplicate:live.filter(player=>player.espnId==='${migration.duplicateId}').map(player=>player.club),
         duplicateIds:Object.entries(counts).filter(([,count])=>count>1),
-        onyeka:live.filter(player=>player.club==='Coventry City'&&
+        onyeka:live.filter(player=>player.club==='Coventry Athletic'&&
           ['frankonyeka','ogochukwuonyeka'].includes(player.name.normalize('NFKD')
             .replace(/[\\u0300-\\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'')))
       };
     })())`));
-    assert.deepEqual(migrated.moved, ['Liverpool'], 'loading reset a unique in-career transfer');
-    assert.deepEqual(migrated.duplicate, ['Manchester United']);
+    assert.deepEqual(migrated.moved, ['Merseyside Reds'], 'loading reset a unique in-career transfer');
+    assert.deepEqual(migrated.duplicate, ['Manchester Reds']);
     assert.deepEqual(migrated.duplicateIds, []);
     assert.equal(migrated.onyeka.length, 1);
     assert.equal(await game.window.RBSSaves.load('1'), true);

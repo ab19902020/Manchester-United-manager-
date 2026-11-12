@@ -52,12 +52,12 @@ test('Mourinho is at Real Madrid, and only there', async (t) => {
       let n = null;
       try { n = managerOf(c); } catch (e) { n = null; }
       if (n && /Mourinho/.test(n)) where.push(c.name);
-      if (c.name === 'Benfica') benfica = n;
+      if (c.name === 'União Lisboa') benfica = n;
     });
     return { where, benfica };
   })()`);
 
-  assert.equal(Array.from(run.where).join(', '), 'Real Madrid',
+  assert.equal(Array.from(run.where).join(', '), 'Madrid Blancos',
     `Mourinho is at: ${Array.from(run.where).join(', ') || 'nowhere'}`);
   assert.ok(run.benfica, 'Benfica has no manager at all');
   assert.doesNotMatch(run.benfica, /Mourinho/,
