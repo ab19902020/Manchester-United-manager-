@@ -1,6 +1,10 @@
 # The Results Business
 
-The Results Business is a mobile-first football management career covering 484 clubs across twenty countries. Manchester United remains the featured career, with its 2026/27 squad and fixture schedule, but every playable club uses the same full management systems.
+The Results Business is a mobile-first football management career covering 484 clubs across twenty countries. Every club, player, manager, competition, ground and sponsor in it is invented — nothing is licensed and nothing is taken from a real roster or fixture list — so the game can be published on app stores. Manchester Reds are the featured career, but every playable club uses the same full management systems.
+
+**Make it yours.** *Club → Save → Names* opens the name editor: rename any club, ground or player, and export or import your names as a pack. A rename changes what something is called and nothing else — a player keeps his face, his ability and his contract — and your pack is applied to every new career on the device.
+
+**The manager's legacy.** *Club → Trophies* keeps a running record of every league game you have managed and twenty-one career milestones, from a first win to taking a club all the way up. It only records what has happened; it never gives a bonus or changes a result.
 
 Player portraits now use a single studio-style illustration system with more
 natural facial proportions, individual features, current club kits and age detail.
@@ -27,8 +31,10 @@ partially rotate away your previous saves.
 
 ## Play on Android
 
-**Download:** [`releases/the-results-business.apk`](releases/the-results-business.apk)
-(version 1.1.0, 1.9 MB, Android 7.0 or later).
+**Getting the app.** Every push builds two files in GitHub Actions (the *Android app* workflow, under
+*Artifacts*): `the-results-business-apk`, which installs straight onto a phone, and
+`the-results-business-play-bundle`, the `.aab` that Google Play asks for. `npm run apk` and `npm run aab`
+build the same two locally. The app targets Android 16 (API 36) and runs on Android 7.0 or later.
 
 The game also ships as an Android app (`android/`): the same build, served
 from inside the APK, so it plays offline and keeps its saves in the app's own
@@ -99,8 +105,9 @@ The automated suite covers:
 - complete-world validation for new autosaves;
 - IndexedDB manual slots and rotating recovery autosaves;
 - save/load round trips and transfer-offer acceptance;
-- sourced 2026/27 English fixture dates, pairings and season-two handoff;
-- sourced English squad identities, nationality, birth date and physical facts;
+- an invented world that is complete: five full English divisions, squads deep enough to play, whole rounds of fixtures;
+- a licence guard that fails if any shipped file names a real competition, club, ground, broadcaster or footballer;
+- the name editor (a rename never changes a player or a club) and the career milestones (they only watch);
 - press-conference, fullscreen, SVG-ID and transfer-pagination regressions;
 - one authoritative match displayed through Pitch, Text and Stats;
 - legal team selection, consistent bench swaps, cup-opponent scouting, player
@@ -119,10 +126,11 @@ GitHub Actions runs the same checks on every pull request.
 - `index.html` — the legacy game core and UI.
 - `src/career-store.js` — validated, checksummed IndexedDB career storage.
 - `src/simulation-model.js` — shared scoring probabilities and balance targets.
-- `src/lower-league-data.js` — generated five-division English roster and player-facts snapshot.
-- `src/lower-league-squads.js` — maps factual identities and biographies onto game-balanced slots.
-- `src/authentic-fixture-data.js` — generated snapshot of published 2026/27 fixture lists.
-- `src/authentic-fixtures.js` — applies sourced dates to season one without moving them for cups.
+- `src/name-editor.js` — rename clubs, grounds and players; name packs.
+- `src/legacy.js` — the career record and milestones.
+- `src/original-trophies.js` — the silverware, designed for this game.
+- `src/visual-refresh.js` — screen transitions, depth and the match layout.
+- `tests/licence-clean.test.cjs` — the guard that keeps real-world names out.
 - `src/runtime-enhancements.js` — save integration, diagnostics, accessibility and PWA wiring.
 - `src/match-ratings.js` — diminishing goalkeeper save rewards and rating-distribution guardrails.
 - `src/match-view.js` — Pitch, Text and Stats views of the same MatchSim result.
@@ -191,36 +199,16 @@ Older valid `rdm2627` browser saves are migrated automatically. An incomplete le
 
 ## Data notes
 
-The game currently carries 6,292 published fixtures across 17 divisions: all
-2,588 in the five modeled English divisions; every match in La Liga, Serie A,
-Bundesliga, Ligue 1, Primeira Liga and Eredivisie; and the complete modeled
-regular seasons for Serie B, 2. Bundesliga, Ligue 2, Süper Lig, Super League
-Greece and the Czech First League. The snapshot was read on 9 August 2026 from
-ESPN and the official Chance Liga schedule. Exact source URLs and event IDs are
-recorded in `src/authentic-fixture-data.js`; run the fixture updater with
-`--tier=england`, `--tier=major` or `--tier=rest` to validate and refresh a tier.
-The same data updates affected memberships before a career is built; it reuses
-existing club slots, ratings and finances rather than inventing new ones.
+**Everything in the game is invented.** There are no real clubs, players, managers, referees,
+competitions, grounds, broadcasters, sponsors or trophies in it, and no data read from a roster feed or a
+published fixture list. Clubs are named for the town they play in with a suffix no real club there uses;
+players and staff are drawn from name pools; competitions say what they are (Premier Division, Challenge
+Cup, Champions Cup); fixtures are generated; the trophies in the trophy room were designed here.
 
-Sourced dates apply only to 2026/27. From season two, the game returns to its
-generated calendar because no future list has been published. Generated cup ties
-move around a sourced league date, never the other way round.
+`tests/licence-clean.test.cjs` reads every file that ships and fails the build if a real competition,
+club, ground, broadcaster or famous footballer is named in one. If it fails, rename the thing — do not add
+an exception.
 
-All 116 modeled English clubs use an ESPN roster and player-biography snapshot
-read on 13 August 2026: [Premier League](https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/teams?limit=100), [Championship](https://site.api.espn.com/apis/site/v2/sports/soccer/eng.2/teams?limit=100), [League One](https://site.api.espn.com/apis/site/v2/sports/soccer/eng.3/teams?limit=100), [League Two](https://site.api.espn.com/apis/site/v2/sports/soccer/eng.4/teams?limit=100) and [National League](https://site.api.espn.com/apis/site/v2/sports/soccer/eng.5/teams?limit=100).
-The schema 3 snapshot records 3,238 unique roster players and four verified
-same-club detail records with the nationality, date of birth, height and weight
-ESPN publishes. Twelve IDs returned on more than one team roster are resolved by
-the athlete-detail team before the data is accepted; an ambiguous owner now fails
-the updater instead of entering the game twice. Each decision retains its roster
-and detail URLs and read date. Run `npm run data:player-facts` to validate and
-refresh it.
-
-The integration keeps positions, ratings, potential, contracts and the economy
-game-balanced. Lower-division slots retain their shape while sourced identities and
-facts replace generated ones; stale or generated Premier League names are replaced
-by unused players from that club's published roster. Matching never borrows an
-identity from another club, and a missing source field remains missing rather than
-being inherited from the player who previously occupied the slot or being guessed.
-
-British neural voices are optional. Their first use requires a 36–326 MB download; coarse-pointer and lower-memory devices default to the 36 MB model. Device voices remain the zero-download fallback.
+This is not legal advice, and a name check is not a clearance: before publishing, look over the store
+listing, screenshots and description for the same things, and remember that the name editor lets players
+type whatever they like into their own copy.

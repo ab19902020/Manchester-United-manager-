@@ -2,6 +2,56 @@
 
 ## Unreleased
 
+### 2.0 — an invented world, ready for app stores — 13 November 2026
+
+**Nothing in the game belongs to somebody else any more.**
+
+- **Sourced data removed.** The roster feed snapshot (`lower-league-data.js`, 2 MB of real squads with
+  provenance), the published fixture lists (`authentic-fixture-data.js`) and the code that applied them
+  are gone, with the scripts that fetched them. The game is 3 MB lighter and builds its own world.
+- **484 clubs renamed**, with their grounds: each is its town plus a suffix no real club there uses
+  (Manchester Reds, Merseyside Blues, Bavaria München, Sporting Madrid). Internal club keys are
+  unchanged, so rivalries, kits and saves keyed on them still work. Badge letters now come from the
+  club's name rather than its key, and no two clubs in a country share a monogram.
+- **1,380 real people replaced** — players, managers, assistants, referees, board members — each with an
+  invented name from a pool for the same nationality, consistently across squads, contracts, faces,
+  characters and nationality tables. Ratings, ages and positions are untouched, so the balance is too.
+- **Name pools scrubbed.** The generic pools held whole national squads' surnames beside their first
+  names, so the generator could reassemble a real star by chance. They hold ordinary surnames now.
+- **Competitions renamed** to say what they are: Premier Division, Second/Third/Fourth Division,
+  National Division, Challenge Cup, League Cup, Champions Cup, Continental Cup, Federation Cup, World
+  Championship; every foreign league likewise. Real broadcasters, fan handles, club lore, boardroom
+  owners, signature celebrations and stadium names are gone.
+- **Original trophies.** The trophy room's sculpts were modelled on real cups. Every competition now
+  has a cup designed here (`src/original-trophies.js`).
+- **A guard.** `tests/licence-clean.test.cjs` scans every shipped file for real competitions, clubs,
+  grounds, broadcasters and famous footballers and fails if it finds one. It found a further forty
+  after the first pass, which is what it is for.
+
+**Upgrades.**
+
+- **The name editor** (`src/name-editor.js`): rename any club, ground or player; export and import name
+  packs; packs apply to every new career. Faces, hidden potential, personality, nationality, club
+  standing and managers were all seeded from names, so a stable identity (`_n0`) now sits under every
+  rename and all of them key off that — a renamed player is the same player.
+- **The manager's legacy** (`src/legacy.js`): a career record and twenty-one milestones on the
+  Trophies tab. It reads what has happened and writes only its own drawer; the test snapshots the
+  whole save to prove it.
+- **A visual refresh** (`src/visual-refresh.js`): screens rise in when the screen changes (never on a
+  repaint), cards and buttons have depth and answer a press, crests sit in shadow, and the match pitch
+  sits at the top of the screen instead of floating in a dead band.
+- **Android for Google Play.** The app targets API 36, handles the back gesture through the callback
+  Android 16 requires, and CI now builds the `.aab` bundle Play takes as well as the APK. The old
+  signed APK was built from the licensed data and has been removed.
+
+**Checked.** The match engine was not touched. Two statistical guards failed after the rename; measured
+properly — 500 matches a variant on independent streams, three pairings — low morale still costs about
+0.16 points a game and tired legs far more, exactly as before. The failure was one fixed random stream
+landing badly on the new world, so those two tests now draw from several streams.
+
+**Not done.** Saves made before this version still carry the old names inside them; they load, but
+they are not renamed. Nobody outside development has one.
+
 ### The game as an Android app — 11 October 2026
 
 - **An APK, built from this repository.** `android/` is a native shell

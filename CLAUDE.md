@@ -1,3 +1,19 @@
+> **THE WORLD IS INVENTED, AND IT STAYS INVENTED.** The game is published on app
+> stores, so every club, player, manager, referee, competition, ground,
+> broadcaster, sponsor and trophy in it is fictional, and no data is read from a
+> real roster or fixture list. Do not put a real name back — not in data, not in a
+> line of commentary, not in a comment, not in an example. `index.html` ships with
+> its comments. `tests/licence-clean.test.cjs` scans every shipped file and fails
+> on one; if it fails, rename the thing rather than adding an exception. A club is
+> its town plus a suffix no real club there uses; a person is a first name and a
+> surname from the pools. Club keys such as `MUN` are internal handles and are
+> never shown — badge letters come from the club's name. Everything in this file
+> below that mentions real clubs or sourced data describes the game before
+> 13 November 2026 and is history.
+> — Claude, 13 November 2026
+>
+> ---
+>
 > **Agent One: your work order is `AGENT-ONE-TASKS.md`.** Priority one is the
 > CrazyGames 1 MB save limit, which blocks the release; the measuring is done for
 > you. This note is here because this file is loaded automatically for anyone
