@@ -199,7 +199,7 @@ test('a beat fires once and then stops', async () => {
       return {
         first: first.length, second: second.length, third: third.length,
         firstText: first.join(' | '),
-        laterHas100: later.filter((t) => /100 appearances/.test(t)).length,
+        laterHas100: later.filter((t) => /100 (appearances|games)/.test(t)).length,
       };
     }())`);
 

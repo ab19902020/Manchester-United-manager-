@@ -110,8 +110,10 @@ test('a squad in form beats the same squad out of form',
       x.injury=null;x.susp=0;x.cond=100;x.sharp=70;x.morale=72;x.form=[];});
 
     const play=(apply)=>{
-      Math.random=window.RBSWorldSeed.mulberry32(0x5eed1>>>0);
       let pts=0,played=0;
+      /* two streams, not one: a single fixed stream is a single sample */
+      [0x5eed1,0x7a11e].forEach(seed=>{
+      Math.random=window.RBSWorldSeed.mulberry32(seed>>>0);
       for(let i=0;i<70;i++){
         heal(ME);heal(THEM);
         G.clubs[ME].recent=[];G.clubs[THEM].recent=[];
@@ -122,7 +124,7 @@ test('a squad in form beats the same squad out of form',
         try{ buildContext(fix); quickSim(fix); }catch(e){ continue; }
         const my=home?fix.hs:fix.as, th=home?fix.as:fix.hs;
         played++; pts+= my>th?3 : my===th?1 : 0;
-      }
+      }});
       return pts/Math.max(1,played);
     };
 

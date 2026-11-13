@@ -40,12 +40,14 @@ test('career search opens actual players and every management shortcut reaches i
   await startCareer(game, 'Navigation QA', { seed: 20260907 });
   game.click('careerSearch');
   const input = game.document.getElementById('rbsCareerSearch');
-  input.value = 'Bruno'; input.dispatchEvent(new game.window.Event('input', { bubbles: true }));
+  /* a man in your own squad, so the readiness panel has something to say */
+  const wanted = game.eval("surname(G.clubs[G.my].players.slice().sort((a,b)=>b.ovr-a.ovr)[0].name)");
+  input.value = wanted; input.dispatchEvent(new game.window.Event('input', { bubbles: true }));
   const result = game.document.querySelector('[data-action="careerResult"][data-kind="player"]');
   assert.ok(result);
-  assert.match(result.textContent, /Bruno/);
+  assert.ok(result.textContent.includes(wanted));
   result.click();
-  assert.match(game.document.getElementById('sheetBody').textContent, /Bruno/);
+  assert.ok(game.document.getElementById('sheetBody').textContent.includes(wanted));
   assert.ok(game.document.getElementById('rbsPlayerReadiness'));
   assert.equal(game.document.querySelector('.rbs-compare-open').parentElement.id, 'sheetBody',
     'the comparison button must not squeeze the portrait identity row');
