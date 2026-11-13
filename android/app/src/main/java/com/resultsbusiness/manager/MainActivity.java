@@ -658,8 +658,11 @@ public final class MainActivity extends Activity {
                 });
     }
 
+    /* Android 12 and earlier still come in this way; 13 and later use the
+       callback registered in onCreate, so nothing is lost by the override. */
     @Override
     @SuppressWarnings("deprecation")
+    @SuppressLint("GestureBackNavigation")
     public void onBackPressed() {
         handleBack();
     }
