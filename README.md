@@ -2,6 +2,25 @@
 
 The Results Business is a mobile-first football management career covering 484 clubs across twenty countries. Every club, player, manager, competition, ground and sponsor in it is invented — nothing is licensed and nothing is taken from a real roster or fixture list — so the game can be published on app stores. Manchester Reds are the featured career, but every playable club uses the same full management systems.
 
+**Found your own club — the heart of the game.** *New career → Build a club*: name it, design the badge
+and shirt, choose a ground, then pick **any of the twenty countries** — you start at the very bottom of
+that country's pyramid (five divisions to climb in England, two in Spain, Italy, Germany and France; in the
+single-division countries the climb is Europe). Money is scaled to the league you join. You start with an
+academy and no senior squad; if you reach the first game without one, the staff sign enough free agents to
+fulfil it.
+
+**Choose your job.** For a club you found: *Owner-manager* (everything is yours) or *Chairman* (you run the
+club and sign the players; your manager picks the side, trains and faces the press). For an existing club
+you can also be the classic *Manager*, or a *Head coach* with a director of football who does the recruiting
+— tell him which position you need on the Transfers screen.
+
+**Run the club from the Director's Office** (owners and chairmen, on Home and Club → Finances): set ticket
+prices (dearer seats earn more per head, fewer people come and the supporters notice), borrow from the bank
+(weekly repayments over 3, 5 or 10 years; what you can borrow grows each season your club survives), put
+your own money in, decide how much cash goes into the transfer budget, and set the wage ceiling. Owners
+cannot be sacked — but six weeks beyond the overdraft puts the club into administration: twelve points off,
+a transfer embargo until the summer, and half the debt written off.
+
 **Make it yours.** *Club → Save → Names* opens the name editor: rename any club, ground or player, and export or import your names as a pack. A rename changes what something is called and nothing else — a player keeps his face, his ability and his contract — and your pack is applied to every new career on the device.
 
 **The manager's legacy.** *Club → Trophies* keeps a running record of every league game you have managed and twenty-one career milestones, from a first win to taking a club all the way up. It only records what has happened; it never gives a bonus or changes a result.
@@ -126,6 +145,8 @@ GitHub Actions runs the same checks on every pull request.
 - `index.html` — the legacy game core and UI.
 - `src/career-store.js` — validated, checksummed IndexedDB career storage.
 - `src/simulation-model.js` — shared scoring probabilities and balance targets.
+- `src/founder.js` — found a club in any country; the four jobs; the director of football.
+- `src/directors-office.js` — tickets, borrowing, owner money, budgets and administration.
 - `src/name-editor.js` — rename clubs, grounds and players; name packs.
 - `src/legacy.js` — the career record and milestones.
 - `src/original-trophies.js` — the silverware, designed for this game.

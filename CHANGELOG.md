@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+### Build your own club, anywhere, and run it — 13 November 2026
+
+- **Found a club in any of the twenty countries**, at the bottom of its pyramid. Reputation starts below
+  the smallest club in the league and the backer's money is measured against that league's own clubs
+  (sensible ≈ the richest rival, generous ≈ twice, tight ≈ the median); the fifth-tier English figures are
+  unchanged. The welcome mail and the backer cards speak in the chosen league's terms.
+- **Four jobs.** Owner-manager and Chairman for a founded club; Manager and Head coach as well for an
+  existing one. Owners cannot be sacked (the backers withdraw money instead) and their contract never runs
+  out; a Chairman's manager runs selection, training and the press through the existing delegation; a
+  Head coach cannot bid — a director of football signs the weakest position, or the one asked for, inside
+  the budget and the wage ceiling while the window is open.
+- **The Director's Office** (`src/directors-office.js`): ticket pricing with an elasticity that depends on
+  how big the club is and how the supporters feel, applied to the real gate each home game; bank loans
+  with weekly annuity repayments and early repayment, dearest first; owner investment; releasing cash
+  into the transfer budget; the wage ceiling; and administration after six weeks beyond the overdraft.
+  The deduction is a rule about the books — it does not know where the club is in the table.
+- **Fixed: a founded club with no squad reached matchday and could not get past it.** The staff now sign
+  the cheapest free agents on one-year deals to fulfil the fixture, and say so.
+- **Fixed: sponsorship for any club outside England was priced as a Premier Division club** — a new
+  Spanish second-tier side was offered a £64M shirt deal. It now uses the rule rival clubs in those
+  leagues were already priced by.
+- `npm run play -- --found ESP --role chairman` founds and plays a club; `--role coach` takes a job as head
+  coach. All four jobs were played through the buttons with no errors or dead ends.
+
 ### 2.0 — an invented world, ready for app stores — 13 November 2026
 
 **Nothing in the game belongs to somebody else any more.**

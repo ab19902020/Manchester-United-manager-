@@ -401,6 +401,42 @@
     return p;
   }
 
+  /* A NEW CLUB THAT REACHES MATCHDAY WITHOUT A SQUAD. A club that has
+     signed nobody by the eve of its first game used to arrive at it with
+     two academy boys and the referee refusing to start -- and nothing on
+     the screen could get past him, because the only fix was a squad that
+     did not exist. A real club in that position fulfils the fixture with
+     whoever will sign: the staff take the cheapest free agents on the
+     list until there are sixteen senior players, two of them keepers, and
+     say so. Nobody good is on that list for nothing, so it is a fixture
+     fulfilled, not a squad built. */
+  function fulfilFixture() {
+    if (!(G.cc && G.cc.on) || typeof window.ccAgents !== 'function') return 0;
+    const my = G.clubs[G.my];
+    const next = typeof window.nextUserFixture === 'function' ? window.nextUserFixture() : null;
+    if (!next || next.day - G.day > 1) return 0;
+    const seniors = () => my.players.filter((p) => !p.loan && !p.youth);
+    if (seniors().length >= 16) return 0;
+    const list = window.ccAgents().slice().sort((a, b) => a.ask - b.ask);
+    const signed = [];
+    const take = (a) => {
+      const p = a.p;
+      p.club = G.my; p.wage = a.ask; p.contract = 1; p.listed = false; delete p.askWage;
+      my.players.push(p); signed.push(p);
+    };
+    const keepers = () => seniors().filter((p) => p.pos === 'GK').length;
+    list.filter((a) => a.p.pos === 'GK').slice(0, Math.max(0, 2 - keepers())).forEach(take);
+    list.filter((a) => a.p.club === -1).forEach((a) => { if (seniors().length < 16) take(a); });
+    if (!signed.length) return 0;
+    try { G.tacs.xi = window.autoPick(G.my, G.tacs.formation); } catch (e) { /* picked on the day */ }
+    mail('board', '\uD83D\uDCCB The staff signed ' + signed.length + ' players to fulfil the fixture',
+      'The club was going to its first game without a team, so the staff did what a club in that position does: they rang round '
+      + 'and signed the cheapest free agents who would come, on one-year deals, until there were enough to start a match. '
+      + '<br><br>' + signed.map((p) => esc(p.name) + ' (' + p.pos + ', ' + p.ovr + ')').join(', ')
+      + '<br><br>It is a team in the sense that there are eleven of them. Building a squad is still your job.');
+    return signed.length;
+  }
+
   let lastWeek = null;
   if (typeof window.dailyTickCore === 'function') {
     const previous = window.dailyTickCore;
@@ -412,6 +448,7 @@
           if (isOwner() && typeof myDeal === 'function') { const d = myDeal(); if (d && d.left < 3) d.left = 3; }
           const wk = Math.floor(G.day / 7);
           if (wk !== lastWeek) { lastWeek = wk; dofTick(); }
+          fulfilFixture();
         }
       } catch (e) { /* the day still passes */ }
       return r;
@@ -473,7 +510,7 @@
     }
   }
 
-  window.RBSFounder = Object.freeze({ countries, ROLES, role, isOwner, setUpRole, dofTick, state, annualRevenue });
+  window.RBSFounder = Object.freeze({ countries, ROLES, role, isOwner, setUpRole, dofTick, fulfilFixture, state, annualRevenue });
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', install);
   else install();
 })();

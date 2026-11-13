@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/* global window, document, getComputedStyle, G, MU, UI, ACTIONS, ROSTER */
+/* global window, document, getComputedStyle, G, MU, UI, ACTIONS, ROSTER, LEAGUES */
 
 /* PLAY A CAREER THROUGH THE REAL INTERFACE, AND REPORT EVERY DEAD END.
  *
@@ -226,7 +226,26 @@ async function main() {
     }
     await page.waitForTimeout(200);
   }
-  if (await page.$('[data-action="startGame"]')) await page.click('[data-action="startGame"]');
+  /* --role <owner|chairman|manager|coach> picks the job; --found <CC> founds
+     a club at the bottom of that country's pyramid instead of taking one */
+  const role = arg('role', '');
+  const found = arg('found', '');
+  if (found) {
+    await page.click('[data-action="ccMode"][data-v="make"]');
+    await page.waitForTimeout(200);
+    await page.click('[data-action="fdCountry"][data-v="' + found + '"]');
+    if (role) await page.click('[data-action="fdFoundRole"][data-v="' + role + '"]');
+    await page.fill('#ccName', 'Autoplay Athletic');
+    await page.waitForTimeout(150);
+    await page.click('[data-action="ccGo"]');
+  } else {
+    if (role) {
+      await page.evaluate(() => { const d = document.getElementById('fdJobRoles'); if (d) d.open = true; });
+      await page.click('[data-action="fdJobRole"][data-v="' + role + '"]');
+      await page.waitForTimeout(150);
+    }
+    if (await page.$('[data-action="startGame"]')) await page.click('[data-action="startGame"]');
+  }
   await page.waitForTimeout(300);
   await page.fill('#mgrName', 'Auto Player');
   await page.click('[data-action="mgrDone"]');
@@ -235,7 +254,8 @@ async function main() {
 
   const startDay = await page.evaluate(() => G.day);
   const clubName = await page.evaluate(() => G.clubs[G.my].name);
-  console.log(`Playing ${clubName} from day ${startDay} for ${days} days (${liveLeft} live matches)`);
+  const job = await page.evaluate(() => (G.role || 'manager') + ' in the ' + ((typeof LEAGUES !== 'undefined' && LEAGUES[G.clubs[G.my].league]) || {}).name);
+  console.log(`Playing ${clubName} (${job}) from day ${startDay} for ${days} days (${liveLeft} live matches)`);
 
   const counts = {};
   const stuck = [];

@@ -176,3 +176,30 @@ test('the office: loans are repaid weekly, tickets trade crowd for price, and in
   assert.equal(run.ptsAgain, run.ptsAfter, 'the deduction was applied twice');
   assert.equal(run.lend, false, 'a bank lent to a club in administration');
 });
+
+test('a new club that reaches matchday without a squad still fulfils the fixture', async (t) => {
+  const game = await createGame();
+  t.after(() => game.close());
+  found(game, 'ENG', 'owner');
+
+  const run = game.eval(`(function () {
+    const c = G.clubs[G.my];
+    const next = nextUserFixture();
+    const early = window.RBSFounder.fulfilFixture();
+    G.day = next.day - 1;
+    const signed = window.RBSFounder.fulfilFixture();
+    const seniors = c.players.filter((p) => !p.loan && !p.youth);
+    const again = window.RBSFounder.fulfilFixture();
+    return { early, signed, seniors: seniors.length, keepers: seniors.filter((p) => p.pos === 'GK').length,
+      oneYear: seniors.every((p) => p.contract === 1), xi: (G.tacs.xi || []).filter(Boolean).length, again,
+      told: G.inbox.some((m) => /to fulfil the fixture/.test(m.title)) };
+  })()`);
+  assert.equal(run.early, 0, 'the staff stepped in weeks before the game');
+  assert.ok(run.signed >= 14, `only ${run.signed} were signed`);
+  assert.ok(run.seniors >= 16);
+  assert.ok(run.keepers >= 2, 'no goalkeepers');
+  assert.equal(run.oneYear, true, 'emergency signings should be on one-year deals');
+  assert.equal(run.xi, 11, 'no eleven was named');
+  assert.equal(run.again, 0, 'they kept signing once there was a squad');
+  assert.equal(run.told, true, 'the owner was not told');
+});
