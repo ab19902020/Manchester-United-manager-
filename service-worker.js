@@ -71,6 +71,7 @@ const CORE_ASSETS = [
   './src/original-trophies.js',
   './src/name-editor.js',
   './src/visual-refresh.js',
+  './src/legacy.js',
   './src/crazygames.js',
   './src/android-shell.js',
   './vendor/three.min.js',
