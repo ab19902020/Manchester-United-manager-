@@ -15,7 +15,7 @@
  *
  *   node scripts/probe-dugout-flake.cjs
  */
-const { createGame, startCareer } = require('/home/user/Manchester-the Reds-manager-/tests/game-harness.cjs');
+const { createGame, startCareer } = require('/home/user/Manchester-United-manager-/tests/game-harness.cjs');
 (async () => {
   let fails = 0;
   for (let run = 1; run <= 14; run += 1) {

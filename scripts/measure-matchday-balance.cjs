@@ -17,7 +17,7 @@
  * does to goals for and against. */
 const { chromium } = require('/opt/node22/lib/node_modules/playwright');
 const http=require('http'),fs=require('fs'),path=require('path');
-const ROOT='/home/user/Manchester-the Reds-manager-';
+const ROOT='/home/user/Manchester-United-manager-';
 const T={'.html':'text/html','.js':'text/javascript','.svg':'image/svg+xml','.png':'image/png'};
 const srv=http.createServer((q,r)=>{let f=decodeURIComponent(q.url.split('?')[0]);
  if(f==='/')f='/index.html';const p=path.join(ROOT,f);
