@@ -21,6 +21,16 @@ your own money in, decide how much cash goes into the transfer budget, and set t
 cannot be sacked — but six weeks beyond the overdraft puts the club into administration: twelve points off,
 a transfer embargo until the summer, and half the debt written off.
 
+**When it is your club, the board is your investors.** Owners and chairmen are not employees: the board's
+meetings and letters come from the investors who put money in beside you. They still hold you to the target,
+but they cannot sack you — if they lose faith they take money back out of the transfer budget. A chairman's
+matches play themselves (you see the full-time report); choose *Watch from the box* in the office to watch
+them instead, and the assistant takes every press conference.
+
+**Old saves.** A career started before 2.0 is brought into the invented world when it loads: clubs and
+grounds take their new names, every player gets an invented name, and the record (seasons, honours, cups,
+fixtures) is rewritten to match. Abilities, contracts and results are untouched; the old inbox is cleared.
+
 **Make it yours.** *Club → Save → Names* opens the name editor: rename any club, ground or player, and export or import your names as a pack. A rename changes what something is called and nothing else — a player keeps his face, his ability and his contract — and your pack is applied to every new career on the device.
 
 **The manager's legacy.** *Club → Trophies* keeps a running record of every league game you have managed and twenty-one career milestones, from a first win to taking a club all the way up. It only records what has happened; it never gives a bonus or changes a result.
@@ -147,6 +157,8 @@ GitHub Actions runs the same checks on every pull request.
 - `src/simulation-model.js` — shared scoring probabilities and balance targets.
 - `src/founder.js` — found a club in any country; the four jobs; the director of football.
 - `src/directors-office.js` — tickets, borrowing, owner money, budgets and administration.
+- `src/owner-polish.js` — the investors, and a chairman's matchday.
+- `src/save-migration.js` — brings a pre-2.0 save into the invented world.
 - `src/name-editor.js` — rename clubs, grounds and players; name packs.
 - `src/legacy.js` — the career record and milestones.
 - `src/original-trophies.js` — the silverware, designed for this game.

@@ -91,6 +91,8 @@ function gameHtml() {
     'src/legacy.js',
     'src/founder.js',
     'src/directors-office.js',
+    'src/owner-polish.js',
+    'src/save-migration.js',
     'src/crazygames.js',
     'src/android-shell.js',
   ]) {

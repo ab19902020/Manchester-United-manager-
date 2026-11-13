@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+### Owners are owners, chairmen delegate, and old saves come across — 13 November 2026
+
+- **The board becomes your investors** for an owner-manager or chairman: board letters and the board room
+  speak in their voice and the room says plainly that they cannot sack you. Only words change; the board's
+  scoring and targets are untouched.
+- **A chairman's matches play themselves** through the existing instant simulation, from either road to
+  the ground (the pre-match screen or the dressing room), and land on the full-time report. *Watch from the
+  box* in the office turns it off.
+- **Fixed: delegating the press did not cover press conferences.** The pre- and post-match conferences go
+  straight into the inbox and never through `mail`, so the assistant only ever took the invitation letters.
+  He now takes the conferences too — for anyone who hands him the press, not just a chairman. A chairman
+  career played through the buttons went from 36 press answers to none.
+- **Old saves are migrated on load** (`src/save-migration.js`): clubs and grounds by key, players named
+  from the pools by id, roster-feed provenance stripped, the record rewritten, the chatter cleared. Old
+  competition and broadcaster names are recognised by hash, so the shipped code never contains them.
+  Checked against a real 2026/27 save made with the original build: none of the 267 blocked terms survive,
+  and the career plays on.
+
 ### Build your own club, anywhere, and run it — 13 November 2026
 
 - **Found a club in any of the twenty countries**, at the bottom of its pyramid. Reputation starts below

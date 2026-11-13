@@ -198,6 +198,37 @@
     };
   }
 
+  /* THE CONFERENCES THAT DO NOT COME BY LETTER. The pre-match and
+     post-match conferences are written straight into the inbox and into
+     `G.pressCtx`, never through `mail`, so the hook above never saw them
+     and a manager who had handed the press to his assistant still sat
+     through every one. Whenever one is opened and the job is delegated,
+     the assistant takes it -- the same outcome as pressing "Send your
+     assistant", without the grumble, because it is an arrangement rather
+     than a no-show. */
+  function takeConference() {
+    if (!on('press') || !G || !G.pressCtx || G.pressCtx.entered) return false;
+    const letter = (G.inbox || []).find((m) => m && Array.isArray(m.actions)
+      && m.actions.some((a) => a && a.act === 'pressSkip'));
+    G.pressCtx = null;
+    if (letter) {
+      letter.actions = null; letter.must = false;
+      if (!letter.read) { letter.read = true; G.unread = Math.max(0, (G.unread || 0) - 1); }
+      letter.body += '<br><br><span class="xs" style="color:var(--gold)">\u2713 '
+        + esc(((assistant() || {}).name) || 'Your assistant') + ' took the conference.</span>';
+    }
+    return true;
+  }
+  ['maybeMedia', 'maybePreMedia'].forEach((name) => {
+    if (typeof window[name] !== 'function') return;
+    const previous = window[name];
+    window[name] = function conferenceDelegated() {
+      const result = previous.apply(this, arguments);
+      try { takeConference(); } catch (error) { /* the room waits for him */ }
+      return result;
+    };
+  });
+
   /* -------------------------------------------------------------------
      3. HE SETS THE WEEK
      -------------------------------------------------------------------

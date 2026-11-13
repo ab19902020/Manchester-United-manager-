@@ -373,12 +373,12 @@
     if (!result.ok) { toast(result.why, 2600); return; }
     if (good) toast(good, 2400);
     try { render(); } catch (e) { /* redrawn later */ }
-    sheet();
+    ACTIONS.directorsOffice();
   }
 
   ACTIONS.directorsOffice = sheet;
   ACTIONS.doTicket = (el) => { office().ticket = +el.dataset.v; after({ ok: true }, 'Ticket prices set'); };
-  ACTIONS.doTerm = (el) => { office().term = +el.dataset.v; sheet(); };
+  ACTIONS.doTerm = (el) => { office().term = +el.dataset.v; ACTIONS.directorsOffice(); };
   ACTIONS.doBorrow = (el) => { const r = borrow(+el.dataset.v, office().term || 5, true); after(r, r.ok ? 'Borrowed ' + fmtM(+el.dataset.v) + ' — ' + fmtW(r.weekly) + ' to repay' : ''); };
   ACTIONS.doRepay = (el) => { const r = repay(+el.dataset.v); after(r, r.ok ? 'Repaid ' + fmtM(r.amount) : ''); };
   ACTIONS.doInvest = (el) => { const r = invest(+el.dataset.v, true); after(r, r.ok ? fmtM(r.amount) + ' of your own money is in the club' : ''); };

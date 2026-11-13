@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'results-business:' + encodeURIComponent(self.registration.scope) + ':';
-const CACHE_NAME = CACHE_PREFIX + 'v62';
+const CACHE_NAME = CACHE_PREFIX + 'v63';
 const CORE_ASSETS = [
   './',
   './index.html',
@@ -74,6 +74,8 @@ const CORE_ASSETS = [
   './src/legacy.js',
   './src/founder.js',
   './src/directors-office.js',
+  './src/owner-polish.js',
+  './src/save-migration.js',
   './src/crazygames.js',
   './src/android-shell.js',
   './vendor/three.min.js',
