@@ -29,7 +29,7 @@ function workerHarness() {
       addEventListener: (event, fn) => { listeners[event] = fn; },
       skipWaiting: () => Promise.resolve(), clients: { claim: () => Promise.resolve() } },
     caches: {
-      keys: async () => ['other-game-v9', prefix + 'v59', prefix + 'v60', 'results-business:other-scope:v59'],
+      keys: async () => ['other-game-v9', prefix + 'v60', prefix + 'v61', 'results-business:other-scope:v60'],
       delete: async (key) => { deleted.push(key); },
       open: async () => ({
         match: async (key) => entries.get(key),
@@ -53,7 +53,7 @@ test('offline activation leaves other games and other installs alone', async () 
   let done;
   worker.listeners.activate({waitUntil: (promise) => { done = promise; }});
   await done;
-  assert.deepEqual(worker.deleted, [worker.prefix + 'v59']);
+  assert.deepEqual(worker.deleted, [worker.prefix + 'v60']);
 });
 
 test('offline HTML and scripts come from the same installed build', async () => {

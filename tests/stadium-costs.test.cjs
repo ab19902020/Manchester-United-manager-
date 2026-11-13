@@ -29,10 +29,13 @@ const AS_CLUB = `(function (league) {
   const api = window.RBSStadiumCosts;
   const clubs = G.clubs.filter((c) => c.league === league);
   if (!clubs.length) return null;
-  const reps = clubs.map((c) => c.rep || 0).sort((a, b) => a - b);
-  const median = reps[Math.floor(reps.length / 2)];
+  /* the typical club of the division: nearest the median bank, because the
+     question is what a club can AFFORD, and banks spread more than
+     reputations do in a generated world */
+  const banks = clubs.map((c) => c.bank || 0).sort((a, b) => a - b);
+  const median = banks[Math.floor(banks.length / 2)];
   const club = clubs.slice().sort((a, b) =>
-    Math.abs((a.rep || 0) - median) - Math.abs((b.rep || 0) - median))[0];
+    Math.abs((a.bank || 0) - median) - Math.abs((b.bank || 0) - median))[0];
   const was = G.my;
   G.my = G.clubs.indexOf(club);
   const prices = api.priceFor(club);
