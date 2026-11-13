@@ -235,17 +235,6 @@
            generous one has about twice that, and a tight one has the
            median. A founder has to buy a whole squad, so even the tight
            route is not poor -- it is ordinary. */
-        if (league !== 'NL' && others.length) {
-          const pick = (k) => others.map((x) => x[k] || 0).sort((a, b) => a - b);
-          const med = (k) => { const v = pick(k); return v[v.length >> 1]; };
-          const top = (k) => { const v = pick(k); return v[v.length - 1]; };
-          const chair = (G.cc && G.cc.chair) || 'sen';
-          const m = { gen: [2.0, 1.3, 1.3], sen: [1.1, 0.9, 1.0], tig: [1.0, 0.5, 1.1] }[chair] || [1.1, 0.9, 1.0];
-          c.budget = Math.round(top('budget') * m[0]);
-          c.bank = Math.round(med('bank') * m[1]);
-          c.wageCap = Math.round((chair === 'tig' ? med('wageCap') : top('wageCap')) * m[2] / 500) * 500;
-          G.cc.scale = +(c.budget / 3.2e6).toFixed(2);
-        }
         G.cc.country = c.cc || state.cc;
         G.cc.league = league;
         const name = L.name || league;
@@ -253,14 +242,44 @@
           ['title', 'body'].forEach((k) => {
             if (typeof m[k] === 'string') m[k] = m[k].split('National Division').join(name);
           });
-          if (typeof m.body === 'string' && G.cc.scale) {
-            m.body = m.body.replace(/<b>[^<]*<\/b> to spend, a wage ceiling of <b>[^<]*<\/b>/,
-              '<b>' + fmtM(c.budget) + '</b> to spend, a wage ceiling of <b>' + fmtW(c.wageCap) + '</b>');
-          }
         });
       } catch (e) { /* the club is placed either way */ }
       return ok;
     };
+  }
+
+  /* The backer's money, measured against the clubs in the league the club
+     actually joins -- after the world is finished, because the economy
+     rescales every club's budget late in the build and a figure read
+     before that is measured against numbers that are about to change.
+     The fifth-tier English figures were set by hand for that division and
+     stay as they are; anywhere else a sensible backer matches the richest
+     club in the division, a generous one has about twice that, and a
+     tight one has the median. A founder has to buy a whole squad, so even
+     the tight route is not poor -- it is ordinary. */
+  function scaleBacking() {
+    if (!(G.cc && G.cc.on) || G.cc.scaled) return;
+    const c = G.clubs[G.my];
+    G.cc.scaled = 1;
+    if (c.league === 'NL') return;
+    const others = (divMembers(c.league) || []).map((i) => G.clubs[i]).filter((x) => x && x !== c);
+    if (!others.length) return;
+    const pick = (k) => others.map((x) => x[k] || 0).sort((a, b) => a - b);
+    const med = (k) => { const v = pick(k); return v[v.length >> 1]; };
+    const top = (k) => { const v = pick(k); return v[v.length - 1]; };
+    const chair = (G.cc && G.cc.chair) || 'sen';
+    const m = { gen: [2.0, 1.3, 1.3], sen: [1.0, 0.9, 1.0], tig: [1.0, 0.5, 1.1] }[chair] || [1.0, 0.9, 1.0];
+    c.budget = Math.round((chair === 'tig' ? med('budget') : top('budget')) * m[0]);
+    c.bank = Math.round(med('bank') * m[1]);
+    c.wageCap = Math.round((chair === 'tig' ? med('wageCap') : top('wageCap')) * m[2] / 500) * 500;
+    G.cc.scale = +(c.budget / 3.2e6).toFixed(2);
+    (G.inbox || []).forEach((mm) => {
+      if (typeof mm.body === 'string') {
+        mm.body = mm.body.replace(/<b>[^<]*<\/b> to spend, a wage ceiling of <b>[^<]*<\/b>/,
+          '<b>' + fmtM(c.budget) + '</b> to spend, a wage ceiling of <b>' + fmtW(c.wageCap) + '</b>');
+      }
+    });
+    if (G.owner && G.role && (G.role === 'owner' || G.role === 'chairman')) G.owner.wealth = Math.max(c.bank, 250000);
   }
 
   /* ---- 3. the job ----------------------------------------------------- */
@@ -318,6 +337,7 @@
         /* the roster preview builds a throwaway world; it has no job */
         if (G && G.clubs && G.clubs[G.my] && !G._rosterBuild) {
           const founded = !!(G.cc && G.cc.on);
+          scaleBacking();
           setUpRole(founded ? state.foundRole : (founding ? state.foundRole : state.jobRole), founded);
         }
       } catch (e) { /* the career still starts */ }
@@ -478,7 +498,8 @@
     if (!view || view.querySelector('#fdDof')) return;
     const want = (G.dof && G.dof.want) || '';
     const chip = (v, t) => '<button class="chip' + (want === v ? ' on' : '') + '" data-action="dofWant" data-v="' + v + '">' + t + '</button>';
-    view.insertAdjacentHTML('afterbegin', '<div class="card fd-dof" id="fdDof"><span class="rbs-eyebrow">Director of football</span>'
+    const tools = view.querySelector('#rbsPageTools');
+    (tools || view).insertAdjacentHTML(tools ? 'afterend' : 'afterbegin', '<div class="card fd-dof" id="fdDof"><span class="rbs-eyebrow">Director of football</span>'
       + '<h4>Recruitment is his job</h4><p>He signs players while the window is open, inside the budget of <b>'
       + fmtM(G.clubs[G.my].budget) + '</b>. ' + (windowOpen() ? 'The window is open.' : 'The window is shut.')
       + ' Signed so far: <b>' + ((G.dof && G.dof.signed) || 0) + '</b>.</p><div class="cc-chips">'

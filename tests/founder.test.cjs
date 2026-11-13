@@ -43,8 +43,8 @@ test('a founded club starts at the bottom of the country you choose, on that lea
     assert.equal(r.league, r.bottom, `${cc}: placed in ${r.league}, not the bottom division ${r.bottom}`);
     assert.equal(r.cc, cc);
     assert.ok(r.rep < r.minRep, `${cc}: a new club should be the smallest in its league (${r.rep} vs ${r.minRep})`);
-    assert.ok(r.budget <= r.topBudget * 1.4, `${cc}: a sensible backer gave ${r.budget}, the richest rival has ${r.topBudget}`);
-    assert.ok(r.budget >= r.topBudget * 0.5, `${cc}: the budget ${r.budget} is not in this league's terms`);
+    assert.ok(r.budget <= r.topBudget * 1.1, `${cc}: a sensible backer gave ${r.budget}, the richest rival has ${r.topBudget}`);
+    assert.ok(r.budget >= r.topBudget * 0.9, `${cc}: the budget ${r.budget} is not in this league's terms`);
     assert.equal(r.players, 0, 'a new club starts with no senior squad');
     assert.ok(r.youth >= 10, 'but with an academy');
     assert.equal(r.english, false, `${cc}: the welcome still talks about the English fifth tier`);
