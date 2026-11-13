@@ -45,7 +45,7 @@
  * ninety minutes of football takes half an hour of wall clock and
  * checking a dozen of them is not possible any other way.
  */
-const CHROME = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
+const CHROME = '/opt/pw-browsers/chromium';
 const { chromium } = require('/opt/node22/lib/node_modules/playwright');
 const path = require('path');
 

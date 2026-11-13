@@ -26,7 +26,7 @@
  * guess.
  */
 
-const CHROME = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
+const CHROME = '/opt/pw-browsers/chromium';
 const PLAYWRIGHT = '/opt/node22/lib/node_modules/playwright';
 
 const fs = require('fs');

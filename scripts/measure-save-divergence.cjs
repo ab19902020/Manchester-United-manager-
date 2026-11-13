@@ -33,7 +33,7 @@
  * Nothing is approximated: every byte reported is a gzipped buffer.
  */
 
-const CHROME = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
+const CHROME = '/opt/pw-browsers/chromium';
 const { chromium } = require('/opt/node22/lib/node_modules/playwright');
 
 const SEASONS = Number(process.argv[2] || 1);

@@ -23,7 +23,7 @@ const srv = http.createServer((q, r) => { let f = decodeURIComponent(q.url.split
   fs.createReadStream(p).pipe(r); });
 srv.listen(0, async () => {
   const port = srv.address().port;
-  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
+  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium',
     args: ['--no-sandbox','--mute-audio','--use-gl=swiftshader','--enable-unsafe-swiftshader'] });
   const gp = await b.newPage({ viewport: { width: 390, height: 844 } });
   await gp.goto('http://127.0.0.1:' + port + '/index.html');

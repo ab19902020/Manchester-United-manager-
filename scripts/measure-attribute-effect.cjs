@@ -27,7 +27,7 @@ const N = +(process.argv[2] || 24);
 const ONLY = (process.argv[3] || '').split(',').filter(Boolean);
 srv.listen(0, async () => {
   const port = srv.address().port;
-  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
+  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium',
     args: ['--no-sandbox','--mute-audio','--use-gl=swiftshader','--enable-unsafe-swiftshader'] });
   const p = await b.newPage({ viewport: { width: 844, height: 390 } });
   await p.goto('http://127.0.0.1:' + port + '/index.html');

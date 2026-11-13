@@ -29,7 +29,7 @@ const N = +(process.argv[2]||10);
 const HALF = +(process.argv[3]||150);
 srv.listen(0, async()=>{
  const port=srv.address().port;
- const b=await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
+ const b=await chromium.launch({executablePath:'/opt/pw-browsers/chromium',
   args:['--no-sandbox','--mute-audio','--use-gl=swiftshader','--enable-unsafe-swiftshader']});
 
  /* real squads from a real save */

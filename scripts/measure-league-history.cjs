@@ -18,7 +18,7 @@
  * up a goal a season. That is not visible from one match and it is
  * obvious from one table.
  */
-const CHROME = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
+const CHROME = '/opt/pw-browsers/chromium';
 const { chromium } = require('/opt/node22/lib/node_modules/playwright');
 const fs = require('fs'), path = require('path');
 

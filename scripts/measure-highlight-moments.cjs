@@ -31,7 +31,7 @@ const { chromium } = require('/opt/node22/lib/node_modules/playwright');
 const path = require('path');
 const N = +(process.argv[2] || 8);
 (async () => {
-  const b = await chromium.launch({ executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
+  const b = await chromium.launch({ executablePath:'/opt/pw-browsers/chromium',
     args:['--no-sandbox','--mute-audio','--use-gl=swiftshader','--enable-unsafe-swiftshader','--ignore-gpu-blocklist'] });
   const p = await b.newPage({ viewport:{width:640,height:300} });
   const errs=[]; p.on('pageerror',e=>errs.push(String(e).slice(0,200)));

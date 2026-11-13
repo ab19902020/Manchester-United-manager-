@@ -40,7 +40,7 @@
  * averaged about 70 over the last decade and the survival line, 18th
  * plus one, about 36.
  */
-const CHROME = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
+const CHROME = '/opt/pw-browsers/chromium';
 const { chromium } = require('/opt/node22/lib/node_modules/playwright');
 const path = require('path');
 

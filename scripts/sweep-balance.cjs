@@ -37,7 +37,7 @@
  * carried, and that wrong reference is why the bottom of this game's
  * table was once reported as too weak when it was already right.
  */
-const CHROME = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
+const CHROME = '/opt/pw-browsers/chromium';
 const { chromium } = require('/opt/node22/lib/node_modules/playwright');
 const path = require('path');
 

@@ -18,7 +18,7 @@
  * Nothing here knows who is playing or who is winning. It plays a fixed
  * pair of mid-table sides off a seeded stream and counts.
  */
-const CHROME = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
+const CHROME = '/opt/pw-browsers/chromium';
 const { chromium } = require('/opt/node22/lib/node_modules/playwright');
 const path = require('path');
 

@@ -2,7 +2,7 @@
 /* global document, newGame, G */
 
 /* What the save is actually made of, field by field. */
-const CHROME='/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
+const CHROME='/opt/pw-browsers/chromium';
 const {chromium}=require('/opt/node22/lib/node_modules/playwright');
 (async()=>{
  const b=await chromium.launch({executablePath:CHROME,args:['--no-sandbox','--mute-audio']});

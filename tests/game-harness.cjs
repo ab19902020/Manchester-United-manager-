@@ -87,6 +87,7 @@ function gameHtml() {
     'src/decision-dock.js',
     'src/original-trophies.js',
     'src/name-editor.js',
+    'src/visual-refresh.js',
     'src/crazygames.js',
     'src/android-shell.js',
   ]) {

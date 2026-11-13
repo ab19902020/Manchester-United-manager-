@@ -26,7 +26,7 @@
  *   SMALL       a control whose hit area is under 40x40. What makes an
  *               interface feel imprecise rather than ugly.
  */
-const CHROME = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
+const CHROME = '/opt/pw-browsers/chromium';
 const { chromium } = require('/opt/node22/lib/node_modules/playwright');
 const path = require('path');
 

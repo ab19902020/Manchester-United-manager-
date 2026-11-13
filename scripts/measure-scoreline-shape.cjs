@@ -32,7 +32,7 @@
  *     the one number that says how over-dispersed the thing is: Poisson
  *     has variance equal to mean, so anything above 1.0 is the fault
  */
-const CHROME = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
+const CHROME = '/opt/pw-browsers/chromium';
 const { chromium } = require('/opt/node22/lib/node_modules/playwright');
 const path = require('path');
 

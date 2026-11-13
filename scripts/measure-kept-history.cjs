@@ -4,7 +4,7 @@
 
 /* Does the world still remember after a save and a reload, and what does
  * remembering cost? Both measured through the game's own controller. */
-const CHROME = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
+const CHROME = '/opt/pw-browsers/chromium';
 const { chromium } = require('/opt/node22/lib/node_modules/playwright');
 
 (async () => {

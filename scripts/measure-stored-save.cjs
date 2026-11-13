@@ -10,7 +10,7 @@
  * asks a different question: press Save in the game and see what lands
  * in storage, because that is what CrazyGames would have to carry.
  */
-const CHROME = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
+const CHROME = '/opt/pw-browsers/chromium';
 const { chromium } = require('/opt/node22/lib/node_modules/playwright');
 
 (async () => {

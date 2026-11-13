@@ -25,7 +25,7 @@
  * A number near zero here is a fault, not a curiosity: it would mean the
  * game is ignoring something it tells the player to care about.
  */
-const CHROME = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
+const CHROME = '/opt/pw-browsers/chromium';
 const { chromium } = require('/opt/node22/lib/node_modules/playwright');
 const path = require('path');
 
