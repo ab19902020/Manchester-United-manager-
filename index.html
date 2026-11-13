@@ -9207,7 +9207,14 @@ function commercialPower(){
  const c=G.clubs[G.my];
  const pos=leaguePos(G.my);
  const n=divMembers(myDiv()).length;
- const divM={PL:1,EU:1,CH:.30,L1:.10,L2:.05,NL:.025}[myDiv()]||1;
+ /* A division with no figure of its own was priced as the Premier
+    Division, so running a Spanish second-tier club came with a £64M shirt
+    deal. Outside England it is now the rule every rival club in that
+    league is already priced by: a top flight by its standing in Europe,
+    a second tier at a twelfth of the top. */
+ let divM={PL:1,EU:1,CH:.30,L1:.10,L2:.05,NL:.025}[myDiv()];
+ if(divM==null){const L=(typeof LEAGUES!=='undefined')&&LEAGUES[myDiv()];
+  divM=L&&L.tier===1?clamp((L.coef||2)/5,.12,1):.08}
  const trophies=(G.history||[]).filter(h=>h.myPos===1).length;
  const euro=(G.clSpots||[]).indexOf(G.my)>=0?1.18:1;
  const posM=1+(n-pos)/n*.35;
@@ -51736,7 +51743,7 @@ ACTIONS.frontNew=()=>{
    const d=document.createElement('div');
    d.innerHTML=brandLock(true)+
     '<div class="xs faint" style="text-align:center;margin-top:9px;line-height:1.6">'+
-    'Take any job in the world, or build a club of your own in the National Division.</div>';
+    'Take any job in the world, or found your own club at the bottom of any country\u2019s pyramid.</div>';
    logo.replaceWith(d)}
   const tag=ss.querySelector('.tag');
   if(tag)tag.remove();
@@ -57510,6 +57517,8 @@ showStart();
 <script src="src/name-editor.js"></script>
 <script src="src/visual-refresh.js"></script>
 <script src="src/legacy.js"></script>
+<script src="src/founder.js"></script>
+<script src="src/directors-office.js"></script>
 <script src="src/crazygames.js"></script>
 <script src="src/android-shell.js"></script>
 </body>

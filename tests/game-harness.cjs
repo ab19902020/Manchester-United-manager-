@@ -89,6 +89,8 @@ function gameHtml() {
     'src/name-editor.js',
     'src/visual-refresh.js',
     'src/legacy.js',
+    'src/founder.js',
+    'src/directors-office.js',
     'src/crazygames.js',
     'src/android-shell.js',
   ]) {
