@@ -23,7 +23,17 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
-      - uses: android-actions/setup-android@v3
+      # The runner already carries the Android SDK. The setup-android action
+      # used to sit here and began failing before a line of ours ran: it asks
+      # sdkmanager for a package ("tools") that no longer exists. All the build
+      # needs is the platform it compiles against, so ask for exactly that.
+      - name: Android SDK platform 36
+        run: |
+          SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          MANAGER="$(ls -d "$SDK"/cmdline-tools/*/bin/sdkmanager | sort -V | tail -1)"
+          yes | "$MANAGER" --licenses > /dev/null || true
+          "$MANAGER" "platforms;android-36" "build-tools;36.0.0" > /dev/null
+          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
       - name: Release signing key (only when the repository has one)
         env:
           RB_KEYSTORE_BASE64: ${{ secrets.RB_KEYSTORE_BASE64 }}
