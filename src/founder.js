@@ -444,8 +444,16 @@
       p.club = G.my; p.wage = a.ask; p.contract = 1; p.listed = false; delete p.askWage;
       my.players.push(p); signed.push(p);
     };
-    const keepers = () => seniors().filter((p) => p.pos === 'GK').length;
-    list.filter((a) => a.p.pos === 'GK').slice(0, Math.max(0, 2 - keepers())).forEach(take);
+    /* sixteen is a shape, not a number: two keepers, six defenders, five
+       midfielders, three forwards. The cheapest sixteen of anything came out
+       as nine midfielders and four defenders, and the first two injuries at
+       the back left a side that could not be picked. */
+    const SHAPE = { GK: 2, D: 6, M: 5, A: 3 };
+    const have = (g) => seniors().filter((p) => POSGROUP(p.pos) === g).length;
+    Object.keys(SHAPE).forEach((g) => {
+      list.filter((a) => a.p.club === -1 && POSGROUP(a.p.pos) === g)
+        .slice(0, Math.max(0, SHAPE[g] - have(g))).forEach(take);
+    });
     list.filter((a) => a.p.club === -1).forEach((a) => { if (seniors().length < 16) take(a); });
     if (!signed.length) return 0;
     try { G.tacs.xi = window.autoPick(G.my, G.tacs.formation); } catch (e) { /* picked on the day */ }

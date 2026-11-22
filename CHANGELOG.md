@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### An audit pass: a new club could get stuck on matchday — 22 November 2026
+
+Found by playing full careers through the real buttons (`scripts/play-career.cjs`) in founded clubs.
+
+- **Fixed: "Team not ready" with a fix button that fixed nothing.** The out-of-position block counted four
+  men in the wrong slot as a reason not to start, even when the auto-pick had just chosen the best eleven the
+  club could field, so the button looped forever and the match could not be played. A side that is already the
+  best available is no longer refused; a badly placed one that could be better still is.
+- **Fixed: the emergency squad had no shape.** A new club reaching its first game signed the cheapest sixteen
+  free agents of any position (nine midfielders, four defenders). It now signs two keepers, six defenders, five
+  midfielders and three forwards, then tops up.
+
 ### Owners are owners, chairmen delegate, and old saves come across — 13 November 2026
 
 - **The board becomes your investors** for an owner-manager or chairman: board letters and the board room

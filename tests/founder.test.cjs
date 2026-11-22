@@ -192,7 +192,8 @@ test('a new club that reaches matchday without a squad still fulfils the fixture
     const again = window.RBSFounder.fulfilFixture();
     return { early, signed, seniors: seniors.length, keepers: seniors.filter((p) => p.pos === 'GK').length,
       oneYear: seniors.every((p) => p.contract === 1), xi: (G.tacs.xi || []).filter(Boolean).length, again,
-      told: G.inbox.some((m) => /to fulfil the fixture/.test(m.title)) };
+      told: G.inbox.some((m) => /to fulfil the fixture/.test(m.title)),
+      shape: seniors.reduce((o, p) => { const g = POSGROUP(p.pos); o[g] = (o[g] || 0) + 1; return o; }, {}) };
   })()`);
   assert.equal(run.early, 0, 'the staff stepped in weeks before the game');
   assert.ok(run.signed >= 14, `only ${run.signed} were signed`);
@@ -201,5 +202,35 @@ test('a new club that reaches matchday without a squad still fulfils the fixture
   assert.equal(run.oneYear, true, 'emergency signings should be on one-year deals');
   assert.equal(run.xi, 11, 'no eleven was named');
   assert.equal(run.again, 0, 'they kept signing once there was a squad');
+  assert.ok(run.shape.D >= 6 && run.shape.M >= 5 && run.shape.A >= 3 && run.shape.GK >= 2,
+    'the emergency squad had no shape: ' + JSON.stringify(run.shape));
   assert.equal(run.told, true, 'the owner was not told');
+});
+
+test('a side that is already the best the club can field is never refused a match', async (t) => {
+  const game = await createGame();
+  t.after(() => game.close());
+  found(game, 'GER', 'owner');
+
+  const run = game.eval(`(function () {
+    const c = G.clubs[G.my];
+    G.day = nextUserFixture().day - 1; window.RBSFounder.fulfilFixture();
+    /* the back line is hurt: no defender can play, so four men are out of position whoever is picked */
+    c.players.filter((p) => POSGROUP(p.pos) === 'D').forEach((p) => { p.injury = { name: 'knock', days: 20 }; });
+    G.tacs.formation = '4-4-2';
+    const hurt = c.players.filter((p) => POSGROUP(p.pos) === 'D' && !p.injury).length;
+    G.tacs.xi = autoPick(G.my, G.tacs.formation);
+    const afterBest = squadIssues().map((i) => i.k);
+    /* a deliberately worse eleven is still refused: the rule has not gone */
+    const shape = FORMATIONS[G.tacs.formation].map((s) => s[0]);
+    const pool = c.players.filter((p) => !p.loan && !p.injury);
+    const worse = shape.map((slot) => pool.find((p) => POSGROUP(p.pos) !== POSGROUP(slot))).map((p) => p && p.id);
+    const used = new Set(); const distinct = worse.every((id) => id != null && !used.has(id) && used.add(id));
+    G.tacs.xi = worse;
+    const afterWorse = squadIssues().map((i) => i.k);
+    return { hurt, afterBest, afterWorse, distinct };
+  })()`);
+  assert.equal(run.hurt, 0, 'the test needs the back line out');
+  assert.ok(!run.afterBest.includes('shape'), 'the best available eleven was refused: ' + run.afterBest);
+  if (run.distinct) assert.ok(run.afterWorse.includes('shape'), 'a badly-placed eleven should still be refused');
 });

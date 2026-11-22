@@ -50337,7 +50337,15 @@ if(typeof squadIssues==='function'){
     picked.forEach((p,i)=>{
      const slot=shape[i]&&shape[i][0];
      if(slot&&POSGROUP(slot)!==POSGROUP(p.pos))wrong++});
-    if(wrong>=4)out.push({k:'shape',
+    /* the block is for a side that could be better. When this eleven IS the
+       best the club can field -- the auto-pick would choose the same men --
+       there is nothing left to fix, and refusing to start would leave the
+       button that promises a fix looping forever */
+    let bestAlready=false;
+    if(wrong>=4){
+     try{const key=a=>(a||[]).filter(Boolean).map(String).sort().join();
+      bestAlready=key(autoPick(G.my,G.tacs.formation))===key(G.tacs.xi)}catch(e){}}
+    if(wrong>=4&&!bestAlready)out.push({k:'shape',
      t:wrong+' players out of position',
      s:'Most of this eleven is being asked to play somewhere it does not play. '+
        'It will cost you more than any of them are worth.',
